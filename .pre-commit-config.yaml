@@ -1,0 +1,230 @@
+# Pre-commit hooks configuration
+# https://pre-commit.com/
+
+default_language_version:
+  python: python3.11  # Must match FreeCAD's bundled Python version
+
+repos:
+  # ==========================================================================
+  # General File Hygiene
+  # ==========================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$  # Allow trailing spaces in markdown for line breaks
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+      - id: check-ast  # Check Python syntax
+        types: [text]
+        files: \.(py|FCMacro)$
+
+  # ==========================================================================
+  # Python - Linting and Formatting
+  # ==========================================================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, text]
+        files: \.(py|FCMacro)$
+      - id: ruff-format
+        types_or: [python, text]
+        files: \.(py|FCMacro)$
+
+  # ==========================================================================
+  # Python - Type Checking
+  # ==========================================================================
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.10.0
+          - pydantic-settings>=2.7.0
+          - mcp>=1.25.0
+        # Note: mypy doesn't natively support .FCMacro, so we skip those files
+        # FCMacro files are checked by ruff and bandit instead
+        args: [--config-file=pyproject.toml]
+
+  # ==========================================================================
+  # Python - Security Scanning
+  # ==========================================================================
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml, -r, src, macros]
+        additional_dependencies: ["bandit[toml]"]
+        types: [text]
+        files: \.(py|FCMacro)$
+
+  # ==========================================================================
+  # Secrets Detection - Multi-Layer Approach
+  # ==========================================================================
+
+  # Layer 1: Gitleaks - Fast, comprehensive secrets scanner
+  # Scans git history and current files using regex patterns
+  # Config: .gitleaks.toml
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        name: gitleaks (secrets scanner)
+        args: [--config, .gitleaks.toml, --verbose]
+
+  # Layer 2: detect-secrets - Yelp's enterprise-grade secrets detector
+  # Uses baseline file to track known/approved secrets
+  # Config: .secrets.baseline
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets (baseline scan)
+        args:
+          - --baseline
+          - .secrets.baseline
+          - --exclude-files
+          - '\.secrets\.baseline$'
+          - --exclude-files
+          - '\.gitleaks\.toml$'
+          - --exclude-files
+          - 'uv\.lock$'
+          - --exclude-files
+          - 'poetry\.lock$'
+          - --exclude-files
+          - 'package-lock\.json$'
+
+  # Layer 3: TruffleHog - Deep secrets scanner with verification
+  # Verifies secrets are actually valid (e.g., tests AWS keys)
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: v3.84.1
+    hooks:
+      - id: trufflehog
+        name: trufflehog (verified secrets scan)
+        args:
+          - --no-update
+
+  # ==========================================================================
+  # Markdown Linting - Comprehensive Configuration
+  # ==========================================================================
+
+  # Primary: markdownlint-cli2 - Comprehensive markdown linter
+  # Config: .markdownlint.yaml
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.1
+    hooks:
+      - id: markdownlint-cli2
+        name: markdownlint (linter)
+        args: []  # Uses .markdownlint.yaml automatically
+
+  # Secondary: mdformat - Opinionated markdown formatter
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.21
+    hooks:
+      - id: mdformat
+        name: mdformat (formatter)
+        additional_dependencies:
+          - mdformat-gfm          # GitHub Flavored Markdown
+          - mdformat-frontmatter  # YAML front matter
+          - mdformat-footnote     # Footnotes
+          - mdformat-tables       # Table formatting
+          - mdformat-simple-breaks  # Use --- for horizontal rules
+        exclude: CHANGELOG\.md$  # Don't format auto-generated changelogs
+
+  # Tertiary: md-toc - Table of contents generator
+  # Automatically updates TOC between <!--TOC--> markers
+  - repo: https://github.com/frnmst/md-toc
+    rev: 9.0.0
+    hooks:
+      - id: md-toc
+        name: md-toc (table of contents)
+        args: ["-p", "github", "-l", "6"]  # GitHub parser, max 6 levels
+        files: ^(README|ARCHITECTURE-MCP)\.md$
+
+  # ==========================================================================
+  # Spell Checking
+  # ==========================================================================
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        additional_dependencies:
+          - tomli
+        args:
+          - --ignore-words
+          - .codespell-ignore-words.txt
+          - --skip
+          - "*.lock,*.json,.secrets.baseline"
+
+  # ==========================================================================
+  # Configuration Validation
+  # ==========================================================================
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.23
+    hooks:
+      - id: validate-pyproject
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.30.0
+    hooks:
+      - id: check-github-workflows
+        name: validate GitHub workflows
+      - id: check-dependabot
+        name: validate Dependabot config
+
+  # ==========================================================================
+  # Shell Script Linting
+  # ==========================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck (shell linter)
+        args: [--severity=warning]
+
+  # ==========================================================================
+  # Dockerfile Linting
+  # ==========================================================================
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint-docker
+        name: hadolint (Dockerfile linter)
+
+  # ==========================================================================
+  # Commit Message Linting
+  # ==========================================================================
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.1.0
+    hooks:
+      - id: commitizen
+        name: commitizen (commit format)
+        stages: [commit-msg]
+
+# ==========================================================================
+# CI Configuration
+# ==========================================================================
+ci:
+  autoupdate_schedule: monthly
+  autoupdate_commit_msg: "chore(deps): update pre-commit hooks"
+  skip:
+    - mypy             # Needs dependencies installed
+    - hadolint-docker  # Needs Docker
+    - trufflehog       # Can be slow in CI

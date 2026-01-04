@@ -1,0 +1,75 @@
+site_name: FreeCAD MCP Server
+site_description: MCP server for FreeCAD integration with AI assistants
+site_url: https://github.com/spkane/freecad-mcp
+repo_url: https://github.com/spkane/freecad-mcp
+repo_name: spkane/freecad-mcp
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Quick Start: getting-started/quickstart.md
+  - User Guide:
+      - Embedded Mode: guide/embedded-mode.md
+      - Socket Mode: guide/socket-mode.md
+      - Tools Reference: guide/tools.md
+      - Resources Reference: guide/resources.md
+  - API Reference:
+      - Server: api/server.md
+      - Bridge: api/bridge.md
+      - Config: api/config.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Architecture: development/architecture.md

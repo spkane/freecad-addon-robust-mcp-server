@@ -1,0 +1,47 @@
+# Technical terms that are not typos
+justfile
+sigsegv
+mise
+gitleaks
+trufflehog
+linting
+linted
+linter
+linters
+markdownlint
+ruff
+mypy
+bandit
+codespell
+mdformat
+commitizen
+hadolint
+shellcheck
+freecad
+fcstd
+mcp
+impl
+vertexes
+recomputation
+heredoc
+heredocs
+docstrings
+virtualenv
+isinstance
+pylance
+pyside
+changelog
+partdesign
+pytest
+
+# GitHub usernames and project names
+spkane
+neka
+bonninr
+contextform
+blockchained
+jango
+
+# File extensions and paths
+md
+js

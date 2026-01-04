@@ -1,0 +1,284 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "freecad-robust-mcp"
+version = "0.1.0"
+description = "MCP (Model Context Protocol) server for FreeCAD integration with Claude Code and other AI assistants"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Sean P. Kane", email = "spkane@gmail.com" }
+]
+maintainers = [
+    { name = "Sean P. Kane", email = "spkane@gmail.com" }
+]
+keywords = [
+    "freecad",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "ai",
+    "llm",
+    "cad",
+    "3d-modeling",
+    "3d-printing",
+    "parametric-design",
+    "automation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "mcp>=1.25.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "pytest-timeout>=2.3.0",
+    "mypy>=1.14.0",
+    "ruff>=0.8.0",
+    "bandit[toml]>=1.8.0",
+    "safety>=3.2.0",
+    "pre-commit>=4.0.0",
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.27.0",
+    "md-toc>=9.0.0",
+    "twine>=6.0.0",
+    "build>=1.2.0",
+]
+
+[project.scripts]
+freecad-mcp = "freecad_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/spkane/freecad-mcp"
+Documentation = "https://github.com/spkane/freecad-mcp#readme"
+Repository = "https://github.com/spkane/freecad-mcp.git"
+Issues = "https://github.com/spkane/freecad-mcp/issues"
+Changelog = "https://github.com/spkane/freecad-mcp/blob/main/CHANGELOG.md"
+"Docker Hub" = "https://hub.docker.com/r/spkane/freecad-mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/freecad_mcp"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests", "macros"]
+extend-include = ["*.FCMacro"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate (commented-out code)
+    "PL",     # Pylint
+    "RUF",    # Ruff-specific rules
+    "S",      # flake8-bandit (security)
+    "ANN",    # flake8-annotations
+    "ASYNC",  # flake8-async
+    "D",      # pydocstyle
+]
+ignore = [
+    "D104",   # Missing docstring in public package - __init__.py often just imports
+    "D107",   # Missing docstring in __init__ - class docstring covers this
+    "ANN401", # Allow Any in type annotations - FreeCAD types are dynamic
+    "ANN001", # Allow missing type annotations - FastMCP doesn't export types
+    "PLR0913",# Too many arguments - CAD APIs have many params
+    "PLR0915",# Too many statements - registration functions are long
+    "PLC0415",# Allow imports in functions - FreeCAD must be imported lazily
+    "PLR2004",# Allow magic numbers in comparisons - CAD dimensions
+    "PLW0603",# Allow global statement - bridge lifecycle management
+    "E501",   # Line too long - embedded Python code strings
+    "RUF022", # Don't sort __all__ - prefer logical grouping
+    "S110",   # Allow try-except-pass for optional operations
+    "ARG002", # Allow unused arguments - needed for interface compliance
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # Allow asserts in tests
+    "S108",   # Allow /tmp in tests
+    "ANN",    # Don't require annotations in tests
+    "D",      # Don't require docstrings in tests
+    "PLR2004",# Allow magic numbers in tests
+    "SIM105", # Allow try-except-pass in tests
+    "SIM117", # Allow nested with statements
+    "B017",   # Allow blind exception catch in tests
+]
+# FreeCAD macros have relaxed rules - they are standalone GUI scripts
+# But still require essential docstrings (module, class, public function)
+"**/*.FCMacro" = [
+    "ANN",    # Don't require type annotations - FreeCAD types are complex
+    "D104",   # Missing docstring in public package - N/A for macros
+    "D105",   # Missing docstring in magic method - __init__ etc don't need them
+    "D107",   # Missing docstring in __init__ - class docstring covers this
+    "D203",   # Blank line before class docstring (conflicts with D211)
+    "D212",   # Multi-line docstring start (conflicts with D213)
+    "PLR0912",# Allow many branches - GUI code is complex
+    "PLR0913",# Allow many arguments - CAD APIs have many params
+    "PLR0915",# Allow many statements - macros are self-contained
+    "SIM102", # Allow nested if statements - improves readability
+    "SIM103", # Allow return after if-else for clarity
+    "SIM108", # Allow if-else over ternary for readability
+    "S112",   # Allow try-except-continue - used for geometry iteration
+    "F841",   # Allow unused variables - Qt signal connections
+    "UP008",  # Allow super(Class, self) - PySide compatibility
+]
+
+[tool.mypy]
+python_version = "3.11"
+# Not using strict mode due to FastMCP lacking type stubs
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = true
+follow_imports = "silent"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "freecad_mcp.tools",
+    "freecad_mcp.tools.*",
+]
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "freecad_mcp.resources",
+    "freecad_mcp.resources.*",
+]
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "freecad_mcp.prompts",
+    "freecad_mcp.prompts.*",
+]
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "freecad_mcp.bridge",
+    "freecad_mcp.bridge.*",
+]
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "freecad_mcp.freecad_plugin",
+    "freecad_mcp.freecad_plugin.*",
+]
+warn_return_any = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "freecad_mcp.server"
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "-ra",
+    "-q",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring FreeCAD",
+    "gui: marks tests requiring FreeCAD GUI mode (not headless)",
+]
+
+[tool.coverage.run]
+source = ["src/freecad_mcp"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
+show_missing = true
+fail_under = 80
+
+[tool.bandit]
+exclude_dirs = ["tests", "docs"]
+skips = [
+    "B101",  # Allow asserts
+    "B102",  # exec is required for FreeCAD Python execution
+    "B110",  # try-except-pass used for optional cleanup
+    "B411",  # XML-RPC is required for FreeCAD compatibility
+]
+
+[tool.codespell]
+skip = ".git,*.lock,*.toml"
+ignore-words-list = "crate"

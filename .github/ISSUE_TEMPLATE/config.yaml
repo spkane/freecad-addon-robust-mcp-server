@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/spkane/freecad-mcp#readme
+    about: Check the README for usage instructions and troubleshooting
+  - name: Discussions
+    url: https://github.com/spkane/freecad-mcp/discussions
+    about: Ask questions and discuss ideas with the community

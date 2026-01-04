@@ -1,0 +1,182 @@
+name: Macro Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "macros/**/*.FCMacro"
+      - "macros/**/*.py"
+      - "tests/integration/test_cut_object_for_magnets.py"
+      - ".github/workflows/macro-test.yaml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "macros/**/*.FCMacro"
+      - "macros/**/*.py"
+      - "tests/integration/test_cut_object_for_magnets.py"
+      - ".github/workflows/macro-test.yaml"
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-macros:
+    name: Test FreeCAD Macros
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install FreeCAD
+        run: |
+          sudo add-apt-repository -y ppa:freecad-maintainers/freecad-stable
+          sudo apt-get update
+          sudo apt-get install -y freecad
+
+      - name: Verify FreeCAD installation
+        run: |
+          # Try different possible names for the headless FreeCAD command
+          FREECAD_CMD=""
+          if command -v freecadcmd &> /dev/null; then
+              FREECAD_CMD="freecadcmd"
+          elif command -v FreeCADCmd &> /dev/null; then
+              FREECAD_CMD="FreeCADCmd"
+          elif [ -x "/usr/bin/freecadcmd" ]; then
+              FREECAD_CMD="/usr/bin/freecadcmd"
+          elif [ -x "/usr/bin/FreeCADCmd" ]; then
+              FREECAD_CMD="/usr/bin/FreeCADCmd"
+          fi
+
+          if [ -n "$FREECAD_CMD" ]; then
+              echo "Found FreeCADCmd: $FREECAD_CMD"
+              $FREECAD_CMD --version || true
+          else
+              echo "WARNING: FreeCADCmd not found, trying freecad..."
+              freecad --version || true
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Validate macro syntax
+        run: |
+          echo "Validating macro Python syntax..."
+          for macro in macros/**/*.FCMacro; do
+              echo "Checking: $macro"
+              python3 -m py_compile "$macro" || {
+                  echo "ERROR: Syntax error in $macro"
+                  exit 1
+              }
+          done
+          echo "All macros have valid Python syntax"
+
+      - name: Start FreeCAD headless with MCP bridge
+        run: |
+          # Set up environment
+          export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
+
+          # Find FreeCADCmd
+          FREECAD_CMD=""
+          if command -v freecadcmd &> /dev/null; then
+              FREECAD_CMD="freecadcmd"
+          elif command -v FreeCADCmd &> /dev/null; then
+              FREECAD_CMD="FreeCADCmd"
+          elif [ -x "/usr/bin/freecadcmd" ]; then
+              FREECAD_CMD="/usr/bin/freecadcmd"
+          else
+              echo "ERROR: FreeCADCmd not found"
+              exit 1
+          fi
+
+          echo "Using FreeCAD: $FREECAD_CMD"
+
+          # Start FreeCAD headless with MCP bridge in background
+          $FREECAD_CMD src/freecad_mcp/freecad_plugin/headless_server.py &
+          FREECAD_PID=$!
+          echo "FREECAD_PID=$FREECAD_PID" >> $GITHUB_ENV
+
+          # Wait for bridge to be ready (check XML-RPC port)
+          echo "Waiting for MCP bridge to start..."
+          for i in {1..60}; do
+              if curl -s --max-time 2 -X POST \
+                  -H "Content-Type: text/xml" \
+                  -d '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>' \
+                  http://localhost:9875 > /dev/null 2>&1; then
+                  echo "MCP bridge is ready (took ${i}s)"
+                  break
+              fi
+              if [ $i -eq 60 ]; then
+                  echo "ERROR: MCP bridge did not start within 60s"
+                  kill $FREECAD_PID 2>/dev/null || true
+                  exit 1
+              fi
+              sleep 1
+          done
+
+      - name: Run CutObjectForMagnets macro tests
+        env:
+          FREECAD_MODE: xmlrpc
+        run: |
+          uv run pytest tests/integration/test_cut_object_for_magnets.py -v --tb=short
+
+      - name: Stop FreeCAD
+        if: always()
+        run: |
+          if [ -n "$FREECAD_PID" ]; then
+              kill $FREECAD_PID 2>/dev/null || true
+          fi
+
+  lint-macros:
+    name: Lint Macro Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Lint macro files with Ruff
+        run: |
+          # Run ruff on macro files (check only, don't fail on issues specific to FreeCAD macros)
+          uv run ruff check macros/ --select=E,F,W --ignore=F401,E402 || true
+
+      - name: Check macro documentation
+        run: |
+          # Ensure each macro directory has a README
+          for macro_dir in macros/*/; do
+              if [ -d "$macro_dir" ]; then
+                  readme_found=false
+                  for readme in "$macro_dir"README*.md; do
+                      if [ -f "$readme" ]; then
+                          readme_found=true
+                          break
+                      fi
+                  done
+                  if [ "$readme_found" = false ]; then
+                      echo "WARNING: No README found in $macro_dir"
+                  else
+                      echo "OK: README found in $macro_dir"
+                  fi
+              fi
+          done

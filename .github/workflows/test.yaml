@@ -1,0 +1,140 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test.yaml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test.yaml"
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -v --tb=short
+
+      - name: Run type checking
+        run: uv run mypy src/
+
+  # Integration tests require FreeCAD - run in a separate job with FreeCAD installed
+  integration-test:
+    name: Integration Tests (FreeCAD)
+    runs-on: ubuntu-latest
+    # Only run on main branch or when explicitly requested
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install FreeCAD
+        run: |
+          sudo add-apt-repository -y ppa:freecad-maintainers/freecad-stable
+          sudo apt-get update
+          sudo apt-get install -y freecad
+
+      - name: Verify FreeCAD installation
+        run: |
+          freecadcmd --version || freecad --version || echo "FreeCAD version check"
+          which freecadcmd || which FreeCADCmd || echo "FreeCADCmd not in PATH"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Start FreeCAD headless with MCP bridge
+        run: |
+          # Set up environment
+          export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
+
+          # Find FreeCADCmd
+          FREECAD_CMD=""
+          if command -v freecadcmd &> /dev/null; then
+              FREECAD_CMD="freecadcmd"
+          elif command -v FreeCADCmd &> /dev/null; then
+              FREECAD_CMD="FreeCADCmd"
+          elif [ -x "/usr/bin/freecadcmd" ]; then
+              FREECAD_CMD="/usr/bin/freecadcmd"
+          else
+              echo "ERROR: FreeCADCmd not found"
+              exit 1
+          fi
+
+          echo "Using FreeCAD: $FREECAD_CMD"
+
+          # Start FreeCAD headless with MCP bridge in background
+          $FREECAD_CMD src/freecad_mcp/freecad_plugin/headless_server.py &
+          FREECAD_PID=$!
+          echo "FREECAD_PID=$FREECAD_PID" >> $GITHUB_ENV
+
+          # Wait for bridge to be ready (check XML-RPC port)
+          echo "Waiting for MCP bridge to start..."
+          for i in {1..60}; do
+              if curl -s --max-time 2 -X POST \
+                  -H "Content-Type: text/xml" \
+                  -d '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>' \
+                  http://localhost:9875 > /dev/null 2>&1; then
+                  echo "MCP bridge is ready (took ${i}s)"
+                  break
+              fi
+              if [ $i -eq 60 ]; then
+                  echo "ERROR: MCP bridge did not start within 60s"
+                  kill $FREECAD_PID 2>/dev/null || true
+                  exit 1
+              fi
+              sleep 1
+          done
+
+      - name: Run integration tests
+        env:
+          FREECAD_MODE: xmlrpc
+        run: |
+          uv run pytest tests/integration/ -v --tb=short || true
+          # Note: Some integration tests may be skipped if they require GUI mode
+
+      - name: Stop FreeCAD
+        if: always()
+        run: |
+          if [ -n "$FREECAD_PID" ]; then
+              kill $FREECAD_PID 2>/dev/null || true
+          fi

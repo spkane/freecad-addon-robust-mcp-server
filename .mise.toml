@@ -1,0 +1,35 @@
+# mise tool configuration
+# https://mise.jdx.dev/
+
+[tools]
+# Python 3.11 is required for embedded FreeCAD mode - FreeCAD bundles libpython3.11
+# Using a different Python version causes ABI incompatibility crashes
+python = "3.11"
+uv = "latest"
+just = "latest"
+pre-commit = "latest"
+
+[env]
+# FreeCAD connection mode:
+#   "xmlrpc"   - XML-RPC protocol (recommended, works on all platforms)
+#   "socket"   - JSON-RPC socket protocol (alternative)
+#   "embedded" - In-process FreeCAD (Linux only, crashes on macOS/Windows)
+FREECAD_MODE = "xmlrpc"
+
+# Path to FreeCAD's lib directory (for embedded mode only)
+# macOS: "/Applications/FreeCAD.app/Contents/Resources/lib"
+# Linux: "/usr/lib/freecad/lib"
+# Windows: "C:/Program Files/FreeCAD/lib"
+# FREECAD_PATH = ""
+
+# Connection settings (for xmlrpc and socket modes)
+FREECAD_SOCKET_HOST = "localhost"
+FREECAD_SOCKET_PORT = "9876"
+FREECAD_XMLRPC_PORT = "9875"
+
+# Execution limits
+FREECAD_TIMEOUT_MS = "30000"
+FREECAD_MAX_OUTPUT_SIZE = "1000000"
+
+[settings]
+experimental = true

@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "streetsidesoftware.code-spell-checker",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "DavidAnson.vscode-markdownlint",
+    "tamasfe.even-better-toml",
+    "redhat.vscode-yaml",
+    "eamodio.gitlens"
+  ]
+}

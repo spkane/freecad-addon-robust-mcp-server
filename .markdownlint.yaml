@@ -1,0 +1,222 @@
+# Markdownlint Configuration
+# https://github.com/DavidAnson/markdownlint
+# Rule reference: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Default state for all rules
+default: true
+
+# ============================================================================
+# Headings
+# ============================================================================
+
+# MD001 - Heading levels should only increment by one level at a time
+MD001: true
+
+# MD002 - First heading should be a top-level heading (deprecated, use MD041)
+MD002: false
+
+# MD003 - Heading style
+MD003:
+  style: "atx"  # Use # style headings (not === or ---)
+
+# MD022 - Headings should be surrounded by blank lines
+MD022:
+  lines_above: 1
+  lines_below: 1
+
+# MD023 - Headings must start at the beginning of the line
+MD023: true
+
+# MD024 - Multiple headings with the same content
+MD024:
+  siblings_only: true  # Allow same heading in different sections
+
+# MD025 - Multiple top-level headings in the same document
+MD025:
+  front_matter_title: "^\\s*title\\s*[:=]"
+
+# MD026 - Trailing punctuation in heading
+MD026:
+  punctuation: ".,;:!。，；：！"
+
+# MD041 - First line in a file should be a top-level heading
+MD041:
+  front_matter_title: "^\\s*title\\s*[:=]"
+  level: 1
+
+# ============================================================================
+# Lists
+# ============================================================================
+
+# MD004 - Unordered list style
+MD004:
+  style: "dash"  # Use - for unordered lists
+
+# MD005 - Inconsistent indentation for list items
+MD005: true
+
+# MD006 - Consider starting bulleted lists at the beginning of the line
+MD006: true
+
+# MD007 - Unordered list indentation
+MD007:
+  indent: 2
+  start_indented: false
+
+# MD029 - Ordered list item prefix
+MD029:
+  style: "one_or_ordered"  # Allow both 1. 1. 1. and 1. 2. 3.
+
+# MD030 - Spaces after list markers
+MD030:
+  ul_single: 1
+  ol_single: 1
+  ul_multi: 1
+  ol_multi: 1
+
+# MD032 - Lists should be surrounded by blank lines
+MD032: true
+
+# ============================================================================
+# Code Blocks
+# ============================================================================
+
+# MD014 - Dollar signs used before commands without showing output
+MD014: true
+
+# MD031 - Fenced code blocks should be surrounded by blank lines
+MD031:
+  list_items: true
+
+# MD038 - Spaces inside code span elements
+MD038: true
+
+# MD040 - Fenced code blocks should have a language specified
+MD040:
+  allowed_languages: []  # Allow any language
+  language_only: false
+
+# MD046 - Code block style
+MD046:
+  style: "fenced"  # Use ``` not indentation
+
+# MD048 - Code fence style
+MD048:
+  style: "backtick"  # Use ``` not ~~~
+
+# ============================================================================
+# Line Length and Whitespace
+# ============================================================================
+
+# MD009 - Trailing spaces
+MD009:
+  br_spaces: 2  # Allow 2 trailing spaces for line breaks
+  list_item_empty_lines: false
+  strict: false
+
+# MD010 - Hard tabs
+MD010:
+  code_blocks: true
+  ignore_code_languages: ["makefile", "make"]
+  spaces_per_tab: 4
+
+# MD012 - Multiple consecutive blank lines
+MD012:
+  maximum: 2
+
+# MD013 - Line length
+# Disabled: Let text wrap naturally, especially for documentation
+MD013: false
+
+# MD047 - Files should end with a single newline character
+MD047: true
+
+# ============================================================================
+# Links and Images
+# ============================================================================
+
+# MD011 - Reversed link syntax
+MD011: true
+
+# MD034 - Bare URL used
+MD034: true
+
+# MD039 - Spaces inside link text
+MD039: true
+
+# MD042 - No empty links
+MD042: true
+
+# MD045 - Images should have alternate text (alt text)
+MD045: true
+
+# MD051 - Link fragments should be valid
+MD051: true
+
+# MD052 - Reference links and images should use a label that is defined
+MD052: true
+
+# MD053 - Link and image reference definitions should be needed
+MD053:
+  ignored_definitions: ["//"]
+
+# ============================================================================
+# HTML and Raw Content
+# ============================================================================
+
+# MD033 - Inline HTML
+# Disabled: Allow HTML for things like <details>, <summary>, badges, etc.
+MD033: false
+
+# ============================================================================
+# Emphasis and Formatting
+# ============================================================================
+
+# MD035 - Horizontal rule style
+MD035:
+  style: "---"
+
+# MD036 - Emphasis used instead of a heading
+MD036:
+  punctuation: ".,;:!?。，；：！？"
+
+# MD037 - Spaces inside emphasis markers
+MD037: true
+
+# MD049 - Emphasis style
+MD049:
+  style: "asterisk"  # Use *text* not _text_
+
+# MD050 - Strong style
+MD050:
+  style: "asterisk"  # Use **text** not __text__
+
+# ============================================================================
+# Block Quotes
+# ============================================================================
+
+# MD027 - Multiple spaces after blockquote symbol
+MD027: true
+
+# MD028 - Blank line inside blockquote
+MD028: true
+
+# ============================================================================
+# Other
+# ============================================================================
+
+# MD018 - No space after hash on atx style heading
+MD018: true
+
+# MD019 - Multiple spaces after hash on atx style heading
+MD019: true
+
+# MD020 - No space inside hashes on closed atx style heading
+MD020: true
+
+# MD021 - Multiple spaces inside hashes on closed atx style heading
+MD021: true
+
+# MD044 - Proper names should have the correct capitalization
+# Disabled: Causes false positives in GitHub URLs containing lowercase project names
+MD044: false

@@ -1,0 +1,699 @@
+# FreeCAD Tools and MCP Server
+
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that enables integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches. Also includes standalone FreeCAD macros for common tasks.
+
+## Table of Contents
+
+<!--TOC-->
+
+- [FreeCAD Tools and MCP Server](#freecad-tools-and-mcp-server)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Requirements](#requirements)
+  - [For Users](#for-users)
+  - [MCP Server](#mcp-server)
+    - [Installation](#installation)
+      - [Using pip (recommended)](#using-pip-recommended)
+      - [Using mise and just (from source)](#using-mise-and-just-from-source)
+      - [Using Docker](#using-docker)
+    - [Configuration](#configuration)
+      - [Environment Variables](#environment-variables)
+      - [Connection Modes](#connection-modes)
+      - [MCP Client Configuration](#mcp-client-configuration)
+    - [Usage](#usage)
+      - [Starting the MCP Bridge in FreeCAD](#starting-the-mcp-bridge-in-freecad)
+      - [Running Modes](#running-modes)
+        - [XML-RPC Mode (Recommended)](#xml-rpc-mode-recommended)
+        - [Socket Mode (JSON-RPC)](#socket-mode-json-rpc)
+        - [Headless Mode](#headless-mode)
+        - [Embedded Mode (Linux Only)](#embedded-mode-linux-only)
+    - [Available Tools](#available-tools)
+      - [Execution & Debugging (5 tools)](#execution--debugging-5-tools)
+      - [Document Management (7 tools)](#document-management-7-tools)
+      - [Object Creation - Primitives (8 tools)](#object-creation---primitives-8-tools)
+      - [Object Management (12 tools)](#object-management-12-tools)
+      - [PartDesign - Sketching (14 tools)](#partdesign---sketching-14-tools)
+      - [PartDesign - Patterns & Edges (5 tools)](#partdesign---patterns--edges-5-tools)
+      - [View & Display (11 tools)](#view--display-11-tools)
+      - [Undo/Redo (3 tools)](#undoredo-3-tools)
+      - [Export/Import (7 tools)](#exportimport-7-tools)
+      - [Macro Management (6 tools)](#macro-management-6-tools)
+      - [Parts Library (2 tools)](#parts-library-2-tools)
+  - [FreeCAD Macros](#freecad-macros)
+    - [CutObjectForMagnets](#cutobjectformagnets)
+  - [For Developers](#for-developers)
+  - [MCP Server Development](#mcp-server-development)
+    - [Prerequisites](#prerequisites)
+    - [Initial Setup](#initial-setup)
+    - [MCP Client Configuration (Development)](#mcp-client-configuration-development)
+    - [Development Workflow](#development-workflow)
+    - [Running FreeCAD with the MCP Bridge](#running-freecad-with-the-mcp-bridge)
+      - [GUI Mode (recommended for development)](#gui-mode-recommended-for-development)
+      - [Headless Mode (for automation/CI)](#headless-mode-for-automationci)
+    - [Running Tests](#running-tests)
+    - [Code Quality](#code-quality)
+  - [Macro Development](#macro-development)
+    - [StartMCPBridge Macro](#startmcpbridge-macro)
+    - [CutObjectForMagnets Macro](#cutobjectformagnets-macro)
+  - [Architecture](#architecture)
+  - [License](#license)
+
+<!--TOC-->
+
+## Features
+
+- **82+ MCP Tools**: Comprehensive CAD operations including primitives, PartDesign, booleans, export
+- **Multiple Connection Modes**: XML-RPC (recommended), JSON-RPC socket, or embedded
+- **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
+- **Macro Development**: Create, edit, run, and template FreeCAD macros via MCP
+- **Standalone Macros**: Useful FreeCAD macros that work independently of the MCP server
+
+## Requirements
+
+- [FreeCAD](https://www.freecadweb.org/) 0.21+ or 1.0+
+- Python 3.11 (required for FreeCAD ABI compatibility)
+
+---
+
+## For Users
+
+This section covers installation and usage for end users who want to use the MCP server with AI assistants or the standalone FreeCAD macros.
+
+## MCP Server
+
+### Installation
+
+#### Using pip (recommended)
+
+```bash
+pip install freecad-robust-mcp
+```
+
+#### Using mise and just (from source)
+
+```bash
+git clone https://github.com/spkane/freecad-mcp.git
+cd freecad-mcp
+mise trust
+mise install
+just setup
+```
+
+#### Using Docker
+
+Run the MCP server in a container. This is useful for isolated environments or when you don't want to install Python dependencies on your host.
+
+```bash
+# Pull from Docker Hub (when published)
+docker pull spkane/freecad-mcp
+
+# Or build locally
+git clone https://github.com/spkane/freecad-mcp.git
+cd freecad-mcp
+docker build -t freecad-mcp .
+
+# Or use just commands (if you have mise/just installed)
+just docker::build        # Build for local architecture
+just docker::build-multi  # Build multi-arch (amd64 + arm64)
+```
+
+**Note:** The containerized MCP server only supports `xmlrpc` and `socket` modes since FreeCAD runs on your host machine (not in the container). The container connects to FreeCAD via `host.docker.internal`.
+
+### Configuration
+
+#### Environment Variables
+
+| Variable              | Description                                          | Default     |
+| --------------------- | ---------------------------------------------------- | ----------- |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, or `embedded`   | `xmlrpc`    |
+| `FREECAD_PATH`        | Path to FreeCAD's lib directory (embedded mode only) | Auto-detect |
+| `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                       | `localhost` |
+| `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
+| `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
+| `FREECAD_TIMEOUT_MS`  | Execution timeout in ms                              | `30000`     |
+
+#### Connection Modes
+
+| Mode       | Description                                 | Platform Support                  |
+| ---------- | ------------------------------------------- | --------------------------------- |
+| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms** (recommended)   |
+| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms**                 |
+| `embedded` | Imports FreeCAD directly into process       | **Linux only** (crashes on macOS) |
+
+**Note:** Embedded mode crashes on macOS because FreeCAD's `FreeCAD.so` links to `@rpath/libpython3.11.dylib`, which conflicts with external Python interpreters. Use `xmlrpc` or `socket` mode on macOS and Windows.
+
+#### MCP Client Configuration
+
+Add something like the following to your MCP client settings. For Claude Code, this is `~/.claude/claude_desktop_config.json` or a project `.mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "freecad-mcp",
+      "env": {
+        "FREECAD_MODE": "xmlrpc"
+      }
+    }
+  }
+}
+```
+
+If installed from source with mise/uv:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "/path/to/mise/shims/uv",
+      "args": ["run", "--project", "/path/to/freecad-mcp", "freecad-mcp"],
+      "env": {
+        "FREECAD_MODE": "xmlrpc"
+      }
+    }
+  }
+}
+```
+
+If using Docker:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--add-host=host.docker.internal:host-gateway",
+        "-e", "FREECAD_MODE=xmlrpc",
+        "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
+        "freecad-mcp"
+      ]
+    }
+  }
+}
+```
+
+**Docker configuration notes:**
+
+- `--rm` removes the container after it exits
+- `-i` keeps stdin open for MCP communication
+- `--add-host=host.docker.internal:host-gateway` allows the container to connect to FreeCAD on your host (Linux only; macOS/Windows have this built-in)
+- `FREECAD_SOCKET_HOST=host.docker.internal` tells the MCP server to connect to FreeCAD on your host machine
+
+### Usage
+
+#### Starting the MCP Bridge in FreeCAD
+
+Before your AI assistant can connect, you need to start the MCP bridge inside FreeCAD:
+
+1. Install the bridge macro (one time):
+
+   ```bash
+   # If installed from source:
+   just install-bridge-macro
+
+   # Or manually copy from the macros/Start_MCP_Bridge/ directory
+   ```
+
+1. Start FreeCAD
+
+1. Run the macro: **Macro -> Macros -> StartMCPBridge -> Execute**
+
+1. You should see in the FreeCAD console:
+
+   ```text
+   MCP Bridge started!
+     - XML-RPC: localhost:9875
+     - Socket: localhost:9876
+   ```
+
+1. Start/restart your MCP client (Claude Code, etc.) - it will connect automatically
+
+#### Running Modes
+
+##### XML-RPC Mode (Recommended)
+
+Connects to a running FreeCAD instance via XML-RPC. Works on all platforms.
+
+```bash
+FREECAD_MODE=xmlrpc freecad-mcp
+```
+
+##### Socket Mode (JSON-RPC)
+
+Connects via JSON-RPC socket. Works on all platforms.
+
+```bash
+FREECAD_MODE=socket freecad-mcp
+```
+
+##### Headless Mode
+
+Run FreeCAD in console mode without GUI. Useful for automation.
+
+```bash
+# If installed from source:
+just run-headless
+```
+
+**Note:** Screenshot and view features are not available in headless mode.
+
+##### Embedded Mode (Linux Only)
+
+Runs FreeCAD in-process. **Only works on Linux** - crashes on macOS/Windows.
+
+```bash
+FREECAD_MODE=embedded freecad-mcp
+```
+
+### Available Tools
+
+The MCP server provides **83 tools** organized into categories. Tools marked with **GUI** require FreeCAD to be running in GUI mode; they will return an error in headless mode.
+
+#### Execution & Debugging (5 tools)
+
+| Tool                         | Description                                            | Mode |
+| ---------------------------- | ------------------------------------------------------ | ---- |
+| `execute_python`             | Execute arbitrary Python code in FreeCAD's context     | All  |
+| `get_freecad_version`        | Get FreeCAD version, build date, and Python version    | All  |
+| `get_connection_status`      | Check MCP bridge connection status and latency         | All  |
+| `get_console_output`         | Get recent FreeCAD console output (up to N lines)      | All  |
+| `get_mcp_server_environment` | Get MCP server environment (OS, hostname, Docker info) | All  |
+
+#### Document Management (7 tools)
+
+| Tool                  | Description                               | Mode |
+| --------------------- | ----------------------------------------- | ---- |
+| `list_documents`      | List all open documents with metadata     | All  |
+| `get_active_document` | Get information about the active document | All  |
+| `create_document`     | Create a new FreeCAD document             | All  |
+| `open_document`       | Open an existing .FCStd file              | All  |
+| `save_document`       | Save a document to disk                   | All  |
+| `close_document`      | Close a document (with optional save)     | All  |
+| `recompute_document`  | Force recomputation of all objects        | All  |
+
+#### Object Creation - Primitives (8 tools)
+
+| Tool              | Description                                        | Mode |
+| ----------------- | -------------------------------------------------- | ---- |
+| `create_object`   | Create a generic FreeCAD object by type ID         | All  |
+| `create_box`      | Create a Part::Box with length, width, height      | All  |
+| `create_cylinder` | Create a Part::Cylinder with radius, height, angle | All  |
+| `create_sphere`   | Create a Part::Sphere with radius                  | All  |
+| `create_cone`     | Create a Part::Cone with two radii and height      | All  |
+| `create_torus`    | Create a Part::Torus (donut) with radii and angles | All  |
+| `create_wedge`    | Create a Part::Wedge (tapered box)                 | All  |
+| `create_helix`    | Create a Part::Helix curve for sweeps and threads  | All  |
+
+#### Object Management (12 tools)
+
+| Tool                | Description                                        | Mode |
+| ------------------- | -------------------------------------------------- | ---- |
+| `list_objects`      | List all objects in a document                     | All  |
+| `inspect_object`    | Get detailed object info (properties, shape, etc.) | All  |
+| `edit_object`       | Modify properties of an existing object            | All  |
+| `delete_object`     | Delete an object from a document                   | All  |
+| `set_placement`     | Set object position and rotation                   | All  |
+| `scale_object`      | Scale an object uniformly or non-uniformly         | All  |
+| `rotate_object`     | Rotate an object around an axis                    | All  |
+| `copy_object`       | Create a copy of an object                         | All  |
+| `mirror_object`     | Mirror an object across a plane (XY, XZ, YZ)       | All  |
+| `boolean_operation` | Fuse, cut, or intersect objects                    | All  |
+| `get_selection`     | Get currently selected objects                     | GUI  |
+| `set_selection`     | Select specific objects by name                    | GUI  |
+| `clear_selection`   | Clear all selections                               | GUI  |
+
+#### PartDesign - Sketching (14 tools)
+
+| Tool                     | Description                                     | Mode |
+| ------------------------ | ----------------------------------------------- | ---- |
+| `create_partdesign_body` | Create a PartDesign::Body container             | All  |
+| `create_sketch`          | Create a sketch on a plane or face              | All  |
+| `add_sketch_rectangle`   | Add a rectangle to a sketch                     | All  |
+| `add_sketch_circle`      | Add a circle to a sketch                        | All  |
+| `add_sketch_line`        | Add a line (with optional construction flag)    | All  |
+| `add_sketch_arc`         | Add an arc by center, radius, and angles        | All  |
+| `add_sketch_point`       | Add a point (useful for hole centers)           | All  |
+| `pad_sketch`             | Extrude a sketch (additive)                     | All  |
+| `pocket_sketch`          | Cut into solid using a sketch (subtractive)     | All  |
+| `revolution_sketch`      | Revolve a sketch around an axis (additive)      | All  |
+| `groove_sketch`          | Revolve a sketch around an axis (subtractive)   | All  |
+| `create_hole`            | Create parametric holes with optional threading | All  |
+| `loft_sketches`          | Create a loft through multiple sketches         | All  |
+| `sweep_sketch`           | Sweep a profile along a spine path              | All  |
+
+#### PartDesign - Patterns & Edges (5 tools)
+
+| Tool               | Description                                | Mode |
+| ------------------ | ------------------------------------------ | ---- |
+| `linear_pattern`   | Create linear pattern of a feature         | All  |
+| `polar_pattern`    | Create polar/circular pattern of a feature | All  |
+| `mirrored_feature` | Mirror a feature across a plane            | All  |
+| `fillet_edges`     | Add fillets (rounded edges)                | All  |
+| `chamfer_edges`    | Add chamfers (beveled edges)               | All  |
+
+#### View & Display (11 tools)
+
+| Tool                    | Description                                     | Mode |
+| ----------------------- | ----------------------------------------------- | ---- |
+| `get_screenshot`        | Capture a screenshot of the 3D view             | GUI  |
+| `set_view_angle`        | Set camera to standard views (Front, Top, etc.) | GUI  |
+| `fit_all`               | Zoom to fit all objects in view                 | GUI  |
+| `zoom_in`               | Zoom in by a factor                             | GUI  |
+| `zoom_out`              | Zoom out by a factor                            | GUI  |
+| `set_camera_position`   | Set camera position and look-at point           | GUI  |
+| `set_object_visibility` | Show/hide objects                               | GUI  |
+| `set_display_mode`      | Set display mode (Shaded, Wireframe, etc.)      | GUI  |
+| `set_object_color`      | Set object color as RGB values                  | GUI  |
+| `list_workbenches`      | List available FreeCAD workbenches              | All  |
+| `activate_workbench`    | Switch to a different workbench                 | All  |
+
+#### Undo/Redo (3 tools)
+
+| Tool                   | Description                        | Mode |
+| ---------------------- | ---------------------------------- | ---- |
+| `undo`                 | Undo the last operation            | All  |
+| `redo`                 | Redo a previously undone operation | All  |
+| `get_undo_redo_status` | Get available undo/redo operations | All  |
+
+#### Export/Import (7 tools)
+
+| Tool          | Description                                | Mode |
+| ------------- | ------------------------------------------ | ---- |
+| `export_step` | Export to STEP format (ISO CAD exchange)   | All  |
+| `export_stl`  | Export to STL format (3D printing)         | All  |
+| `export_3mf`  | Export to 3MF format (modern 3D printing)  | All  |
+| `export_obj`  | Export to OBJ format (Wavefront)           | All  |
+| `export_iges` | Export to IGES format (older CAD exchange) | All  |
+| `import_step` | Import a STEP file                         | All  |
+| `import_stl`  | Import an STL file as mesh                 | All  |
+
+#### Macro Management (6 tools)
+
+| Tool                         | Description                                    | Mode |
+| ---------------------------- | ---------------------------------------------- | ---- |
+| `list_macros`                | List all available FreeCAD macros              | All  |
+| `run_macro`                  | Execute a macro by name                        | All  |
+| `create_macro`               | Create a new macro file                        | All  |
+| `read_macro`                 | Read macro source code                         | All  |
+| `delete_macro`               | Delete a user macro                            | All  |
+| `create_macro_from_template` | Create macro from template (basic, part, etc.) | All  |
+
+#### Parts Library (2 tools)
+
+| Tool                       | Description                           | Mode |
+| -------------------------- | ------------------------------------- | ---- |
+| `list_parts_library`       | List parts in FreeCAD's parts library | All  |
+| `insert_part_from_library` | Insert a part from the library        | All  |
+
+---
+
+## FreeCAD Macros
+
+This project includes standalone FreeCAD macros that can be used independently of the MCP server. These are useful for FreeCAD users who want the macros without setting up the full MCP integration.
+
+### CutObjectForMagnets
+
+Intelligently cuts 3D objects along a plane and automatically places magnet holes with built-in surface penetration detection. Perfect for creating multi-part prints that snap together with magnets.
+
+**Features:**
+
+- Smart surface detection - skips holes that would penetrate outer surfaces
+- Supports preset planes (XY, XZ, YZ) or custom datum planes for angled cuts
+- Count-based hole placement with even distribution
+- Dual-part validation ensures alignment
+- Non-destructive (original object is hidden, not deleted)
+
+**Installation:**
+
+```bash
+# If you have the source:
+just install-cut-macro
+
+# Or manually copy CutObjectForMagnets.FCMacro from macros/Cut_Object_for_Magnets/
+# to your FreeCAD macro directory:
+#   macOS: ~/Library/Application Support/FreeCAD/Macro/
+#   Linux: ~/.local/share/FreeCAD/Macro/
+#   Windows: %APPDATA%/FreeCAD/Macro/
+```
+
+**Usage:**
+
+1. Open your model in FreeCAD
+1. Select the object to cut
+1. Go to **Macro -> Macros... -> CutObjectForMagnets -> Execute**
+1. Configure the cut plane and magnet hole parameters
+1. Click **Execute Cut**
+
+**Parameters:**
+
+- **Plane:** XY, XZ, YZ, or a model datum plane
+- **Offset:** Distance from origin (for preset planes)
+- **Hole diameter:** Size of magnet holes (e.g., 6.2mm for 6mm magnets)
+- **Hole depth:** How deep holes go into each piece
+- **Number of holes:** Total holes to create (evenly distributed)
+- **Edge clearance:** Distance from hole edge to outer surface
+
+See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md) for detailed documentation.
+
+**Uninstall:**
+
+```bash
+just uninstall-cut-macro
+```
+
+---
+
+## For Developers
+
+This section covers development setup, contributing, and working with the codebase.
+
+## MCP Server Development
+
+### Prerequisites
+
+- [mise](https://mise.jdx.dev/) - Tool version manager
+- [FreeCAD](https://www.freecadweb.org/) 0.21+ or 1.0+
+
+### Initial Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/spkane/freecad-mcp.git
+cd freecad-mcp
+
+# Install mise (if not already installed)
+curl https://mise.run | sh
+
+# Install all tools (Python 3.11, uv, just, pre-commit)
+mise trust
+mise install
+
+# Set up the development environment
+just setup
+```
+
+This installs:
+
+- **Python 3.11** - Required for FreeCAD ABI compatibility
+- **uv** - Fast Python package manager
+- **just** - Command runner for development workflows
+- **pre-commit** - Git hooks for code quality
+
+### MCP Client Configuration (Development)
+
+Create a `.mcp.json` file in the project directory:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "/path/to/mise/shims/uv",
+      "args": ["run", "--project", "/path/to/freecad-mcp", "freecad-mcp"],
+      "env": {
+        "FREECAD_MODE": "xmlrpc",
+        "FREECAD_SOCKET_HOST": "localhost",
+        "FREECAD_XMLRPC_PORT": "9875",
+        "PATH": "/path/to/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+      }
+    }
+  }
+}
+```
+
+**Replace the paths with your actual paths:**
+
+| Placeholder              | Description                    | Example (macOS)                |
+| ------------------------ | ------------------------------ | ------------------------------ |
+| `/path/to/mise/shims/uv` | Full path to uv via mise shims | `~/.local/share/mise/shims/uv` |
+| `/path/to/freecad-mcp`   | Project directory              | `~/dev/freecad-mcp`            |
+| `/path/to/mise/shims`    | mise shims directory for PATH  | `~/.local/share/mise/shims`    |
+
+**Finding your mise shims path:**
+
+```bash
+mise where uv | sed 's|/installs/.*|/shims|'
+# Or simply:
+echo ~/.local/share/mise/shims
+```
+
+### Development Workflow
+
+Commands are organized into modules. Use `just --list` to see all shortcuts, or `just --list <module>` to see module-specific commands.
+
+```bash
+# Show all available commands
+just --list
+
+# Show commands in a specific module
+just --list docker
+just --list quality
+just --list testing
+just --list freecad
+
+# Install/update dependencies
+just install
+
+# Run all checks (linting, type checking, tests)
+just all
+
+# Individual checks (shortcuts to module commands)
+just lint        # Run ruff linter (quality::lint)
+just typecheck   # Run mypy type checker (quality::typecheck)
+just test        # Run unit tests (testing::unit)
+just check       # Run all pre-commit hooks (quality::check)
+
+# Format code
+just format
+
+# Run with debug logging
+just run-debug
+
+# Docker commands
+just docker::build        # Build image for local architecture
+just docker::build-multi  # Build multi-arch image (amd64 + arm64)
+just docker::run          # Run container
+```
+
+### Running FreeCAD with the MCP Bridge
+
+#### GUI Mode (recommended for development)
+
+```bash
+# Install the bridge macro
+just install-bridge-macro
+
+# Start FreeCAD with auto-started bridge
+just run-gui
+
+# Or start FreeCAD manually, then:
+# Macro -> Macros -> StartMCPBridge -> Execute
+```
+
+#### Headless Mode (for automation/CI)
+
+```bash
+just run-headless
+```
+
+### Running Tests
+
+```bash
+# Unit tests only (no FreeCAD required)
+just test
+
+# Unit tests with coverage
+just test-cov
+
+# Integration tests (requires running FreeCAD bridge)
+just test-integration
+
+# All tests with automatic FreeCAD startup
+just integration
+```
+
+### Code Quality
+
+The project uses strict code quality checks via pre-commit:
+
+- **Ruff** - Linting and formatting
+- **MyPy** - Type checking
+- **Bandit** - Security scanning
+- **Codespell** - Spell checking
+- **Secrets scanning** - Gitleaks, detect-secrets, TruffleHog
+
+```bash
+# Run all pre-commit hooks
+just check
+
+# Run security/secrets scans
+just security
+just secrets
+```
+
+---
+
+## Macro Development
+
+### StartMCPBridge Macro
+
+The StartMCPBridge macro is required for the MCP server to communicate with FreeCAD. Developers working on the MCP integration should understand how it works.
+
+**Location:** `macros/Start_MCP_Bridge/`
+
+**What it does:**
+
+1. Adds the freecad-mcp project source to Python's path
+1. Imports and instantiates the `FreecadMCPPlugin`
+1. Starts both XML-RPC (port 9875) and JSON-RPC (port 9876) servers
+1. Registers handlers for executing Python code, managing documents, creating objects, etc.
+
+**Installation for development:**
+
+```bash
+just install-bridge-macro
+```
+
+This copies the macro to FreeCAD's macro directory and injects the correct project path.
+
+**Uninstall:**
+
+```bash
+just uninstall-bridge-macro
+```
+
+### CutObjectForMagnets Macro
+
+**Location:** `macros/Cut_Object_for_Magnets/`
+
+**Installation for development:**
+
+```bash
+just install-cut-macro
+```
+
+**Uninstall:**
+
+```bash
+just uninstall-cut-macro
+```
+
+See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md) for detailed documentation on the macro's internals.
+
+---
+
+## Architecture
+
+See [ARCHITECTURE-MCP.md](ARCHITECTURE-MCP.md) for detailed design documentation covering:
+
+- Module structure
+- Bridge communication protocols
+- Tool registration patterns
+- FreeCAD plugin architecture
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

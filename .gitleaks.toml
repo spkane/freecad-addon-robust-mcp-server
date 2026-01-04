@@ -1,0 +1,125 @@
+# Gitleaks Configuration
+# https://github.com/gitleaks/gitleaks
+#
+# This configuration extends the default rules with project-specific settings.
+
+title = "FreeCAD MCP Gitleaks Configuration"
+
+[extend]
+# Extend the default gitleaks configuration
+useDefault = true
+
+# ============================================================================
+# Custom Rules
+# ============================================================================
+
+[[rules]]
+id = "freecad-api-key"
+description = "FreeCAD or related API key"
+regex = '''(?i)(freecad|fcstd|fc)[-_]?(api)?[-_]?(key|token|secret)[\s]*[=:]\s*['"]?([a-zA-Z0-9_\-]{16,})['"]?'''
+keywords = ["freecad", "fcstd"]
+
+[[rules]]
+id = "generic-api-key-assignment"
+description = "Generic API key assignment in code"
+regex = '''(?i)(api[_-]?key|apikey|api[_-]?secret|api[_-]?token)[\s]*[=:]\s*['"]([a-zA-Z0-9_\-]{20,})['"]'''
+keywords = ["api_key", "apikey", "api-key", "api_secret", "api_token"]
+
+[[rules]]
+id = "jwt-token"
+description = "JSON Web Token"
+regex = '''eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*'''
+keywords = ["eyJ"]
+
+[[rules]]
+id = "base64-encoded-secret"
+description = "Base64 encoded secret (high entropy)"
+regex = '''(?i)(secret|password|token|key)[\s]*[=:]\s*['"]([A-Za-z0-9+/]{40,}={0,2})['"]'''
+keywords = ["secret", "password", "token", "key"]
+entropy = 4.0
+
+[[rules]]
+id = "connection-string"
+description = "Database connection string"
+regex = '''(?i)(mongodb|postgres|mysql|redis|amqp|mssql)://[^\s'"]+'''
+keywords = ["mongodb://", "postgres://", "mysql://", "redis://", "amqp://", "mssql://"]
+
+[[rules]]
+id = "private-key-header"
+description = "Private key file content"
+regex = '''-----BEGIN (RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY( BLOCK)?-----'''
+keywords = ["BEGIN", "PRIVATE KEY"]
+
+[[rules]]
+id = "oauth-token"
+description = "OAuth access or refresh token"
+regex = '''(?i)(oauth|access|refresh)[-_]?token[\s]*[=:]\s*['"]([a-zA-Z0-9_\-\.]{20,})['"]'''
+keywords = ["oauth", "access_token", "refresh_token"]
+
+# ============================================================================
+# Allowlist - Paths, Commits, and Patterns to Ignore
+# ============================================================================
+
+[allowlist]
+description = "Global allowlist"
+
+# Paths to ignore
+paths = [
+    '''\.gitleaks\.toml$''',
+    '''\.pre-commit-config\.yaml$''',
+    '''(^|/)tests?/''',
+    '''(^|/)test_.*\.py$''',
+    '''(^|/).*_test\.py$''',
+    '''(^|/)conftest\.py$''',
+    '''(^|/)fixtures/''',
+    '''(^|/)mocks?/''',
+    '''\.md$''',             # Documentation files
+    '''go\.sum$''',
+    '''package-lock\.json$''',
+    '''yarn\.lock$''',
+    '''uv\.lock$''',
+    '''poetry\.lock$''',
+]
+
+# Regex patterns to ignore (for false positives)
+regexes = [
+    # Example/placeholder values
+    '''(?i)(example|sample|placeholder|dummy|fake|test|mock)''',
+    # Documentation patterns
+    '''your[-_]?(api)?[-_]?(key|token|secret)[-_]?here''',
+    '''<.*?(key|token|secret|password).*?>''',
+    '''xxx+''',
+    '''CHANGE[-_]?ME''',
+    # Common false positives
+    '''(?i)public[-_]?key''',  # Public keys are not secrets
+    '''sk-\.\.\.''',           # Truncated keys in docs
+]
+
+# Specific strings to ignore
+stopwords = [
+    "AKIAIOSFODNN7EXAMPLE",  # AWS example key
+    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # AWS example secret
+    "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",  # GitHub placeholder
+]
+
+# ============================================================================
+# Rule-specific Allowlists
+# ============================================================================
+
+# Allow specific patterns for certain rules
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+regexes = [
+    '''(?i)example''',
+    '''(?i)placeholder''',
+    '''(?i)your[-_]key[-_]here''',
+]
+
+# ============================================================================
+# Entropy Settings
+# ============================================================================
+
+# Minimum entropy threshold for entropy-based detection
+# Higher values = fewer false positives but may miss some secrets
+# Default is 3.5, we use 4.0 for fewer false positives

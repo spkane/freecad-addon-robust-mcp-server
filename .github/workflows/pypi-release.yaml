@@ -1,0 +1,236 @@
+name: PyPI Release
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+# Cancel in-progress runs for the same tag
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate semantic version tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # Validate semantic versioning format (v1.2.3 or v1.2.3-prerelease)
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+              echo "ERROR: Tag '$TAG' does not follow semantic versioning (vX.Y.Z or vX.Y.Z-prerelease)"
+              exit 1
+          fi
+
+          # Extract version without 'v' prefix
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this is a prerelease
+          if [[ "$TAG" =~ -[a-zA-Z0-9.]+ ]]; then
+              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Parsed version: $VERSION (prerelease: ${{ steps.version.outputs.is_prerelease }})"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install build dependencies
+        run: uv sync --all-extras
+
+      - name: Verify version in pyproject.toml
+        run: |
+          # Extract version from pyproject.toml
+          PYPROJECT_VERSION=$(grep -E '^version\s*=' pyproject.toml | head -1 | sed 's/.*=\s*"\([^"]*\)".*/\1/')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "Git tag version: $TAG_VERSION"
+
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+              echo "ERROR: Version mismatch!"
+              echo "  pyproject.toml: $PYPROJECT_VERSION"
+              echo "  Git tag: $TAG_VERSION"
+              echo ""
+              echo "Please update pyproject.toml to match the release tag."
+              exit 1
+          fi
+
+          echo "Version check passed!"
+
+      - name: Build package
+        run: uv build
+
+      - name: Check package
+        run: |
+          uv run twine check dist/*
+
+      - name: List built artifacts
+        run: ls -la dist/
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  test-install:
+    name: Test Installation
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11"]
+
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Install package from wheel
+        run: |
+          pip install dist/*.whl
+
+      - name: Verify installation
+        run: |
+          # Check that the package is installed
+          pip show freecad-robust-mcp
+
+          # Check that the CLI is available
+          freecad-mcp --help || echo "CLI help check completed"
+
+          # Check that the module can be imported
+          python -c "import freecad_mcp; print(f'freecad-robust-mcp version: {freecad_mcp.__version__ if hasattr(freecad_mcp, \"__version__\") else \"unknown\"}')"
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: [build, test-install]
+    runs-on: ubuntu-latest
+    # Only publish prereleases to TestPyPI
+    if: contains(github.ref, '-')
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/freecad-robust-mcp
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build, test-install]
+    runs-on: ubuntu-latest
+    # Only publish stable releases to PyPI
+    if: ${{ !contains(github.ref, '-') }}
+    environment:
+      name: pypi
+      url: https://pypi.org/p/freecad-robust-mcp
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  create-github-release-assets:
+    name: Add Assets to GitHub Release
+    needs: [build, test-install]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  generate-summary:
+    name: Generate Release Summary
+    needs: [publish-pypi, publish-testpypi]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate release summary
+        run: |
+          echo "## PyPI Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ github.ref }}" == *"-"* ]]; then
+              echo "**Type:** Prerelease (published to TestPyPI)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Install from TestPyPI" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+              echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ freecad-robust-mcp" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+              echo "**Type:** Stable release (published to PyPI)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Install from PyPI" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+              echo "pip install freecad-robust-mcp" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Or with uv:" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+              echo "uv pip install freecad-robust-mcp" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi

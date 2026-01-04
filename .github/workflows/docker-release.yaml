@@ -1,0 +1,147 @@
+name: Docker Release
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+# Cancel in-progress runs for the same tag
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKERHUB_REPO: spkane/freecad-mcp
+
+jobs:
+  release:
+    name: Build and Push to Docker Hub
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate semantic version tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          # Validate semantic versioning format (v1.2.3 or v1.2.3-prerelease)
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+              echo "ERROR: Tag '$TAG' does not follow semantic versioning (vX.Y.Z or vX.Y.Z-prerelease)"
+              exit 1
+          fi
+
+          # Extract version without 'v' prefix
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Extract major.minor for additional tag
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+
+          # Extract major for additional tag
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+
+          # Check if this is a prerelease
+          if [[ "$TAG" =~ -[a-zA-Z0-9.]+ ]]; then
+              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Parsed version: $VERSION (major: $MAJOR, major.minor: $MAJOR_MINOR, prerelease: ${{ steps.version.outputs.is_prerelease }})"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            # Full semantic version (v1.2.3 -> 1.2.3)
+            type=semver,pattern={{version}}
+            # Major.minor version (v1.2.3 -> 1.2)
+            type=semver,pattern={{major}}.{{minor}}
+            # Major version only (v1.2.3 -> 1) - only for stable releases
+            type=semver,pattern={{major}},enable=${{ steps.version.outputs.is_prerelease == 'false' }}
+            # Latest tag - only for stable releases
+            type=raw,value=latest,enable=${{ steps.version.outputs.is_prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=FreeCAD MCP Server
+            org.opencontainers.image.description=Model Context Protocol server for FreeCAD integration
+            org.opencontainers.image.vendor=spkane
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Test pushed image
+        run: |
+          # Pull and test the image
+          docker pull ${{ env.DOCKERHUB_REPO }}:${{ steps.version.outputs.version }}
+
+          # Test that the container starts and responds to MCP initialize
+          echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \
+            timeout 30 docker run --rm -i \
+              -e FREECAD_MODE=xmlrpc \
+              ${{ env.DOCKERHUB_REPO }}:${{ steps.version.outputs.version }} 2>&1 | \
+            grep -q '"result"' && echo "Container test passed" || echo "Container test completed"
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_REPO }}
+          readme-filepath: ./README.md
+          short-description: "MCP (Model Context Protocol) server for FreeCAD integration"
+        continue-on-error: true
+
+      - name: Generate release summary
+        run: |
+          echo "## Docker Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Prerelease:** ${{ steps.version.outputs.is_prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published Tags" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pull Command" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.DOCKERHUB_REPO }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

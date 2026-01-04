@@ -1,0 +1,128 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out this form as completely as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Start FreeCAD with '...'
+        2. Run tool '....'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened? Include any error messages.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection-mode
+    attributes:
+      label: Connection Mode
+      description: Which connection mode are you using?
+      options:
+        - xmlrpc (recommended)
+        - socket
+        - embedded
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: freecad-mode
+    attributes:
+      label: FreeCAD Mode
+      description: How are you running FreeCAD?
+      options:
+        - GUI mode (FreeCAD with window)
+        - Headless mode (FreeCADCmd)
+        - Docker container
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: freecad-version
+    attributes:
+      label: FreeCAD Version
+      description: FreeCAD version (e.g., 1.0.0, 0.21.2)
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Linux (Ubuntu/Debian)
+        - Linux (Fedora/RHEL)
+        - Linux (Other)
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      description: Python version (e.g., 3.11.9)
+      placeholder: "3.11.9"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Log Output
+      description: |
+        Please copy and paste any relevant log output. This will be automatically formatted as code.
+        Include FreeCAD console output and/or MCP server logs if available.
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or files about the problem here.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched the existing issues to make sure this is not a duplicate
+          required: true
+        - label: I have read the README and documentation
+          required: true

@@ -1,0 +1,216 @@
+"""Execution tools for FreeCAD MCP server.
+
+This module provides tools for executing Python code in FreeCAD's context,
+getting version information, and accessing the console.
+"""
+
+import os
+import platform
+import socket
+from pathlib import Path
+from typing import Any
+
+
+def register_execution_tools(mcp, get_bridge) -> None:
+    """Register execution-related tools with the MCP server.
+
+    Args:
+        mcp: The FastMCP server instance.
+        get_bridge: Async function to get the active bridge.
+    """
+
+    @mcp.tool()
+    async def execute_python(
+        code: str,
+        timeout_ms: int = 30000,
+    ) -> dict[str, Any]:
+        """Execute Python code in FreeCAD's Python console context.
+
+        This tool allows you to run arbitrary Python code within FreeCAD's
+        environment, with access to all FreeCAD modules and the active document.
+
+        Args:
+            code: Python code to execute. Use `_result_ = value` to return data
+                to the caller. The code has access to FreeCAD, App, FreeCADGui,
+                and Gui modules.
+            timeout_ms: Maximum execution time in milliseconds. Defaults to 30000.
+
+        Returns:
+            Dictionary containing execution results:
+                - success: Whether execution completed without errors
+                - result: The value assigned to `_result_` variable
+                - stdout: Captured standard output
+                - stderr: Captured standard error
+                - execution_time_ms: Time taken in milliseconds
+                - error_type: Type of exception if failed (None if success)
+                - error_traceback: Full traceback if failed (None if success)
+
+        Example:
+            Create a simple box and return its volume::
+
+                execute_python('''
+                import Part
+                box = Part.makeBox(10, 20, 30)
+                _result_ = {"volume": box.Volume, "area": box.Area}
+                ''')
+
+            List all objects in the active document::
+
+                execute_python('''
+                doc = FreeCAD.ActiveDocument
+                if doc:
+                    _result_ = [obj.Name for obj in doc.Objects]
+                else:
+                    _result_ = []
+                ''')
+        """
+        bridge = await get_bridge()
+        result = await bridge.execute_python(code, timeout_ms)
+        return {
+            "success": result.success,
+            "result": result.result,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "execution_time_ms": result.execution_time_ms,
+            "error_type": result.error_type,
+            "error_traceback": result.error_traceback,
+        }
+
+    @mcp.tool()
+    async def get_freecad_version() -> dict[str, Any]:
+        """Get FreeCAD version and build information.
+
+        Returns:
+            Dictionary containing version information:
+                - version: Version string (e.g., "0.21.2")
+                - version_tuple: Version as list of integers
+                - build_date: Build date string
+                - python_version: Embedded Python version
+                - gui_available: Whether GUI is available
+        """
+        bridge = await get_bridge()
+        return await bridge.get_freecad_version()
+
+    @mcp.tool()
+    async def get_connection_status() -> dict[str, Any]:
+        """Get the current FreeCAD connection status.
+
+        Returns:
+            Dictionary containing connection information:
+                - connected: Whether bridge is connected
+                - mode: Connection mode (embedded, xmlrpc, socket)
+                - freecad_version: FreeCAD version string
+                - gui_available: Whether GUI is available
+                - last_ping_ms: Last ping latency in milliseconds
+                - error: Error message if not connected
+        """
+        bridge = await get_bridge()
+        status = await bridge.get_status()
+        return {
+            "connected": status.connected,
+            "mode": status.mode,
+            "freecad_version": status.freecad_version,
+            "gui_available": status.gui_available,
+            "last_ping_ms": status.last_ping_ms,
+            "error": status.error,
+        }
+
+    @mcp.tool()
+    async def get_console_output(lines: int = 100) -> list[str]:
+        """Get recent FreeCAD console output.
+
+        Args:
+            lines: Maximum number of lines to return. Defaults to 100.
+
+        Returns:
+            List of console output lines, most recent last.
+        """
+        bridge = await get_bridge()
+        return await bridge.get_console_output(lines)
+
+    @mcp.tool()
+    async def get_mcp_server_environment() -> dict[str, Any]:
+        """Get environment information about the MCP server process.
+
+        This tool returns information about the environment where the MCP server
+        is running, which is useful for debugging and verifying which MCP server
+        instance you are connected to (e.g., host vs Docker container).
+
+        Returns:
+            Dictionary containing environment information:
+                - hostname: Machine hostname
+                - os_name: Operating system name (Linux, Darwin, Windows)
+                - os_version: Operating system version
+                - platform: Platform identifier string
+                - python_version: Python version running the MCP server
+                - in_docker: Whether running inside a Docker container
+                - docker_container_id: Container ID if in Docker (first 12 chars)
+                - env_vars: Selected environment variables for debugging:
+                    - FREECAD_MODE: Connection mode
+                    - FREECAD_SOCKET_HOST: Socket host
+                    - FREECAD_SOCKET_PORT: Socket port
+                    - FREECAD_XMLRPC_PORT: XML-RPC port
+
+        Example:
+            Verify you're talking to the containerized MCP server::
+
+                env = get_mcp_server_environment()
+                if env["in_docker"]:
+                    print(f"Connected to container: {env['docker_container_id']}")
+                else:
+                    print("Connected to host MCP server")
+        """
+
+        def _detect_docker() -> tuple[bool, str | None]:
+            """Detect if running inside Docker and get container ID."""
+            # Check for .dockerenv file (most reliable)
+            dockerenv = Path("/.dockerenv")
+            if dockerenv.exists():
+                # Try to get container ID from cgroup
+                container_id = None
+                try:
+                    cgroup_path = Path("/proc/self/cgroup")
+                    with cgroup_path.open() as f:
+                        for line in f:
+                            if "docker" in line or "containerd" in line:
+                                # Extract container ID from path
+                                parts = line.strip().split("/")
+                                if parts:
+                                    cid = parts[-1]
+                                    # Container IDs are 64 hex chars
+                                    if len(cid) >= 12:
+                                        container_id = cid[:12]
+                                        break
+                except (OSError, IndexError):
+                    pass
+                return True, container_id
+
+            # Also check cgroup for containerized environments
+            try:
+                cgroup_init = Path("/proc/1/cgroup")
+                with cgroup_init.open() as f:
+                    content = f.read()
+                    if "docker" in content or "containerd" in content:
+                        return True, None
+            except OSError:
+                pass
+
+            return False, None
+
+        in_docker, container_id = _detect_docker()
+
+        return {
+            "hostname": socket.gethostname(),
+            "os_name": platform.system(),
+            "os_version": platform.release(),
+            "platform": platform.platform(),
+            "python_version": platform.python_version(),
+            "in_docker": in_docker,
+            "docker_container_id": container_id,
+            "env_vars": {
+                "FREECAD_MODE": os.environ.get("FREECAD_MODE", ""),
+                "FREECAD_SOCKET_HOST": os.environ.get("FREECAD_SOCKET_HOST", ""),
+                "FREECAD_SOCKET_PORT": os.environ.get("FREECAD_SOCKET_PORT", ""),
+                "FREECAD_XMLRPC_PORT": os.environ.get("FREECAD_XMLRPC_PORT", ""),
+            },
+        }
