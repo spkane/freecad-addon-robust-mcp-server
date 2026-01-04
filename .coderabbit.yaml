@@ -1,0 +1,147 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit Configuration
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: en-US
+
+# Tone instructions for reviews
+tone_instructions: >
+  Be concise and direct. Focus on actionable feedback.
+  This is a Python project using modern tooling (uv, ruff, mypy).
+  The codebase integrates with FreeCAD CAD software via MCP protocol.
+
+early_access: false
+
+# Enable or disable reviews
+reviews:
+  # Enable automated code reviews
+  auto_review:
+    enabled: true
+    # Don't review drafts until ready
+    drafts: false
+    # Review base branches (PRs to main)
+    base_branches:
+      - main
+      - master
+
+  # Review profile - assertive catches more issues
+  profile: assertive
+
+  # Request changes when issues found
+  request_changes_workflow: true
+
+  # High-level summary in PR comments
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+
+  # Add poem to review (disabled - keep it professional)
+  poem: false
+
+  # Collapse walkthrough in large PRs
+  collapse_walkthrough: true
+
+  # Review labeling
+  labeling_instructions:
+    - label: "security"
+      instructions: "Apply when security vulnerabilities are found"
+    - label: "breaking-change"
+      instructions: "Apply when changes break backward compatibility"
+    - label: "documentation"
+      instructions: "Apply when documentation changes are needed"
+
+  # Paths to always review carefully
+  path_instructions:
+    - path: "src/freecad_mcp/**/*.py"
+      instructions: >
+        This is the core MCP server code. Pay attention to:
+        - Async/await patterns
+        - Error handling for FreeCAD operations
+        - Type hints and Pydantic models
+        - Security of execute_python functionality
+    - path: "src/freecad_mcp/tools/**/*.py"
+      instructions: >
+        These are MCP tool implementations. Ensure:
+        - Proper docstrings for tool discovery
+        - Consistent error handling patterns
+        - GUI-safe checks (FreeCAD.GuiUp) for view operations
+    - path: "src/freecad_mcp/freecad_plugin/**/*.py"
+      instructions: >
+        This code runs inside FreeCAD's Python environment.
+        It cannot import packages from the project's virtualenv (mcp, pydantic).
+        Watch for accidental imports of project dependencies.
+    - path: "macros/**/*.FCMacro"
+      instructions: >
+        FreeCAD macro files. These are standalone Python scripts.
+        They run in FreeCAD's environment with access to FreeCAD, Part, etc.
+    - path: "tests/**/*.py"
+      instructions: >
+        Test files. Ensure good test coverage and clear assertions.
+        Integration tests require FreeCAD MCP bridge to be running.
+    - path: ".github/workflows/**/*.yaml"
+      instructions: >
+        GitHub Actions workflows. Check for:
+        - Proper caching configuration
+        - Security of secrets handling
+        - Correct job dependencies
+    - path: "pyproject.toml"
+      instructions: >
+        Project configuration. Watch for:
+        - Dependency version constraints
+        - Tool configuration consistency (ruff, mypy, pytest)
+
+  # Tools to use for analysis
+  tools:
+    # Python-specific tools
+    ruff:
+      enabled: true
+    # General tools
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    hadolint:
+      enabled: true
+
+# Chat configuration
+chat:
+  auto_reply: true
+
+# Knowledge base for context
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  jira:
+    project_keys: []
+  pull_requests:
+    scope: auto
+
+# Files and paths to ignore in reviews
+path_filters:
+  # Lock files - auto-generated
+  - "!uv.lock"
+  - "!poetry.lock"
+  - "!package-lock.json"
+  # Generated/cached files
+  - "!**/.mypy_cache/**"
+  - "!**/.pytest_cache/**"
+  - "!**/.ruff_cache/**"
+  - "!**/__pycache__/**"
+  - "!**/*.pyc"
+  # Virtual environments
+  - "!.venv/**"
+  - "!venv/**"
+  # IDE settings (except shared configs)
+  - "!.idea/**"
+  # Build artifacts
+  - "!dist/**"
+  - "!build/**"
+  - "!*.egg-info/**"
+  # Documentation build output
+  - "!site/**"
+  # Secrets baseline (reviewed separately)
+  - "!.secrets.baseline"
