@@ -96,7 +96,7 @@ cython_debug/
 .ruff_cache/
 
 # UV
-uv.lock
+# Note: uv.lock is committed for reproducible CI builds
 
 # OS
 .DS_Store
