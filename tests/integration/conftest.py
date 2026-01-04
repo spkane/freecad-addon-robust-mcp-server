@@ -2,10 +2,17 @@
 
 This module handles connection checking and provides consolidated skip behavior
 when the FreeCAD MCP bridge is not available.
+
+Instance ID Verification:
+    The FreeCAD MCP bridge generates a unique instance ID at startup which is
+    printed to stdout. Tests can capture this ID and verify they're connected
+    to the expected instance using the `bridge_instance_id` fixture or by
+    calling proxy.get_instance_id().
 """
 
 from __future__ import annotations
 
+import os
 import warnings
 import xmlrpc.client
 from typing import Any
@@ -15,19 +22,20 @@ import pytest
 # Global flag to track bridge availability (checked once per session)
 _bridge_available: bool | None = None
 _bridge_error: str | None = None
+_bridge_instance_id: str | None = None
 _warning_emitted: bool = False
 
 
-def _check_bridge_connection() -> tuple[bool, str | None]:
-    """Check if the FreeCAD MCP bridge is available.
+def _check_bridge_connection() -> tuple[bool, str | None, str | None]:
+    """Check if the FreeCAD MCP bridge is available and get its instance ID.
 
     Returns:
-        Tuple of (is_available, error_message)
+        Tuple of (is_available, error_message, instance_id)
     """
-    global _bridge_available, _bridge_error
+    global _bridge_available, _bridge_error, _bridge_instance_id
 
     if _bridge_available is not None:
-        return _bridge_available, _bridge_error
+        return _bridge_available, _bridge_error, _bridge_instance_id
 
     try:
         proxy = xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
@@ -35,21 +43,27 @@ def _check_bridge_connection() -> tuple[bool, str | None]:
         if result.get("pong"):
             _bridge_available = True
             _bridge_error = None
+            # The ping response includes instance_id
+            _bridge_instance_id = result.get("instance_id")
         else:
             _bridge_available = False
             _bridge_error = "FreeCAD MCP bridge not responding to ping"
+            _bridge_instance_id = None
     except ConnectionRefusedError:
         _bridge_available = False
         _bridge_error = "Connection refused - FreeCAD MCP bridge not running"
+        _bridge_instance_id = None
     except Exception as e:
         _bridge_available = False
         _bridge_error = f"Cannot connect to FreeCAD MCP bridge: {e}"
+        _bridge_instance_id = None
 
-    return _bridge_available, _bridge_error
+    return _bridge_available, _bridge_error, _bridge_instance_id
 
 
 def pytest_collection_modifyitems(
-    _config: pytest.Config, items: list[pytest.Item]
+    config: pytest.Config,  # noqa: ARG001
+    items: list[pytest.Item],
 ) -> None:
     """Skip all integration tests if the bridge is not available.
 
@@ -67,7 +81,7 @@ def pytest_collection_modifyitems(
         return
 
     # Check bridge connection once
-    is_available, error = _check_bridge_connection()
+    is_available, error, instance_id = _check_bridge_connection()
 
     if not is_available:
         # Apply skip marker to all integration tests
@@ -93,8 +107,73 @@ def xmlrpc_proxy() -> xmlrpc.client.ServerProxy:
     This fixture is shared across all integration test modules.
     The connection check has already been performed during collection.
     """
-    is_available, error = _check_bridge_connection()
+    is_available, error, _ = _check_bridge_connection()
     if not is_available:
         pytest.skip(error or "FreeCAD MCP bridge not available")
 
     return xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
+
+
+@pytest.fixture(scope="module")
+def bridge_instance_id() -> str | None:
+    """Get the instance ID of the connected FreeCAD MCP bridge.
+
+    This fixture returns the unique instance ID that was generated when
+    the bridge started. Use this to verify you're connected to the expected
+    bridge instance.
+
+    Returns:
+        The instance ID string, or None if not available.
+    """
+    is_available, _, instance_id = _check_bridge_connection()
+    if not is_available:
+        return None
+    return instance_id
+
+
+@pytest.fixture(scope="module")
+def expected_bridge_instance_id() -> str | None:
+    """Get the expected bridge instance ID from environment variable.
+
+    When running tests that start the bridge themselves (e.g., in CI),
+    the startup script can capture the instance ID from the bridge's
+    stdout and set it as EXPECTED_BRIDGE_INSTANCE_ID environment variable.
+
+    Returns:
+        The expected instance ID from env, or None if not set.
+    """
+    return os.environ.get("EXPECTED_BRIDGE_INSTANCE_ID")
+
+
+def verify_bridge_instance(
+    proxy: xmlrpc.client.ServerProxy,
+    expected_id: str | None,
+) -> bool:
+    """Verify we're connected to the expected bridge instance.
+
+    Args:
+        proxy: XML-RPC proxy to the bridge.
+        expected_id: Expected instance ID, or None to skip verification.
+
+    Returns:
+        True if verification passed or was skipped (no expected_id).
+
+    Raises:
+        AssertionError: If instance ID doesn't match expected.
+    """
+    if expected_id is None:
+        return True
+
+    result: dict[str, Any] = proxy.get_instance_id()  # type: ignore[assignment]
+    actual_id = result.get("instance_id")
+
+    if actual_id != expected_id:
+        msg = (
+            f"Bridge instance ID mismatch!\n"
+            f"  Expected: {expected_id}\n"
+            f"  Actual:   {actual_id}\n"
+            f"This may indicate you're connected to a different bridge instance."
+        )
+        raise AssertionError(msg)
+
+    return True

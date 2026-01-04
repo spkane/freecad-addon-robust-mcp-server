@@ -358,7 +358,7 @@ def register_resources(mcp, get_bridge) -> None:
                         },
                         {
                             "name": "get_mcp_server_environment",
-                            "description": "Get MCP server environment info (OS, hostname, Docker detection)",
+                            "description": "Get MCP server environment info (instance_id, OS, hostname, Docker detection)",
                             "key_params": [],
                         },
                     ],

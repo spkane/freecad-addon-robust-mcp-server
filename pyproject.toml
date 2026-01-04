@@ -275,7 +275,9 @@ exclude_dirs = ["tests", "docs"]
 skips = [
     "B101",  # Allow asserts
     "B102",  # exec is required for FreeCAD Python execution
+    "B104",  # Binding to 0.0.0.0 is intentional for container/network access
     "B110",  # try-except-pass used for optional cleanup
+    "B112",  # try-except-continue used for iterating over faces safely
     "B411",  # XML-RPC is required for FreeCAD compatibility
 ]
 

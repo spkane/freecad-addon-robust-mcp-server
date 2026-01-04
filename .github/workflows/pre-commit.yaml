@@ -23,15 +23,11 @@ jobs:
       - name: Install mise
         uses: jdx/mise-action@v2
 
-      - name: Install uv
+      - name: Cache uv dependencies
         uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
-
-      - name: Set up Python
-        run: uv python install 3.11
 
       - name: Install dependencies
         run: uv sync --all-extras

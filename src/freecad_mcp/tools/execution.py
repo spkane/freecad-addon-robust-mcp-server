@@ -10,6 +10,8 @@ import socket
 from pathlib import Path
 from typing import Any
 
+from freecad_mcp.server import get_instance_id
+
 
 def register_execution_tools(mcp, get_bridge) -> None:
     """Register execution-related tools with the MCP server.
@@ -138,6 +140,9 @@ def register_execution_tools(mcp, get_bridge) -> None:
 
         Returns:
             Dictionary containing environment information:
+                - instance_id: Unique UUID for this server instance (generated at
+                    startup). Use this to verify you're connected to the expected
+                    server instance in tests and automation.
                 - hostname: Machine hostname
                 - os_name: Operating system name (Linux, Darwin, Windows)
                 - os_version: Operating system version
@@ -152,6 +157,12 @@ def register_execution_tools(mcp, get_bridge) -> None:
                     - FREECAD_XMLRPC_PORT: XML-RPC port
 
         Example:
+            Verify you're connected to the expected server instance::
+
+                env = get_mcp_server_environment()
+                expected_id = "abc123..."  # Captured from server startup output
+                assert env["instance_id"] == expected_id
+
             Verify you're talking to the containerized MCP server::
 
                 env = get_mcp_server_environment()
@@ -200,6 +211,7 @@ def register_execution_tools(mcp, get_bridge) -> None:
         in_docker, container_id = _detect_docker()
 
         return {
+            "instance_id": get_instance_id(),
             "hostname": socket.gethostname(),
             "os_name": platform.system(),
             "os_version": platform.release(),

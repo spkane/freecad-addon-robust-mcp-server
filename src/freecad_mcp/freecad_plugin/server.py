@@ -22,9 +22,11 @@ import contextlib
 import io
 import json
 import queue
+import sys
 import threading
 import time
 import traceback
+import uuid
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Any
@@ -96,6 +98,9 @@ class FreecadMCPPlugin:
             xmlrpc_port: Port for XML-RPC server.
             enable_xmlrpc: Whether to enable XML-RPC server.
         """
+        # Generate unique instance ID for this server
+        self._instance_id = str(uuid.uuid4())
+
         self._host = host
         self._port = port
         self._xmlrpc_port = xmlrpc_port
@@ -129,6 +134,14 @@ class FreecadMCPPlugin:
 
         self._running = True
 
+        # Print instance ID to stdout for test automation to capture
+        # This is printed before logging to ensure it's easily parseable
+        print(
+            f"FREECAD_MCP_BRIDGE_INSTANCE_ID={self._instance_id}",
+            file=sys.stdout,
+            flush=True,
+        )
+
         # Start the queue processing timer on the main thread
         self._start_queue_processor()
 
@@ -151,7 +164,8 @@ class FreecadMCPPlugin:
 
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage(
-                f"MCP Bridge started:\n  - JSON-RPC: {self._host}:{self._port}\n"
+                f"MCP Bridge started (Instance ID: {self._instance_id}):\n"
+                f"  - JSON-RPC: {self._host}:{self._port}\n"
             )
             if self._enable_xmlrpc:
                 FreeCAD.Console.PrintMessage(
@@ -555,7 +569,19 @@ class FreecadMCPPlugin:
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"pong": True, "timestamp": time.time()},
+                "result": {
+                    "pong": True,
+                    "timestamp": time.time(),
+                    "instance_id": self._instance_id,
+                },
+            }
+
+        # Handle get_instance_id specially (no queue needed)
+        if method == "get_instance_id":
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"instance_id": self._instance_id},
             }
 
         # Handle execute via queue
@@ -602,6 +628,9 @@ class FreecadMCPPlugin:
         # Register methods (type: ignore needed - xmlrpc types are overly restrictive)
         self._xmlrpc_server.register_function(self._xmlrpc_execute, "execute")  # type: ignore[arg-type]
         self._xmlrpc_server.register_function(self._xmlrpc_ping, "ping")  # type: ignore[arg-type]
+        self._xmlrpc_server.register_function(
+            self._xmlrpc_get_instance_id, "get_instance_id"
+        )  # type: ignore[arg-type]
         self._xmlrpc_server.register_function(self._xmlrpc_get_view, "get_view")  # type: ignore[arg-type]
         self._xmlrpc_server.register_introspection_functions()
 
@@ -610,7 +639,19 @@ class FreecadMCPPlugin:
 
     def _xmlrpc_ping(self) -> dict[str, Any]:
         """XML-RPC ping handler."""
-        return {"pong": True, "timestamp": time.time()}
+        return {
+            "pong": True,
+            "timestamp": time.time(),
+            "instance_id": self._instance_id,
+        }
+
+    def _xmlrpc_get_instance_id(self) -> dict[str, Any]:
+        """XML-RPC get_instance_id handler.
+
+        Returns:
+            Dictionary containing the unique instance ID for this bridge.
+        """
+        return {"instance_id": self._instance_id}
 
     def _xmlrpc_execute(self, code: str) -> dict[str, Any]:
         """XML-RPC execute handler (neka-nat compatible).
