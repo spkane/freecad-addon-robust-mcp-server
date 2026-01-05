@@ -40,7 +40,9 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
       - [Macro Management (6 tools)](#macro-management-6-tools)
       - [Parts Library (2 tools)](#parts-library-2-tools)
   - [FreeCAD Macros](#freecad-macros)
+    - [Downloading Macros](#downloading-macros)
     - [CutObjectForMagnets](#cutobjectformagnets)
+    - [MultiExport](#multiexport)
   - [For Developers](#for-developers)
   - [MCP Server Development](#mcp-server-development)
     - [Prerequisites](#prerequisites)
@@ -55,6 +57,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
   - [Macro Development](#macro-development)
     - [StartMCPBridge Macro](#startmcpbridge-macro)
     - [CutObjectForMagnets Macro](#cutobjectformagnets-macro)
+    - [MultiExport Macro](#multiexport-macro)
   - [Architecture](#architecture)
   - [License](#license)
 
@@ -413,6 +416,20 @@ The MCP server provides **83 tools** organized into categories. Tools marked wit
 
 This project includes standalone FreeCAD macros that can be used independently of the MCP server. These are useful for FreeCAD users who want the macros without setting up the full MCP integration.
 
+### Downloading Macros
+
+Pre-packaged macro archives are available with each release:
+
+1. Go to the [Releases page](https://github.com/spkane/freecad-mcp/releases)
+1. Download the macro archive for your platform:
+   - `freecad-macros-X.Y.Z.tar.gz` (Linux/macOS)
+   - `freecad-macros-X.Y.Z.zip` (Windows)
+1. Extract and copy the `.FCMacro` files to your FreeCAD macro directory:
+   - **macOS**: `~/Library/Application Support/FreeCAD/Macro/`
+   - **Linux**: `~/.local/share/FreeCAD/Macro/`
+   - **Windows**: `%APPDATA%/FreeCAD/Macro/`
+1. **(Optional)** Copy the `.svg` icon files to the same directory for custom icons in FreeCAD's macro menu
+
 ### CutObjectForMagnets
 
 Intelligently cuts 3D objects along a plane and automatically places magnet holes with built-in surface penetration detection. Perfect for creating multi-part prints that snap together with magnets.
@@ -461,6 +478,62 @@ See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Obj
 
 ```bash
 just uninstall-cut-macro
+```
+
+### MultiExport
+
+Export selected FreeCAD objects to multiple file formats simultaneously. Supports 8 formats with a convenient checkbox dialog and smart defaults.
+
+**Features:**
+
+- Export to 8 formats: STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF
+- Smart defaults: STL, STEP, and 3MF pre-selected
+- Intelligent path defaults based on document location
+- Configurable mesh quality (tolerance and deflection)
+- Real-time file preview before export
+- Multi-object batch export support
+
+**Installation:**
+
+```bash
+# If you have the source:
+just freecad::install-export-macro
+
+# Or manually copy MultiExport.FCMacro from macros/Multi_Export/
+# to your FreeCAD macro directory:
+#   macOS: ~/Library/Application Support/FreeCAD/Macro/
+#   Linux: ~/.local/share/FreeCAD/Macro/
+#   Windows: %APPDATA%/FreeCAD/Macro/
+```
+
+**Usage:**
+
+1. Select one or more objects in FreeCAD (Ctrl+click for multiple)
+1. Go to **Macro -> Macros... -> MultiExport -> Execute**
+1. Choose export formats (checkboxes)
+1. Set output directory and base filename
+1. Adjust mesh quality if needed
+1. Click **Export**
+
+**Supported Formats:**
+
+| Format | Extension | Default | Description                          |
+| ------ | --------- | ------- | ------------------------------------ |
+| STL    | `.stl`    | Yes     | Standard 3D printing format          |
+| STEP   | `.step`   | Yes     | CAD interchange (preserves geometry) |
+| 3MF    | `.3mf`    | Yes     | Modern 3D printing with metadata     |
+| OBJ    | `.obj`    | No      | 3D graphics and game engines         |
+| IGES   | `.iges`   | No      | Legacy CAD interchange               |
+| BREP   | `.brep`   | No      | OpenCASCADE native format            |
+| PLY    | `.ply`    | No      | Polygon file for 3D scanning         |
+| AMF    | `.amf`    | No      | Additive manufacturing format        |
+
+See [macros/Multi_Export/README-MultiExport.md](macros/Multi_Export/README-MultiExport.md) for detailed documentation.
+
+**Uninstall:**
+
+```bash
+just freecad::uninstall-export-macro
 ```
 
 ---
@@ -680,6 +753,24 @@ just uninstall-cut-macro
 ```
 
 See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md) for detailed documentation on the macro's internals.
+
+### MultiExport Macro
+
+**Location:** `macros/Multi_Export/`
+
+**Installation for development:**
+
+```bash
+just freecad::install-export-macro
+```
+
+**Uninstall:**
+
+```bash
+just freecad::uninstall-export-macro
+```
+
+See [macros/Multi_Export/README-MultiExport.md](macros/Multi_Export/README-MultiExport.md) for detailed documentation on the macro's internals.
 
 ---
 

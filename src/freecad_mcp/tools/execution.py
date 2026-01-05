@@ -10,6 +10,8 @@ import socket
 from pathlib import Path
 from typing import Any
 
+from freecad_mcp.server import get_instance_id
+
 
 def register_execution_tools(mcp, get_bridge) -> None:
     """Register execution-related tools with the MCP server.
@@ -130,14 +132,18 @@ def register_execution_tools(mcp, get_bridge) -> None:
 
     @mcp.tool()
     async def get_mcp_server_environment() -> dict[str, Any]:
-        """Get environment information about the MCP server process.
+        """Get environment information about the MCP server and FreeCAD connection.
 
         This tool returns information about the environment where the MCP server
-        is running, which is useful for debugging and verifying which MCP server
-        instance you are connected to (e.g., host vs Docker container).
+        is running and the FreeCAD connection state, which is useful for debugging,
+        verifying which MCP server instance you are connected to (e.g., host vs
+        Docker container), and determining if GUI features are available.
 
         Returns:
             Dictionary containing environment information:
+                - instance_id: Unique UUID for this server instance (generated at
+                    startup). Use this to verify you're connected to the expected
+                    server instance in tests and automation.
                 - hostname: Machine hostname
                 - os_name: Operating system name (Linux, Darwin, Windows)
                 - os_version: Operating system version
@@ -145,6 +151,14 @@ def register_execution_tools(mcp, get_bridge) -> None:
                 - python_version: Python version running the MCP server
                 - in_docker: Whether running inside a Docker container
                 - docker_container_id: Container ID if in Docker (first 12 chars)
+                - freecad: FreeCAD connection information:
+                    - connected: Whether bridge is connected to FreeCAD
+                    - mode: Connection mode (embedded, xmlrpc, socket)
+                    - version: FreeCAD version string
+                    - gui_available: Whether FreeCAD GUI is available (False in
+                        headless mode). Use this to skip GUI-only tests.
+                    - is_headless: Convenience boolean, True when GUI is NOT
+                        available (opposite of gui_available)
                 - env_vars: Selected environment variables for debugging:
                     - FREECAD_MODE: Connection mode
                     - FREECAD_SOCKET_HOST: Socket host
@@ -152,6 +166,18 @@ def register_execution_tools(mcp, get_bridge) -> None:
                     - FREECAD_XMLRPC_PORT: XML-RPC port
 
         Example:
+            Verify you're connected to the expected server instance::
+
+                env = get_mcp_server_environment()
+                expected_id = "abc123..."  # Captured from server startup output
+                assert env["instance_id"] == expected_id
+
+            Skip GUI-only tests in headless mode::
+
+                env = get_mcp_server_environment()
+                if env["freecad"]["is_headless"]:
+                    pytest.skip("Test requires GUI mode")
+
             Verify you're talking to the containerized MCP server::
 
                 env = get_mcp_server_environment()
@@ -199,7 +225,12 @@ def register_execution_tools(mcp, get_bridge) -> None:
 
         in_docker, container_id = _detect_docker()
 
+        # Get FreeCAD connection status
+        bridge = await get_bridge()
+        status = await bridge.get_status()
+
         return {
+            "instance_id": get_instance_id(),
             "hostname": socket.gethostname(),
             "os_name": platform.system(),
             "os_version": platform.release(),
@@ -207,6 +238,13 @@ def register_execution_tools(mcp, get_bridge) -> None:
             "python_version": platform.python_version(),
             "in_docker": in_docker,
             "docker_container_id": container_id,
+            "freecad": {
+                "connected": status.connected,
+                "mode": status.mode,
+                "version": status.freecad_version,
+                "gui_available": status.gui_available,
+                "is_headless": not status.gui_available,
+            },
             "env_vars": {
                 "FREECAD_MODE": os.environ.get("FREECAD_MODE", ""),
                 "FREECAD_SOCKET_HOST": os.environ.get("FREECAD_SOCKET_HOST", ""),

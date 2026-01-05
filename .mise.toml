@@ -5,9 +5,12 @@
 # Python 3.11 is required for embedded FreeCAD mode - FreeCAD bundles libpython3.11
 # Using a different Python version causes ABI incompatibility crashes
 python = "3.11"
-uv = "latest"
-just = "latest"
-pre-commit = "latest"
+# Pin tool versions for reproducible CI builds
+# Update these periodically with: mise upgrade
+uv = "0.9"          # uv package manager
+just = "1.43"       # task runner
+pre-commit = "4.5"  # pre-commit hooks
+github-cli = "2.74" # GitHub CLI for PR/issue management
 
 [env]
 # FreeCAD connection mode:

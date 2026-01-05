@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "freecad-robust-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "MCP (Model Context Protocol) server for FreeCAD integration with Claude Code and other AI assistants"
 readme = "README.md"
 license = "MIT"
@@ -89,6 +89,19 @@ Issues = "https://github.com/spkane/freecad-mcp/issues"
 Changelog = "https://github.com/spkane/freecad-mcp/blob/main/CHANGELOG.md"
 "Docker Hub" = "https://hub.docker.com/r/spkane/freecad-mcp"
 
+[tool.hatch.version]
+source = "vcs"
+# Use git tags for versioning: v0.1.0 -> 0.1.0
+# For untagged commits: 0.1.0.dev5+g1a2b3c4
+
+[tool.hatch.version.raw-options]
+# Fall back version when not in a git repo (e.g., source tarball)
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/freecad_mcp/_version.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/freecad_mcp"]
 
@@ -145,6 +158,7 @@ convention = "google"
     "ANN",    # Don't require annotations in tests
     "D",      # Don't require docstrings in tests
     "PLR2004",# Allow magic numbers in tests
+    "PTH",    # Allow os.path in tests - matches embedded FreeCAD code style
     "SIM105", # Allow try-except-pass in tests
     "SIM117", # Allow nested with statements
     "B017",   # Allow blind exception catch in tests
@@ -158,9 +172,11 @@ convention = "google"
     "D107",   # Missing docstring in __init__ - class docstring covers this
     "D203",   # Blank line before class docstring (conflicts with D211)
     "D212",   # Multi-line docstring start (conflicts with D213)
+    "PLR0911",# Allow many return statements - GUI code paths vary
     "PLR0912",# Allow many branches - GUI code is complex
     "PLR0913",# Allow many arguments - CAD APIs have many params
     "PLR0915",# Allow many statements - macros are self-contained
+    "PTH",    # Allow os.path - better FreeCAD compatibility than pathlib
     "SIM102", # Allow nested if statements - improves readability
     "SIM103", # Allow return after if-else for clarity
     "SIM108", # Allow if-else over ternary for readability
@@ -275,7 +291,9 @@ exclude_dirs = ["tests", "docs"]
 skips = [
     "B101",  # Allow asserts
     "B102",  # exec is required for FreeCAD Python execution
+    "B104",  # Binding to 0.0.0.0 is intentional for container/network access
     "B110",  # try-except-pass used for optional cleanup
+    "B112",  # try-except-continue used for iterating over faces safely
     "B411",  # XML-RPC is required for FreeCAD compatibility
 ]
 

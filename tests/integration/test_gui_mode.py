@@ -419,6 +419,7 @@ _result_ = True
         )
 
         screenshot_path = Path(temp_dir) / "test_screenshot.png"
+        screenshot_path_str = str(screenshot_path)
 
         result = execute_code(
             xmlrpc_proxy,
@@ -434,11 +435,11 @@ view = FreeCADGui.ActiveDocument.ActiveView
 view.fitAll()
 
 # Save screenshot
-view.saveImage({screenshot_path!r}, 800, 600, "White")
+view.saveImage({screenshot_path_str!r}, 800, 600, "White")
 
 _result_ = {{
-    "saved": os.path.exists({screenshot_path!r}),
-    "path": {screenshot_path!r}
+    "saved": os.path.exists({screenshot_path_str!r}),
+    "path": {screenshot_path_str!r}
 }}
 """,
         )
@@ -522,6 +523,8 @@ _result_ = {
         """Test creating model, setting view, taking screenshot, and exporting."""
         step_path = Path(temp_dir) / "workflow_export.step"
         screenshot_path = Path(temp_dir) / "workflow_screenshot.png"
+        step_path_str = str(step_path)
+        screenshot_path_str = str(screenshot_path)
 
         result = execute_code(
             xmlrpc_proxy,
@@ -558,16 +561,16 @@ view.viewIsometric()
 view.fitAll()
 
 # Take screenshot
-view.saveImage({screenshot_path!r}, 800, 600, "White")
+view.saveImage({screenshot_path_str!r}, 800, 600, "White")
 
 # Export to STEP
-bracket_obj.Shape.exportStep({step_path!r})
+bracket_obj.Shape.exportStep({step_path_str!r})
 
 _result_ = {{
     "bracket_valid": bracket_obj.Shape.isValid(),
     "bracket_volume": bracket_obj.Shape.Volume,
-    "screenshot_exists": os.path.exists({screenshot_path!r}),
-    "step_exists": os.path.exists({step_path!r})
+    "screenshot_exists": os.path.exists({screenshot_path_str!r}),
+    "step_exists": os.path.exists({step_path_str!r})
 }}
 """,
         )

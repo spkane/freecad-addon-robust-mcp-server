@@ -67,6 +67,26 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
 
+      - name: Get version for setuptools-scm
+        id: version
+        run: |
+          # Get version from git describe (matches setuptools-scm behavior)
+          # For tagged releases: v1.0.0 -> 1.0.0
+          # For dev builds: v1.0.0-5-g1234567 -> 1.0.0.dev5+g1234567
+          if git describe --tags --exact-match 2>/dev/null; then
+            VERSION=$(git describe --tags --exact-match | sed 's/^v//')
+          else
+            # Get the latest tag or use 0.0.0 if none exists
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            BASE_VERSION=$(echo "$LATEST_TAG" | sed 's/^v//')
+            # Count commits since tag
+            COMMITS=$(git rev-list "${LATEST_TAG}..HEAD" --count 2>/dev/null || echo "0")
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            VERSION="${BASE_VERSION}.dev${COMMITS}+g${SHORT_SHA}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -75,13 +95,15 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Test Docker image
         run: |
           # Build for current platform only for testing
-          docker build -t freecad-mcp:test .
+          docker build --build-arg VERSION=${{ steps.version.outputs.VERSION }} -t freecad-mcp:test .
 
           # Test that the container starts and responds to MCP initialize
           echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \

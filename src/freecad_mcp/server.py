@@ -28,6 +28,8 @@ Example:
 """
 
 import logging
+import sys
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
@@ -43,8 +45,21 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Generate unique instance ID at module load time
+# This ID is stable for the lifetime of this server process
+INSTANCE_ID: str = str(uuid.uuid4())
+
 # Global bridge instance (initialized on startup via lifespan)
 _bridge: Any = None
+
+
+def get_instance_id() -> str:
+    """Get the unique instance ID for this MCP server process.
+
+    Returns:
+        The UUID string that uniquely identifies this server instance.
+    """
+    return INSTANCE_ID
 
 
 async def get_bridge() -> "FreecadBridge":
@@ -169,7 +184,13 @@ def main() -> None:
 
     # Set up logging
     logging.getLogger().setLevel(config.log_level)
+
+    # Print instance ID to stdout for test automation to capture
+    # This is printed before logging to ensure it's easily parseable
+    print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stdout, flush=True)
+
     logger.info("Starting FreeCAD MCP server")
+    logger.info("Instance ID: %s", INSTANCE_ID)
     logger.info("Mode: %s", config.mode.value)
     logger.info("Transport: %s", config.transport.value)
 

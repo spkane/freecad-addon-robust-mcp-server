@@ -1,10 +1,12 @@
 """FreeCAD Macro: Cut Object for Magnets.
 
+SPDX-License-Identifier: MIT
+Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
+
 Cuts an object along a plane and adds connector holes for magnets with
 surface collision detection.
 
 Version: 1.0.0
-Author: Assistant
 
 Requirements:
     - FreeCAD 0.19 or later

@@ -320,6 +320,64 @@ uninstall-cut-macro:
     rm -f "$MACRO_DIR/CutObjectForMagnets.svg"
     echo "CutObjectForMagnets macro uninstalled"
 
+# Install the MultiExport macro to FreeCAD's macro directory
+install-export-macro:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PROJECT_DIR="{{project_root}}"
+
+    # Determine macro directory based on OS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
+    else
+        MACRO_DIR="$APPDATA/FreeCAD/Macro"
+    fi
+
+    mkdir -p "$MACRO_DIR"
+
+    # Copy the macro file
+    cp "${PROJECT_DIR}/macros/Multi_Export/MultiExport.FCMacro" "$MACRO_DIR/"
+
+    # Optionally copy the icon if it exists
+    if [[ -f "${PROJECT_DIR}/macros/Multi_Export/MultiExport.svg" ]]; then
+        cp "${PROJECT_DIR}/macros/Multi_Export/MultiExport.svg" "$MACRO_DIR/"
+    fi
+
+    echo "MultiExport macro installed to: $MACRO_DIR"
+    echo ""
+    echo "To use:"
+    echo "  1. Start FreeCAD"
+    echo "  2. Select one or more objects to export"
+    echo "  3. Go to: Macro → Macros → MultiExport → Execute"
+    echo "  4. Choose export formats (STL, STEP, 3MF selected by default)"
+    echo "  5. Set output directory and filename"
+    echo "  6. Click Export"
+
+# Uninstall the MultiExport macro
+uninstall-export-macro:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
+    else
+        MACRO_DIR="$APPDATA/FreeCAD/Macro"
+    fi
+    rm -f "$MACRO_DIR/MultiExport.FCMacro"
+    rm -f "$MACRO_DIR/MultiExport.svg"
+    echo "MultiExport macro uninstalled"
+
+# Install all macros to FreeCAD's macro directory
+install-all-macros: install-bridge-macro install-cut-macro install-export-macro
+    @echo "All macros installed successfully!"
+
+# Uninstall all macros from FreeCAD's macro directory
+uninstall-all-macros: uninstall-bridge-macro uninstall-cut-macro uninstall-export-macro
+    @echo "All macros uninstalled successfully!"
+
 # =============================================================================
 # Plugin Installation
 # =============================================================================

@@ -113,13 +113,17 @@ repos:
 
   # Layer 3: TruffleHog - Deep secrets scanner with verification
   # Verifies secrets are actually valid (e.g., tests AWS keys)
+  # Note: TruffleHog has wasm/go-re2 panic bugs in GitHub Actions.
+  # It's skipped in CI (via SKIP env var) but runs locally.
+  # See: https://github.com/trufflesecurity/trufflehog/issues/3321
   - repo: https://github.com/trufflesecurity/trufflehog
-    rev: v3.84.1
+    rev: v3.88.7
     hooks:
       - id: trufflehog
         name: trufflehog (verified secrets scan)
         args:
           - --no-update
+        exclude: '(^|/)uv\.lock$|\.secrets\.baseline$'
 
   # ==========================================================================
   # Markdown Linting - Comprehensive Configuration

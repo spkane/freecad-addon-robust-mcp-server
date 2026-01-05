@@ -493,6 +493,7 @@ _result_ = True
     ) -> None:
         """Test exporting to STEP format."""
         step_path = Path(temp_dir) / "test_export.step"
+        step_path_str = str(step_path)
 
         result = execute_code(
             xmlrpc_proxy,
@@ -501,10 +502,10 @@ import FreeCAD
 
 doc = FreeCAD.ActiveDocument
 obj = doc.getObject("ExportBox")
-obj.Shape.exportStep({step_path!r})
+obj.Shape.exportStep({step_path_str!r})
 
 import os
-_result_ = {{"exported": os.path.exists({step_path!r})}}
+_result_ = {{"exported": os.path.exists({step_path_str!r})}}
 """,
         )
         assert result["result"]["exported"] is True
@@ -515,6 +516,7 @@ _result_ = {{"exported": os.path.exists({step_path!r})}}
     ) -> None:
         """Test saving as FreeCAD native format."""
         fcstd_path = Path(temp_dir) / "test_save.FCStd"
+        fcstd_path_str = str(fcstd_path)
 
         result = execute_code(
             xmlrpc_proxy,
@@ -522,12 +524,12 @@ _result_ = {{"exported": os.path.exists({step_path!r})}}
 import FreeCAD
 
 doc = FreeCAD.ActiveDocument
-doc.saveAs({fcstd_path!r})
+doc.saveAs({fcstd_path_str!r})
 
 import os
 _result_ = {{
-    "saved": os.path.exists({fcstd_path!r}),
-    "path": {fcstd_path!r}
+    "saved": os.path.exists({fcstd_path_str!r}),
+    "path": {fcstd_path_str!r}
 }}
 """,
         )

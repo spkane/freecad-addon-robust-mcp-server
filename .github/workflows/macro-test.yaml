@@ -7,6 +7,7 @@ on:
       - "macros/**/*.FCMacro"
       - "macros/**/*.py"
       - "tests/integration/test_cut_object_for_magnets.py"
+      - "tests/integration/test_multi_export.py"
       - ".github/workflows/macro-test.yaml"
   pull_request:
     branches: [main, master]
@@ -14,6 +15,7 @@ on:
       - "macros/**/*.FCMacro"
       - "macros/**/*.py"
       - "tests/integration/test_cut_object_for_magnets.py"
+      - "tests/integration/test_multi_export.py"
       - ".github/workflows/macro-test.yaml"
 
 # Cancel in-progress runs for the same branch
@@ -30,41 +32,73 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install FreeCAD
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Get latest FreeCAD release info
+        id: freecad-release
         run: |
-          sudo add-apt-repository -y ppa:freecad-maintainers/freecad-stable
-          sudo apt-get update
-          sudo apt-get install -y freecad
+          # Get the latest stable release tag from GitHub API
+          RELEASE_INFO=$(curl -s https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
+          TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+          echo "Latest FreeCAD release: $TAG_NAME"
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+
+          # Find the Linux AppImage asset URL
+          APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
+          APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+
+          if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+              echo "ERROR: Could not find Linux AppImage in release assets"
+              exit 1
+          fi
+
+          echo "AppImage URL: $APPIMAGE_URL"
+          echo "AppImage name: $APPIMAGE_NAME"
+          echo "url=$APPIMAGE_URL" >> $GITHUB_OUTPUT
+          echo "name=$APPIMAGE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Cache FreeCAD AppImage
+        id: cache-freecad
+        uses: actions/cache@v5
+        with:
+          path: ~/freecad-appimage
+          key: freecad-appimage-${{ steps.freecad-release.outputs.tag }}
+
+      - name: Download FreeCAD AppImage
+        if: steps.cache-freecad.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/freecad-appimage
+          echo "Downloading FreeCAD ${{ steps.freecad-release.outputs.tag }}..."
+          curl -L -o ~/freecad-appimage/FreeCAD.AppImage "${{ steps.freecad-release.outputs.url }}"
+          chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+      - name: Setup FreeCAD AppImage
+        run: |
+          # Make AppImage executable (in case restored from cache)
+          chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+          # Extract AppImage for headless use (AppImages need FUSE which isn't available in CI)
+          cd ~/freecad-appimage
+          ./FreeCAD.AppImage --appimage-extract > /dev/null 2>&1
+
+          # Create symlinks for easy access
+          sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecadcmd /usr/local/bin/freecadcmd
+          sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecad /usr/local/bin/freecad
 
       - name: Verify FreeCAD installation
         run: |
-          # Try different possible names for the headless FreeCAD command
-          FREECAD_CMD=""
-          if command -v freecadcmd &> /dev/null; then
-              FREECAD_CMD="freecadcmd"
-          elif command -v FreeCADCmd &> /dev/null; then
-              FREECAD_CMD="FreeCADCmd"
-          elif [ -x "/usr/bin/freecadcmd" ]; then
-              FREECAD_CMD="/usr/bin/freecadcmd"
-          elif [ -x "/usr/bin/FreeCADCmd" ]; then
-              FREECAD_CMD="/usr/bin/FreeCADCmd"
-          fi
+          echo "Checking FreeCAD installation..."
+          freecadcmd --version || freecad --version || echo "Version check failed"
+          which freecadcmd
+          # Show Python version bundled with FreeCAD
+          freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.version}')" || true
 
-          if [ -n "$FREECAD_CMD" ]; then
-              echo "Found FreeCADCmd: $FREECAD_CMD"
-              $FREECAD_CMD --version || true
-          else
-              echo "WARNING: FreeCADCmd not found, trying freecad..."
-              freecad --version || true
-          fi
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Cache uv dependencies
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install 3.11
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Install dependencies
         run: uv sync --all-extras
@@ -86,23 +120,11 @@ jobs:
           # Set up environment
           export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
 
-          # Find FreeCADCmd
-          FREECAD_CMD=""
-          if command -v freecadcmd &> /dev/null; then
-              FREECAD_CMD="freecadcmd"
-          elif command -v FreeCADCmd &> /dev/null; then
-              FREECAD_CMD="FreeCADCmd"
-          elif [ -x "/usr/bin/freecadcmd" ]; then
-              FREECAD_CMD="/usr/bin/freecadcmd"
-          else
-              echo "ERROR: FreeCADCmd not found"
-              exit 1
-          fi
-
-          echo "Using FreeCAD: $FREECAD_CMD"
+          echo "Using FreeCAD: freecadcmd"
 
           # Start FreeCAD headless with MCP bridge in background
-          $FREECAD_CMD src/freecad_mcp/freecad_plugin/headless_server.py &
+          # Capture stdout to a file so we can extract the instance ID
+          freecadcmd src/freecad_mcp/freecad_plugin/headless_server.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> $GITHUB_ENV
 
@@ -118,17 +140,37 @@ jobs:
               fi
               if [ $i -eq 60 ]; then
                   echo "ERROR: MCP bridge did not start within 60s"
+                  echo "=== Bridge log ===" && cat /tmp/freecad_bridge.log || true
                   kill $FREECAD_PID 2>/dev/null || true
                   exit 1
               fi
               sleep 1
           done
 
+          # Log the instance ID for debugging (pytest tests verify bridge via conftest.py fixtures)
+          BRIDGE_INSTANCE_ID=$(grep -o 'FREECAD_MCP_BRIDGE_INSTANCE_ID=[^ ]*' /tmp/freecad_bridge.log | cut -d= -f2 | head -1)
+          if [ -n "$BRIDGE_INSTANCE_ID" ]; then
+              echo "Bridge Instance ID: $BRIDGE_INSTANCE_ID"
+          else
+              echo "Warning: Could not extract bridge instance ID from log"
+              cat /tmp/freecad_bridge.log || true
+          fi
+
       - name: Run CutObjectForMagnets macro tests
         env:
           FREECAD_MODE: xmlrpc
+        # Note: Tests use boolean holes (not PartDesign::Hole) for CI compatibility.
+        # PartDesign::Hole has a CADKernelError bug in some headless AppImage environments.
         run: |
           uv run pytest tests/integration/test_cut_object_for_magnets.py -v --tb=short
+
+      - name: Run MultiExport macro tests
+        env:
+          FREECAD_MODE: xmlrpc
+        # Export functionality should work in headless mode
+        continue-on-error: true
+        run: |
+          uv run pytest tests/integration/test_multi_export.py -v --tb=short
 
       - name: Stop FreeCAD
         if: always()
@@ -145,13 +187,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
+      - name: Install mise
+        uses: jdx/mise-action@v3
 
-      - name: Set up Python
-        run: uv python install 3.11
+      - name: Cache uv dependencies
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Install dependencies
         run: uv sync --all-extras

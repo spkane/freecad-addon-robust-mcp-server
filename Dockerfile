@@ -38,6 +38,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
+# Version for setuptools-scm when building without git (e.g., in Docker)
+# This can be overridden at build time with --build-arg VERSION=x.y.z
+ARG VERSION=0.0.0.dev0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
+
 # Create virtual environment and install dependencies
 # Using uv cache mount for faster rebuilds
 RUN --mount=type=cache,target=/root/.cache/uv \

@@ -1,9 +1,11 @@
 """FreeCAD Macro: Start MCP Bridge Server.
 
+SPDX-License-Identifier: MIT
+Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
+
 Start the MCP bridge server for AI assistant integration with FreeCAD.
 
 Version: 1.0.0
-Author: FreeCAD MCP Project
 
 Requirements:
     - FreeCAD 0.21 or later
