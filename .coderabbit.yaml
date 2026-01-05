@@ -83,11 +83,27 @@ reviews:
         - Proper caching configuration
         - Security of secrets handling
         - Correct job dependencies
+
+        INTENTIONAL PATTERNS (do not flag as issues):
+        - continue-on-error: true on test steps is intentional during stabilization
+        - upload-artifact@v6 and download-artifact@v7 work on GitHub-hosted runners
+        - Actions version jumps (v4 to v6/v7) are intentional Dependabot updates
     - path: "pyproject.toml"
       instructions: >
         Project configuration. Watch for:
         - Dependency version constraints
         - Tool configuration consistency (ruff, mypy, pytest)
+
+        CRITICAL: Python 3.11 is required - FreeCAD bundles libpython3.11.
+        Using a different Python version causes ABI incompatibility crashes.
+    - path: ".mise.toml"
+      instructions: >
+        Tool version management via mise. All versions use fuzzy matching:
+        - "0.9" means "0.9.x" (allows patch updates)
+        - "1.43" means "1.43.x" (allows patch updates)
+        This is consistent and intentional. Do not flag as inconsistent pinning.
+
+        CRITICAL: Python must stay at 3.11 to match FreeCAD's bundled Python.
 
   # Tools to use for analysis
   tools:
