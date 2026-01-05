@@ -1,8 +1,8 @@
 # Docker build and run commands
 # Usage: just docker::build, just docker::build-all, etc.
 
-# Default Docker image name
-image_name := "freecad-mcp"
+# Default Docker image name (matches Docker Hub and PyPI package name)
+image_name := "freecad-robust-mcp"
 registry := "spkane"
 
 # Project root directory (justfile_directory() returns the main justfile's directory)
@@ -53,7 +53,7 @@ shell:
         --add-host=host.docker.internal:host-gateway \
         -e FREECAD_MODE=xmlrpc \
         -e FREECAD_SOCKET_HOST=host.docker.internal \
-        --entrypoint /bin/bash \
+        --entrypoint /bin/sh \
         {{image_name}}
 
 # Show image size and layers
@@ -66,6 +66,36 @@ inspect:
 clean:
     docker rmi {{image_name}} 2>/dev/null || true
     docker rmi {{registry}}/{{image_name}} 2>/dev/null || true
+
+# Scan Docker image for vulnerabilities (warn on all severities)
+scan:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Scanning {{image_name}} for vulnerabilities..."
+    echo ""
+    trivy image --severity HIGH,CRITICAL {{image_name}}
+    echo ""
+    echo "Scanning for MEDIUM/LOW (informational)..."
+    trivy image --severity MEDIUM,LOW {{image_name}} || true
+
+# Scan Docker image with strict settings (fail on HIGH or CRITICAL)
+scan-strict:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Scanning {{image_name}} for HIGH/CRITICAL vulnerabilities..."
+    echo "(Build will fail if any HIGH or CRITICAL CVEs are found)"
+    echo ""
+    trivy image --severity HIGH,CRITICAL --exit-code 1 {{image_name}}
+    echo ""
+    echo "✓ No HIGH or CRITICAL vulnerabilities found!"
+    echo ""
+    echo "Scanning for MEDIUM/LOW (informational only)..."
+    trivy image --severity MEDIUM,LOW --exit-code 0 {{image_name}} || true
+
+# Scan Docker image and output SARIF report
+scan-sarif output="trivy-results.sarif":
+    trivy image --format sarif --output {{output}} {{image_name}}
+    @echo "SARIF report written to {{output}}"
 
 # Create and configure buildx builder for multi-arch builds
 setup-buildx:

@@ -222,6 +222,21 @@ repos:
         name: hadolint (Dockerfile linter)
 
   # ==========================================================================
+  # Dockerfile Security Scanning (Misconfigurations)
+  # ==========================================================================
+  - repo: https://github.com/mxab/pre-commit-trivy.git
+    rev: v0.16.0
+    hooks:
+      - id: trivyconfig-docker
+        name: trivy (Dockerfile misconfig)
+        args:
+          - --severity
+          - HIGH,CRITICAL
+          - --exit-code
+          - "1"
+          - .
+
+  # ==========================================================================
   # Commit Message Linting
   # ==========================================================================
   - repo: https://github.com/commitizen-tools/commitizen
@@ -238,6 +253,7 @@ ci:
   autoupdate_schedule: monthly
   autoupdate_commit_msg: "chore(deps): update pre-commit hooks"
   skip:
-    - mypy             # Needs dependencies installed
-    - hadolint-docker  # Needs Docker
-    - trufflehog       # Can be slow in CI
+    - mypy              # Needs dependencies installed
+    - hadolint-docker   # Needs Docker
+    - trivyconfig-docker  # Needs Docker
+    - trufflehog        # Can be slow in CI

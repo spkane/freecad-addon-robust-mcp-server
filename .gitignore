@@ -97,6 +97,10 @@ cython_debug/
 # Ruff
 .ruff_cache/
 
+# Trivy (pre-commit and CI cache)
+.pre-commit-trivy-cache/
+.trivy-cache/
+
 # UV
 # Note: uv.lock is committed for reproducible CI builds
 

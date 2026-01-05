@@ -11,6 +11,7 @@ uv = "0.9"          # uv package manager
 just = "1.43"       # task runner
 pre-commit = "4.5"  # pre-commit hooks
 github-cli = "2.74" # GitHub CLI for PR/issue management
+trivy = "0.62"      # container vulnerability scanner
 
 [env]
 # FreeCAD connection mode:

@@ -164,8 +164,10 @@ jobs:
     name: Publish to TestPyPI
     needs: [build, test-install]
     runs-on: ubuntu-latest
-    # Only publish prereleases to TestPyPI
-    if: contains(github.ref, '-')
+    # Only publish alpha releases to TestPyPI for early testing.
+    # Beta and RC releases go to PyPI since they are closer to stable.
+    # This is intentional - do not change to contains(github.ref, '-').
+    if: contains(github.ref, '-alpha')
     environment:
       name: testpypi
       url: https://test.pypi.org/p/freecad-robust-mcp
@@ -188,8 +190,10 @@ jobs:
     name: Publish to PyPI
     needs: [build, test-install]
     runs-on: ubuntu-latest
-    # Only publish stable releases to PyPI
-    if: ${{ !contains(github.ref, '-') }}
+    # Publish beta, rc, and stable releases to PyPI (not alpha).
+    # Alpha releases are too experimental for PyPI - they go to TestPyPI only.
+    # This is intentional - do not change to !contains(github.ref, '-').
+    if: ${{ !contains(github.ref, '-alpha') }}
     environment:
       name: pypi
       url: https://pypi.org/p/freecad-robust-mcp
@@ -245,14 +249,47 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$REF_NAME" == *"-"* ]]; then
+          # Alpha releases go to TestPyPI only; beta, rc, and stable go to PyPI
+          if [[ "$REF_NAME" == *"-alpha"* ]]; then
               {
-                echo "**Type:** Prerelease (published to TestPyPI)"
+                echo "**Type:** Alpha prerelease (published to TestPyPI only)"
                 echo ""
                 echo "### Install from TestPyPI"
                 echo ""
                 echo "\`\`\`bash"
                 echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ freecad-robust-mcp"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$REF_NAME" == *"-beta"* ]]; then
+              {
+                echo "**Type:** Beta prerelease (published to PyPI)"
+                echo ""
+                echo "### Install from PyPI"
+                echo ""
+                echo "\`\`\`bash"
+                echo "pip install freecad-robust-mcp"
+                echo "\`\`\`"
+                echo ""
+                echo "Or with uv:"
+                echo ""
+                echo "\`\`\`bash"
+                echo "uv pip install freecad-robust-mcp"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$REF_NAME" == *"-rc"* ]]; then
+              {
+                echo "**Type:** Release candidate (published to PyPI)"
+                echo ""
+                echo "### Install from PyPI"
+                echo ""
+                echo "\`\`\`bash"
+                echo "pip install freecad-robust-mcp"
+                echo "\`\`\`"
+                echo ""
+                echo "Or with uv:"
+                echo ""
+                echo "\`\`\`bash"
+                echo "uv pip install freecad-robust-mcp"
                 echo "\`\`\`"
               } >> "$GITHUB_STEP_SUMMARY"
           else

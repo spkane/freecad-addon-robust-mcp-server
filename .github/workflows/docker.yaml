@@ -113,13 +113,42 @@ jobs:
               ${{ env.IMAGE_NAME }}:test 2>&1 | \
             grep -q '"result"' && echo "Container test passed" || echo "Container test completed"
 
-      - name: Scan for vulnerabilities
-        if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@master
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@v4
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          path: .trivy-cache
+          # Cache key based on OS and workflow file hash; refreshes when workflow changes
+          key: trivy-db-${{ runner.os }}-${{ hashFiles('.github/workflows/docker.yaml') }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      - name: Scan for HIGH/CRITICAL vulnerabilities (fail build)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:test
+          severity: "HIGH,CRITICAL"
+          exit-code: "1"
+          format: "table"
+          cache-dir: .trivy-cache
+
+      - name: Scan for MEDIUM/LOW vulnerabilities (warning only)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:test
+          severity: "MEDIUM,LOW"
+          exit-code: "0"
+          format: "table"
+          cache-dir: .trivy-cache
+        continue-on-error: true
+
+      - name: Generate SARIF report for GitHub Security
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:test
           format: "sarif"
           output: "trivy-results.sarif"
+          cache-dir: .trivy-cache
         continue-on-error: true
 
       - name: Upload Trivy scan results
