@@ -140,7 +140,7 @@ jobs:
           docker pull spkane/freecad-robust-mcp:latest
           ```
 
-          ### Running with Claude Desktop
+          ### Running with Claude Desktop (macOS/Windows)
 
           Add to your Claude Desktop configuration:
 
@@ -158,6 +158,35 @@ jobs:
               }
             }
           }
+          ```
+
+          ### Linux Users
+
+          `host.docker.internal` is only available on Docker Desktop (macOS/Windows).
+          On Linux Docker Engine, use one of these alternatives:
+
+          **Option 1: Host networking (recommended)**
+          ```bash
+          docker run -i --rm --network=host \
+            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_SOCKET_HOST=localhost \
+            spkane/freecad-robust-mcp:latest
+          ```
+
+          **Option 2: Use host IP address**
+          ```bash
+          docker run -i --rm \
+            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_SOCKET_HOST=192.168.1.100 \
+            spkane/freecad-robust-mcp:latest
+          ```
+
+          **Option 3: Add host gateway (Docker 20.10+)**
+          ```bash
+          docker run -i --rm --add-host=host.docker.internal:host-gateway \
+            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_SOCKET_HOST=host.docker.internal \
+            spkane/freecad-robust-mcp:latest
           ```
 
           ## Connection Modes
