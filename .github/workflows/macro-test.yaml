@@ -147,11 +147,10 @@ jobs:
               sleep 1
           done
 
-          # Extract and save the instance ID from the bridge log
+          # Log the instance ID for debugging (pytest tests verify bridge via conftest.py fixtures)
           BRIDGE_INSTANCE_ID=$(grep -o 'FREECAD_MCP_BRIDGE_INSTANCE_ID=[^ ]*' /tmp/freecad_bridge.log | cut -d= -f2 | head -1)
           if [ -n "$BRIDGE_INSTANCE_ID" ]; then
               echo "Bridge Instance ID: $BRIDGE_INSTANCE_ID"
-              echo "EXPECTED_BRIDGE_INSTANCE_ID=$BRIDGE_INSTANCE_ID" >> $GITHUB_ENV
           else
               echo "Warning: Could not extract bridge instance ID from log"
               cat /tmp/freecad_bridge.log || true

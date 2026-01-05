@@ -3,10 +3,9 @@ name: Macro Release
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  # Note: Only trigger on release.published to avoid duplicate runs.
+  # Creating a release implicitly pushes a tag, so triggering on both
+  # would cause the workflow to run twice.
 
 # Cancel in-progress runs for the same tag
 concurrency:
@@ -64,7 +63,12 @@ jobs:
           done
 
           # Copy top-level LICENSE file
-          cp LICENSE "staging/freecad-macros-${VERSION}/"
+          if [ -f "LICENSE" ]; then
+            cp LICENSE "staging/freecad-macros-${VERSION}/"
+          else
+            echo "ERROR: No LICENSE file found at repository root"
+            exit 1
+          fi
 
           # Add a top-level README
           cat > "staging/freecad-macros-${VERSION}/README.md" << 'EOF'
