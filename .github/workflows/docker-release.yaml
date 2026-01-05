@@ -152,7 +152,7 @@ jobs:
                 "args": [
                   "run", "-i", "--rm",
                   "-e", "FREECAD_MODE=xmlrpc",
-                  "-e", "FREECAD_XMLRPC_HOST=host.docker.internal",
+                  "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
                   "spkane/freecad-robust-mcp:latest"
                 ]
               }
@@ -173,9 +173,8 @@ jobs:
           | Variable | Default | Description |
           |----------|---------|-------------|
           | `FREECAD_MODE` | `xmlrpc` | Connection mode |
-          | `FREECAD_XMLRPC_HOST` | `localhost` | XML-RPC server host |
+          | `FREECAD_SOCKET_HOST` | `localhost` | Server host (used for both XML-RPC and socket modes) |
           | `FREECAD_XMLRPC_PORT` | `9875` | XML-RPC server port |
-          | `FREECAD_SOCKET_HOST` | `localhost` | Socket server host |
           | `FREECAD_SOCKET_PORT` | `9876` | Socket server port |
 
           ## Starting FreeCAD with MCP Bridge

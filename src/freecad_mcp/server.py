@@ -24,7 +24,7 @@ Example:
 
     With environment variables::
 
-        $ FREECAD_MODE=socket FREECAD_HOST=localhost freecad-mcp
+        $ FREECAD_MODE=socket FREECAD_SOCKET_HOST=localhost freecad-mcp
 """
 
 import logging
