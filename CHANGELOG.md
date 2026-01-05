@@ -12,325 +12,66 @@ Group changes under: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ## [Unreleased]
 
+<!-- This section captures changes that have been merged but not yet released.
+     When preparing a new release, move these entries to a new version section below. -->
+
+## [0.5.0-beta] - 2026-01-05
+
+Initial public beta release of the FreeCAD MCP Server and Macros.
+
 ### Added
 
-- **GitHub Actions CI/CD workflows**:
-  - `pre-commit.yaml`: Runs all pre-commit hooks on every push and PR
-  - `test.yaml`: Runs unit tests when MCP source files change, integration tests on main branch
-  - `docker.yaml`: Builds multi-arch Docker images, pushes to GHCR on main/tags
-  - `docker-release.yaml`: Builds and pushes to Docker Hub on semantic version tags (v1.2.3)
-    - Multi-arch support (linux/amd64, linux/arm64)
-    - Semantic version tags: `1.2.3`, `1.2`, `1`, and `latest` for stable releases
-    - Prerelease tags (v1.2.3-beta) only get the full version tag
-    - SBOM and provenance attestations for supply chain security
-    - Automatic Docker Hub README sync
-  - `pypi-release.yaml`: Builds and publishes to PyPI on semantic version tags
-    - Validates version in pyproject.toml matches git tag
-    - Tests installation on Ubuntu and macOS before publishing
-    - Stable releases (v1.2.3) go to PyPI, prereleases (v1.2.3-beta) to TestPyPI
-    - Trusted publishing with OIDC (no API tokens needed)
-    - Attaches wheel and sdist to GitHub Release
-  - `macro-test.yaml`: Tests FreeCAD macros when macro files change (validates syntax, runs tests)
-  - Integration tests start FreeCAD headless with MCP bridge automatically
-- **GitHub issue templates**:
-  - Bug report template with structured fields for connection mode, FreeCAD version, OS, logs
-  - Feature request template with impact assessment and use case sections
-  - Issue template config with links to documentation and discussions
-- **Dependabot configuration**:
-  - Weekly updates for Python dependencies, GitHub Actions, and Docker base images
-  - Grouped updates for development dependencies
-- **PyPI package name**: `freecad-robust-mcp` (due to existing `freecad-mcp` on PyPI)
-  - Install via: `pip install freecad-robust-mcp`
-  - CLI command remains `freecad-mcp`
-  - Python import remains `import freecad_mcp`
-- **Enhanced PyPI and Docker Hub metadata**:
-  - Updated pyproject.toml with expanded classifiers, keywords, and URLs for better discoverability
-  - Added maintainers, Changelog URL, and Docker Hub URL to project metadata
-  - Added `py.typed` marker file for PEP 561 typed package support
-  - Enhanced Dockerfile with full OCI image labels (vendor, authors, documentation, base image)
-  - Added `twine` and `build` to dev dependencies for package validation
-- **Docker integration test workflow** (`just docker::test`):
-  - Builds the Docker image with a `:test` tag
-  - Automatically starts FreeCAD headless with MCP bridge if not already running
-  - Runs containerized MCP server and verifies communication
-  - Confirms response is from Docker container (Linux OS, Docker detection)
-  - Displays container hostname and raw MCP responses for debugging
-  - Automatically cleans up started FreeCAD process on completion
-- **New MCP tool `get_mcp_server_environment`**:
-  - Returns environment info about where the MCP server is running
-  - Includes: hostname, os_name, os_version, platform, python_version
-  - Docker detection: `in_docker` boolean and `docker_container_id` (first 12 chars)
-  - Environment variables: FREECAD_MODE, FREECAD_SOCKET_HOST/PORT, FREECAD_XMLRPC_PORT
-  - Useful for verifying which MCP server instance you're connected to
-  - Documented in README.md, CLAUDE.md, and docs/MCP_TOOLS_REFERENCE.md
-- **Docker support for MCP server**:
-  - New `Dockerfile` with BuildKit optimizations and multi-stage build
-  - Multi-arch support via `docker buildx` (linux/amd64, linux/arm64)
-  - Cache mounts for apt, pip, and uv for faster rebuilds
-  - Non-root user for security
-  - Health check for container orchestration
-  - Environment variables for connection configuration (FREECAD_MODE, FREECAD_SOCKET_HOST, etc.)
-  - `.dockerignore` to exclude development files from build context
-  - Docker just commands: `just docker::build`, `just docker::build-multi`, `just docker::build-push`
-- **Modular justfile organization**:
-  - Reorganized justfile into modules in `just/` directory for better organization
-  - `just/docker.just` - Docker build and run commands
-  - `just/quality.just` - Code quality and linting commands
-  - `just/testing.just` - Test execution commands
-  - `just/freecad.just` - FreeCAD plugin and macro commands
-  - `just/documentation.just` - Documentation building commands
-  - All existing shortcut commands preserved (e.g., `just test`, `just lint`, `just check`)
-  - New module syntax available: `just docker::build`, `just quality::secrets`, etc.
-  - Use `just --list <module>` to see commands in a specific module
-- **Improved cut face detection for curved objects in CutObjectForMagnets macro**:
-  - `_find_cut_face_name()` now uses a two-strategy approach:
-    - Strategy 1: Match faces by normal direction (works for flat/planar objects)
-    - Strategy 2: Match faces by proximity to cut plane (works for curved objects like vases)
-  - For curved objects where no face has a matching normal (dot product < 0.99), the function
-    now finds faces whose center lies closest to the cut plane
-  - This fixes the "Could not find cut face" error when cutting vases and other curved shapes at angles
-  - Tested successfully with a vase model cut at 30° angle using a datum plane
+#### MCP Server for FreeCAD
 
-- **Undo support for CutObjectForMagnets macro**:
-  - Each major step is now wrapped in a FreeCAD transaction
-  - Users can undo individual steps via Edit → Undo in the GUI
-  - Transaction steps: Create Bottom Body, Create Top Body, Create Bottom Hole Sketch, Create Top Hole Sketch, Create Bottom Magnet Holes, Create Top Magnet Holes, Hide Original Object
-  - If any step fails, the transaction is aborted to prevent partial state
-- **VS Code workspace configuration**:
-  - Added `.vscode/settings.json` with cSpell configuration matching codespell pre-commit
-  - Custom dictionary includes all project-specific terms from `.codespell-ignore-words.txt`
-  - Configured Ruff as default Python formatter with format-on-save
-  - Added `.vscode/extensions.json` recommending Code Spell Checker, Ruff, Pylance, etc.
-- **Integration tests for CutObjectForMagnets macro**:
-  - `test_cut_solid_box_with_partdesign_holes` - Tests cutting solid objects with PartDesign::Hole features
-  - `test_cut_hollow_cylinder_with_partdesign_holes` - Tests cutting hollow objects (vase-shaped) with PartDesign::Hole
-  - `test_boolean_hole_creation_fallback` - Tests the `_create_holes_boolean` fallback method
-  - `test_boolean_vs_partdesign_comparison` - Compares output of both hole creation methods
-  - `test_single_hole` / `test_many_holes` - Edge case tests for hole count variations
-  - Tests are in `tests/integration/test_cut_object_for_magnets.py` and run via `just test-integration`
-- **Status bar display for MCP bridge in GUI mode**:
-  - Shows "🔌 MCP Bridge running (XML-RPC:9875) | waiting for connections..." when idle
-  - Shows "🔌 MCP Bridge active (XML-RPC:9875) | X requests | last: Ys ago" after activity
-  - Updates every 5 seconds to show current status
-  - Automatically clears when bridge is stopped
-- Initial MCP server implementation for FreeCAD integration
-- Bridge architecture supporting multiple connection modes:
-  - Embedded mode (headless FreeCAD)
-  - Socket mode (JSON-RPC)
-  - XML-RPC mode (neka-nat compatible)
-- MCP tools for FreeCAD operations:
-  - Document management (create, open, save, close)
-  - Object manipulation (create, modify, delete)
-  - PartDesign workflow (sketches, pads, pockets, fillets)
-  - Import/export (STEP, STL, 3MF, OBJ, IGES)
-  - Macro management
-  - View and screenshot capture
-- `export_3mf` - Export objects to 3MF format (modern 3D printing format with color/material support)
-- Additional primitive creation tools:
-  - `create_cone` - Create cone primitives with configurable radii
-  - `create_torus` - Create torus (donut) primitives
-  - `create_wedge` - Create wedge/ramp primitives
-  - `create_helix` - Create helix curves for threads and springs
-- Transform and manipulation tools:
-  - `scale_object` - Scale objects uniformly or non-uniformly
-  - `rotate_object` - Rotate objects around arbitrary axes
-  - `copy_object` - Create copies with optional offset
-  - `mirror_object` - Mirror objects across planes (XY, XZ, YZ)
-- Selection management tools:
-  - `get_selection` - Get current selection with sub-elements
-  - `set_selection` - Programmatically select objects
-  - `clear_selection` - Clear all selections
-- Advanced PartDesign tools:
-  - `revolution_sketch` - Create revolution solids from sketches
-  - `groove_sketch` - Create subtractive revolutions
-  - `create_hole` - Create parametric holes with threading support (ISO, UNC, UNF)
-  - `linear_pattern` - Create linear patterns of features
-  - `polar_pattern` - Create circular patterns of features
-  - `mirrored_feature` - Mirror PartDesign features
-  - `loft_sketches` - Create lofts through multiple profiles
-  - `sweep_sketch` - Sweep profiles along paths
-- Additional sketch geometry tools:
-  - `add_sketch_line` - Add lines with construction mode option
-  - `add_sketch_arc` - Add arcs with center/radius/angles
-  - `add_sketch_point` - Add points for hole centers
-- View and document control tools:
-  - `zoom_in` / `zoom_out` - View zoom controls
-  - `set_camera_position` - Set camera position and look-at point
-  - `undo` / `redo` - Document undo/redo operations
-  - `get_undo_redo_status` - Query undo/redo state
-  - `recompute` - Force document recomputation
-  - `get_console_log` - Get console messages, warnings, errors
-- Parts library tools:
-  - `list_parts_library` - List available library parts
-  - `insert_part_from_library` - Insert parts from library with positioning
-- MCP resources exposing FreeCAD state:
-  - Version and status information
-  - Document and object listings
-  - Workbench information
-  - Console output
-- MCP prompts for guided workflows:
-  - Part design assistance
-  - Export/import guidance
-  - Shape analysis
-  - Macro development help
-  - Troubleshooting guides
-- Comprehensive pre-commit hook configuration:
-  - Ruff for linting and formatting
-  - MyPy for type checking
-  - Bandit for security scanning
-  - Multi-layer secrets detection (Gitleaks, detect-secrets, TruffleHog)
-  - Markdownlint and mdformat for documentation
-  - Codespell for spell checking
-- Project documentation:
-  - CLAUDE.md with AI assistant guidelines
-  - ARCHITECTURE.md with system design
-  - README.md with usage instructions
+- **Document management**: Create, open, save, close, recompute documents
+- **Object manipulation**: Create primitives (box, cylinder, sphere, cone, torus, wedge, helix), boolean operations, transforms (scale, rotate, copy, mirror)
+- **PartDesign workflow**: Bodies, sketches, pads, pockets, revolutions, fillets, chamfers, holes, patterns, lofts, sweeps
+- **Import/Export**: STEP, STL, 3MF, OBJ, IGES, BREP formats
+- **View control**: Screenshots, camera positioning, zoom, visibility, display modes
+- **Macro support**: List, run, create, and manage FreeCAD macros
+- **Undo/Redo**: Full undo/redo support with status queries
 
-### Changed
+#### Connection Modes
 
-- **Reorganized README.md structure**:
-  - Split into "For Users" and "For Developers" top-level sections
-  - Each section has MCP Server and FreeCAD Macros subsections
-  - Added Docker installation and Claude Code configuration for containerized usage
-  - pip installation now shown as primary option for users
-  - mise/just shown as alternative for developers
-- **Improved docs/index.md landing page**:
-  - Now properly links to all documentation files in the repo
-  - Added documentation table with descriptions
-  - Updated quick start, features, and connection modes sections
-- CLAUDE.md now documents `uv` package manager usage and `uv run` requirement for Python tools
-- Added proper MIT license attribution to files inspired by neka-nat/freecad-mcp:
-  - `src/freecad_mcp/bridge/xmlrpc.py` - XML-RPC protocol design
-  - `src/freecad_mcp/freecad_plugin/server.py` - Queue-based thread safety pattern
-- **Improved error messaging for connection failures**:
-  - XML-RPC bridge now provides detailed instructions when FreeCAD plugin is not running
-  - Error message explains how to start the MCP bridge in FreeCAD
-  - References the new `just install-macro` command for easy setup
-- **New justfile commands for FreeCAD integration**:
-  - `just install-macro` - Installs StartMCPBridge.FCMacro with dynamic project paths
-  - `just uninstall-macro` - Removes the installed macro
-  - `just install-freecad-plugin` - Installs full plugin to FreeCAD Mod directory
-  - `just uninstall-freecad-plugin` - Removes the installed plugin
-  - `just run-headless` - Launches FreeCAD in headless mode with MCP bridge
-  - `just run-headless-custom <path>` - Launch with custom FreeCADCmd path
-  - `just run-gui` - Launches FreeCAD GUI with MCP bridge auto-started
-  - `just run-gui-custom <path>` - Launch GUI with custom FreeCAD path
-  - Supports macOS, Linux, and Windows paths automatically
-- **Headless mode support for FreeCAD plugin**:
-  - Plugin now detects when Qt is unavailable and uses thread-based queue processing
-  - New `run_forever()` method for running in headless/console mode
-  - New `headless_server.py` script for easy headless startup
-  - Note: Screenshots and view features are not available in headless mode
-- **Improved error handling for GUI-dependent tools**:
-  - All view tools now check `FreeCAD.GuiUp` and return clear error messages in headless mode
-  - Tools return `{"success": False, "error": "..."}` instead of raising exceptions
-  - Affected tools: `set_object_visibility`, `set_display_mode`, `set_object_color`,
-    `zoom_in`, `zoom_out`, `set_camera_position`, `get_screenshot`
-  - Non-GUI tools (`undo`, `redo`, `recompute`) now also return structured error responses
-- **Updated documentation for connection modes**:
-  - README.md now documents all three modes: `xmlrpc`, `socket`, `embedded`
-  - Changed default recommended mode from `embedded` to `xmlrpc` (works on all platforms)
-  - Added `FREECAD_XMLRPC_PORT` environment variable documentation
-  - Documented platform limitations (embedded mode only works on Linux)
-  - Updated Python version requirement from 3.12+ to 3.11 (FreeCAD ABI compatibility)
-  - ARCHITECTURE.md deployment modes updated to reflect current implementation
+| Mode       | Description                   | Platform Support            |
+| ---------- | ----------------------------- | --------------------------- |
+| `xmlrpc`   | XML-RPC protocol (port 9875)  | All platforms (recommended) |
+| `socket`   | JSON-RPC socket (port 9876)   | All platforms               |
+| `embedded` | In-process FreeCAD            | Linux only                  |
 
-### Fixed
+#### FreeCAD Macros
 
-- **Justfile module working directory issue**:
-  - Fixed `just freecad::run-headless` and other FreeCAD commands failing with wrong path
-  - Issue: `$(pwd)` in module recipes returned `just/` directory instead of project root
-  - Solution: All module files now use `project_root := justfile_directory()` variable
-  - Added documentation in CLAUDE.md about justfile working directory behavior in modules
-- **Cut face detection for re-cutting already-cut objects in CutObjectForMagnets macro**:
-  - When cutting an object that was previously cut, the macro now correctly identifies the NEW cut face
-  - Previously, the algorithm only checked face normals but not proximity to the cut plane
-  - This caused it to potentially select an OLD cut face from a previous operation
-  - New algorithm uses three strategies with combined normal + distance checks:
-    1. Planar faces with exact normal match AND close to cut plane (ideal case)
-    2. Any faces with good normal match close to cut plane (for curved objects)
-    3. Fallback to best normal match with warning (for edge cases)
-- **Sketch attachment failure in CutObjectForMagnets macro**:
-  - Changed `_find_cut_face_name()` to use `body.BaseFeature` instead of `body.Tip`
-  - Changed `_create_hole_sketch()` to attach sketches to BaseFeature instead of Tip
-  - Root cause: When re-running the macro on a failed state, `body.Tip` was the broken
-    `MagnetHoles` feature (with 0 faces) instead of the solid `BaseFeature`
-  - This caused the macro to select non-planar faces (Cone, Toroid) instead of the
-    actual planar cut face, resulting in "Invalid" sketch state with `FlatFace` MapMode
-  - Now correctly finds Face4 (the planar cut face with dot=1.0) instead of Face81 (Cone)
-- **Python version mismatch crash** - Embedded FreeCAD mode was crashing with SIGSEGV
-  - FreeCAD bundles `libpython3.11.dylib` and requires Python 3.11 for ABI compatibility
-  - Using Python 3.12+ caused `EXC_BAD_ACCESS` when loading FreeCAD.so (calling `PySys_GetObject` from wrong Python version)
-  - Changed `.mise.toml` to use Python 3.11 and updated `pyproject.toml` accordingly
-- **Embedded mode crashes on macOS** - Even with correct Python version, embedded mode fails
-  - FreeCAD's `FreeCAD.so` links to `@rpath/libpython3.11.dylib` which conflicts with external Python interpreters
-  - Documented that embedded mode only works on Linux; macOS/Windows must use `xmlrpc` or `socket` mode
-  - Updated `.mcp.json` to use `xmlrpc` mode by default
-  - Added FreeCAD connection modes documentation to CLAUDE.md
-- Server startup crash with `AttributeError: 'FastMCP' object has no attribute 'on_startup'`
-  - Migrated from deprecated `mcp.on_startup()`/`on_shutdown()` hooks to the modern `lifespan` async context manager pattern
-  - This fix is required for compatibility with MCP SDK 1.25.0+
-- Pre-commit hook compatibility issues:
-  - Ruff UP038: Updated isinstance calls to use modern union syntax
-  - MyPy: Added type ignore comments for FastMCP dynamic attributes
-  - Codespell: Added FreeCAD-specific terms to ignore list
-  - Markdownlint/mdformat: Added mdformat-simple-breaks plugin for consistent horizontal rules
-- Justfile commands now use `uv run` prefix for all Python tools (pytest, ruff, mypy, etc.)
-- **Headless server import error** - `just run-headless` was failing with `'freecad_mcp' is not a package`
-  - The `freecad_mcp/__init__.py` imports the MCP SDK which isn't available in FreeCAD's Python environment
-  - Fixed by importing `FreecadMCPPlugin` directly from the module file instead of through the package hierarchy
-  - Added explicit `flush=True` to print statements for immediate output in FreeCAD's buffered stdout
-- **Headless mode queue processor not running** - XML-RPC `execute` calls would hang indefinitely
-  - The code was checking for Qt (PySide) availability to determine GUI vs headless mode
-  - PySide6 is available in FreeCAD headless mode, but Qt timers don't fire without an event loop
-  - Fixed by using `FreeCAD.GuiUp` to correctly detect headless mode and start the queue processor thread
-- **Renamed CutWithConnectors macro to CutObjectForMagnets**:
-  - Macro file renamed from `CutWithConnectors.FCMacro` to `CutObjectForMagnets.FCMacro`
-  - Directory renamed from `Cut_with_Connectors` to `Cut_Object_for_Magnets`
-  - Updated class names: `CutWithConnectorsDialog` → `CutObjectForMagnetsDialog`
-  - Updated dialog title and UI labels to reference "magnets" instead of "connectors"
-  - Updated justfile commands to reference new file paths
-  - All functionality preserved - just a naming update for clarity
-- **CutObjectForMagnets macro - hole placement improvements**:
-  - Changed from spacing-based to count-based hole placement (default: 6 holes)
-  - Holes now distributed evenly along the perimeter of the cut face
-  - Both halves now have identical hole positions that align when joined
-  - Fixed cut face detection to find the correct face at the cut plane (was finding original object faces)
-  - Fixed hole positioning for hollow objects (ring-shaped cross-sections)
-  - Safety check correctly rejects holes that would penetrate inner walls on thin-walled objects
-  - Added smart hole repositioning: when a hole fails the safety check, the macro tries to find a nearby safe position by:
-    - Moving further inward from the edge (1.5x, 2x, 2.5x, 3x inset)
-    - Moving along the perimeter to find a thicker section (±5%, ±10%, ±15%, ±20%)
-  - Hole validation now checks BOTH parts simultaneously to ensure holes align perfectly
-  - Added minimum hole spacing check: holes must be at least 2x diameter apart (one hole width between them)
-  - Automatically reduces hole count when requested holes would overlap
-  - Updated default values: diameter=3mm, depth=3mm, holes=6
-  - Added dual clearance system with preferred and minimum values:
-    - "Edge Clearance (Preferred)": default 2mm - used for initial hole placement
-    - "Edge Clearance (Minimum)": default 0.5mm - used as fallback during repositioning
-    - Smart repositioning now tries clearances from preferred down to minimum before moving holes
-    - This keeps holes in ideal positions when possible, only moving closer to edges when necessary
-  - Dialog now shows body name and type being cut
-  - Smart plane detection: selecting both object and plane auto-sets the plane as cut plane
-  - Added object selection combo box: users can now change the object to cut in the dialog (not just from initial selection)
-- **CutObjectForMagnets macro - PartDesign::Hole implementation (parametric holes)**:
-  - Holes now created as native `PartDesign::Hole` features instead of Part boolean operations
-  - Cut halves created as `PartDesign::Body` objects using `PartDesign::BaseFeature`
-  - Hole centers defined via `Sketcher::SketchObject` attached to cut face
-  - Benefits of new approach:
-    - Holes appear in the feature tree and can be edited after creation
-    - Change hole diameter/depth by modifying the Hole feature properties
-    - Sketch shows hole center points for visualization
-    - Full PartDesign parametric workflow integration
-  - New helper methods added:
-    - `_create_body_from_shape()` - Wraps Part::Shape in PartDesign::Body
-    - `_find_cut_face_name()` - Locates cut face by normal direction
-    - `_world_to_sketch_coords()` - Transforms world coords to sketch-local 2D
-    - `_create_hole_sketch()` - Creates sketch with points at hole centers
-    - `_create_hole_feature()` - Creates PartDesign::Hole from sketch
-  - Original boolean hole method kept as `_create_holes_boolean()` for potential fallback
-  - FreeCAD 1.0+ API compatibility fixes:
-    - Fixed `_create_body_from_shape()` to use `body.BaseFeature = feature` property instead of `body.newObject("PartDesign::BaseFeature")`
-    - Fixed sketch attachment to use `AttachmentSupport` property instead of deprecated `Support`
-    - Fixed `_create_hole_feature()` to use `DepthType = "Dimension"` (string) and `HoleCutType = "None"` instead of numeric values
-  - Tested successfully with solid objects (box) and hollow objects (vase-shaped cylinder)
+- **CutObjectForMagnets**: Cut objects in half with aligned magnet holes for easy reassembly
+  - Smart hole placement with overlap detection
+  - Support for solid and hollow objects
+  - Parametric PartDesign::Hole or boolean hole methods
+- **MultiExport**: Export selected objects to multiple formats simultaneously
+  - Supports STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF
+  - Configurable mesh tolerance for STL/3MF
+  - Batch export with progress feedback
+
+#### Installation Options
+
+- **PyPI**: `pip install freecad-robust-mcp`
+- **Docker**: `docker pull ghcr.io/spkane/freecad-mcp`
+- **Source**: Clone and install with `uv sync --all-extras`
+
+#### CI/CD & Tooling
+
+- GitHub Actions workflows for testing, Docker builds, and PyPI releases
+- Pre-commit hooks with Ruff, MyPy, Bandit, and secrets detection
+- Dependabot for automated dependency updates
+- CodeQL security scanning
+
+#### Documentation
+
+- Comprehensive README with installation and configuration guides
+- CLAUDE.md with AI assistant guidelines
+- ARCHITECTURE.md with system design documentation
+- MCP tools reference with examples
+
+### Known Limitations
+
+- Embedded mode only works on Linux (macOS/Windows must use xmlrpc or socket)
+- Python 3.11 required (must match FreeCAD's bundled Python for ABI compatibility)
+- GUI features (screenshots, visibility) not available in headless mode
