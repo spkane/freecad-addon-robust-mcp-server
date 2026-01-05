@@ -95,8 +95,8 @@ pip install freecad-robust-mcp
 #### Using mise and just (from source)
 
 ```bash
-git clone https://github.com/spkane/freecad-mcp.git
-cd freecad-mcp
+git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
+cd freecad-robust-mcp-and-more
 mise trust
 mise install
 just setup
@@ -108,11 +108,11 @@ Run the MCP server in a container. This is useful for isolated environments or w
 
 ```bash
 # Pull from Docker Hub (when published)
-docker pull spkane/freecad-mcp
+docker pull spkane/freecad-robust-mcp
 
 # Or build locally
-git clone https://github.com/spkane/freecad-mcp.git
-cd freecad-mcp
+git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
+cd freecad-robust-mcp-and-more
 docker build -t freecad-mcp .
 
 # Or use just commands (if you have mise/just installed)
@@ -420,7 +420,7 @@ This project includes standalone FreeCAD macros that can be used independently o
 
 Pre-packaged macro archives are available with each release:
 
-1. Go to the [Releases page](https://github.com/spkane/freecad-mcp/releases)
+1. Go to the [Releases page](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
 1. Download the macro archive for your platform:
    - `freecad-macros-X.Y.Z.tar.gz` (Linux/macOS)
    - `freecad-macros-X.Y.Z.zip` (Windows)
@@ -553,8 +553,8 @@ This section covers development setup, contributing, and working with the codeba
 
 ```bash
 # Clone the repository
-git clone https://github.com/spkane/freecad-mcp.git
-cd freecad-mcp
+git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
+cd freecad-robust-mcp-and-more
 
 # Install mise (if not already installed)
 curl https://mise.run | sh

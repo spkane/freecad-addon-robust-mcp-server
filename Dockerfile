@@ -59,9 +59,9 @@ FROM python:3.11-slim AS runtime
 # Note: version, revision, and created are set dynamically in CI/CD workflows
 LABEL org.opencontainers.image.title="FreeCAD MCP Server" \
       org.opencontainers.image.description="MCP (Model Context Protocol) server for FreeCAD integration with AI assistants" \
-      org.opencontainers.image.url="https://github.com/spkane/freecad-mcp" \
-      org.opencontainers.image.source="https://github.com/spkane/freecad-mcp" \
-      org.opencontainers.image.documentation="https://github.com/spkane/freecad-mcp#readme" \
+      org.opencontainers.image.url="https://github.com/spkane/freecad-robust-mcp-and-more" \
+      org.opencontainers.image.source="https://github.com/spkane/freecad-robust-mcp-and-more" \
+      org.opencontainers.image.documentation="https://github.com/spkane/freecad-robust-mcp-and-more#readme" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="Sean P. Kane" \
       org.opencontainers.image.authors="Sean P. Kane <spkane@gmail.com>" \

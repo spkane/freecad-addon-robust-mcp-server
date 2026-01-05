@@ -1,8 +1,8 @@
 site_name: FreeCAD MCP Server
 site_description: MCP server for FreeCAD integration with AI assistants
-site_url: https://github.com/spkane/freecad-mcp
-repo_url: https://github.com/spkane/freecad-mcp
-repo_name: spkane/freecad-mcp
+site_url: https://github.com/spkane/freecad-robust-mcp-and-more
+repo_url: https://github.com/spkane/freecad-robust-mcp-and-more
+repo_name: spkane/freecad-robust-mcp-and-more
 
 theme:
   name: material

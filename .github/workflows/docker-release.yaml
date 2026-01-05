@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOCKERHUB_REPO: spkane/freecad-mcp
+  DOCKERHUB_REPO: spkane/freecad-robust-mcp
 
 jobs:
   release:

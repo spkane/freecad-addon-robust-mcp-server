@@ -53,7 +53,7 @@ Initial public beta release of the FreeCAD MCP Server and Macros.
 #### Installation Options
 
 - **PyPI**: `pip install freecad-robust-mcp`
-- **Docker**: `docker pull ghcr.io/spkane/freecad-mcp`
+- **Docker**: `docker pull ghcr.io/spkane/freecad-robust-mcp`
 - **Source**: Clone and install with `uv sync --all-extras`
 
 #### CI/CD & Tooling
