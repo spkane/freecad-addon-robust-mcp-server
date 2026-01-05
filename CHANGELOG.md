@@ -16,15 +16,9 @@ Group changes under: Added, Changed, Deprecated, Removed, Fixed, Security
 
 Initial public beta release of the FreeCAD MCP Server and Macros.
 
-### Highlights
+### Added
 
-- **MCP Server for FreeCAD** - Control FreeCAD programmatically via the Model Context Protocol
-- **Three connection modes** - XML-RPC (recommended), Socket, or Embedded
-- **60+ MCP tools** - Document management, object creation, PartDesign workflows, import/export
-- **Docker support** - Run the MCP server in containers with multi-arch images
-- **FreeCAD Macros** - CutObjectForMagnets and MultiExport standalone macros
-
-### MCP Server Features
+#### MCP Server for FreeCAD
 
 - **Document management**: Create, open, save, close, recompute documents
 - **Object manipulation**: Create primitives (box, cylinder, sphere, cone, torus, wedge, helix), boolean operations, transforms (scale, rotate, copy, mirror)
@@ -34,7 +28,7 @@ Initial public beta release of the FreeCAD MCP Server and Macros.
 - **Macro support**: List, run, create, and manage FreeCAD macros
 - **Undo/Redo**: Full undo/redo support with status queries
 
-### Connection Modes
+#### Connection Modes
 
 | Mode       | Description                   | Platform Support            |
 | ---------- | ----------------------------- | --------------------------- |
@@ -42,7 +36,7 @@ Initial public beta release of the FreeCAD MCP Server and Macros.
 | `socket`   | JSON-RPC socket (port 9876)   | All platforms               |
 | `embedded` | In-process FreeCAD            | Linux only                  |
 
-### FreeCAD Macros
+#### FreeCAD Macros
 
 - **CutObjectForMagnets**: Cut objects in half with aligned magnet holes for easy reassembly
   - Smart hole placement with overlap detection
@@ -53,20 +47,20 @@ Initial public beta release of the FreeCAD MCP Server and Macros.
   - Configurable mesh tolerance for STL/3MF
   - Batch export with progress feedback
 
-### Installation Options
+#### Installation Options
 
 - **PyPI**: `pip install freecad-robust-mcp`
 - **Docker**: `docker pull ghcr.io/spkane/freecad-mcp`
 - **Source**: Clone and install with `uv sync --all-extras`
 
-### CI/CD & Tooling
+#### CI/CD & Tooling
 
 - GitHub Actions workflows for testing, Docker builds, and PyPI releases
 - Pre-commit hooks with Ruff, MyPy, Bandit, and secrets detection
 - Dependabot for automated dependency updates
 - CodeQL security scanning
 
-### Documentation
+#### Documentation
 
 - Comprehensive README with installation and configuration guides
 - CLAUDE.md with AI assistant guidelines
