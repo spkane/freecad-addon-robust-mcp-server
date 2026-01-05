@@ -3,6 +3,9 @@
 # FreeCAD MCP Server Dockerfile
 # Multi-stage build with BuildKit optimizations for multi-arch support
 #
+# Uses Alpine Linux for minimal image size and reduced CVE surface.
+# Alpine has significantly fewer vulnerabilities than Debian-based images.
+#
 # Build:
 #   docker build -t freecad-mcp .
 #
@@ -15,24 +18,22 @@
 # =============================================================================
 # Stage 1: Builder - Install dependencies and build the package
 # =============================================================================
-FROM python:3.11-slim AS builder
+FROM python:3.11-alpine AS builder
 
-# Install build dependencies
-# hadolint ignore=DL3008
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies for compiling Python packages with native extensions
+# hadolint ignore=DL3018
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev
 
 # Set up working directory
 WORKDIR /app
 
-# Install uv for fast dependency management
-# Using pip cache mount for faster rebuilds
+# Upgrade pip to fix CVE-2025-8869, then install uv for fast dependency management
 # hadolint ignore=DL3013
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-compile uv
+    pip install --no-cache-dir --upgrade "pip>=25.3" && \
+    pip install --no-cache-dir --no-compile uv
 
 # Copy only dependency files first for better layer caching
 COPY pyproject.toml README.md ./
@@ -53,7 +54,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime - Minimal image for running the server
 # =============================================================================
-FROM python:3.11-slim AS runtime
+FROM python:3.11-alpine AS runtime
 
 # Labels for container metadata (OCI Image Spec)
 # Note: version, revision, and created are set dynamically in CI/CD workflows
@@ -65,11 +66,15 @@ LABEL org.opencontainers.image.title="FreeCAD MCP Server" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="Sean P. Kane" \
       org.opencontainers.image.authors="Sean P. Kane <spkane@gmail.com>" \
-      org.opencontainers.image.base.name="python:3.11-slim"
+      org.opencontainers.image.base.name="python:3.11-alpine"
 
-# Create non-root user for security
-RUN groupadd --gid 1000 mcpuser && \
-    useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home mcpuser
+# Create non-root user for security (Alpine uses addgroup/adduser)
+RUN addgroup -g 1000 mcpuser && \
+    adduser -u 1000 -G mcpuser -s /bin/sh -D mcpuser
+
+# Upgrade pip in the base image to fix CVE-2025-8869
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir --upgrade "pip>=25.3"
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv

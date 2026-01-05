@@ -13,6 +13,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
   - [Features](#features)
   - [Requirements](#requirements)
   - [For Users](#for-users)
+    - [Quick Links](#quick-links)
   - [MCP Server](#mcp-server)
     - [Installation](#installation)
       - [Using pip (recommended)](#using-pip-recommended)
@@ -85,6 +86,14 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 ## For Users
 
 This section covers installation and usage for end users who want to use the MCP server with AI assistants or the standalone FreeCAD macros.
+
+### Quick Links
+
+| Resource                                                                          | Description                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp)                  | Pre-built Docker images for easy deployment                  |
+| [PyPI](https://pypi.org/project/freecad-robust-mcp/)                              | Python package for pip installation                          |
+| [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases) | Release archives, changelogs, and standalone macro downloads |
 
 ## MCP Server
 
