@@ -42,7 +42,7 @@ jobs:
           RELEASE_INFO=$(curl -s https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
           TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
           echo "Latest FreeCAD release: $TAG_NAME"
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
           # Find the Linux AppImage asset URL
           APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
@@ -55,8 +55,8 @@ jobs:
 
           echo "AppImage URL: $APPIMAGE_URL"
           echo "AppImage name: $APPIMAGE_NAME"
-          echo "url=$APPIMAGE_URL" >> $GITHUB_OUTPUT
-          echo "name=$APPIMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "url=$APPIMAGE_URL" >> "$GITHUB_OUTPUT"
+          echo "name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Cache FreeCAD AppImage
         id: cache-freecad
@@ -126,7 +126,7 @@ jobs:
           # Capture stdout to a file so we can extract the instance ID
           freecadcmd src/freecad_mcp/freecad_plugin/headless_server.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
-          echo "FREECAD_PID=$FREECAD_PID" >> $GITHUB_ENV
+          echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 
           # Wait for bridge to be ready (check XML-RPC port)
           echo "Waiting for MCP bridge to start..."
@@ -138,10 +138,10 @@ jobs:
                   echo "MCP bridge is ready (took ${i}s)"
                   break
               fi
-              if [ $i -eq 60 ]; then
+              if [ "$i" -eq 60 ]; then
                   echo "ERROR: MCP bridge did not start within 60s"
                   echo "=== Bridge log ===" && cat /tmp/freecad_bridge.log || true
-                  kill $FREECAD_PID 2>/dev/null || true
+                  kill "$FREECAD_PID" 2>/dev/null || true
                   exit 1
               fi
               sleep 1
@@ -176,7 +176,7 @@ jobs:
         if: always()
         run: |
           if [ -n "$FREECAD_PID" ]; then
-              kill $FREECAD_PID 2>/dev/null || true
+              kill "$FREECAD_PID" 2>/dev/null || true
           fi
 
   lint-macros:

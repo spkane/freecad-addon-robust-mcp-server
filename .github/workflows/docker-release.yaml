@@ -31,7 +31,7 @@ jobs:
         id: version
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           # Validate semantic versioning format (v1.2.3 or v1.2.3-prerelease)
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -41,24 +41,26 @@ jobs:
 
           # Extract version without 'v' prefix
           VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           # Extract major.minor for additional tag
           MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
-          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
 
           # Extract major for additional tag
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
 
           # Check if this is a prerelease
           if [[ "$TAG" =~ -[a-zA-Z0-9.]+ ]]; then
-              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+              IS_PRERELEASE="true"
           else
-              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+              IS_PRERELEASE="false"
           fi
 
-          echo "Parsed version: $VERSION (major: $MAJOR, major.minor: $MAJOR_MINOR, prerelease: ${{ steps.version.outputs.is_prerelease }})"
+          echo "Parsed version: $VERSION (major: $MAJOR, major.minor: $MAJOR_MINOR, prerelease: $IS_PRERELEASE)"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -129,19 +131,21 @@ jobs:
 
       - name: Generate release summary
         run: |
-          echo "## Docker Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Prerelease:** ${{ steps.version.outputs.is_prerelease }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Published Tags" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull Command" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.DOCKERHUB_REPO }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Docker Release Summary"
+            echo ""
+            echo "**Version:** ${{ steps.version.outputs.version }}"
+            echo "**Prerelease:** ${{ steps.version.outputs.is_prerelease }}"
+            echo ""
+            echo "### Published Tags"
+            echo ""
+            echo "\`\`\`"
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "\`\`\`"
+            echo ""
+            echo "### Pull Command"
+            echo ""
+            echo "\`\`\`bash"
+            echo "docker pull ${{ env.DOCKERHUB_REPO }}:${{ steps.version.outputs.version }}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

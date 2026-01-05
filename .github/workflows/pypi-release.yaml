@@ -26,7 +26,7 @@ jobs:
         id: version
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           # Validate semantic versioning format (v1.2.3 or v1.2.3-prerelease)
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -36,16 +36,18 @@ jobs:
 
           # Extract version without 'v' prefix
           VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           # Check if this is a prerelease
           if [[ "$TAG" =~ -[a-zA-Z0-9.]+ ]]; then
-              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+              IS_PRERELEASE="true"
           else
-              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+              IS_PRERELEASE="false"
           fi
 
-          echo "Parsed version: $VERSION (prerelease: ${{ steps.version.outputs.is_prerelease }})"
+          echo "Parsed version: $VERSION (prerelease: $IS_PRERELEASE)"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -205,32 +207,40 @@ jobs:
 
     steps:
       - name: Generate release summary
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          echo "## PyPI Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## PyPI Release Summary"
+            echo ""
+            echo "**Tag:** $REF_NAME"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "${{ github.ref }}" == *"-"* ]]; then
-              echo "**Type:** Prerelease (published to TestPyPI)" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Install from TestPyPI" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-              echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ freecad-robust-mcp" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          if [[ "$REF_NAME" == *"-"* ]]; then
+              {
+                echo "**Type:** Prerelease (published to TestPyPI)"
+                echo ""
+                echo "### Install from TestPyPI"
+                echo ""
+                echo "\`\`\`bash"
+                echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ freecad-robust-mcp"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
           else
-              echo "**Type:** Stable release (published to PyPI)" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Install from PyPI" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-              echo "pip install freecad-robust-mcp" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "Or with uv:" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-              echo "uv pip install freecad-robust-mcp" >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              {
+                echo "**Type:** Stable release (published to PyPI)"
+                echo ""
+                echo "### Install from PyPI"
+                echo ""
+                echo "\`\`\`bash"
+                echo "pip install freecad-robust-mcp"
+                echo "\`\`\`"
+                echo ""
+                echo "Or with uv:"
+                echo ""
+                echo "\`\`\`bash"
+                echo "uv pip install freecad-robust-mcp"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
           fi

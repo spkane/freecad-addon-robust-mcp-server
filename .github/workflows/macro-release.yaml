@@ -27,11 +27,11 @@ jobs:
         id: version
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           # Extract version without 'v' prefix
           VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           echo "Packaging macros for version: $VERSION"
 
@@ -40,7 +40,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
 
           # Create a staging directory
-          mkdir -p staging/freecad-macros-${VERSION}
+          mkdir -p "staging/freecad-macros-${VERSION}"
 
           # Copy macro directories (excluding test files and development artifacts)
           for macro_dir in macros/*/; do
@@ -99,7 +99,7 @@ jobs:
           EOF
 
           # List included macros in the README
-          for macro_dir in staging/freecad-macros-${VERSION}/*/; do
+          for macro_dir in "staging/freecad-macros-${VERSION}/"*/; do
               if [ -d "$macro_dir" ]; then
                   macro_name=$(basename "$macro_dir")
                   echo "- **${macro_name}**: See ${macro_name}/README*.md for details" >> "staging/freecad-macros-${VERSION}/README.md"
@@ -131,7 +131,7 @@ jobs:
 
           cd ..
           echo "Created archives:"
-          ls -la freecad-macros-${VERSION}.*
+          ls -la "freecad-macros-${VERSION}."*
 
       - name: Upload macro archives to release
         uses: softprops/action-gh-release@v2
@@ -146,24 +146,28 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          echo "## FreeCAD Macros Release" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Packaged Macros" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## FreeCAD Macros Release"
+            echo ""
+            echo "**Version:** ${VERSION}"
+            echo ""
+            echo "### Packaged Macros"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
           for macro_dir in macros/*/; do
               if [ -d "$macro_dir" ]; then
                   macro_name=$(basename "$macro_dir")
-                  echo "- ${macro_name}" >> $GITHUB_STEP_SUMMARY
+                  echo "- ${macro_name}" >> "$GITHUB_STEP_SUMMARY"
               fi
           done
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Download" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The macro archives have been attached to the GitHub release:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- \`freecad-macros-${VERSION}.tar.gz\` (Linux/macOS)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`freecad-macros-${VERSION}.zip\` (Windows)" >> $GITHUB_STEP_SUMMARY
+          {
+            echo ""
+            echo "### Download"
+            echo ""
+            echo "The macro archives have been attached to the GitHub release:"
+            echo ""
+            echo "- \`freecad-macros-${VERSION}.tar.gz\` (Linux/macOS)"
+            echo "- \`freecad-macros-${VERSION}.zip\` (Windows)"
+          } >> "$GITHUB_STEP_SUMMARY"
