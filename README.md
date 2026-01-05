@@ -59,6 +59,8 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
     - [CutObjectForMagnets Macro](#cutobjectformagnets-macro)
     - [MultiExport Macro](#multiexport-macro)
   - [Architecture](#architecture)
+  - [Acknowledgements](#acknowledgements)
+    - [Related Projects](#related-projects)
   - [License](#license)
 
 <!--TOC-->
@@ -97,6 +99,10 @@ pip install freecad-robust-mcp
 ```bash
 git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
 cd freecad-robust-mcp-and-more
+
+# Install mise (if not already installed)
+curl https://mise.run | sh
+
 mise trust
 mise install
 just setup
@@ -782,6 +788,26 @@ See [ARCHITECTURE-MCP.md](ARCHITECTURE-MCP.md) for detailed design documentation
 - Bridge communication protocols
 - Tool registration patterns
 - FreeCAD plugin architecture
+
+---
+
+## Acknowledgements
+
+This project was developed after analyzing several existing FreeCAD MCP implementations. We are grateful to these projects for their pioneering work and the ideas they contributed to the FreeCAD + AI ecosystem:
+
+### Related Projects
+
+- **[neka-nat/freecad-mcp](https://github.com/neka-nat/freecad-mcp)** (MIT License) - The queue-based thread safety pattern and XML-RPC protocol design (port 9875) were directly inspired by this project. Our implementation maintains protocol compatibility while being a complete rewrite with additional features.
+
+- **[jango-blockchained/mcp-freecad](https://github.com/jango-blockchained/mcp-freecad)** - Inspired our connection recovery mechanisms and multi-mode architecture approach.
+
+- **[contextform/freecad-mcp](https://github.com/contextform/freecad-mcp)** - Informed our comprehensive PartDesign and Part workbench tool coverage.
+
+- **[ATOI-Ming/FreeCAD-MCP](https://github.com/ATOI-Ming/FreeCAD-MCP)** - Inspired our macro development toolkit including templates, validation, and automatic imports.
+
+- **[bonninr/freecad_mcp](https://github.com/bonninr/freecad_mcp)** - Influenced our simple socket-based communication approach.
+
+See [docs/comparison.md](docs/comparison.md) for a detailed analysis of these implementations and the design decisions they informed.
 
 ---
 
