@@ -1,5 +1,8 @@
 name: Docker Build
 
+# Build and test Docker images on pushes to main and pull requests.
+# Note: Version tags (v*) are NOT included here - they trigger docker-release.yaml
+# via the 'release: published' event instead, to avoid duplicate workflow runs.
 on:
   push:
     branches: [main, master]
@@ -9,8 +12,6 @@ on:
       - "src/**/*.py"
       - "pyproject.toml"
       - ".github/workflows/docker.yaml"
-    tags:
-      - "v*"
   pull_request:
     branches: [main, master]
     paths:

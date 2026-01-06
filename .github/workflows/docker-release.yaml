@@ -1,12 +1,11 @@
 name: Docker Release
 
+# Only trigger on GitHub release publication, not on tag push.
+# When a release is created, GitHub fires both 'release' and 'push' events.
+# Using only 'release' prevents duplicate workflow runs.
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-*"
 
 # Cancel in-progress runs for the same tag
 concurrency:
