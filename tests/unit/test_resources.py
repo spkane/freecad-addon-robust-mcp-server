@@ -1,6 +1,8 @@
 """Tests for MCP resources module."""
 
 import json
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,13 +20,15 @@ class TestFreecadResources:
     """Tests for FreeCAD MCP resources."""
 
     @pytest.fixture
-    def mock_mcp(self):
+    def mock_mcp(self) -> MagicMock:
         """Create a mock MCP server that captures resource registrations."""
         mcp = MagicMock()
         mcp._registered_resources = {}
 
-        def resource_decorator(uri):
-            def wrapper(func):
+        def resource_decorator(
+            uri: str,
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            def wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
                 mcp._registered_resources[uri] = func
                 return func
 
@@ -34,23 +38,27 @@ class TestFreecadResources:
         return mcp
 
     @pytest.fixture
-    def mock_bridge(self):
+    def mock_bridge(self) -> AsyncMock:
         """Create a mock FreeCAD bridge."""
         return AsyncMock()
 
     @pytest.fixture
-    def register_resources(self, mock_mcp, mock_bridge):
+    def register_resources(
+        self, mock_mcp: MagicMock, mock_bridge: AsyncMock
+    ) -> dict[str, Callable[..., Any]]:
         """Register resources and return the registered functions."""
         from freecad_mcp.resources.freecad import register_resources
 
-        async def get_bridge():
+        async def get_bridge() -> AsyncMock:
             return mock_bridge
 
         register_resources(mock_mcp, get_bridge)
         return mock_mcp._registered_resources
 
     @pytest.mark.asyncio
-    async def test_resource_version(self, register_resources, mock_bridge):
+    async def test_resource_version(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://version should return version info."""
         mock_bridge.get_freecad_version = AsyncMock(
             return_value={
@@ -70,7 +78,9 @@ class TestFreecadResources:
         mock_bridge.get_freecad_version.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_resource_status_connected(self, register_resources, mock_bridge):
+    async def test_resource_status_connected(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://status should return connected status."""
         mock_bridge.get_status = AsyncMock(
             return_value=ConnectionStatus(
@@ -93,7 +103,9 @@ class TestFreecadResources:
         assert data["error"] is None
 
     @pytest.mark.asyncio
-    async def test_resource_status_disconnected(self, register_resources, mock_bridge):
+    async def test_resource_status_disconnected(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://status should return error when disconnected."""
         mock_bridge.get_status = AsyncMock(
             return_value=ConnectionStatus(
@@ -111,7 +123,9 @@ class TestFreecadResources:
         assert data["error"] == "Connection refused"
 
     @pytest.mark.asyncio
-    async def test_resource_documents_empty(self, register_resources, mock_bridge):
+    async def test_resource_documents_empty(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://documents should return empty list when no documents."""
         mock_bridge.get_documents = AsyncMock(return_value=[])
 
@@ -122,7 +136,9 @@ class TestFreecadResources:
         assert data == []
 
     @pytest.mark.asyncio
-    async def test_resource_documents_with_docs(self, register_resources, mock_bridge):
+    async def test_resource_documents_with_docs(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://documents should return document list."""
         mock_docs = [
             DocumentInfo(
@@ -155,7 +171,9 @@ class TestFreecadResources:
         assert data[1]["is_modified"] is True
 
     @pytest.mark.asyncio
-    async def test_resource_document_found(self, register_resources, mock_bridge):
+    async def test_resource_document_found(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://documents/{name} should return document info."""
         mock_docs = [
             DocumentInfo(
@@ -177,7 +195,9 @@ class TestFreecadResources:
         assert data["objects"] == ["Part1", "Part2"]
 
     @pytest.mark.asyncio
-    async def test_resource_document_not_found(self, register_resources, mock_bridge):
+    async def test_resource_document_not_found(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://documents/{name} should return error when not found."""
         mock_bridge.get_documents = AsyncMock(return_value=[])
 
@@ -189,7 +209,9 @@ class TestFreecadResources:
         assert "not found" in data["error"]
 
     @pytest.mark.asyncio
-    async def test_resource_document_objects(self, register_resources, mock_bridge):
+    async def test_resource_document_objects(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://documents/{name}/objects should return object list."""
         mock_objects = [
             ObjectInfo(
@@ -221,7 +243,9 @@ class TestFreecadResources:
         assert data[1]["visibility"] is False
 
     @pytest.mark.asyncio
-    async def test_resource_object_details(self, register_resources, mock_bridge):
+    async def test_resource_object_details(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://objects/{doc_name}/{obj_name} should return object details."""
         mock_object = ObjectInfo(
             name="Box",
@@ -250,7 +274,9 @@ class TestFreecadResources:
         assert data["shape_info"]["volume"] == 6000.0
 
     @pytest.mark.asyncio
-    async def test_resource_active_document(self, register_resources, mock_bridge):
+    async def test_resource_active_document(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://active-document should return active document."""
         mock_doc = DocumentInfo(
             name="ActiveDoc",
@@ -270,7 +296,9 @@ class TestFreecadResources:
         assert data["is_modified"] is True
 
     @pytest.mark.asyncio
-    async def test_resource_active_document_none(self, register_resources, mock_bridge):
+    async def test_resource_active_document_none(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://active-document should return null when no active document."""
         mock_bridge.get_active_document = AsyncMock(return_value=None)
 
@@ -282,7 +310,9 @@ class TestFreecadResources:
         assert data is None
 
     @pytest.mark.asyncio
-    async def test_resource_workbenches(self, register_resources, mock_bridge):
+    async def test_resource_workbenches(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://workbenches should return workbench list."""
         mock_workbenches = [
             WorkbenchInfo(
@@ -309,7 +339,9 @@ class TestFreecadResources:
         assert data[0]["is_active"] is True
 
     @pytest.mark.asyncio
-    async def test_resource_active_workbench(self, register_resources, mock_bridge):
+    async def test_resource_active_workbench(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://workbenches/active should return active workbench."""
         mock_workbenches = [
             WorkbenchInfo(
@@ -335,7 +367,9 @@ class TestFreecadResources:
         assert data["label"] == "Part Design"
 
     @pytest.mark.asyncio
-    async def test_resource_macros(self, register_resources, mock_bridge):
+    async def test_resource_macros(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://macros should return macro list."""
         mock_macros = [
             MacroInfo(
@@ -363,7 +397,9 @@ class TestFreecadResources:
         assert data[1]["is_system"] is True
 
     @pytest.mark.asyncio
-    async def test_resource_console(self, register_resources, mock_bridge):
+    async def test_resource_console(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://console should return console output."""
         mock_bridge.get_console_output = AsyncMock(
             return_value=[
@@ -382,7 +418,9 @@ class TestFreecadResources:
         assert data["count"] == 3
 
     @pytest.mark.asyncio
-    async def test_resource_capabilities(self, register_resources, mock_bridge):
+    async def test_resource_capabilities(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
         """freecad://capabilities should return server capabilities."""
         resource_capabilities = register_resources["freecad://capabilities"]
         result = await resource_capabilities()

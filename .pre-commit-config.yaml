@@ -14,7 +14,7 @@ repos:
       - id: trailing-whitespace
         exclude: \.md$  # Allow trailing spaces in markdown for line breaks
       - id: end-of-file-fixer
-        exclude: \.safety-project\.ini$  # Safety CLI adds trailing newline
+        exclude: \.safety-project\.ini$  # Safety CLI manages its own formatting
       - id: check-xml
       - id: check-yaml
         args: [--unsafe]
@@ -248,7 +248,6 @@ repos:
         language: system
         pass_filenames: false
         files: ^(docs/|mkdocs\.yaml)
-        types: [file]
 
   # ==========================================================================
   # Commit Message Linting

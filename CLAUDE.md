@@ -104,7 +104,7 @@ uv run safety auth
 uv run safety auth --login
 ```
 
-**Note:** The Safety CLI authentication is stored locally and only needs to be done once per machine. If you skip this step, the `safety` pre-commit hook will fail with an authentication prompt.
+**Note:** The Safety CLI authentication is stored locally and only needs to be done once per machine. If you skip this step, `just check` will show a clear error message with instructions. The `safety` pre-commit hook will also fail with an authentication prompt.
 
 **CI/CD:** Safety runs in CI using the `SAFETY_API_KEY` repository secret. The API key is passed via environment variable to the pre-commit hook.
 

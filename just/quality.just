@@ -5,8 +5,29 @@
 # Python tools use `uv run`. This ensures commands work even without mise shell activation.
 
 # Run all pre-commit checks
-check:
+check: _check-safety-auth
     uv run pre-commit run --all-files
+
+# Verify Safety CLI authentication (skipped in CI where SAFETY_API_KEY is used)
+_check-safety-auth:
+    #!/usr/bin/env bash
+    # Skip check if SAFETY_API_KEY is set (CI environment)
+    if [[ -n "${SAFETY_API_KEY:-}" ]]; then
+        exit 0
+    fi
+    # Check if authenticated locally
+    if ! uv run safety auth status >/dev/null 2>&1; then
+        echo "ERROR: Safety CLI not authenticated."
+        echo ""
+        echo "Safety CLI requires a free account for dependency vulnerability scanning."
+        echo "Run the following command to authenticate:"
+        echo ""
+        echo "    uv run safety auth login"
+        echo ""
+        echo "This only needs to be done once per machine."
+        echo "See CLAUDE.md for more details."
+        exit 1
+    fi
 
 # Format code with ruff
 format:
