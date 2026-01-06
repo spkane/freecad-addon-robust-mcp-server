@@ -35,6 +35,29 @@ jobs:
 
           echo "Packaging macros for version: $VERSION"
 
+      - name: Update macro versions
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TODAY=$(date +%Y-%m-%d)
+
+          echo "Updating macros to version: $VERSION (date: $TODAY)"
+
+          # Update __Version__ and __Date__ in all .FCMacro files
+          for macro_file in macros/*/*.FCMacro; do
+              if [ -f "$macro_file" ]; then
+                  echo "Updating: $macro_file"
+
+                  # Update __Version__ line (handles both single and double quotes)
+                  sed -i "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$macro_file"
+
+                  # Update __Date__ line (handles both single and double quotes)
+                  sed -i "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$macro_file"
+
+                  # Verify the changes
+                  grep -E "^__(Version|Date)__" "$macro_file" || true
+              fi
+          done
+
       - name: Create macro archive
         run: |
           VERSION="${{ steps.version.outputs.version }}"
