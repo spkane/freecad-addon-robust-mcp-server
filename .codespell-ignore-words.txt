@@ -13,7 +13,6 @@ ruff
 mypy
 bandit
 codespell
-mdformat
 commitizen
 hadolint
 shellcheck

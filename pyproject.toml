@@ -80,13 +80,6 @@ dev = [
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.27.0",
     "md-toc>=9.0.0",
-    # Markdown tools (also used by pre-commit, but useful standalone)
-    "mdformat>=0.7.0",
-    "mdformat-gfm>=0.3.0",
-    "mdformat-frontmatter>=2.0.0",
-    "mdformat-footnote>=0.1.0",
-    "mdformat-tables>=1.0.0",
-    "mdformat-simple-breaks>=0.0.1",
     "codespell>=2.3.0",
     # Publishing
     "twine>=6.0.0",

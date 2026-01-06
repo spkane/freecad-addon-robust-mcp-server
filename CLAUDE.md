@@ -223,12 +223,11 @@ just secrets-trufflehog       # Verified secrets only
 
 ### Markdown Linting
 
-All markdown files are linted and formatted for consistency:
+All markdown files are linted for consistency:
 
 ```bash
-just markdown-lint    # Check markdown files
-just markdown-fix     # Auto-fix markdown issues
-just markdown-format  # Format with mdformat
+just markdown-lint  # Check markdown files
+just markdown-fix   # Auto-fix markdown issues
 ```
 
 Configuration: `.markdownlint.yaml`
@@ -787,8 +786,6 @@ This project uses relaxed mypy settings because FastMCP lacks proper type stubs.
 ### Markdownlint (MD035)
 
 - **Horizontal rules**: Must use `---` format (3 dashes)
-- **mdformat-simple-breaks**: This plugin ensures mdformat produces `---` instead of 70 underscores
-- **Conflict resolution**: markdownlint and mdformat must agree on horizontal rule style
 
 ### Bandit Security
 

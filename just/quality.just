@@ -73,7 +73,3 @@ markdown-lint:
 # Lint and fix markdown files
 markdown-fix:
     mise exec -- markdownlint-cli2 --fix "**/*.md"
-
-# Format markdown files with mdformat (installed via uv)
-markdown-format:
-    uv run mdformat docs/*.md README.md ARCHITECTURE-MCP.md CLAUDE.md

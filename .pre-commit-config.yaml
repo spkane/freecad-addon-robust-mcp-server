@@ -141,31 +141,17 @@ repos:
         exclude: '(^|/)uv\.lock$|\.secrets\.baseline$'
 
   # ==========================================================================
-  # Markdown Linting - Comprehensive Configuration
+  # Markdown Linting
   # ==========================================================================
 
-  # Primary: markdownlint-cli2 - Comprehensive markdown linter
+  # markdownlint-cli2 - Comprehensive markdown linter with auto-fix
   # Config: .markdownlint.yaml
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.17.1
     hooks:
       - id: markdownlint-cli2
         name: markdownlint (linter)
-        args: []  # Uses .markdownlint.yaml automatically
-
-  # Secondary: mdformat - Opinionated markdown formatter
-  - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.21
-    hooks:
-      - id: mdformat
-        name: mdformat (formatter)
-        additional_dependencies:
-          - mdformat-gfm          # GitHub Flavored Markdown
-          - mdformat-frontmatter  # YAML front matter
-          - mdformat-footnote     # Footnotes
-          - mdformat-tables       # Table formatting
-          - mdformat-simple-breaks  # Use --- for horizontal rules
-        exclude: CHANGELOG\.md$  # Don't format auto-generated changelogs
+        args: [--fix]
 
   # Tertiary: md-toc - Table of contents generator
   # Automatically updates TOC between <!--TOC--> markers
