@@ -6,10 +6,8 @@ Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
 Export selected bodies to multiple file formats simultaneously with a
 user-friendly dialog for format selection and output configuration.
 
-Version: 1.0.0
-
 Requirements:
-    - FreeCAD 0.19 or later
+    - FreeCAD 0.21 or later
     - One or more objects selected in the 3D view
 
 Usage:
@@ -19,6 +17,22 @@ Usage:
     4. Choose output directory and base filename
     5. Click "Export"
 """
+
+# FreeCAD Addon Manager metadata
+__Name__ = "Multi Export"
+__Comment__ = "Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously"
+__Author__ = "Sean P. Kane"
+__Version__ = "0.5.0-beta"
+__Date__ = "2026-01-05"
+__License__ = "MIT"
+__Web__ = "https://github.com/spkane/freecad-robust-mcp-and-more"
+__Wiki__ = "https://github.com/spkane/freecad-robust-mcp-and-more#readme"
+__Icon__ = ""
+__Help__ = "Select one or more objects, run the macro, choose export formats and output location, then click Export."
+__Status__ = "Beta"
+__Requires__ = "FreeCAD 0.21+"
+__Communication__ = "https://github.com/spkane/freecad-robust-mcp-and-more/issues"
+__Files__ = ""
 
 import os
 
