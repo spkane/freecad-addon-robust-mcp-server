@@ -862,9 +862,9 @@ class SmartCutter:
                 closest_on_face = dist_info[1][0][0]
                 return App.Vector(closest_on_face)
             else:
-                # Point is not on the face - for ring shapes, we may need
-                # to adjust. Try projecting directly onto the face.
-                dist_info = cut_face.distToShape(Part.Vertex(inset_point))
+                # Point is not on the face - for ring shapes, the inset point
+                # may land in the hole. Return the closest point on the face
+                # from the already-computed dist_info.
                 return App.Vector(dist_info[1][0][0])
         except Exception as e:
             App.Console.PrintWarning(f"Failed to validate inset point: {e}\n")
@@ -1902,16 +1902,7 @@ def main():
         bottom_body, top_body = cutter.execute(progress_update)
 
         # Bodies are already created in the document by execute()
-        # Just need to finalize and hide original
-
-        # Transaction 7: Hide original object
-        App.ActiveDocument.openTransaction("Hide Original Object")
-        try:
-            obj.ViewObject.Visibility = False
-            App.ActiveDocument.commitTransaction()
-        except Exception:
-            App.ActiveDocument.abortTransaction()
-            raise
+        # Original object is hidden in execute() Transaction 8
 
         App.ActiveDocument.recompute()
 
