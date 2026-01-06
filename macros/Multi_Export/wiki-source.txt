@@ -9,7 +9,7 @@
 |Author=Sean P. Kane
 |Version=0.5.0-beta
 |Date=2026-01-05
-|FCVersion=0.19+
+|FCVersion=0.21+
 |Download=[https://wiki.freecad.org/images/thumb/1/19/Macro_Multi_Export.png/48px-Macro_Multi_Export.png ToolBar Icon]
 |SeeAlso=[[Std_Export|Std Export]], [[Import_Export|Import Export]]
 }}
@@ -58,7 +58,7 @@ This macro provides a convenient way to export selected FreeCAD objects to multi
 ==Requirements== <!--T:8-->
 
 <!--T:9-->
-* FreeCAD 0.19 or later
+* FreeCAD 0.21 or later
 * Objects with solid shapes (Part or PartDesign bodies)
 
 ==Installation== <!--T:10-->
@@ -97,7 +97,7 @@ Export selected bodies to multiple file formats simultaneously with a
 user-friendly dialog for format selection and output configuration.
 
 Requirements:
-    - FreeCAD 0.19 or later
+    - FreeCAD 0.21 or later
     - One or more objects selected in the 3D view
 
 Usage:
@@ -119,8 +119,8 @@ __Web__ = "https://github.com/spkane/freecad-robust-mcp-and-more"
 __Wiki__ = "https://github.com/spkane/freecad-robust-mcp-and-more#readme"
 __Icon__ = ""
 __Help__ = "Select one or more objects, run the macro, choose export formats and output location, then click Export."
-__Status__ = "Stable"
-__Requires__ = "FreeCAD 0.19+"
+__Status__ = "Beta"
+__Requires__ = "FreeCAD 0.21+"
 __Communication__ = "https://github.com/spkane/freecad-robust-mcp-and-more/issues"
 __Files__ = ""
 

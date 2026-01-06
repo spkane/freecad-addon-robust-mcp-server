@@ -7,7 +7,7 @@ Export selected bodies to multiple file formats simultaneously with a
 user-friendly dialog for format selection and output configuration.
 
 Requirements:
-    - FreeCAD 0.19 or later
+    - FreeCAD 0.21 or later
     - One or more objects selected in the 3D view
 
 Usage:
@@ -29,8 +29,8 @@ __Web__ = "https://github.com/spkane/freecad-robust-mcp-and-more"
 __Wiki__ = "https://github.com/spkane/freecad-robust-mcp-and-more#readme"
 __Icon__ = ""
 __Help__ = "Select one or more objects, run the macro, choose export formats and output location, then click Export."
-__Status__ = "Stable"
-__Requires__ = "FreeCAD 0.19+"
+__Status__ = "Beta"
+__Requires__ = "FreeCAD 0.21+"
 __Communication__ = "https://github.com/spkane/freecad-robust-mcp-and-more/issues"
 __Files__ = ""
 
