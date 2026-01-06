@@ -28,8 +28,7 @@ curl https://mise.run | sh
 mise install
 just setup
 
-# Start FreeCAD with MCP bridge
-just install-bridge-macro
+# Start FreeCAD with MCP bridge auto-started
 just run-gui
 
 # Run the MCP server (in another terminal or via your MCP client)
@@ -58,5 +57,7 @@ See the [README](../README.md) for detailed installation and configuration instr
 
 This project includes standalone FreeCAD macros:
 
-- **[StartMCPBridge](../macros/Start_MCP_Bridge/)** - Starts the MCP bridge server for AI assistant integration
 - **[CutObjectForMagnets](../macros/Cut_Object_for_Magnets/)** - Cuts objects along planes with automatic magnet hole placement
+- **[MultiExport](../macros/Multi_Export/)** - Export objects to multiple formats simultaneously
+
+The MCP bridge functionality is provided via the **MCP Bridge Workbench** which can be installed through FreeCAD's Addon Manager

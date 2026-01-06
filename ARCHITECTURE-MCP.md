@@ -1515,9 +1515,9 @@ FREECAD_XMLRPC_PORT = "9875"
 
 **Setup:**
 
-1. Run `just install-bridge-macro` to install the StartMCPBridge macro
-1. Start FreeCAD and execute the macro: Macro → Macros → StartMCPBridge → Execute
-1. The macro starts both XML-RPC (port 9875) and JSON-RPC (port 9876) servers
+1. Install the MCP Bridge workbench via FreeCAD Addon Manager, or run `just run-gui` from source
+1. Start the bridge using the workbench toolbar button or menu
+1. The bridge starts both XML-RPC (port 9875) and JSON-RPC (port 9876) servers
 
 ### Mode 2: Local Embedded (Linux Only)
 

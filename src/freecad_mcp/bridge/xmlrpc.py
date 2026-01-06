@@ -118,25 +118,22 @@ The FreeCAD MCP bridge server is not running. To fix this:
 
 1. Start FreeCAD (the GUI application)
 
-2. In FreeCAD's Python console (View → Panels → Python console), run:
+2. Start the MCP bridge using one of these methods:
 
-   import sys
-   sys.path.insert(0, "/path/to/freecad-robust-mcp-and-more/src")
-   from freecad_mcp.freecad_plugin.server import FreecadMCPPlugin
-   plugin = FreecadMCPPlugin()
-   plugin.start()
+   Option A: Using the MCP Bridge Workbench (recommended)
+   - Install via FreeCAD Addon Manager: Edit → Preferences → Addon Manager
+   - Search for "MCP Bridge" and install
+   - Switch to the MCP Bridge workbench
+   - Click "Start MCP Bridge" in the toolbar
 
-   Or run the StartMCPBridge macro if installed:
-   - Macro → Macros → StartMCPBridge → Execute
+   Option B: From source (for developers)
+   - Run: just run-gui
 
 3. You should see: "MCP Bridge started!"
    - XML-RPC: localhost:{self._port}
    - Socket: localhost:9876
 
 4. Then restart your MCP client (e.g., restart Claude Code)
-
-To install the macro automatically, run from the project directory:
-   just install-macro
 ================================================================================
 """
 

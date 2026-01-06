@@ -128,23 +128,11 @@ run-gui: (freecad::run-gui)
 # Run FreeCAD headless with MCP bridge (shortcut for freecad::run-headless)
 run-headless: (freecad::run-headless)
 
-# Install the StartMCPBridge macro (shortcut for freecad::install-bridge-macro)
-install-bridge-macro: (freecad::install-bridge-macro)
-
-# Uninstall the StartMCPBridge macro (shortcut for freecad::uninstall-bridge-macro)
-uninstall-bridge-macro: (freecad::uninstall-bridge-macro)
-
 # Install the CutObjectForMagnets macro (shortcut for freecad::install-cut-macro)
 install-cut-macro: (freecad::install-cut-macro)
 
 # Uninstall the CutObjectForMagnets macro (shortcut for freecad::uninstall-cut-macro)
 uninstall-cut-macro: (freecad::uninstall-cut-macro)
-
-# Install the FreeCAD plugin (shortcut for freecad::install-plugin)
-install-freecad-plugin: (freecad::install-plugin)
-
-# Uninstall the FreeCAD plugin (shortcut for freecad::uninstall-plugin)
-uninstall-freecad-plugin: (freecad::uninstall-plugin)
 
 # =============================================================================
 # Combined Workflows

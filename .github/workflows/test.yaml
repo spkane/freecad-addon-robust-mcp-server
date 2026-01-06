@@ -5,6 +5,7 @@ on:
     branches: [main, master]
     paths:
       - "src/**/*.py"
+      - "addon/**/*.py"
       - "tests/**/*.py"
       - "pyproject.toml"
       - "uv.lock"
@@ -13,6 +14,7 @@ on:
     branches: [main, master]
     paths:
       - "src/**/*.py"
+      - "addon/**/*.py"
       - "tests/**/*.py"
       - "pyproject.toml"
       - "uv.lock"

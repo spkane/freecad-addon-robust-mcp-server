@@ -6,6 +6,7 @@ on:
     paths:
       - "macros/**/*.FCMacro"
       - "macros/**/*.py"
+      - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/test_cut_object_for_magnets.py"
       - "tests/integration/test_multi_export.py"
       - ".github/workflows/macro-test.yaml"
@@ -14,6 +15,7 @@ on:
     paths:
       - "macros/**/*.FCMacro"
       - "macros/**/*.py"
+      - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/test_cut_object_for_magnets.py"
       - "tests/integration/test_multi_export.py"
       - ".github/workflows/macro-test.yaml"
@@ -117,14 +119,11 @@ jobs:
 
       - name: Start FreeCAD headless with MCP bridge
         run: |
-          # Set up environment
-          export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
-
           echo "Using FreeCAD: freecadcmd"
 
           # Start FreeCAD headless with MCP bridge in background
-          # Capture stdout to a file so we can extract the instance ID
-          freecadcmd src/freecad_mcp/freecad_plugin/headless_server.py > /tmp/freecad_bridge.log 2>&1 &
+          # Uses the workbench addon's headless server script
+          freecadcmd addon/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 

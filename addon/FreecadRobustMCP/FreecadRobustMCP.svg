@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <!-- Background -->
   <rect width="64" height="64" fill="#2c3e50" rx="4"/>
-
   <!-- FreeCAD logo representation (left side) - simplified gear/cog -->
   <g id="freecad-icon" transform="translate(10, 22)">
     <!-- Gear body -->
@@ -15,7 +14,6 @@
     <!-- Inner circle -->
     <circle cx="10" cy="10" r="4" fill="#2c3e50"/>
   </g>
-
   <!-- Claude/AI representation (right side) - stylized brain/network -->
   <g id="claude-icon" transform="translate(44, 22)">
     <!-- Main circle -->
@@ -29,22 +27,17 @@
     <line x1="10" y1="6" x2="14" y2="12" stroke="#2c3e50" stroke-width="1"/>
     <line x1="6" y1="12" x2="14" y2="12" stroke="#2c3e50" stroke-width="1"/>
   </g>
-
   <!-- Bridge/Connection arrows -->
   <g id="bridge">
     <!-- Arrow from FreeCAD to Claude -->
     <line x1="28" y1="28" x2="40" y2="28" stroke="#27ae60" stroke-width="2"/>
     <polygon points="40,28 36,25 36,31" fill="#27ae60"/>
-
     <!-- Arrow from Claude to FreeCAD -->
     <line x1="40" y1="36" x2="28" y2="36" stroke="#3498db" stroke-width="2"/>
     <polygon points="28,36 32,33 32,39" fill="#3498db"/>
   </g>
-
   <!-- MCP text label -->
-  <text x="32" y="56" font-family="Arial, sans-serif" font-size="8" font-weight="bold"
-        fill="#ecf0f1" text-anchor="middle">MCP</text>
-
+  <text x="32" y="56" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#ecf0f1" text-anchor="middle">MCP</text>
   <!-- Connection status indicator (green dot) -->
   <circle cx="32" cy="10" r="4" fill="#27ae60" stroke="#1e8449" stroke-width="1"/>
   <!-- Pulse ring animation hint -->

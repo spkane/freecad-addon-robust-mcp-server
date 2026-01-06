@@ -1,11 +1,11 @@
-# FreeCAD plugin and macro commands
-# Usage: just freecad::run-gui, just freecad::install-bridge-macro, etc.
+# FreeCAD workbench and macro commands
+# Usage: just freecad::run-gui, just freecad::install-workbench, etc.
 
 # Project root directory (justfile_directory() returns the main justfile's directory)
 project_root := justfile_directory()
 
 # =============================================================================
-# Running FreeCAD
+# Running FreeCAD with MCP Bridge
 # =============================================================================
 
 # Run MCP bridge server in FreeCAD headless mode
@@ -13,7 +13,8 @@ run-headless:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    SCRIPT_PATH="${PROJECT_DIR}/src/freecad_mcp/freecad_plugin/headless_server.py"
+    # Use the headless server from the addon directory (source of truth)
+    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py"
 
     # Find FreeCADCmd executable based on OS
     FREECAD_CMD=""
@@ -64,9 +65,6 @@ run-headless:
     echo "Using FreeCAD: $FREECAD_CMD"
     echo ""
 
-    # Add project src to PYTHONPATH so FreeCAD can find the module
-    export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
-
     # Run FreeCADCmd with the headless server script
     "$FREECAD_CMD" "$SCRIPT_PATH"
 
@@ -75,7 +73,7 @@ run-headless-custom freecad_cmd:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    SCRIPT_PATH="${PROJECT_DIR}/src/freecad_mcp/freecad_plugin/headless_server.py"
+    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py"
 
     if [[ ! -x "{{freecad_cmd}}" ]]; then
         echo "ERROR: FreeCADCmd not found or not executable: {{freecad_cmd}}"
@@ -85,28 +83,72 @@ run-headless-custom freecad_cmd:
     echo "Using FreeCAD: {{freecad_cmd}}"
     echo ""
 
-    # Add project src to PYTHONPATH so FreeCAD can find the module
-    export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
-
     # Run FreeCADCmd with the headless server script
     "{{freecad_cmd}}" "$SCRIPT_PATH"
 
-# Run FreeCAD GUI with MCP bridge plugin auto-started
+# Run FreeCAD GUI with MCP bridge (requires workbench to be installed)
 run-gui:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Use the gui_startup.py script from the project
-    STARTUP_SCRIPT="${PROJECT_DIR}/src/freecad_mcp/freecad_plugin/gui_startup.py"
+    # Create a temporary startup script that starts the MCP bridge
+    STARTUP_SCRIPT=$(mktemp /tmp/freecad_mcp_startup.XXXXXX.py)
 
-    if [[ ! -f "$STARTUP_SCRIPT" ]]; then
-        echo "ERROR: Startup script not found: $STARTUP_SCRIPT"
-        exit 1
-    fi
+    # Use the server from the addon directory
+    cat > "$STARTUP_SCRIPT" << 'PYTHON_EOF'
+    # FreeCAD MCP Bridge Auto-Start Script
+    import sys
+    from pathlib import Path
 
-    # Set environment variable for the project path
-    export FREECAD_MCP_PROJECT_PATH="${PROJECT_DIR}/src"
+    # Find the addon directory - check both installed location and dev location
+    addon_paths = []
+
+    # Check development location first (addon in project)
+    dev_addon = Path(__file__).resolve().parent.parent / "addon" / "FreecadRobustMCP" / "freecad_mcp_bridge"
+    if dev_addon.exists():
+        addon_paths.append(str(dev_addon))
+
+    # Check installed workbench locations
+    import os
+    if sys.platform == "darwin":
+        installed = Path.home() / "Library" / "Application Support" / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
+    elif sys.platform == "win32":
+        installed = Path(os.environ.get("APPDATA", "")) / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
+    else:
+        installed = Path.home() / ".local" / "share" / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
+
+    if installed.exists():
+        addon_paths.append(str(installed))
+
+    # Try to import and start
+    started = False
+    for addon_path in addon_paths:
+        try:
+            if addon_path not in sys.path:
+                sys.path.insert(0, addon_path)
+            from server import FreecadMCPPlugin
+            plugin = FreecadMCPPlugin(
+                host="localhost",
+                port=9876,
+                xmlrpc_port=9875,
+                enable_xmlrpc=True,
+            )
+            plugin.start()
+            import FreeCAD
+            FreeCAD.Console.PrintMessage("\nMCP Bridge started!\n")
+            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\n")
+            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\n\n")
+            started = True
+            break
+        except Exception:
+            continue
+
+    if not started:
+        import FreeCAD
+        FreeCAD.Console.PrintError("Failed to start MCP Bridge.\n")
+        FreeCAD.Console.PrintError("Install the workbench first: just freecad::install-workbench\n")
+    PYTHON_EOF
 
     # Find FreeCAD GUI executable based on OS
     FREECAD_GUI=""
@@ -158,9 +200,6 @@ run-gui:
     echo "Using FreeCAD: $FREECAD_GUI"
     echo ""
 
-    # Add project src to PYTHONPATH so FreeCAD can find the module
-    export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
-
     # Launch FreeCAD with the startup script
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS: Use 'open' with --args to pass the script
@@ -184,15 +223,18 @@ run-gui-custom freecad_path:
     # Create a temporary startup script
     STARTUP_SCRIPT=$(mktemp /tmp/freecad_mcp_startup.XXXXXX.py)
 
+    # Use the server from the addon directory
+    ADDON_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge"
+
     cat > "$STARTUP_SCRIPT" << EOF
     # FreeCAD MCP Bridge Auto-Start Script
     import sys
-    project_path = "${PROJECT_DIR}/src"
-    if project_path not in sys.path:
-        sys.path.insert(0, project_path)
+    addon_path = "${ADDON_PATH}"
+    if addon_path not in sys.path:
+        sys.path.insert(0, addon_path)
 
     try:
-        from freecad_mcp.freecad_plugin.server import FreecadMCPPlugin
+        from server import FreecadMCPPlugin
         plugin = FreecadMCPPlugin(
             host="localhost",
             port=9876,
@@ -200,18 +242,18 @@ run-gui-custom freecad_path:
             enable_xmlrpc=True,
         )
         plugin.start()
+        import FreeCAD
         FreeCAD.Console.PrintMessage("\\nMCP Bridge started!\\n")
         FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
         FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
     except Exception as e:
+        import FreeCAD
         FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\\n")
     EOF
 
     echo "Starting FreeCAD with MCP bridge..."
     echo "Using FreeCAD: {{freecad_path}}"
     echo ""
-
-    export PYTHONPATH="${PROJECT_DIR}/src:${PYTHONPATH:-}"
 
     if [[ "$OSTYPE" == "darwin"* ]] && [[ "{{freecad_path}}" == *.app ]]; then
         open -a "{{freecad_path}}" --args "$STARTUP_SCRIPT"
@@ -222,51 +264,8 @@ run-gui-custom freecad_path:
     echo "FreeCAD is starting with MCP bridge..."
 
 # =============================================================================
-# Macro Installation
+# Macro Installation (MultiExport, CutObjectForMagnets)
 # =============================================================================
-
-# Install the StartMCPBridge macro to FreeCAD's macro directory
-install-bridge-macro:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PROJECT_DIR="{{project_root}}"
-
-    # Determine macro directory based on OS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
-    fi
-
-    mkdir -p "$MACRO_DIR"
-
-    # Copy the macro file and replace the placeholder with the actual project path
-    sed "s|__PROJECT_PATH__|${PROJECT_DIR}/src|g" \
-        "${PROJECT_DIR}/macros/Start_MCP_Bridge/StartMCPBridge.FCMacro" \
-        > "$MACRO_DIR/StartMCPBridge.FCMacro"
-
-    echo "StartMCPBridge macro installed to: $MACRO_DIR"
-    echo ""
-    echo "To use:"
-    echo "  1. Start FreeCAD"
-    echo "  2. Go to: Macro -> Macros -> StartMCPBridge -> Execute"
-    echo "  3. Restart your MCP client (Claude Code, etc.) to connect"
-
-# Uninstall the StartMCPBridge macro
-uninstall-bridge-macro:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
-    fi
-    rm -f "$MACRO_DIR/StartMCPBridge.FCMacro"
-    echo "StartMCPBridge macro uninstalled"
 
 # Install the CutObjectForMagnets macro to FreeCAD's macro directory
 install-cut-macro:
@@ -371,42 +370,149 @@ uninstall-export-macro:
     echo "MultiExport macro uninstalled"
 
 # Install all macros to FreeCAD's macro directory
-install-all-macros: install-bridge-macro install-cut-macro install-export-macro
+install-all-macros: install-cut-macro install-export-macro
     @echo "All macros installed successfully!"
 
 # Uninstall all macros from FreeCAD's macro directory
-uninstall-all-macros: uninstall-bridge-macro uninstall-cut-macro uninstall-export-macro
+uninstall-all-macros: uninstall-cut-macro uninstall-export-macro
     @echo "All macros uninstalled successfully!"
 
 # =============================================================================
-# Plugin Installation
+# Workbench Addon Installation
 # =============================================================================
 
-# Install the FreeCAD plugin to user's FreeCAD directory
-install-plugin:
+# Install the FreeCAD Robust MCP workbench addon to FreeCAD's Mod directory
+install-workbench:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        PLUGIN_DIR="$HOME/Library/Application Support/FreeCAD/Mod/MCPBridge"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        PLUGIN_DIR="$HOME/.local/share/FreeCAD/Mod/MCPBridge"
-    else
-        PLUGIN_DIR="$APPDATA/FreeCAD/Mod/MCPBridge"
-    fi
-    mkdir -p "$PLUGIN_DIR"
-    cp -r src/freecad_mcp/freecad_plugin/* "$PLUGIN_DIR/"
-    echo "Plugin installed to: $PLUGIN_DIR"
+    PROJECT_DIR="{{project_root}}"
+    ADDON_NAME="FreecadRobustMCP"
 
-# Uninstall the FreeCAD plugin
-uninstall-plugin:
+    # Determine FreeCAD Mod directory based on OS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
+    else
+        MOD_DIR="$APPDATA/FreeCAD/Mod"
+    fi
+
+    ADDON_DEST="$MOD_DIR/$ADDON_NAME"
+
+    # Create Mod directory if it doesn't exist
+    mkdir -p "$MOD_DIR"
+
+    # Remove existing installation if present
+    if [[ -d "$ADDON_DEST" ]]; then
+        echo "Removing existing installation at: $ADDON_DEST"
+        rm -rf "$ADDON_DEST"
+    fi
+
+    # Copy the addon directory
+    cp -r "${PROJECT_DIR}/addon/$ADDON_NAME" "$ADDON_DEST"
+
+    echo ""
+    echo "=========================================="
+    echo "FreeCAD Robust MCP Workbench installed!"
+    echo "=========================================="
+    echo ""
+    echo "Installation path: $ADDON_DEST"
+    echo ""
+    echo "To use:"
+    echo "  1. Start FreeCAD"
+    echo "  2. Select the 'MCP Bridge' workbench from the workbench selector"
+    echo "  3. Click 'Start MCP Bridge' in the toolbar"
+    echo "  4. Connect your MCP client (Claude Code, etc.) to FreeCAD"
+    echo ""
+
+# Uninstall the FreeCAD Robust MCP workbench addon
+uninstall-workbench:
     #!/usr/bin/env bash
     set -euo pipefail
+    ADDON_NAME="FreecadRobustMCP"
+
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        PLUGIN_DIR="$HOME/Library/Application Support/FreeCAD/Mod/MCPBridge"
+        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        PLUGIN_DIR="$HOME/.local/share/FreeCAD/Mod/MCPBridge"
+        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
     else
-        PLUGIN_DIR="$APPDATA/FreeCAD/Mod/MCPBridge"
+        MOD_DIR="$APPDATA/FreeCAD/Mod"
     fi
-    rm -rf "$PLUGIN_DIR"
-    echo "Plugin uninstalled"
+
+    ADDON_DEST="$MOD_DIR/$ADDON_NAME"
+
+    if [[ -d "$ADDON_DEST" ]]; then
+        rm -rf "$ADDON_DEST"
+        echo "FreeCAD Robust MCP Workbench uninstalled from: $ADDON_DEST"
+    else
+        echo "Workbench not found at: $ADDON_DEST"
+    fi
+
+# Check workbench installation status
+mcp-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Determine directories based on OS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
+    else
+        MOD_DIR="$APPDATA/FreeCAD/Mod"
+    fi
+
+    echo "=========================================="
+    echo "MCP Bridge Installation Status"
+    echo "=========================================="
+    echo ""
+
+    # Check workbench
+    if [[ -d "$MOD_DIR/FreecadRobustMCP" ]]; then
+        echo "✓ Workbench addon: INSTALLED"
+        echo "  Path: $MOD_DIR/FreecadRobustMCP"
+        echo ""
+        echo "To use:"
+        echo "  1. Start FreeCAD"
+        echo "  2. Select 'MCP Bridge' workbench"
+        echo "  3. Click 'Start MCP Bridge' in toolbar"
+    else
+        echo "✗ Workbench addon: NOT INSTALLED"
+        echo ""
+        echo "To install:"
+        echo "  just freecad::install-workbench"
+    fi
+    echo ""
+
+    # Check for legacy installations that should be cleaned up
+    LEGACY_COUNT=0
+
+    if [[ -d "$MOD_DIR/MCPBridge" ]]; then
+        echo "⚠ Legacy plugin found: $MOD_DIR/MCPBridge"
+        echo "  Run: rm -rf \"$MOD_DIR/MCPBridge\""
+        ((LEGACY_COUNT++)) || true
+    fi
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
+    else
+        MACRO_DIR="$APPDATA/FreeCAD/Macro"
+    fi
+
+    if [[ -f "$MACRO_DIR/StartMCPBridge.FCMacro" ]]; then
+        echo "⚠ Legacy macro found: $MACRO_DIR/StartMCPBridge.FCMacro"
+        echo "  Run: rm \"$MACRO_DIR/StartMCPBridge.FCMacro\""
+        ((LEGACY_COUNT++)) || true
+    fi
+
+    if [[ $LEGACY_COUNT -gt 0 ]]; then
+        echo ""
+        echo "Note: Legacy installations can be removed. The workbench replaces them."
+    fi
+
+    echo "=========================================="
+
+# Check if the workbench addon is installed (alias for mcp-status)
+workbench-status: mcp-status

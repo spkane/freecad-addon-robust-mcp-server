@@ -87,83 +87,7 @@ ToolBar Icon [[Image:Macro_Multi_Export.png]]
 
 '''Macro_Multi_Export.FCMacro'''
 
-{{MacroCode|code=
-"""FreeCAD Macro: Multi-Format Export.
-
-SPDX-License-Identifier: MIT
-Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
-
-Export selected bodies to multiple file formats simultaneously with a
-user-friendly dialog for format selection and output configuration.
-
-Requirements:
-    - FreeCAD 0.21 or later
-    - One or more objects selected in the 3D view
-
-Usage:
-    1. Select the object(s) to export
-    2. Run the macro
-    3. Select desired export formats (STL, STEP, 3MF selected by default)
-    4. Choose output directory and base filename
-    5. Click "Export"
-"""
-
-# FreeCAD Addon Manager metadata
-__Name__ = "Multi Export"
-__Comment__ = "Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously"
-__Author__ = "Sean P. Kane"
-__Version__ = "0.5.0-beta"
-__Date__ = "2026-01-05"
-__License__ = "MIT"
-__Web__ = "https://github.com/spkane/freecad-robust-mcp-and-more"
-__Wiki__ = "https://github.com/spkane/freecad-robust-mcp-and-more#readme"
-__Icon__ = ""
-__Help__ = "Select one or more objects, run the macro, choose export formats and output location, then click Export."
-__Status__ = "Beta"
-__Requires__ = "FreeCAD 0.21+"
-__Communication__ = "https://github.com/spkane/freecad-robust-mcp-and-more/issues"
-__Files__ = ""
-
-import os
-
-import FreeCAD as App
-import FreeCADGui as Gui
-import Mesh
-import Part
-from PySide import QtGui
-
-
-class ExportFormat:
-    """Represents an export format with its properties."""
-
-    def __init__(
-        self,
-        name: str,
-        extension: str,
-        description: str,
-        default_enabled: bool = False,
-    ):
-        self.name = name
-        self.extension = extension
-        self.description = description
-        self.default_enabled = default_enabled
-
-
-# Define available export formats
-EXPORT_FORMATS = [
-    ExportFormat("STL", "stl", "Stereolithography - common for 3D printing", default_enabled=True),
-    ExportFormat("STEP", "step", "Standard for Exchange of Product Data - CAD interchange", default_enabled=True),
-    ExportFormat("3MF", "3mf", "3D Manufacturing Format - modern 3D printing format", default_enabled=True),
-    ExportFormat("OBJ", "obj", "Wavefront OBJ - 3D graphics and game engines", default_enabled=False),
-    ExportFormat("IGES", "iges", "Initial Graphics Exchange Specification - legacy CAD format", default_enabled=False),
-    ExportFormat("BREP", "brep", "OpenCASCADE native format - preserves exact geometry", default_enabled=False),
-    ExportFormat("PLY", "ply", "Polygon File Format - 3D scanning and printing", default_enabled=False),
-    ExportFormat("AMF", "amf", "Additive Manufacturing Format - XML-based 3D printing", default_enabled=False),
-]
-
-# ... (full macro code continues - see GitHub repository for complete source)
-# https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Multi_Export/MultiExport.FCMacro
-}}
+- https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Multi_Export/MultiExport.FCMacro
 
 ==Links== <!--T:16-->
 
@@ -173,3 +97,4 @@ EXPORT_FORMATS = [
 
 [[Category:Macros{{#translation:}}]]
 [[Category:User Documentation{{#translation:}}]]
+[[Category:Addons {{#translation:}}]]

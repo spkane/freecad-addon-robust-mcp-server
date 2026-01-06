@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""Headless FreeCAD MCP Bridge Server.
+r"""Headless FreeCAD MCP Bridge Server.
+
+SPDX-License-Identifier: MIT
+Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
 
 This script starts the MCP bridge server in FreeCAD's headless mode.
 It should be run with FreeCADCmd (the headless FreeCAD executable).
 
 Usage:
-    FreeCADCmd headless_server.py
-    # or
-    freecadcmd headless_server.py
+    # If workbench is installed via FreeCAD Addon Manager:
+    FreeCADCmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py
+
+    # On macOS:
+    /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
+        ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py
 
 Note: In headless mode, GUI features like screenshots are not available.
-For full functionality, use the StartMCPBridge macro in FreeCAD's GUI.
+For full functionality, use the workbench in FreeCAD's GUI.
 """
 
 from __future__ import annotations
@@ -27,26 +33,26 @@ except ImportError:
     print("ERROR: This script must be run with FreeCADCmd or inside FreeCAD.")
     print("")
     print("Usage:")
-    print("  just run-headless")
-    print("  # or")
-    print("  FreeCADCmd headless_server.py")
-    print("  freecadcmd headless_server.py")
-    print("")
-    print("On macOS:")
     print(
-        "  /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd headless_server.py"
+        "  FreeCADCmd /path/to/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py"
     )
     print("")
-    print("On Linux:")
-    print("  freecadcmd headless_server.py")
+    print("On macOS (if workbench installed):")
+    print("  /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \\")
+    print(
+        "    ~/Library/Application\\ Support/FreeCAD/Mod/FreecadRobustMCP/"
+        "freecad_mcp_bridge/headless_server.py"
+    )
+    print("")
+    print("On Linux (if workbench installed):")
+    print(
+        "  freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/"
+        "freecad_mcp_bridge/headless_server.py"
+    )
     sys.exit(1)
 
-# Import the plugin server directly from the module file
-# We avoid importing through the package hierarchy (freecad_mcp.freecad_plugin.server)
-# because freecad_mcp/__init__.py imports the MCP SDK which isn't available
-# in FreeCAD's embedded Python environment
+# Import the plugin server directly from the module file in the same directory
 script_dir = str(Path(__file__).resolve().parent)
-# Import directly from server.py in the same directory
 sys.path.insert(0, script_dir)
 from server import FreecadMCPPlugin  # noqa: E402
 
@@ -54,7 +60,7 @@ from server import FreecadMCPPlugin  # noqa: E402
 plugin = FreecadMCPPlugin(
     host="localhost",
     port=9876,  # JSON-RPC socket port
-    xmlrpc_port=9875,  # XML-RPC port (neka-nat compatible)
+    xmlrpc_port=9875,  # XML-RPC port
     enable_xmlrpc=True,
 )
 

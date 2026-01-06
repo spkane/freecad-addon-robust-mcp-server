@@ -153,50 +153,7 @@ ToolBar Icon [[Image:Macro_Cut_Object_For_Magnets.png]]
 
 '''Macro_Cut_Object_For_Magnets.FCMacro'''
 
-{{MacroCode|code=
-"""FreeCAD Macro: Cut Object for Magnets.
-
-SPDX-License-Identifier: MIT
-Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
-
-Cuts an object along a plane and adds connector holes for magnets with
-surface collision detection.
-
-Requirements:
-    - FreeCAD 0.19 or later
-    - An object selected in the 3D view
-
-Usage:
-    1. Select the object to cut
-    2. Run the macro
-    3. Configure cut plane and hole parameters
-    4. Click "Execute Cut"
-"""
-
-# FreeCAD Addon Manager metadata
-__Name__ = "Cut Object for Magnets"
-__Comment__ = "Cut an object along a plane and add aligned magnet holes with surface collision detection"
-__Author__ = "Sean P. Kane"
-__Version__ = "0.5.0-beta"
-__Date__ = "2026-01-05"
-__License__ = "MIT"
-__Web__ = "https://github.com/spkane/freecad-robust-mcp-and-more"
-__Wiki__ = "https://github.com/spkane/freecad-robust-mcp-and-more#readme"
-__Icon__ = ""
-__Help__ = "Select an object to cut, run the macro, configure cut plane and magnet hole parameters, then click Execute Cut. Creates two parts with aligned magnet holes."
-__Status__ = "Beta"
-__Requires__ = "FreeCAD 0.19+"
-__Communication__ = "https://github.com/spkane/freecad-robust-mcp-and-more/issues"
-__Files__ = ""
-
-import FreeCAD as App
-import FreeCADGui as Gui
-import Part
-from PySide import QtGui
-
-# ... (full macro code continues - see GitHub repository for complete source)
-# https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro
-}}
+- https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro
 
 ==Links== <!--T:25-->
 
@@ -207,3 +164,4 @@ from PySide import QtGui
 
 [[Category:Macros{{#translation:}}]]
 [[Category:User Documentation{{#translation:}}]]
+[[Category:Addons {{#translation:}}]]

@@ -35,13 +35,10 @@ FreeCAD's `FreeCAD.so` library links to `@rpath/libpython3.11.dylib` (FreeCAD's 
 
 1. Use `xmlrpc` or `socket` mode in your configuration
 
-1. Start FreeCAD and run the MCP plugin inside FreeCAD's Python console:
+1. Start FreeCAD and start the MCP bridge:
 
-   ```python
-   from freecad_mcp.freecad_plugin.server import FreecadMCPPlugin
-   plugin = FreecadMCPPlugin()
-   plugin.start()
-   ```
+   - Install the MCP Bridge workbench via Addon Manager, or
+   - Use `just run-gui` from the source repository
 
 1. The MCP server will then connect to FreeCAD over the network
 
@@ -500,7 +497,7 @@ EOF
 1. **Use `\\n` for newlines**: In heredoc strings that need literal `\n`, use `\\n`
 1. **Variable expansion**: `${VAR}` works inside heredocs for bash variables
 
-See the recipes in `just/freecad.just` (e.g., `install-bridge-macro`, `run-gui`, `run-headless`) for working examples.
+See the recipes in `just/freecad.just` (e.g., `run-gui`, `run-headless`, `install-cut-macro`) for working examples.
 
 ---
 
@@ -696,13 +693,10 @@ just run-headless
 
 **CRITICAL**: Code running inside FreeCAD's Python environment cannot import packages that aren't available in FreeCAD's bundled Python (like `mcp`, `pydantic`, etc.).
 
-The `headless_server.py` script imports the plugin directly from the module file to avoid triggering the `mcp` import in `freecad_mcp/__init__.py`:
+The `headless_server.py` script in the workbench addon imports the plugin directly from the module file to avoid triggering the `mcp` import:
 
 ```python
-# WRONG - triggers mcp import via freecad_mcp/__init__.py
-from freecad_mcp.freecad_plugin.server import FreecadMCPPlugin
-
-# CORRECT - import directly from the module file
+# CORRECT - import directly from the module file in the same directory
 script_dir = str(Path(__file__).resolve().parent)
 sys.path.insert(0, script_dir)
 from server import FreecadMCPPlugin  # Direct module import
@@ -710,9 +704,9 @@ from server import FreecadMCPPlugin  # Direct module import
 
 This pattern is required because:
 
-1. `freecad_mcp/__init__.py` imports `from freecad_mcp.server import mcp`
 1. The MCP SDK is installed in the project's virtualenv, not in FreeCAD's Python
 1. Python processes parent package `__init__.py` files when importing nested modules
+1. Importing from `freecad_mcp/__init__.py` would trigger MCP SDK imports that don't exist in FreeCAD
 
 ---
 

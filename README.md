@@ -30,6 +30,11 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
       - [MCP Client Configuration](#mcp-client-configuration)
     - [Usage](#usage)
       - [Starting the MCP Bridge in FreeCAD](#starting-the-mcp-bridge-in-freecad)
+        - [Option A: Using the Workbench (Recommended)](#option-a-using-the-workbench-recommended)
+        - [Option B: Using just commands (from source)](#option-b-using-just-commands-from-source)
+      - [Uninstalling the MCP Bridge](#uninstalling-the-mcp-bridge)
+        - [Checking for Legacy Components](#checking-for-legacy-components)
+        - [Manual Cleanup (if needed)](#manual-cleanup-if-needed)
       - [Running Modes](#running-modes)
         - [XML-RPC Mode (Recommended)](#xml-rpc-mode-recommended)
         - [Socket Mode (JSON-RPC)](#socket-mode-json-rpc)
@@ -63,7 +68,6 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
     - [Running Tests](#running-tests)
     - [Code Quality](#code-quality)
   - [Macro Development](#macro-development)
-    - [StartMCPBridge Macro](#startmcpbridge-macro)
     - [CutObjectForMagnets Macro](#cutobjectformagnets-macro)
     - [MultiExport Macro](#multiexport-macro)
   - [Architecture](#architecture)
@@ -234,18 +238,19 @@ If using Docker:
 
 Before your AI assistant can connect, you need to start the MCP bridge inside FreeCAD:
 
-1. Install the bridge macro (one time):
+##### Option A: Using the Workbench (Recommended)
 
-   ```bash
-   # If installed from source:
-   just install-bridge-macro
+1. Install the MCP Bridge workbench via FreeCAD's Addon Manager:
 
-   # Or manually copy from the macros/Start_MCP_Bridge/ directory
-   ```
+   - **Edit -> Preferences -> Addon Manager**
+   - Search for "MCP Bridge"
+   - Install and restart FreeCAD
 
-1. Start FreeCAD
+1. Start the bridge:
 
-1. Run the macro: **Macro -> Macros -> StartMCPBridge -> Execute**
+   - Switch to the MCP Bridge workbench
+   - Click the **Start MCP Bridge** button in the toolbar
+   - Or use the menu: **MCP Bridge -> Start Bridge**
 
 1. You should see in the FreeCAD console:
 
@@ -255,7 +260,49 @@ Before your AI assistant can connect, you need to start the MCP bridge inside Fr
      - Socket: localhost:9876
    ```
 
-1. Start/restart your MCP client (Claude Code, etc.) - it will connect automatically
+##### Option B: Using just commands (from source)
+
+```bash
+# Start FreeCAD with MCP bridge auto-started
+just run-gui
+
+# Or for headless/automation mode:
+just run-headless
+```
+
+After starting the bridge, start/restart your MCP client (Claude Code, etc.) - it will connect automatically
+
+#### Uninstalling the MCP Bridge
+
+To uninstall the MCP Bridge workbench:
+
+1. Open FreeCAD
+1. Go to **Edit -> Preferences -> Addon Manager**
+1. Find "MCP Bridge" in the list
+1. Click **Uninstall**
+1. Restart FreeCAD
+
+##### Checking for Legacy Components
+
+If you previously used older versions of this project, you may have legacy components installed. Run this command to check what's installed and get cleanup instructions:
+
+```bash
+just freecad::mcp-status
+```
+
+##### Manual Cleanup (if needed)
+
+Remove any legacy files that may conflict with the workbench:
+
+```bash
+# macOS - remove legacy plugin and macro
+rm -rf ~/Library/Application\ Support/FreeCAD/Mod/MCPBridge/
+rm -f ~/Library/Application\ Support/FreeCAD/Macro/StartMCPBridge.FCMacro
+
+# Linux - remove legacy plugin and macro
+rm -rf ~/.local/share/FreeCAD/Mod/MCPBridge/
+rm -f ~/.local/share/FreeCAD/Macro/StartMCPBridge.FCMacro
+```
 
 #### Running Modes
 
@@ -677,14 +724,8 @@ just docker::run          # Run container
 #### GUI Mode (recommended for development)
 
 ```bash
-# Install the bridge macro
-just install-bridge-macro
-
 # Start FreeCAD with auto-started bridge
 just run-gui
-
-# Or start FreeCAD manually, then:
-# Macro -> Macros -> StartMCPBridge -> Execute
 ```
 
 #### Headless Mode (for automation/CI)
@@ -731,33 +772,6 @@ just secrets
 ---
 
 ## Macro Development
-
-### StartMCPBridge Macro
-
-The StartMCPBridge macro is required for the MCP server to communicate with FreeCAD. Developers working on the MCP integration should understand how it works.
-
-**Location:** `macros/Start_MCP_Bridge/`
-
-**What it does:**
-
-1. Adds the freecad-mcp project source to Python's path
-1. Imports and instantiates the `FreecadMCPPlugin`
-1. Starts both XML-RPC (port 9875) and JSON-RPC (port 9876) servers
-1. Registers handlers for executing Python code, managing documents, creating objects, etc.
-
-**Installation for development:**
-
-```bash
-just install-bridge-macro
-```
-
-This copies the macro to FreeCAD's macro directory and injects the correct project path.
-
-**Uninstall:**
-
-```bash
-just uninstall-bridge-macro
-```
 
 ### CutObjectForMagnets Macro
 

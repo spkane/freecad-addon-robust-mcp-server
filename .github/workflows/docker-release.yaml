@@ -209,8 +209,8 @@ jobs:
 
           Before using this Docker image, start FreeCAD with the MCP bridge:
 
-          1. Open FreeCAD
-          2. Go to **Macro → Macros → StartMCPBridge** (or run from Python console)
+          1. Install the **MCP Bridge** workbench via FreeCAD Addon Manager
+          2. Switch to the MCP Bridge workbench and click **Start MCP Bridge**
           3. The bridge will start listening on ports 9875 (XML-RPC) and 9876 (Socket)
 
           ## Full Documentation
