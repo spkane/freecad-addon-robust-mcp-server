@@ -112,14 +112,14 @@ freecad-robust-mcp-and-more/
 
 - Write tests for all new functionality
 - Maintain test coverage
-- Run `just test` before submitting PRs
+- Run `just all` before submitting PRs (runs quality checks + unit tests)
 - Integration tests require FreeCAD (run via CI)
 
 ### Documentation
 
 - Update docstrings for API changes
 - Update user docs for feature changes
-- Run `just docs` to build and verify
+- Run `just documentation::build` to build and verify
 
 ### Commits
 

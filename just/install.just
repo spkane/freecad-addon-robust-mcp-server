@@ -12,6 +12,45 @@
 project_root := justfile_directory()
 
 # =============================================================================
+# Helper: FreeCAD Directory Detection
+# =============================================================================
+# This function sets MOD_DIR and MACRO_DIR based on the current OS.
+# Source it at the start of any recipe that needs FreeCAD paths.
+#
+# Usage in recipes:
+#   eval "$(just install::_freecad-dirs)"
+#   echo "Mod directory: $MOD_DIR"
+#   echo "Macro directory: $MACRO_DIR"
+
+# Private recipe that outputs shell code to set FreeCAD directories
+[private]
+_freecad-dirs:
+    #!/usr/bin/env bash
+    cat << 'DIRS_EOF'
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
+        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
+        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
+    else
+        # Windows: validate APPDATA or use fallback
+        if [[ -n "$APPDATA" ]]; then
+            FREECAD_BASE="$APPDATA"
+        elif [[ -n "$HOME" ]]; then
+            # Fallback to standard Windows location under HOME
+            FREECAD_BASE="$HOME/AppData/Roaming"
+            echo "Warning: APPDATA not set, using fallback: $FREECAD_BASE" >&2
+        else
+            echo "Error: Neither APPDATA nor HOME is set. Cannot determine FreeCAD directory." >&2
+            exit 1
+        fi
+        MOD_DIR="$FREECAD_BASE/FreeCAD/Mod"
+        MACRO_DIR="$FREECAD_BASE/FreeCAD/Macro"
+    fi
+    DIRS_EOF
+
+# =============================================================================
 # MCP Server Installation
 # =============================================================================
 
@@ -62,14 +101,8 @@ mcp-bridge-workbench:
     PROJECT_DIR="{{project_root}}"
     ADDON_NAME="FreecadRobustMCP"
 
-    # Determine FreeCAD Mod directory based on OS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
-    else
-        MOD_DIR="$APPDATA/FreeCAD/Mod"
-    fi
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
 
     ADDON_DEST="$MOD_DIR/$ADDON_NAME"
 
@@ -82,8 +115,15 @@ mcp-bridge-workbench:
         rm -rf "$ADDON_DEST"
     fi
 
+    # Verify source exists before copying
+    ADDON_SRC="${PROJECT_DIR}/addon/$ADDON_NAME"
+    if [[ ! -d "$ADDON_SRC" ]]; then
+        echo "Error: Addon source directory not found: $ADDON_SRC" >&2
+        exit 1
+    fi
+
     # Copy the addon directory
-    cp -r "${PROJECT_DIR}/addon/$ADDON_NAME" "$ADDON_DEST"
+    cp -r "$ADDON_SRC" "$ADDON_DEST"
 
     echo ""
     echo "=========================================="
@@ -105,13 +145,8 @@ uninstall-mcp-bridge-workbench:
     set -euo pipefail
     ADDON_NAME="FreecadRobustMCP"
 
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
-    else
-        MOD_DIR="$APPDATA/FreeCAD/Mod"
-    fi
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
 
     ADDON_DEST="$MOD_DIR/$ADDON_NAME"
 
@@ -132,23 +167,25 @@ macro-cut:
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Determine macro directory based on OS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
+
+    # Verify source exists before copying
+    MACRO_SRC="${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro"
+    if [[ ! -f "$MACRO_SRC" ]]; then
+        echo "Error: Macro source file not found: $MACRO_SRC" >&2
+        exit 1
     fi
 
     mkdir -p "$MACRO_DIR"
 
     # Copy the macro file
-    cp "${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro" "$MACRO_DIR/"
+    cp "$MACRO_SRC" "$MACRO_DIR/"
 
     # Optionally copy the icon if it exists
-    if [[ -f "${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.svg" ]]; then
-        cp "${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.svg" "$MACRO_DIR/"
+    ICON_SRC="${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.svg"
+    if [[ -f "$ICON_SRC" ]]; then
+        cp "$ICON_SRC" "$MACRO_DIR/"
     fi
 
     echo "CutObjectForMagnets macro installed to: $MACRO_DIR"
@@ -167,13 +204,10 @@ macro-cut:
 uninstall-macro-cut:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
-    fi
+
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
+
     rm -f "$MACRO_DIR/CutObjectForMagnets.FCMacro"
     rm -f "$MACRO_DIR/CutObjectForMagnets.svg"
     echo "CutObjectForMagnets macro uninstalled"
@@ -184,23 +218,25 @@ macro-export:
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Determine macro directory based on OS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
+
+    # Verify source exists before copying
+    MACRO_SRC="${PROJECT_DIR}/macros/Multi_Export/MultiExport.FCMacro"
+    if [[ ! -f "$MACRO_SRC" ]]; then
+        echo "Error: Macro source file not found: $MACRO_SRC" >&2
+        exit 1
     fi
 
     mkdir -p "$MACRO_DIR"
 
     # Copy the macro file
-    cp "${PROJECT_DIR}/macros/Multi_Export/MultiExport.FCMacro" "$MACRO_DIR/"
+    cp "$MACRO_SRC" "$MACRO_DIR/"
 
     # Optionally copy the icon if it exists
-    if [[ -f "${PROJECT_DIR}/macros/Multi_Export/MultiExport.svg" ]]; then
-        cp "${PROJECT_DIR}/macros/Multi_Export/MultiExport.svg" "$MACRO_DIR/"
+    ICON_SRC="${PROJECT_DIR}/macros/Multi_Export/MultiExport.svg"
+    if [[ -f "$ICON_SRC" ]]; then
+        cp "$ICON_SRC" "$MACRO_DIR/"
     fi
 
     echo "MultiExport macro installed to: $MACRO_DIR"
@@ -217,13 +253,10 @@ macro-export:
 uninstall-macro-export:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
-    fi
+
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
+
     rm -f "$MACRO_DIR/MultiExport.FCMacro"
     rm -f "$MACRO_DIR/MultiExport.svg"
     echo "MultiExport macro uninstalled"
@@ -245,17 +278,8 @@ status:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Determine directories based on OS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
-    else
-        MOD_DIR="$APPDATA/FreeCAD/Mod"
-        MACRO_DIR="$APPDATA/FreeCAD/Macro"
-    fi
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
 
     echo "=========================================="
     echo "Installation Status"

@@ -263,7 +263,8 @@ jobs:
             timeout 30 docker run --rm -i \
               -e FREECAD_MODE=xmlrpc \
               ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }} 2>&1 | \
-            grep -q '"result"' && echo "Container test passed" || echo "Container test completed"
+            grep -q '"result"'
+          echo "Container test passed"
 
   create-github-release:
     name: Create GitHub Release

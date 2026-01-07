@@ -91,15 +91,17 @@ bump-workbench version:
     echo "  2. Commit: git add -A && git commit -m 'chore: bump workbench to $VERSION'"
     echo "  3. Tag and release: just release::tag-workbench $VERSION"
 
-# Bump the Cut Object for Magnets macro version in all source files
-bump-macro-magnets version:
+# Private helper recipe for bumping macro versions
+# Parameters: macro_dir, macro_name, macro_file_basename, readme_basename, tag_command, version
+[private]
+_bump-macro macro_dir macro_name macro_file_basename readme_basename tag_command version:
     #!/usr/bin/env bash
     set -euo pipefail
 
     VERSION="{{version}}"
     TODAY=$(date +%Y-%m-%d)
-    MACRO_DIR="{{project_root}}/macros/Cut_Object_for_Magnets"
-    MACRO_NAME="Cut Object for Magnets"
+    MACRO_DIR="{{project_root}}/macros/{{macro_dir}}"
+    MACRO_NAME="{{macro_name}}"
 
     # Validate version format (SemVer 2.0)
     if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -112,7 +114,7 @@ bump-macro-magnets version:
     echo ""
 
     # Update __Version__ and __Date__ in .FCMacro file
-    MACRO_FILE="$MACRO_DIR/CutObjectForMagnets.FCMacro"
+    MACRO_FILE="$MACRO_DIR/{{macro_file_basename}}"
     if [ -f "$MACRO_FILE" ]; then
         sed "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
         sed "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
@@ -124,7 +126,7 @@ bump-macro-magnets version:
     fi
 
     # Update README version line
-    README_FILE="$MACRO_DIR/README-CutObjectForMagnets.md"
+    README_FILE="$MACRO_DIR/{{readme_basename}}"
     if [ -f "$README_FILE" ]; then
         sed "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
         echo ""
@@ -177,95 +179,13 @@ bump-macro-magnets version:
     echo "Next steps:"
     echo "  1. Review changes: git diff"
     echo "  2. Commit: git add -A && git commit -m 'chore: bump $MACRO_NAME macro to $VERSION'"
-    echo "  3. Tag and release: just release::tag-macro-magnets $VERSION"
+    echo "  3. Tag and release: just release::{{tag_command}} $VERSION"
+
+# Bump the Cut Object for Magnets macro version in all source files
+bump-macro-magnets version: (_bump-macro "Cut_Object_for_Magnets" "Cut Object for Magnets" "CutObjectForMagnets.FCMacro" "README-CutObjectForMagnets.md" "tag-macro-magnets" version)
 
 # Bump the Multi Export macro version in all source files
-bump-macro-export version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    VERSION="{{version}}"
-    TODAY=$(date +%Y-%m-%d)
-    MACRO_DIR="{{project_root}}/macros/Multi_Export"
-    MACRO_NAME="Multi Export"
-
-    # Validate version format (SemVer 2.0)
-    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        echo "ERROR: Version '$VERSION' is not valid semver (X.Y.Z or X.Y.Z-prerelease)"
-        echo "Examples: 1.0.0, 1.0.0-alpha, 1.0.0-beta.1, 1.0.0-rc.1"
-        exit 1
-    fi
-
-    echo "Bumping $MACRO_NAME Macro to version: $VERSION (date: $TODAY)"
-    echo ""
-
-    # Update __Version__ and __Date__ in .FCMacro file
-    MACRO_FILE="$MACRO_DIR/MultiExport.FCMacro"
-    if [ -f "$MACRO_FILE" ]; then
-        sed "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
-        sed "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
-        echo "Updated $MACRO_FILE:"
-        grep -E "^__(Version|Date)__" "$MACRO_FILE"
-    else
-        echo "ERROR: File not found: $MACRO_FILE"
-        exit 1
-    fi
-
-    # Update README version line
-    README_FILE="$MACRO_DIR/README-MultiExport.md"
-    if [ -f "$README_FILE" ]; then
-        sed "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
-        echo ""
-        echo "Updated $README_FILE:"
-        grep "Version:" "$README_FILE" | head -1
-    else
-        echo "WARNING: File not found: $README_FILE"
-    fi
-
-    # Update wiki-source.txt version and date
-    WIKI_FILE="$MACRO_DIR/wiki-source.txt"
-    if [ -f "$WIKI_FILE" ]; then
-        sed "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
-        sed "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
-        echo ""
-        echo "Updated $WIKI_FILE:"
-        grep -E "^\|Version=|\|Date=" "$WIKI_FILE"
-    else
-        echo "WARNING: File not found: $WIKI_FILE"
-    fi
-
-    # Update package.xml macro version
-    PACKAGE_XML="{{project_root}}/package.xml"
-    if [ -f "$PACKAGE_XML" ]; then
-        awk -v name="$MACRO_NAME" -v version="$VERSION" -v date="$TODAY" '
-            /<macro>/ { in_macro=1 }
-            /<\/macro>/ { in_macro=0; found_name=0 }
-            in_macro && /<name>.*<\/name>/ {
-                if (index($0, name) > 0) found_name=1
-            }
-            in_macro && found_name && /<version>/ {
-                gsub(/<version>[^<]*<\/version>/, "<version>" version "</version>")
-            }
-            in_macro && found_name && /<date>/ {
-                gsub(/<date>[^<]*<\/date>/, "<date>" date "</date>")
-            }
-            { print }
-        ' "$PACKAGE_XML" > "$PACKAGE_XML.tmp" && mv "$PACKAGE_XML.tmp" "$PACKAGE_XML"
-        echo ""
-        echo "Updated $PACKAGE_XML ($MACRO_NAME section):"
-        grep -A4 ">$MACRO_NAME<" "$PACKAGE_XML"
-    else
-        echo "ERROR: File not found: $PACKAGE_XML"
-        exit 1
-    fi
-
-    echo ""
-    echo "Version bump complete!"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Review changes: git diff"
-    echo "  2. Commit: git add -A && git commit -m 'chore: bump $MACRO_NAME macro to $VERSION'"
-    echo "  3. Tag and release: just release::tag-macro-export $VERSION"
+bump-macro-export version: (_bump-macro "Multi_Export" "Multi Export" "MultiExport.FCMacro" "README-MultiExport.md" "tag-macro-export" version)
 
 # =============================================================================
 # Tag Creation Commands
@@ -612,7 +532,7 @@ delete-tag tag:
     fi
 
     # Delete local tag
-    if git tag -l '{{tag}}' | grep -q '{{tag}}'; then
+    if git tag -l '{{tag}}' | grep -F -q '{{tag}}'; then
         git tag -d '{{tag}}'
         echo "Deleted local tag: {{tag}}"
     else
@@ -620,7 +540,7 @@ delete-tag tag:
     fi
 
     # Delete remote tag
-    if git ls-remote --tags origin | grep -q 'refs/tags/{{tag}}'; then
+    if git ls-remote --tags origin | grep -F -q 'refs/tags/{{tag}}'; then
         git push origin --delete '{{tag}}'
         echo "Deleted remote tag: {{tag}}"
     else
@@ -762,34 +682,34 @@ draft-notes component:
     # Get commits and categorize by conventional commit type
     echo "## Added"
     echo ""
-    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ feat(\(|:)" | sed 's/^[a-f0-9]* /- /' || true
+    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ feat(\(|:)" | sed -E 's/^[a-f0-9]+ /- /' || true
     echo ""
 
     echo "## Changed"
     echo ""
-    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ (refactor|perf|style)(\(|:)" | sed 's/^[a-f0-9]* /- /' || true
+    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ (refactor|perf|style)(\(|:)" | sed -E 's/^[a-f0-9]+ /- /' || true
     echo ""
 
     echo "## Fixed"
     echo ""
-    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ fix(\(|:)" | sed 's/^[a-f0-9]* /- /' || true
+    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ fix(\(|:)" | sed -E 's/^[a-f0-9]+ /- /' || true
     echo ""
 
     echo "## Documentation"
     echo ""
-    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ docs(\(|:)" | sed 's/^[a-f0-9]* /- /' || true
+    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -iE "^[a-f0-9]+ docs(\(|:)" | sed -E 's/^[a-f0-9]+ /- /' || true
     echo ""
 
     echo "## Other Changes"
     echo ""
-    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -ivE "^[a-f0-9]+ (feat|fix|refactor|perf|style|docs|test|ci|build|chore)(\(|:)" | sed 's/^[a-f0-9]* /- /' || true
+    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | grep -ivE "^[a-f0-9]+ (feat|fix|refactor|perf|style|docs|test|ci|build|chore)(\(|:)" | sed -E 's/^[a-f0-9]+ /- /' || true
     echo ""
 
     echo "---"
     echo ""
     echo "## All Commits (chronological)"
     echo ""
-    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | sed 's/^[a-f0-9]* /- /' || echo "(no commits)"
+    git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | sed -E 's/^[a-f0-9]+ /- /' || echo "(no commits)"
 
 # Extract changelog section for a specific component version (for GitHub Release body)
 extract-changelog component version:
@@ -836,6 +756,13 @@ extract-changelog component version:
 # Preview what a release tag would look like (no actual tag created)
 dry-run-tag component version:
     #!/usr/bin/env bash
+    # Validate version format (SemVer 2.0)
+    if [[ ! "{{version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+        echo "Error: Invalid version format '{{version}}'"
+        echo "Expected: X.Y.Z or X.Y.Z-prerelease (e.g., 1.0.0, 1.0.0-alpha, 1.0.0-beta.1)"
+        exit 1
+    fi
+
     case "{{component}}" in
         mcp-server|server)
             TAG="robust-mcp-server-v{{version}}"
