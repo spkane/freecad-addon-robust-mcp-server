@@ -295,15 +295,19 @@ tag-workbench version:
     echo "Tag $TAG created and pushed!"
     echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
 
-# Create and push a release tag for the Cut Object for Magnets macro
-tag-macro-magnets version:
+# Private helper recipe for tagging macro releases
+# Parameters: macro_dir, macro_name, macro_file_basename, tag_prefix, bump_command, tag_message, version
+[private]
+_tag-macro macro_dir macro_name macro_file_basename tag_prefix bump_command tag_message version:
     #!/usr/bin/env bash
     set -euo pipefail
-    TAG="macro-cut-object-for-magnets-v{{version}}"
-    VERSION="{{version}}"
-    MACRO_DIR="{{project_root}}/macros/Cut_Object_for_Magnets"
-    MACRO_NAME="Cut Object for Magnets"
 
+    VERSION="{{version}}"
+    TAG="{{tag_prefix}}v{{version}}"
+    MACRO_DIR="{{project_root}}/macros/{{macro_dir}}"
+    MACRO_NAME="{{macro_name}}"
+
+    # Validate version format (SemVer 2.0)
     if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
         echo "ERROR: Version '$VERSION' is not valid semver"
         exit 1
@@ -319,14 +323,14 @@ tag-macro-magnets version:
     echo "Verifying version in source files..."
 
     # Check .FCMacro file
-    MACRO_FILE="$MACRO_DIR/CutObjectForMagnets.FCMacro"
+    MACRO_FILE="$MACRO_DIR/{{macro_file_basename}}"
     MACRO_VERSION=$(grep -o '__Version__ = "[^"]*"' "$MACRO_FILE" | cut -d'"' -f2)
     if [ "$MACRO_VERSION" != "$VERSION" ]; then
         echo "ERROR: Version mismatch in $MACRO_FILE"
         echo "  Expected: $VERSION"
         echo "  Found:    $MACRO_VERSION"
         echo ""
-        echo "Run 'just release::bump-macro-magnets $VERSION' first, then commit the changes."
+        echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
         exit 1
     fi
 
@@ -345,7 +349,7 @@ tag-macro-magnets version:
         echo "  Expected: $VERSION"
         echo "  Found:    $PKG_VERSION"
         echo ""
-        echo "Run 'just release::bump-macro-magnets $VERSION' first, then commit the changes."
+        echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
         exit 1
     fi
 
@@ -363,85 +367,17 @@ tag-macro-magnets version:
         exit 1
     fi
 
-    git tag -a "$TAG" -m "Release Cut Object for Magnets Macro v{{version}}"
+    git tag -a "$TAG" -m "{{tag_message}} v{{version}}"
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
     echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
+
+# Create and push a release tag for the Cut Object for Magnets macro
+tag-macro-magnets version: (_tag-macro "Cut_Object_for_Magnets" "Cut Object for Magnets" "CutObjectForMagnets.FCMacro" "macro-cut-object-for-magnets-" "bump-macro-magnets" "Release Cut Object for Magnets Macro" version)
 
 # Create and push a release tag for the Multi Export macro
-tag-macro-export version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    TAG="macro-multi-export-v{{version}}"
-    VERSION="{{version}}"
-    MACRO_DIR="{{project_root}}/macros/Multi_Export"
-    MACRO_NAME="Multi Export"
-
-    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        echo "ERROR: Version '$VERSION' is not valid semver"
-        exit 1
-    fi
-
-    # Check for uncommitted changes
-    if ! git diff --quiet HEAD; then
-        echo "ERROR: You have uncommitted changes. Please commit or stash them first."
-        exit 1
-    fi
-
-    # Verify version in source files matches tag version
-    echo "Verifying version in source files..."
-
-    # Check .FCMacro file
-    MACRO_FILE="$MACRO_DIR/MultiExport.FCMacro"
-    MACRO_VERSION=$(grep -o '__Version__ = "[^"]*"' "$MACRO_FILE" | cut -d'"' -f2)
-    if [ "$MACRO_VERSION" != "$VERSION" ]; then
-        echo "ERROR: Version mismatch in $MACRO_FILE"
-        echo "  Expected: $VERSION"
-        echo "  Found:    $MACRO_VERSION"
-        echo ""
-        echo "Run 'just release::bump-macro-export $VERSION' first, then commit the changes."
-        exit 1
-    fi
-
-    # Check package.xml
-    PACKAGE_XML="{{project_root}}/package.xml"
-    PKG_VERSION=$(awk -v name="$MACRO_NAME" '
-        /<macro>/ { in_macro=1 }
-        /<\/macro>/ { in_macro=0; found_name=0 }
-        in_macro && index($0, name) > 0 { found_name=1 }
-        in_macro && found_name && /<version>/ {
-            gsub(/.*<version>/, ""); gsub(/<\/version>.*/, ""); print; exit
-        }
-    ' "$PACKAGE_XML")
-    if [ "$PKG_VERSION" != "$VERSION" ]; then
-        echo "ERROR: Version mismatch in $PACKAGE_XML ($MACRO_NAME section)"
-        echo "  Expected: $VERSION"
-        echo "  Found:    $PKG_VERSION"
-        echo ""
-        echo "Run 'just release::bump-macro-export $VERSION' first, then commit the changes."
-        exit 1
-    fi
-
-    echo "Version verification passed!"
-    echo ""
-    echo "Creating tag: $TAG"
-    echo ""
-    echo "This will trigger:"
-    echo "  - GitHub release with macro archive"
-    echo ""
-    read -p "Continue? [y/N] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Aborted."
-        exit 1
-    fi
-
-    git tag -a "$TAG" -m "Release Multi Export Macro v{{version}}"
-    git push origin "$TAG"
-    echo ""
-    echo "Tag $TAG created and pushed!"
-    echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
+tag-macro-export version: (_tag-macro "Multi_Export" "Multi Export" "MultiExport.FCMacro" "macro-multi-export-" "bump-macro-export" "Release Multi Export Macro" version)
 
 # =============================================================================
 # Tag Information Commands
@@ -467,10 +403,14 @@ latest-versions:
     #!/usr/bin/env bash
     echo "Latest versions:"
     echo ""
-    echo "  MCP Server:      $(git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -1 || echo 'none')"
-    echo "  MCP Workbench:   $(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -1 || echo 'none')"
-    echo "  Macro Magnets:   $(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -1 || echo 'none')"
-    echo "  Macro Export:    $(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -1 || echo 'none')"
+    SERVER_TAG=$(git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -n1)
+    WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -n1)
+    MAGNETS_TAG=$(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -n1)
+    EXPORT_TAG=$(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -n1)
+    echo "  MCP Server:      ${SERVER_TAG:-none}"
+    echo "  MCP Workbench:   ${WORKBENCH_TAG:-none}"
+    echo "  Macro Magnets:   ${MAGNETS_TAG:-none}"
+    echo "  Macro Export:    ${EXPORT_TAG:-none}"
 
 # Show commits since the last release of a component
 changes-since component:

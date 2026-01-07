@@ -68,6 +68,16 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
       - name: Install build dependencies
         run: uv sync --all-extras
 
@@ -157,8 +167,9 @@ jobs:
 
       - name: Verify installation
         run: |
+          set -e
           pip show freecad-robust-mcp
-          freecad-mcp --help || echo "CLI help check completed"
+          freecad-mcp --help
           python -c "import freecad_mcp; print(f'freecad-robust-mcp version: {freecad_mcp.__version__ if hasattr(freecad_mcp, \"__version__\") else \"unknown\"}')"
 
   publish-testpypi:

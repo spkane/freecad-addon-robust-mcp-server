@@ -72,7 +72,7 @@ just quality::lint
 just quality::format
 
 # Run security checks
-just quality::secrets
+just quality::security
 ```
 
 ---
