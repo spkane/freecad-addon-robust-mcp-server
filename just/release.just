@@ -52,7 +52,7 @@ bump-workbench version:
     # Update __version__ in the bridge module's __init__.py
     INIT_FILE="{{project_root}}/addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py"
     if [ -f "$INIT_FILE" ]; then
-        sed -i '' 's/^__version__ = "[^"]*"/__version__ = "'"$VERSION"'"/' "$INIT_FILE"
+        sed 's/^__version__ = "[^"]*"/__version__ = "'"$VERSION"'"/' "$INIT_FILE" > "$INIT_FILE.tmp" && mv "$INIT_FILE.tmp" "$INIT_FILE"
         echo "Updated $INIT_FILE:"
         grep "__version__" "$INIT_FILE"
     else
@@ -114,8 +114,8 @@ bump-macro-magnets version:
     # Update __Version__ and __Date__ in .FCMacro file
     MACRO_FILE="$MACRO_DIR/CutObjectForMagnets.FCMacro"
     if [ -f "$MACRO_FILE" ]; then
-        sed -i '' "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE"
-        sed -i '' "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE"
+        sed "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
+        sed "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
         echo "Updated $MACRO_FILE:"
         grep -E "^__(Version|Date)__" "$MACRO_FILE"
     else
@@ -126,7 +126,7 @@ bump-macro-magnets version:
     # Update README version line
     README_FILE="$MACRO_DIR/README-CutObjectForMagnets.md"
     if [ -f "$README_FILE" ]; then
-        sed -i '' "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE"
+        sed "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
         echo ""
         echo "Updated $README_FILE:"
         grep "Version:" "$README_FILE" | head -1
@@ -137,8 +137,8 @@ bump-macro-magnets version:
     # Update wiki-source.txt version and date
     WIKI_FILE="$MACRO_DIR/wiki-source.txt"
     if [ -f "$WIKI_FILE" ]; then
-        sed -i '' "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE"
-        sed -i '' "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE"
+        sed "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
+        sed "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
         echo ""
         echo "Updated $WIKI_FILE:"
         grep -E "^\|Version=|\|Date=" "$WIKI_FILE"
@@ -202,8 +202,8 @@ bump-macro-export version:
     # Update __Version__ and __Date__ in .FCMacro file
     MACRO_FILE="$MACRO_DIR/MultiExport.FCMacro"
     if [ -f "$MACRO_FILE" ]; then
-        sed -i '' "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE"
-        sed -i '' "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE"
+        sed "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
+        sed "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
         echo "Updated $MACRO_FILE:"
         grep -E "^__(Version|Date)__" "$MACRO_FILE"
     else
@@ -214,7 +214,7 @@ bump-macro-export version:
     # Update README version line
     README_FILE="$MACRO_DIR/README-MultiExport.md"
     if [ -f "$README_FILE" ]; then
-        sed -i '' "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE"
+        sed "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
         echo ""
         echo "Updated $README_FILE:"
         grep "Version:" "$README_FILE" | head -1
@@ -225,8 +225,8 @@ bump-macro-export version:
     # Update wiki-source.txt version and date
     WIKI_FILE="$MACRO_DIR/wiki-source.txt"
     if [ -f "$WIKI_FILE" ]; then
-        sed -i '' "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE"
-        sed -i '' "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE"
+        sed "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
+        sed "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
         echo ""
         echo "Updated $WIKI_FILE:"
         grep -E "^\|Version=|\|Date=" "$WIKI_FILE"
@@ -796,18 +796,19 @@ extract-changelog component version:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Match header exactly as it appears in CHANGELOG.md
     case "{{component}}" in
         mcp-server|server)
-            HEADER="MCP Server v{{version}}"
+            HEADER="### MCP Server v{{version}}"
             ;;
         workbench)
-            HEADER="MCP Bridge Workbench v{{version}}"
+            HEADER="### MCP Bridge Workbench v{{version}}"
             ;;
         macro-magnets|magnets)
-            HEADER="Cut Object for Magnets Macro v{{version}}"
+            HEADER="### Cut Object for Magnets Macro v{{version}}"
             ;;
         macro-export|export)
-            HEADER="Multi Export Macro v{{version}}"
+            HEADER="### Multi Export Macro v{{version}}"
             ;;
         *)
             echo "Unknown component: {{component}}"
@@ -817,11 +818,14 @@ extract-changelog component version:
 
     CHANGELOG="{{project_root}}/CHANGELOG.md"
 
-    # Extract section between this version header and the next "---" or "### " header
+    # Extract section between this version header and the next component header or separator
+    # Only exit on: "---" separator OR "### " followed by component name (capital letter)
+    # This allows #### Added, #### Changed, etc. to be included
     awk -v header="$HEADER" '
-        $0 ~ "### " header { found=1; next }
+        BEGIN { found=0 }
+        $0 == header || $0 == header " " { found=1; next }
         found && /^---$/ { exit }
-        found && /^### / { exit }
+        found && /^### [A-Z]/ { exit }
         found { print }
     ' "$CHANGELOG"
 

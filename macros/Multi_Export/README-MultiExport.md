@@ -272,7 +272,7 @@ When multiple objects are selected:
 
 ## Version History
 
-### v1.0.0 (2025)
+### v0.5.0-beta (2026-01-05)
 
 - Initial release
 - 8 export format support (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF)

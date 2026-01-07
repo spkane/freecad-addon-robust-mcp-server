@@ -533,6 +533,12 @@ wheels = [
 ]
 
 [[package]]
+name = "docopt"
+version = "0.6.2"
+source = { registry = "https://pkgs.safetycli.com/repository/techlabssh/pypi/simple/" }
+sdist = { url = "https://pkgs.safetycli.com/package/techlabssh/pypi/packages/a2/55/8f8cab2afd404cf578136ef2cc5dfb50baa1761b68c9da1fb1e4eed343c9/docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491", size = 25901, upload-time = "2014-06-16T11:18:57.406Z" }
+
+[[package]]
 name = "docutils"
 version = "0.22.4"
 source = { registry = "https://pkgs.safetycli.com/repository/techlabssh/pypi/simple/" }
@@ -602,6 +608,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-timeout" },
+    { name = "pytest-watch" },
     { name = "ruff" },
     { name = "safety" },
     { name = "twine" },
@@ -632,6 +639,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.25.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.3.0" },
+    { name = "pytest-watch", marker = "extra == 'dev'", specifier = ">=4.2.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "safety", marker = "extra == 'dev'", specifier = ">=3.2.0" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6.0.0" },
@@ -1754,6 +1762,18 @@ sdist = { url = "https://pkgs.safetycli.com/package/techlabssh/pypi/packages/ac/
 wheels = [
     { url = "https://pkgs.safetycli.com/package/techlabssh/pypi/packages/fa/b6/3127540ecdf1464a00e5a01ee60a1b09175f6913f0644ac748494d9c4b21/pytest_timeout-2.4.0-py3-none-any.whl", hash = "sha256:c42667e5cdadb151aeb5b26d114aff6bdf5a907f176a007a30b940d3d865b5c2", size = 14382, upload-time = "2025-05-05T19:44:33.502Z" },
 ]
+
+[[package]]
+name = "pytest-watch"
+version = "4.2.0"
+source = { registry = "https://pkgs.safetycli.com/repository/techlabssh/pypi/simple/" }
+dependencies = [
+    { name = "colorama" },
+    { name = "docopt" },
+    { name = "pytest" },
+    { name = "watchdog" },
+]
+sdist = { url = "https://pkgs.safetycli.com/package/techlabssh/pypi/packages/36/47/ab65fc1d682befc318c439940f81a0de1026048479f732e84fe714cd69c0/pytest-watch-4.2.0.tar.gz", hash = "sha256:06136f03d5b361718b8d0d234042f7b2f203910d8568f63df2f866b547b3d4b9", size = 16340, upload-time = "2018-05-20T19:52:16.194Z" }
 
 [[package]]
 name = "python-dateutil"

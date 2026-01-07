@@ -218,13 +218,17 @@ jobs:
           README_FILE: ${{ inputs.readme_file }}
           WIKI_URL: ${{ inputs.wiki_url }}
         run: |
-          HEADER="${MACRO_NAME} Macro v${VERSION}"
+          # Match header exactly as it appears in CHANGELOG.md
+          HEADER="### ${MACRO_NAME} Macro v${VERSION}"
 
-          # Extract section between this version header and the next "---" or "### " header
+          # Extract section between this version header and the next component header or separator
+          # Only exit on: "---" separator OR "### " followed by component name (capital letter)
+          # This allows #### Added, #### Changed, etc. to be included
           CHANGELOG_CONTENT=$(awk -v header="$HEADER" '
-              $0 ~ "### " header { found=1; next }
+              BEGIN { found=0 }
+              $0 == header || $0 == header " " { found=1; next }
               found && /^---$/ { exit }
-              found && /^### / { exit }
+              found && /^### [A-Z]/ { exit }
               found { print }
           ' CHANGELOG.md)
 

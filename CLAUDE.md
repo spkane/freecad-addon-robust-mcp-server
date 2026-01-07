@@ -273,14 +273,45 @@ Module files are located in the `just/` directory.
 
 Pre-commit runs these checks:
 
+**Python Quality:**
+
 - **Ruff**: Linting and import sorting (replaces flake8, isort, pyupgrade)
 - **Ruff Format**: Code formatting (replaces black)
 - **MyPy**: Static type checking
 - **Bandit**: Security vulnerability scanning
-- **Safety**: Dependency vulnerability checking
+- **Safety**: Dependency vulnerability checking (requires `.safety-policy.yml`)
+
+**Secrets Detection (Multi-Layer):**
+
+- **Gitleaks**: Fast regex-based secrets scanning
+- **detect-secrets**: Baseline tracking for known/approved secrets
+- **TruffleHog**: Verified secrets detection (skipped in CI due to wasm bugs)
+
+**Documentation & Config:**
+
+- **Markdownlint**: Markdown linting with auto-fix
+- **md-toc**: Table of contents generation for README
 - **Codespell**: Spell checking in code and docs
-- **YAML/TOML/JSON validation**: Config file validation
+- **MkDocs build**: Validates documentation builds successfully
+- **YAML/TOML/JSON/XML validation**: Config file validation
+- **check-json5**: JSONC validation for VS Code config files
+
+**Infrastructure:**
+
+- **Hadolint**: Dockerfile linting
+- **Trivy**: Dockerfile security misconfiguration scanning
+- **Shellcheck**: Shell script linting
+- **Actionlint**: GitHub Actions workflow linting
+- **validate-pyproject**: Python project configuration validation
+- **check-github-workflows**: GitHub workflow schema validation
+- **check-dependabot**: Dependabot config validation
+
+**Other:**
+
 - **Trailing whitespace and EOF fixes**: File hygiene
+- **Commitizen**: Commit message format validation (commit-msg stage)
+- **no-commit-to-branch**: Prevents commits to main/master
+- **CodeRabbit**: AI code review (manual stage only)
 
 ### Linting Rules
 
@@ -391,12 +422,49 @@ Configuration: `.markdownlint.yaml`
 
 ### Documentation Building
 
-Documentation is auto-generated using the docstrings. Run:
+Documentation is auto-generated using MkDocs with the Material theme. Run:
 
 ```bash
 just documentation::build  # Build documentation
 just documentation::serve  # Serve documentation locally
+just documentation::open   # Open docs in browser
 ```
+
+### MkDocs Configuration
+
+**Theme**: Material for MkDocs with dark mode default, deep purple color scheme.
+
+**Key Plugins**:
+
+- **mkdocstrings**: Auto-generates API docs from Python docstrings
+- **mkdocs-macros-plugin**: Variables and templating in markdown
+- **git-revision-date-localized**: Shows "Last updated" on pages
+- **glightbox**: Image lightbox/zoom functionality
+
+**Macros Plugin - Custom Delimiters**:
+
+To avoid conflicts with Python dict literals in code blocks, this project uses custom delimiters:
+
+```markdown
+<!-- Standard Jinja2 (DON'T USE): {{ variable }} -->
+<!-- Use instead: -->
+{{@ variable @}}
+
+<!-- For blocks: -->
+{%@ if condition @%}
+...
+{%@ endif @%}
+```
+
+Variables are defined in `docs/variables.yaml`:
+
+```yaml
+project_name: FreeCAD MCP Server
+xmlrpc_port: 9875
+socket_port: 9876
+```
+
+**Reference**: See `docs/development/mkdocs-guide.md` for complete documentation on available extensions (admonitions, tabs, code annotations, mermaid diagrams, etc.).
 
 ---
 
@@ -541,26 +609,83 @@ Keep these tools at their latest stable versions:
 
 ```text
 project-root/
-├── .mise.toml               # Tool version management
-├── .pre-commit-config.yaml  # Pre-commit hook configuration
-├── justfile                 # Main task runner (imports modules)
-├── just/                    # Just module files
-│   ├── coderabbit.just      # AI code review commands
-│   ├── docker.just          # Docker build/run commands
-│   ├── documentation.just   # Documentation commands
-│   ├── freecad.just         # FreeCAD running commands
-│   ├── install.just         # Installation commands
-│   ├── quality.just         # Code quality commands
-│   └── testing.just         # Test commands
-├── pyproject.toml           # Project configuration and dependencies
-├── Dockerfile               # Docker image definition
+├── .github/
+│   ├── ISSUE_TEMPLATE/       # GitHub issue templates
+│   │   └── *.yaml
+│   ├── workflows/            # GitHub Actions workflows
+│   │   ├── codeql.yaml           # Security analysis
+│   │   ├── docker.yaml           # Docker build (CI)
+│   │   ├── macro-cut-magnets-release.yaml  # Macro release
+│   │   ├── macro-multi-export-release.yaml # Macro release
+│   │   ├── macro-release-reusable.yaml     # Shared macro release logic
+│   │   ├── macro-test.yaml       # Macro testing
+│   │   ├── mcp-server-release.yaml         # MCP server → PyPI/Docker
+│   │   ├── mcp-workbench-release.yaml      # Workbench → GitHub Release
+│   │   ├── pre-commit.yaml       # Pre-commit checks
+│   │   └── test.yaml             # Unit/integration tests
+│   └── dependabot.yaml       # Dependency updates
+├── addon/                    # FreeCAD addon (workbench)
+│   └── FreecadRobustMCP/     # MCP Bridge workbench
+│       ├── freecad_mcp_bridge/   # Bridge Python package
+│       ├── Init.py           # FreeCAD workbench init
+│       ├── InitGui.py        # FreeCAD GUI init
+│       └── metadata.txt      # Addon metadata
+├── docs/                     # MkDocs documentation source
+│   ├── assets/               # Images, diagrams
+│   ├── development/          # Developer guides
+│   ├── getting-started/      # Installation, quickstart
+│   ├── guide/                # User guides
+│   ├── macros/               # Macro documentation
+│   ├── reference/            # API reference
+│   ├── variables.yaml        # MkDocs macro variables
+│   └── index.md              # Documentation home
+├── just/                     # Just module files
+│   ├── coderabbit.just       # AI code review commands
+│   ├── dev.just              # Development utilities
+│   ├── docker.just           # Docker build/run commands
+│   ├── documentation.just    # Documentation commands
+│   ├── freecad.just          # FreeCAD running commands
+│   ├── install.just          # Installation commands
+│   ├── mcp.just              # MCP server commands
+│   ├── quality.just          # Code quality commands
+│   ├── release.just          # Release/tagging commands
+│   └── testing.just          # Test commands
+├── macros/                   # FreeCAD macro source
+│   ├── Cut_Object_for_Magnets/
+│   │   ├── CutObjectForMagnets.FCMacro
+│   │   └── README-CutObjectForMagnets.md
+│   └── Multi_Export/
+│       ├── MultiExport.FCMacro
+│       └── README-MultiExport.md
 ├── src/
-│   └── package_name/        # Main package source
+│   └── freecad_mcp/          # Main MCP server package
+│       ├── bridge/           # FreeCAD connection bridges
+│       ├── prompts/          # MCP prompt templates
+│       ├── resources/        # MCP resources
+│       ├── tools/            # MCP tools (document, object, etc.)
 │       ├── __init__.py
-│       └── *.py
-├── tests/                   # Test files
-├── docs/                    # Documentation source
-└── CLAUDE.md                # This file
+│       ├── server.py         # Main MCP server
+│       └── settings.py       # Configuration settings
+├── tests/
+│   ├── fixtures/             # Test data files (.FCStd, etc.)
+│   ├── integration/          # Integration tests (require FreeCAD)
+│   ├── unit/                 # Unit tests
+│   └── conftest.py           # Shared pytest fixtures
+├── .codespell-ignore-words.txt  # Spell checker exceptions
+├── .gitleaks.toml            # Gitleaks secrets config
+├── .markdownlint.yaml        # Markdown linting rules
+├── .mise.toml                # Tool version management
+├── .pre-commit-config.yaml   # Pre-commit hook configuration
+├── .safety-policy.yml        # Safety CLI scan policy
+├── .secrets.baseline         # detect-secrets baseline
+├── CHANGELOG.md              # Project changelog
+├── CLAUDE.md                 # This file (AI assistant guidelines)
+├── Dockerfile                # Docker image definition
+├── justfile                  # Main task runner (imports modules)
+├── mkdocs.yaml               # MkDocs configuration
+├── package.xml               # FreeCAD addon metadata
+├── pyproject.toml            # Project configuration and dependencies
+└── uv.lock                   # Locked dependency versions
 ```
 
 ---
@@ -585,6 +710,56 @@ This applies to:
 - Any other YAML, JPEG, or similar files
 
 When creating new files, always use the full extension.
+
+---
+
+## Configuration Files Reference
+
+This section describes the purpose and key settings in each configuration file.
+
+### Tool Management
+
+| File               | Purpose                                                                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.mise.toml`       | Pins versions for Python, uv, just, pre-commit, and security tools (trivy, gitleaks, hadolint, shellcheck, actionlint, markdownlint-cli2). Also sets environment variables for FreeCAD connection settings. |
+| `pyproject.toml`   | Python project configuration: dependencies, build system, tool configs (ruff, mypy, pytest, bandit, codespell, commitizen).                                                                                  |
+| `uv.lock`          | Exact locked versions of all Python dependencies for reproducible builds.                                                                                                                                    |
+
+### Code Quality
+
+| File                          | Purpose                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------- |
+| `.pre-commit-config.yaml`     | Pre-commit hook definitions. See [Pre-commit Hooks](#pre-commit-hooks) for details.   |
+| `.markdownlint.yaml`          | Markdown linting rules (heading style, list indentation, code block style, etc.).     |
+| `.codespell-ignore-words.txt` | Words to ignore during spell checking (technical terms, tool names).                  |
+
+### Security Scanning
+
+| File                  | Purpose                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `.gitleaks.toml`      | Gitleaks secrets scanner configuration with allowlist patterns for false positives.                           |
+| `.secrets.baseline`   | detect-secrets baseline tracking known/approved secrets and their locations.                                  |
+| `.safety-policy.yml`  | Safety CLI scan policy - excludes `.venv`, `node_modules`, and other directories from vulnerability scanning. |
+
+### Documentation
+
+| File                  | Purpose                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `mkdocs.yaml`         | MkDocs configuration: Material theme, plugins (macros, mkdocstrings, git-revision-date), navigation structure. |
+| `docs/variables.yaml` | Variables for MkDocs macros plugin (project name, ports, paths). Use `{{@ variable @}}` syntax in docs.      |
+
+### FreeCAD Addon
+
+| File          | Purpose                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `package.xml` | FreeCAD addon metadata with per-component versioning. Updated automatically by release workflows. |
+
+### GitHub
+
+| File                         | Purpose                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `.github/dependabot.yaml`    | Dependabot configuration for automated dependency updates.                 |
+| `.github/workflows/*.yaml`   | CI/CD workflows. See [GitHub Workflows](#github-actions-workflows) for details. |
 
 ---
 
@@ -927,6 +1102,59 @@ These checks are intentionally skipped in `pyproject.toml`:
 
 - This hook fails when on `main` or `master` branch - this is expected behavior
 - Always work on feature branches for actual commits
+
+### check-json5 (JSONC Support)
+
+- VS Code configuration files (`.vscode/*.json`) use JSONC format (JSON with Comments)
+- These files are excluded from the strict `check-json` hook
+- The `check-json5` hook validates these files instead, allowing `//` comments
+
+---
+
+## GitHub Actions Workflows
+
+This project uses component-specific release workflows along with CI/CD pipelines.
+
+### CI Workflows
+
+| Workflow           | Trigger              | Purpose                                                    |
+| ------------------ | -------------------- | ---------------------------------------------------------- |
+| `test.yaml`        | Push, PR             | Runs unit tests and integration tests on Ubuntu and macOS  |
+| `pre-commit.yaml`  | Push, PR             | Runs all pre-commit hooks for code quality                 |
+| `docker.yaml`      | Push, PR             | Builds Docker image to verify Dockerfile works             |
+| `macro-test.yaml`  | Push, PR             | Tests FreeCAD macros in headless Docker environment        |
+| `codeql.yaml`      | Push, PR, scheduled  | GitHub CodeQL security analysis                            |
+
+### Release Workflows
+
+| Workflow                          | Trigger                              | Purpose                                                  |
+| --------------------------------- | ------------------------------------ | -------------------------------------------------------- |
+| `mcp-server-release.yaml`         | Tag: `robust-mcp-server-v*`          | Builds and publishes MCP server to PyPI and Docker Hub   |
+| `mcp-workbench-release.yaml`      | Tag: `robust-mcp-workbench-v*`       | Creates GitHub Release with workbench addon archive      |
+| `macro-cut-magnets-release.yaml`  | Tag: `macro-cut-object-for-magnets-v*` | Creates GitHub Release with macro archive              |
+| `macro-multi-export-release.yaml` | Tag: `macro-multi-export-v*`         | Creates GitHub Release with macro archive                |
+| `macro-release-reusable.yaml`     | Called by macro release workflows    | Shared logic for macro releases (DRY)                    |
+
+### Release Workflow Features
+
+**MCP Server Release** (`mcp-server-release.yaml`):
+
+- Validates SemVer tag format
+- Builds Python wheel and sdist
+- Tests installation on Ubuntu and macOS
+- Publishes to PyPI (stable) or TestPyPI (alpha)
+- Builds multi-arch Docker image (amd64 + arm64)
+- Pushes to Docker Hub with version tags
+- Creates GitHub Release with artifacts and changelog
+
+**Workbench/Macro Releases**:
+
+- Validates tag format
+- Updates version in source files automatically
+- Updates `package.xml` per-component version
+- Creates tar.gz and zip archives
+- Extracts changelog section for release notes
+- Creates GitHub Release with archives
 
 ---
 

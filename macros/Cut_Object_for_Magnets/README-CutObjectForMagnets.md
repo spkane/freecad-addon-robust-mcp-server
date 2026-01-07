@@ -601,7 +601,7 @@ This ensures holes only go where they're safe!
 
 ## Version History
 
-### v1.0.0 (2025-01-01)
+### v0.5.0-beta (2026-01-05)
 
 - Initial release
 - XY, XZ, YZ preset plane support

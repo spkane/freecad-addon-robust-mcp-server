@@ -266,10 +266,17 @@ status:
     if command -v freecad-mcp &> /dev/null; then
         echo "✓ MCP Server: INSTALLED (as uv tool)"
         echo "  Run: freecad-mcp"
-    elif uv run freecad-mcp --version &> /dev/null 2>&1; then
-        echo "✓ MCP Server: AVAILABLE (via dev environment)"
-        echo "  Run: just mcp::run"
-        echo "  For system-wide install: just install::mcp-server"
+    elif [[ -f "{{project_root}}/pyproject.toml" ]] && grep -q 'name = "freecad-robust-mcp"' "{{project_root}}/pyproject.toml" 2>/dev/null; then
+        # Dev environment exists - check if synced by looking for .venv
+        if [[ -d "{{project_root}}/.venv" ]]; then
+            echo "✓ MCP Server: AVAILABLE (via dev environment)"
+            echo "  Run: just mcp::run"
+            echo "  For system-wide install: just install::mcp-server"
+        else
+            echo "○ MCP Server: DEV SOURCE AVAILABLE (needs setup)"
+            echo "  Setup: uv sync --all-extras"
+            echo "  Then run: just mcp::run"
+        fi
     else
         echo "✗ MCP Server: NOT INSTALLED"
         echo "  Install: just install::mcp-server"

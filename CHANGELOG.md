@@ -28,7 +28,7 @@ This is a multi-component project. Each component has its own versioning and rel
 
 ---
 
-## 2026-01-05 - Initial Public Beta
+## Initial Public Beta - 2026-01-05
 
 ### MCP Server v0.5.0-beta
 

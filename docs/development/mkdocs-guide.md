@@ -344,7 +344,7 @@ xmlrpc_port: 9875
 socket_port: 9876
 ```
 
-Use in markdown:
+Use in Markdown:
 
 ```markdown
 The default XML-RPC port is {{@ xmlrpc_port @}}.
@@ -460,7 +460,7 @@ External links automatically open in new tab (Material theme default).
 
 ## Tables
 
-Standard markdown tables with sorting enabled:
+Standard Markdown tables with sorting enabled:
 
 ```markdown
 | Column 1 | Column 2 | Column 3 |

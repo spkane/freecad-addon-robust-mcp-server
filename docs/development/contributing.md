@@ -106,7 +106,7 @@ freecad-robust-mcp-and-more/
 - Follow PEP 8 with 88-character line length (ruff/black)
 - Use type hints for all function signatures
 - Write Google-style docstrings
-- Run `just format` before committing
+- Run `just quality::format` before committing
 
 ### Testing
 
