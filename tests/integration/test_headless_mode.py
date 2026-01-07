@@ -5,7 +5,7 @@ in headless mode (without GUI). They test object creation, manipulation, and
 export functionality.
 
 Note: These tests require a running FreeCAD headless server.
-      Start it with: just run-headless
+      Start it with: just freecad::run-headless
 
 To run these tests:
     pytest tests/integration/test_headless_mode.py -v

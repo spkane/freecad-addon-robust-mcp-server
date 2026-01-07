@@ -20,6 +20,7 @@ repos:
         args: [--unsafe]
       - id: check-toml
       - id: check-json
+        exclude: ^\.vscode/.*\.json$  # VS Code uses JSONC (JSON with Comments)
       - id: check-added-large-files
         args: [--maxkb=1000]
       - id: check-merge-conflict
@@ -35,6 +36,13 @@ repos:
       - id: check-ast  # Check Python syntax
         types: [text]
         files: \.(py|FCMacro)$
+
+  # JSON5/JSONC validation for VS Code config files (supports comments)
+  - repo: https://github.com/maresb/check-json5
+    rev: v1.0.1
+    hooks:
+      - id: check-json5
+        files: ^\.vscode/.*\.json$  # Only check VS Code JSONC files
 
   # ==========================================================================
   # Python - Linting and Formatting
@@ -81,14 +89,15 @@ repos:
   # Checks installed packages against known security vulnerabilities
   # Local: Requires free safetycli.com account. Run `uv run safety auth` first.
   # CI: Uses SAFETY_API_KEY secret passed via environment variable.
+  # Config: .safety-policy.yml (excludes .venv, node_modules, etc.)
   - repo: local
     hooks:
       - id: safety
         name: safety (dependency vulnerabilities)
-        entry: uv run safety scan --detailed-output
+        entry: uv run safety scan --policy-file .safety-policy.yml --detailed-output
         language: system
         pass_filenames: false
-        files: ^(pyproject\.toml|uv\.lock)$
+        files: ^(pyproject\.toml|uv\.lock|\.safety-policy\.yml)$
 
   # ==========================================================================
   # Secrets Detection - Multi-Layer Approach
@@ -161,7 +170,7 @@ repos:
       - id: md-toc
         name: md-toc (table of contents)
         args: ["-p", "github", "-l", "6"]  # GitHub parser, max 6 levels
-        files: ^(README|ARCHITECTURE-MCP)\.md$
+        files: ^(README|docs/development/architecture-detailed)\.md$
 
   # ==========================================================================
   # Spell Checking
@@ -270,7 +279,7 @@ repos:
   #   2. Authenticate: just coderabbit::login
   #
   # USAGE:
-  #   - Run manually: just review (or just coderabbit::review)
+  #   - Run manually: just coderabbit::review
   #   - Run via pre-commit: uv run pre-commit run coderabbit --all-files
   #
   # NOTE: This hook uses 'manual' stage so it doesn't run automatically.

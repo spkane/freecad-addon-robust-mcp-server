@@ -1,8 +1,8 @@
 name: Docker Build
 
 # Build and test Docker images on pushes to main and pull requests.
-# Note: Version tags (v*) are NOT included here - they trigger docker-release.yaml
-# via the 'release: published' event instead, to avoid duplicate workflow runs.
+# Note: Release tags (robust-mcp-server-v*) trigger mcp-server-release.yaml
+# which handles Docker Hub releases. This workflow is for CI testing only.
 on:
   push:
     branches: [main, master]
@@ -20,6 +20,8 @@ on:
       - "src/**/*.py"
       - "pyproject.toml"
       - ".github/workflows/docker.yaml"
+  workflow_dispatch:
+  workflow_call:
 
 # Cancel in-progress runs for the same branch
 concurrency:

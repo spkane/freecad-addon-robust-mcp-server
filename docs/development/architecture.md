@@ -2,7 +2,7 @@
 
 This document provides a technical overview of the FreeCAD MCP Server architecture.
 
-For the full architecture document with design decisions and rationale, see [ARCHITECTURE-MCP.md](https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/ARCHITECTURE-MCP.md).
+For the full architecture document with design decisions and rationale, see [Detailed Architecture](architecture-detailed.md).
 
 ---
 
@@ -39,17 +39,18 @@ The FreeCAD MCP Server follows a **Bridge with Adapter** pattern:
 
 ```text
 src/freecad_mcp/
-├── __init__.py
+├── __init__.py            # Package entry point
+├── _version.py            # Version info (auto-generated)
 ├── server.py              # Main MCP server entry point
 ├── config.py              # Configuration management
+├── py.typed               # PEP 561 marker for type hints
 │
 ├── bridge/                # FreeCAD communication layer
 │   ├── __init__.py        # Bridge factory
 │   ├── base.py            # Abstract bridge interface
 │   ├── embedded.py        # In-process FreeCAD (Linux only)
 │   ├── socket.py          # JSON-RPC socket bridge
-│   ├── xmlrpc.py          # XML-RPC bridge (recommended)
-│   └── protocol.py        # Wire protocol definitions
+│   └── xmlrpc.py          # XML-RPC bridge (recommended)
 │
 ├── tools/                 # MCP tool implementations
 │   ├── __init__.py
@@ -69,7 +70,8 @@ src/freecad_mcp/
 │   ├── __init__.py
 │   └── freecad.py         # Modeling and debugging prompts
 │
-└── freecad_workbench_addon/  # Workbench addon (deprecated location)
+└── utils/                 # Utility modules
+    └── __init__.py
 ```
 
 ---
@@ -124,7 +126,6 @@ The workbench addon runs inside FreeCAD:
 
 ```text
 addon/FreecadRobustMCP/
-├── package.xml            # FreeCAD addon metadata
 ├── Init.py                # Module initialization
 ├── InitGui.py             # GUI initialization (workbench)
 ├── FreecadRobustMCP.svg   # Workbench icon
@@ -132,7 +133,11 @@ addon/FreecadRobustMCP/
     ├── __init__.py
     ├── server.py          # XML-RPC/JSON-RPC server
     └── headless_server.py # Headless mode launcher
+
+package.xml                # FreeCAD addon metadata (in project root)
 ```
+
+Note: The `package.xml` file is in the project root, not inside the addon directory. This is because it defines metadata for multiple components (workbench and macros) in a single manifest.
 
 ### Thread Safety
 
@@ -256,4 +261,4 @@ Embedded mode receives **minimal testing**:
 ## Next Steps
 
 - [Contributing](contributing.md) - How to contribute
-- [Full Architecture Document](https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/ARCHITECTURE-MCP.md) - Complete design details
+- [Detailed Architecture](architecture-detailed.md) - Complete design details

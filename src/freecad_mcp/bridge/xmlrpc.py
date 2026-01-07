@@ -127,7 +127,7 @@ The FreeCAD MCP bridge server is not running. To fix this:
    - Click "Start MCP Bridge" in the toolbar
 
    Option B: From source (for developers)
-   - Run: just run-gui
+   - Run: just freecad::run-gui
 
 3. You should see: "MCP Bridge started!"
    - XML-RPC: localhost:{self._port}

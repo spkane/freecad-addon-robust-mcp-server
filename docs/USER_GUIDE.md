@@ -33,7 +33,7 @@ You have two options depending on your workflow:
 Best for automated workflows, batch processing, or when you don't need visual feedback.
 
 ```bash
-just run-headless
+just freecad::run-headless
 ```
 
 **Capabilities:** All modeling operations, export, scripting.
@@ -44,7 +44,7 @@ just run-headless
 Best for interactive design work where you want to see results visually.
 
 ```bash
-just run-gui
+just freecad::run-gui
 ```
 
 **Capabilities:** Everything headless mode can do, plus screenshots, colors, view control.

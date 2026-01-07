@@ -73,12 +73,18 @@ dev = [
     "bandit[toml]>=1.8.0",
     "safety>=3.2.0",
     "detect-secrets>=1.5.0",
-    # Pre-commit
+    # Pre-commit and commit conventions
     "pre-commit>=4.0.0",
+    "commitizen>=4.1.0",
     # Documentation
     "mkdocs>=1.6.0",
-    "mkdocs-material>=9.5.0",
+    "mkdocs-material>=9.7.1",
     "mkdocstrings[python]>=0.27.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+    "mkdocs-minify-plugin>=0.8.0",
+    "mkdocs-redirects>=1.2.0",
+    "mkdocs-glightbox>=0.4.0",
+    "mkdocs-macros-plugin>=1.0.0",
     "md-toc>=9.0.0",
     "codespell>=2.3.0",
     # Publishing
@@ -308,3 +314,15 @@ skips = [
 [tool.codespell]
 skip = ".git,*.lock,*.toml"
 ignore-words-list = "crate"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_scheme = "semver2"
+major_version_zero = true
+# Note: This project uses component-specific tags for releases:
+#   - robust-mcp-server-vX.Y.Z      (MCP server: PyPI, Docker, GitHub release)
+#   - robust-mcp-workbench-vX.Y.Z   (FreeCAD workbench)
+#   - macro-cut-object-for-magnets-vX.Y.Z
+#   - macro-multi-export-vX.Y.Z
+# Use `just release::tag-<component> <version>` to create release tags.
+# Commitizen is used for commit message validation and changelog generation.

@@ -87,7 +87,7 @@ This document describes the architecture for a Model Context Protocol (MCP) serv
 
 ## Competitive Analysis
 
-See [docs/COMPARISON.md](docs/COMPARISON.md) for detailed analysis of existing implementations.
+See [COMPARISON.md](../COMPARISON.md) for detailed analysis of existing implementations.
 
 ### Existing FreeCAD MCP Servers
 

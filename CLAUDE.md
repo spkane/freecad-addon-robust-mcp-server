@@ -40,7 +40,7 @@ FreeCAD's `FreeCAD.so` library links to `@rpath/libpython3.11.dylib` (FreeCAD's 
 1. Start FreeCAD and start the MCP bridge:
 
    - Install the MCP Bridge workbench via Addon Manager, or
-   - Use `just run-gui` from the source repository
+   - Use `just freecad::run-gui` from the source repository
 
 1. The MCP server will then connect to FreeCAD over the network
 
@@ -104,7 +104,7 @@ uv run safety auth
 uv run safety auth --login
 ```
 
-**Note:** The Safety CLI authentication is stored locally and only needs to be done once per machine. If you skip this step, `just check` will show a clear error message with instructions. The `safety` pre-commit hook will also fail with an authentication prompt.
+**Note:** The Safety CLI authentication is stored locally and only needs to be done once per machine. If you skip this step, `just quality::check` will show a clear error message with instructions. The `safety` pre-commit hook will also fail with an authentication prompt.
 
 **CI/CD:** Safety runs in CI using the `SAFETY_API_KEY` repository secret. The API key is passed via environment variable to the pre-commit hook.
 
@@ -126,7 +126,7 @@ just coderabbit::login
 
 ```bash
 # Review staged changes (most common)
-just review
+just coderabbit::review
 
 # Review with auto-fix suggestions
 just coderabbit::review-fix
@@ -149,46 +149,113 @@ This project uses [`just`](https://just.systems/) as a command runner. Always pr
 Commands are organized into modules for better organization:
 
 ```bash
-# List all available commands
-just --list
+# List top-level commands and available modules
+just
 
-# List commands in a specific module
-just --list docker
-just --list quality
-just --list testing
-just --list freecad
-just --list documentation
-just --list coderabbit
+# List commands in a specific module (use list-<module>)
+just list-mcp           # MCP server commands
+just list-freecad       # FreeCAD plugin/macro commands
+just list-install       # Installation commands
+just list-quality       # Code quality commands
+just list-testing       # Test commands
+just list-docker        # Docker commands
+just list-documentation # Documentation commands
+just list-dev           # Development utilities
+just list-release       # Release and tagging commands
+just list-coderabbit    # AI code review commands
 
-# Common shortcut commands (aliases to module commands)
-just install      # Install project dependencies
-just lint         # Run all linters (quality::lint)
-just format       # Format code (quality::format)
-just test         # Run tests (testing::unit)
-just check        # Run pre-commit checks (quality::check)
-just docs         # Build documentation (documentation::build)
-just all          # Run all checks and tests
+# List ALL commands from all modules at once
+just list-all
 
-# Module commands (use :: syntax)
-just docker::build        # Build Docker image for local architecture
-just docker::build-multi  # Build multi-arch image (amd64 + arm64)
-just docker::run          # Run Docker container
-just quality::secrets     # Run all secrets scanners
-just testing::cov         # Run tests with coverage
-just freecad::run-gui     # Run FreeCAD GUI with MCP bridge
-just documentation::serve # Serve documentation locally
+# MCP server commands
+just mcp::run              # Run the MCP server (stdio mode)
+just mcp::run-debug        # Run with debug logging
+just mcp::run-http         # Run in HTTP mode for remote access
+
+# FreeCAD commands
+just freecad::run-gui      # Run FreeCAD GUI with MCP bridge
+just freecad::run-headless # Run FreeCAD headless with MCP bridge
+
+# Installation commands (for end users)
+just install::mcp-server           # Install MCP server system-wide (via uv tool)
+just install::mcp-bridge-workbench # Install FreeCAD workbench addon
+just install::macro-all            # Install all macros
+just install::macro-cut            # Install CutObjectForMagnets macro
+just install::macro-export         # Install MultiExport macro
+just install::status               # Check installation status
+
+# Quality commands
+just quality::check        # Run all pre-commit checks
+just quality::lint         # Run linting
+just quality::format       # Format code
+just quality::typecheck    # Run type checking
+just quality::security     # Run security scanning
+just quality::scan         # Run all secrets scanners
+
+# Testing commands
+just testing::unit         # Run unit tests
+just testing::cov          # Run tests with coverage
+just testing::fast         # Run tests without slow markers
+just testing::integration  # Run integration tests
+just testing::integration-freecad # Integration tests with auto FreeCAD startup
+just testing::watch        # Run tests in watch mode
+just testing::all          # Run all tests including integration
+
+# Documentation commands
+just documentation::build  # Build documentation
+just documentation::serve  # Serve documentation locally
+
+# Docker commands
+just docker::build         # Build Docker image for local architecture
+just docker::build-multi   # Build multi-arch image (amd64 + arm64)
+just docker::run           # Run Docker container
+just docker::clean         # Remove local Docker image
+just docker::clean-all     # Remove images and build cache
+
+# Development utilities
+just dev::install-deps     # Install all project dependencies
+just dev::install-pre-commit # Install pre-commit hooks
+just dev::update-deps      # Update all dependencies
+just dev::clean            # Clean build artifacts and caches
+just dev::repl             # Open Python REPL with project loaded
+just dev::tree             # Show project structure
+just dev::validate         # Validate project configuration
+
+# AI code review commands
+just coderabbit::review    # Review staged changes
+just coderabbit::review-fix # Review with auto-fix suggestions
+
+# Release commands (component-specific tagging)
+just release::status                  # Show unreleased changes across all components
+just release::tag-mcp-server 1.0.0    # Release MCP server (PyPI + Docker)
+just release::tag-workbench 1.0.0     # Release MCP Bridge workbench
+just release::tag-macro-magnets 1.0.0 # Release Cut Object for Magnets macro
+just release::tag-macro-export 1.0.0  # Release Multi Export macro
+just release::list-tags               # List all release tags
+just release::latest-versions         # Show latest version of each component
+just release::delete-tag <tag>        # Delete a release tag (local and remote)
+
+# Combined workflows
+just setup                 # Full dev setup (install deps + hooks)
+just all                   # Run all quality checks and unit tests
+just all-with-integration  # Run all checks + integration tests
+just ci                    # Full CI pipeline (checks + coverage)
 ```
 
 #### Just Module Structure
 
-| Module          | Description                         | Key Commands                                 |
-| --------------- | ----------------------------------- | -------------------------------------------- |
-| `docker`        | Docker build and run commands       | `build`, `build-multi`, `build-push`, `run`  |
-| `quality`       | Code quality and linting            | `check`, `lint`, `format`, `secrets`         |
-| `testing`       | Test execution                      | `unit`, `cov`, `integration`, `all`          |
-| `freecad`       | FreeCAD plugin and macro management | `run-gui`, `run-headless`, `install-*-macro` |
-| `documentation` | Documentation building              | `build`, `serve`, `open`                     |
-| `coderabbit`    | AI code reviews (local)             | `install`, `login`, `review`, `review-fix`   |
+| Module          | Description                           | Key Commands                                        |
+| --------------- | ------------------------------------- | --------------------------------------------------- |
+| `mcp`           | MCP server commands                   | `run`, `run-debug`, `run-http`                      |
+| `freecad`       | FreeCAD running commands              | `run-gui`, `run-headless`, `run-gui-custom`         |
+| `install`       | User installation commands            | `mcp-server`, `mcp-bridge-workbench`, `macro-all`   |
+| `quality`       | Code quality and linting              | `check`, `lint`, `format`, `scan`                   |
+| `testing`       | Test execution                        | `unit`, `cov`, `integration-freecad`, `watch`       |
+| `docker`        | Docker build and run commands         | `build`, `build-multi`, `run`, `clean-all`          |
+| `documentation` | Documentation building                | `build`, `serve`, `open`                            |
+| `dev`           | Development utilities                 | `install-deps`, `update-deps`, `clean`              |
+| `release`       | Release and tagging                   | `status`, `tag-mcp-server`, `delete-tag`            |
+| `coderabbit`    | AI code reviews (local)               | `install`, `login`, `review`, `review-fix`          |
 
 Module files are located in the `just/` directory.
 
@@ -200,7 +267,7 @@ Module files are located in the `just/` directory.
 
 **CRITICAL**: This project uses `pre-commit` for all code quality checks. Before finishing ANY code changes:
 
-1. Run `just check` or `uv run pre-commit run --all-files`
+1. Run `just quality::check` or `uv run pre-commit run --all-files`
 1. Fix ALL issues reported
 1. Re-run until all checks pass
 
@@ -241,20 +308,20 @@ This project uses a comprehensive, multi-layer approach to secrets detection:
 
 ```bash
 # Run all secrets scanners
-just secrets
+just quality::scan
 
 # Individual scanners
-just secrets-gitleaks         # Fast pattern matching
-just secrets-gitleaks-history # Scan git history
-just secrets-detect           # Check against baseline
-just secrets-audit            # Interactive baseline audit
-just secrets-trufflehog       # Verified secrets only
+just quality::scan-gitleaks         # Fast pattern matching
+just quality::scan-gitleaks-history # Scan git history
+just quality::scan-detect           # Check against baseline
+just quality::scan-audit            # Interactive baseline audit
+just quality::scan-trufflehog       # Verified secrets only
 ```
 
 **Managing False Positives:**
 
 1. **Gitleaks**: Add patterns to `.gitleaks.toml` allowlist section
-1. **detect-secrets**: Run `just secrets-audit` to mark false positives in baseline
+1. **detect-secrets**: Run `just quality::scan-audit` to mark false positives in baseline
 1. **TruffleHog**: Uses `--only-verified` to minimize false positives
 
 ### Markdown Linting
@@ -262,8 +329,8 @@ just secrets-trufflehog       # Verified secrets only
 All markdown files are linted for consistency:
 
 ```bash
-just markdown-lint  # Check markdown files
-just markdown-fix   # Auto-fix markdown issues
+just quality::markdown-lint  # Check markdown files
+just quality::markdown-fix   # Auto-fix markdown issues
 ```
 
 Configuration: `.markdownlint.yaml`
@@ -327,8 +394,8 @@ Configuration: `.markdownlint.yaml`
 Documentation is auto-generated using the docstrings. Run:
 
 ```bash
-just docs        # Build documentation
-just docs-serve  # Serve documentation locally
+just documentation::build  # Build documentation
+just documentation::serve  # Serve documentation locally
 ```
 
 ---
@@ -391,9 +458,10 @@ class TestCalculateTotal:
 ### Running Tests
 
 ```bash
-just test                       # Run all tests
-just test-cov                   # Run tests with coverage report
-just test-fast                  # Run tests without slow markers
+just testing::unit              # Run unit tests
+just testing::cov               # Run tests with coverage report
+just testing::fast              # Run tests without slow markers
+just testing::all               # Run all tests including integration
 uv run pytest tests/unit/       # Run specific test directory
 uv run pytest -k "test_name"    # Run specific test by name
 ```
@@ -405,7 +473,7 @@ uv run pytest -k "test_name"    # Run specific test by name
 ### Before Making Changes
 
 1. Ensure you're on the latest code
-1. Run `just install` to update dependencies
+1. Run `just install::mcp-server` to update dependencies
 1. Run `just all` to verify clean starting state
 
 ### After Making Changes
@@ -414,12 +482,12 @@ uv run pytest -k "test_name"    # Run specific test by name
 
 1. [ ] **Add/update docstrings** for all new/modified code
 1. [ ] **Add/update tests** for all new/modified functionality
-1. [ ] **Run formatting**: `just format`
-1. [ ] **Run linting**: `just lint` - fix ALL issues
-1. [ ] **Run type checking**: `just typecheck` - fix ALL issues
-1. [ ] **Run security checks**: `just security` - fix ALL issues
-1. [ ] **Run tests**: `just test` - ALL tests must pass
-1. [ ] **Run pre-commit**: `just check` - ALL checks must pass
+1. [ ] **Run formatting**: `just quality::format`
+1. [ ] **Run linting**: `just quality::lint` - fix ALL issues
+1. [ ] **Run type checking**: `just quality::typecheck` - fix ALL issues
+1. [ ] **Run security checks**: `just quality::security` - fix ALL issues
+1. [ ] **Run tests**: `just testing::unit` - ALL tests must pass
+1. [ ] **Run pre-commit**: `just quality::check` - ALL checks must pass
 
 ### Quick Verification Command
 
@@ -455,7 +523,7 @@ This catches issues early and ensures code quality standards are met. Never skip
   - This allows the package to work as a library while ensuring reproducibility
   - **Do not change `>=` to `==` in pyproject.toml** - this would break library usability
 - Regularly update dependencies with `just update-deps` (updates uv.lock)
-- Check for security vulnerabilities with `just security`
+- Check for security vulnerabilities with `just quality::security`
 
 ### Core Dependencies
 
@@ -477,11 +545,13 @@ project-root/
 ├── .pre-commit-config.yaml  # Pre-commit hook configuration
 ├── justfile                 # Main task runner (imports modules)
 ├── just/                    # Just module files
+│   ├── coderabbit.just      # AI code review commands
 │   ├── docker.just          # Docker build/run commands
+│   ├── documentation.just   # Documentation commands
+│   ├── freecad.just         # FreeCAD running commands
+│   ├── install.just         # Installation commands
 │   ├── quality.just         # Code quality commands
-│   ├── testing.just         # Test commands
-│   ├── freecad.just         # FreeCAD plugin/macro commands
-│   └── documentation.just   # Documentation commands
+│   └── testing.just         # Test commands
 ├── pyproject.toml           # Project configuration and dependencies
 ├── Dockerfile               # Docker image definition
 ├── src/
@@ -750,10 +820,10 @@ The following tools in `src/freecad_mcp/tools/view.py` check `FreeCAD.GuiUp`:
 
 ```bash
 # GUI mode - with MCP bridge auto-started
-just run-gui
+just freecad::run-gui
 
 # Headless mode - console only
-just run-headless
+just freecad::run-headless
 
 # Or manually:
 # GUI: /Applications/FreeCAD.app (macOS) or freecad (Linux)
@@ -851,12 +921,133 @@ These checks are intentionally skipped in `pyproject.toml`:
 ### detect-secrets
 
 - **False positives**: Add `# pragma: allowlist secret` comment to lines with false positives
-- **Baseline updates**: Run `just secrets-audit` to update `.secrets.baseline`
+- **Baseline updates**: Run `just quality::scan-audit` to update `.secrets.baseline`
 
 ### no-commit-to-branch
 
 - This hook fails when on `main` or `master` branch - this is expected behavior
 - Always work on feature branches for actual commits
+
+---
+
+## Release Process
+
+This project uses **component-specific versioning**. Each component has its own git tag and release workflow:
+
+| Component                   | Tag Format                            | Releases To                          |
+| --------------------------- | ------------------------------------- | ------------------------------------ |
+| MCP Server                  | `robust-mcp-server-vX.Y.Z`            | PyPI, Docker Hub, GitHub Release     |
+| MCP Bridge Workbench        | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release (archive)             |
+| Cut Object for Magnets Macro| `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive)             |
+| Multi Export Macro          | `macro-multi-export-vX.Y.Z`           | GitHub Release (archive)             |
+
+### Changelog Management
+
+The project uses a single `CHANGELOG.md` with sections for each component. Before releasing:
+
+1. **Draft release notes** from conventional commits:
+
+   ```bash
+   just release::draft-notes mcp-server
+   just release::draft-notes workbench
+   just release::draft-notes macro-magnets
+   just release::draft-notes macro-export
+   ```
+
+2. **Update CHANGELOG.md** with entries under the appropriate component header:
+
+   ```markdown
+   ## YYYY-MM-DD
+
+   ### MCP Server vX.Y.Z
+
+   #### Added
+   - New feature
+
+   ---
+
+   ### MCP Bridge Workbench vX.Y.Z
+   ...
+   ```
+
+3. The release workflow automatically extracts the changelog section for GitHub Releases.
+
+### Creating a Release
+
+Use the `just release::` commands to create and push release tags:
+
+```bash
+# Check what has unreleased changes
+just release::status
+
+# Preview changes since last release
+just release::changes-since mcp-server
+just release::changes-since workbench
+
+# Release the MCP server (triggers PyPI, Docker, GitHub release)
+just release::tag-mcp-server 1.0.0
+
+# Release the MCP Bridge workbench
+just release::tag-workbench 1.0.0
+
+# Release macros
+just release::tag-macro-magnets 1.0.0
+just release::tag-macro-export 1.0.0
+
+# View release tags
+just release::list-tags
+just release::latest-versions
+```
+
+### Version Format
+
+All versions follow SemVer 2.0:
+
+- `X.Y.Z` - Stable release
+- `X.Y.Z-alpha` or `X.Y.Z-alpha.N` - Alpha (TestPyPI only)
+- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta (PyPI)
+- `X.Y.Z-rc.N` - Release candidate (PyPI)
+
+### What Happens on Release
+
+**MCP Server Release:**
+
+1. Validates tag format
+2. Builds Python wheel and sdist
+3. Tests installation on Ubuntu and macOS
+4. Publishes to PyPI (or TestPyPI for alpha)
+5. Builds multi-arch Docker image
+6. Pushes to Docker Hub
+7. Creates GitHub release with artifacts
+
+**Workbench/Macro Release:**
+
+1. Validates tag format
+2. Updates version in source files (.FCMacro, README, wiki-source.txt)
+3. Updates version in package.xml
+4. Creates archive (tar.gz + zip)
+5. Creates GitHub release with archives
+
+### Package.xml Per-Component Versioning
+
+The `package.xml` file uses per-content versioning as supported by FreeCAD:
+
+```xml
+<content>
+    <workbench>
+        <name>MCP Bridge</name>
+        <version>1.0.0</version>
+        ...
+    </workbench>
+    <macro>
+        <name>Multi Export</name>
+        <version>0.8.0</version>
+        ...
+    </macro>
+</content>
+```
+
+Each component can have a different version, and the release workflows automatically update these when a component is released.
 
 ---
 

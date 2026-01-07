@@ -67,6 +67,13 @@ clean:
     docker rmi {{image_name}} 2>/dev/null || true
     docker rmi {{registry}}/{{image_name}} 2>/dev/null || true
 
+# Remove Docker images and build cache
+clean-all:
+    docker rmi {{image_name}} 2>/dev/null || true
+    docker rmi {{registry}}/{{image_name}} 2>/dev/null || true
+    docker builder prune -f
+    @echo "Docker images and build cache cleaned."
+
 # Scan Docker image for vulnerabilities (warn on all severities)
 scan:
     #!/usr/bin/env bash

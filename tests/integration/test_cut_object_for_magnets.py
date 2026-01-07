@@ -13,7 +13,7 @@ Test Organization:
 - TestEdgeCases: Edge case tests (single hole, many holes)
 
 Note: These tests require a running FreeCAD MCP bridge.
-      Start it with: just run-gui or just run-headless
+      Start it with: just freecad::run-gui or just freecad::run-headless
 
 Note: PartDesign::Hole has a CADKernelError bug in some FreeCAD headless
       environments (especially AppImage on Linux CI) where it fails with

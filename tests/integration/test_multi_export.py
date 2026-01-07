@@ -7,7 +7,7 @@ These tests verify the MultiExporter class functionality including:
 - Handling mesh tolerance settings
 
 Note: These tests require a running FreeCAD MCP bridge.
-      Start it with: just run-gui or just run-headless
+      Start it with: just freecad::run-gui or just freecad::run-headless
 
 To run these tests:
     pytest tests/integration/test_multi_export.py -v

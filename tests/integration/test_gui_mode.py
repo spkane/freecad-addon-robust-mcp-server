@@ -5,7 +5,7 @@ in GUI mode (with full graphical interface). They test GUI-specific features
 like visibility, display modes, colors, and camera operations.
 
 Note: These tests require a running FreeCAD GUI server.
-      Start it with: just run-gui
+      Start it with: just freecad::run-gui
 
 To run these tests:
     pytest tests/integration/test_gui_mode.py -v

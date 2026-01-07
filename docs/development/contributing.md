@@ -46,14 +46,14 @@ uv run safety auth --login
 ### Running Tests
 
 ```bash
-# Run all tests
-just test
-
-# Run unit tests only
+# Run unit tests
 just testing::unit
 
 # Run with coverage
 just testing::cov
+
+# Run all tests including integration
+just testing::all
 
 # Run type checking
 uv run mypy src/
@@ -63,13 +63,13 @@ uv run mypy src/
 
 ```bash
 # Run all pre-commit checks
-just check
+just quality::check
 
 # Run linting
-just lint
+just quality::lint
 
 # Format code
-just format
+just quality::format
 
 # Run security checks
 just quality::secrets
@@ -214,7 +214,6 @@ Currently, embedded mode has only mocked unit tests. Adding live integration tes
 ## Getting Help
 
 - **Issues:** [GitHub Issues](https://github.com/spkane/freecad-robust-mcp-and-more/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/spkane/freecad-robust-mcp-and-more/discussions)
 
 ---
 

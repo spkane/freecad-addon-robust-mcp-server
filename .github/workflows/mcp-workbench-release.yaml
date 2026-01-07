@@ -1,0 +1,225 @@
+name: MCP Workbench Release
+
+# Trigger on tag push matching the component-specific pattern
+on:
+  push:
+    tags:
+      - 'robust-mcp-workbench-v*'
+  workflow_dispatch:
+  workflow_call:
+
+# Cancel in-progress runs for the same tag
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-release:
+    name: Validate Tag and Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate semantic version tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Extract version from tag (robust-mcp-workbench-v1.2.3 -> 1.2.3)
+          if [[ ! "$TAG" =~ ^robust-mcp-workbench-v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+              echo "ERROR: Tag '$TAG' does not match expected format (robust-mcp-workbench-vX.Y.Z or robust-mcp-workbench-vX.Y.Z-prerelease)"
+              exit 1
+          fi
+
+          VERSION="${BASH_REMATCH[1]}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Check if this is a prerelease
+          if [[ "$VERSION" =~ -[a-zA-Z0-9.]+ ]]; then
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Parsed version: $VERSION"
+
+      - name: Verify version in source files
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          echo "Verifying version in source files matches tag: $VERSION"
+
+          # Check __version__ in __init__.py
+          INIT_FILE="addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py"
+          INIT_VERSION=$(grep -o '__version__ = "[^"]*"' "$INIT_FILE" | cut -d'"' -f2)
+          if [ "$INIT_VERSION" != "$VERSION" ]; then
+              echo "ERROR: Version mismatch in $INIT_FILE"
+              echo "  Expected: $VERSION"
+              echo "  Found:    $INIT_VERSION"
+              echo ""
+              echo "The version in source files must be updated before tagging."
+              echo "Run: just release::bump-workbench $VERSION"
+              exit 1
+          fi
+          echo "✓ $INIT_FILE: $INIT_VERSION"
+
+          # Check package.xml
+          PKG_VERSION=$(awk '/<workbench>/,/<\/workbench>/' package.xml | grep -o '<version>[^<]*</version>' | head -1 | sed 's/<[^>]*>//g')
+          if [ "$PKG_VERSION" != "$VERSION" ]; then
+              echo "ERROR: Version mismatch in package.xml (workbench section)"
+              echo "  Expected: $VERSION"
+              echo "  Found:    $PKG_VERSION"
+              exit 1
+          fi
+          echo "✓ package.xml (workbench): $PKG_VERSION"
+
+          echo ""
+          echo "Version verification passed!"
+
+      - name: Create workbench archive
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Create staging directory
+          mkdir -p "staging/freecad-mcp-workbench-${VERSION}"
+
+          # Copy workbench files
+          cp -r addon/FreecadRobustMCP/* "staging/freecad-mcp-workbench-${VERSION}/"
+
+          # Copy LICENSE
+          cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/"
+
+          # Create README for the archive
+          cat > "staging/freecad-mcp-workbench-${VERSION}/README.md" << EOF
+          # FreeCAD MCP Bridge Workbench
+
+          **Version:** ${VERSION}
+
+          ## Installation
+
+          ### Via FreeCAD Addon Manager (Recommended)
+
+          1. Open FreeCAD
+          2. Go to **Tools → Addon Manager**
+          3. Search for "MCP Bridge"
+          4. Click **Install**
+          5. Restart FreeCAD
+
+          ### Manual Installation
+
+          Copy the contents of this archive to your FreeCAD Mod directory:
+
+          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCP/\`
+          - **Linux**: \`~/.local/share/FreeCAD/Mod/FreecadRobustMCP/\`
+          - **Windows**: \`%APPDATA%/FreeCAD/Mod/FreecadRobustMCP/\`
+
+          ## Usage
+
+          1. Switch to the **MCP Bridge** workbench
+          2. Click **Start MCP Bridge** in the toolbar
+          3. Connect your MCP client (Claude Code, etc.)
+
+          ## Documentation
+
+          Full documentation: https://github.com/spkane/freecad-robust-mcp-and-more
+
+          ## License
+
+          MIT License - see LICENSE file
+          EOF
+
+          # Create tar.gz archive
+          cd staging
+          tar -czvf "freecad-mcp-workbench-${VERSION}.tar.gz" "freecad-mcp-workbench-${VERSION}"
+
+          # Create zip archive
+          zip -r "freecad-mcp-workbench-${VERSION}.zip" "freecad-mcp-workbench-${VERSION}"
+
+          mv "freecad-mcp-workbench-${VERSION}.tar.gz" ../
+          mv "freecad-mcp-workbench-${VERSION}.zip" ../
+          cd ..
+
+          echo "Created archives:"
+          ls -la "freecad-mcp-workbench-${VERSION}."*
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          HEADER="MCP Bridge Workbench v${VERSION}"
+
+          # Extract section between this version header and the next "---" or "### " header
+          CHANGELOG_CONTENT=$(awk -v header="$HEADER" '
+              $0 ~ "### " header { found=1; next }
+              found && /^---$/ { exit }
+              found && /^### / { exit }
+              found { print }
+          ' CHANGELOG.md)
+
+          # Build release body with changelog content if available
+          cat > release_body.md << 'STATIC_EOF'
+          ## FreeCAD MCP Bridge Workbench v${{ steps.version.outputs.version }}
+
+          This release contains the MCP Bridge workbench for FreeCAD.
+
+          ### Installation
+
+          **Recommended:** Install via FreeCAD's Addon Manager (search for "MCP Bridge").
+
+          **Manual:** Download and extract to your FreeCAD Mod directory.
+
+          ### What's Included
+
+          - MCP Bridge workbench for GUI and headless FreeCAD
+          - XML-RPC and JSON-RPC server support
+          - Toolbar commands for bridge control
+
+          See the [full documentation](https://github.com/spkane/freecad-robust-mcp-and-more) for usage instructions.
+          STATIC_EOF
+
+          if [ -n "$CHANGELOG_CONTENT" ]; then
+              {
+                  echo ""
+                  echo "### Changelog"
+                  echo ""
+                  echo "$CHANGELOG_CONTENT"
+              } >> release_body.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "MCP Bridge Workbench v${{ steps.version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          generate_release_notes: true
+          body_path: release_body.md
+          files: |
+            freecad-mcp-workbench-${{ steps.version.outputs.version }}.tar.gz
+            freecad-mcp-workbench-${{ steps.version.outputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate summary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          {
+            echo "## MCP Bridge Workbench Release"
+            echo ""
+            echo "**Version:** ${VERSION}"
+            echo ""
+            echo "### Downloads"
+            echo ""
+            echo "- \`freecad-mcp-workbench-${VERSION}.tar.gz\`"
+            echo "- \`freecad-mcp-workbench-${VERSION}.zip\`"
+            echo ""
+            echo "### Installation"
+            echo ""
+            echo "Install via FreeCAD Addon Manager or extract to your Mod directory."
+          } >> "$GITHUB_STEP_SUMMARY"

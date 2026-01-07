@@ -4,6 +4,9 @@
 # Note: Tools installed via mise (gitleaks, markdownlint-cli2, etc.) use `mise exec`.
 # Python tools use `uv run`. This ensures commands work even without mise shell activation.
 
+# Project root directory (justfile_directory() returns the main justfile's directory)
+project_root := justfile_directory()
+
 # Run all pre-commit checks
 check: _check-safety-auth
     uv run pre-commit run --all-files
@@ -31,56 +34,56 @@ _check-safety-auth:
 
 # Format code with ruff
 format:
-    uv run ruff format src tests
-    uv run ruff check --fix src tests
+    uv run ruff format {{project_root}}/src {{project_root}}/tests
+    uv run ruff check --fix {{project_root}}/src {{project_root}}/tests
 
 # Run linting
 lint:
-    uv run ruff check src tests
+    uv run ruff check {{project_root}}/src {{project_root}}/tests
 
 # Run type checking
 typecheck:
-    uv run mypy src
+    cd {{project_root}} && uv run mypy src
 
 # Run security scanning (code vulnerabilities)
 security:
-    uv run bandit -c pyproject.toml -r src
+    uv run bandit -c {{project_root}}/pyproject.toml -r {{project_root}}/src
     uv run safety scan --detailed-output
 
 # Run spell checking
 spellcheck:
-    uv run codespell src tests docs
+    uv run codespell {{project_root}}/src {{project_root}}/tests {{project_root}}/docs
 
 # =============================================================================
-# Secrets Scanning
+# Secrets Scanning (quality::scan-* commands)
 # =============================================================================
 
 # Run all secrets scanners
-secrets: secrets-gitleaks secrets-detect secrets-trufflehog  # pragma: allowlist secret
+scan: scan-gitleaks scan-detect scan-trufflehog  # pragma: allowlist secret
     @echo "All secrets scans complete!"
 
 # Run gitleaks secrets scanner (installed via mise)
-secrets-gitleaks:
-    mise exec -- gitleaks detect --config .gitleaks.toml --verbose
+scan-gitleaks:
+    mise exec -- gitleaks detect --source {{project_root}} --config {{project_root}}/.gitleaks.toml --verbose
 
 # Run gitleaks on git history
-secrets-gitleaks-history:
-    mise exec -- gitleaks detect --config .gitleaks.toml --verbose --log-opts="--all"
+scan-gitleaks-history:
+    mise exec -- gitleaks detect --source {{project_root}} --config {{project_root}}/.gitleaks.toml --verbose --log-opts="--all"
 
 # Run detect-secrets scanner (installed via uv)
-secrets-detect:
-    uv run detect-secrets scan --baseline .secrets.baseline
+scan-detect:
+    uv run detect-secrets scan --baseline {{project_root}}/.secrets.baseline
 
 # Audit detect-secrets baseline (interactive)
-secrets-audit:
-    uv run detect-secrets audit .secrets.baseline
+scan-audit:
+    uv run detect-secrets audit {{project_root}}/.secrets.baseline
 
 # Update detect-secrets baseline with new findings
-secrets-baseline-update:
-    uv run detect-secrets scan --baseline .secrets.baseline --update
+scan-baseline-update:
+    uv run detect-secrets scan --baseline {{project_root}}/.secrets.baseline --update
 
 # Run trufflehog for verified secrets (via pre-commit - not installed standalone)
-secrets-trufflehog:
+scan-trufflehog:
     uv run pre-commit run trufflehog --all-files
 
 # =============================================================================
@@ -89,8 +92,8 @@ secrets-trufflehog:
 
 # Lint all markdown files (markdownlint-cli2 installed via mise)
 markdown-lint:
-    mise exec -- markdownlint-cli2 "**/*.md"
+    cd {{project_root}} && mise exec -- markdownlint-cli2 "**/*.md" "#.venv" "#.pytest_cache" "#node_modules" "#site" "#htmlcov"
 
 # Lint and fix markdown files
 markdown-fix:
-    mise exec -- markdownlint-cli2 --fix "**/*.md"
+    cd {{project_root}} && mise exec -- markdownlint-cli2 --fix "**/*.md" "#.venv" "#.pytest_cache" "#node_modules" "#site" "#htmlcov"

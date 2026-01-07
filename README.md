@@ -6,6 +6,7 @@
 [![Pre-commit](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/pre-commit.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/pre-commit.yaml)
 [![CodeQL](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/codeql.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/codeql.yaml)
 [![PyPI Version](https://img.shields.io/pypi/v/freecad-robust-mcp)](https://pypi.org/project/freecad-robust-mcp/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/freecad-robust-mcp)](https://pypi.org/project/freecad-robust-mcp/)
 [![Docker Image Version](https://img.shields.io/docker/v/spkane/freecad-robust-mcp?sort=semver&label=docker)](https://hub.docker.com/r/spkane/freecad-robust-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -268,10 +269,10 @@ Before your AI assistant can connect, you need to start the MCP bridge inside Fr
 
 ```bash
 # Start FreeCAD with MCP bridge auto-started
-just run-gui
+just freecad::run-gui
 
 # Or for headless/automation mode:
-just run-headless
+just freecad::run-headless
 ```
 
 After starting the bridge, start/restart your MCP client (Claude Code, etc.) - it will connect automatically
@@ -291,7 +292,7 @@ To uninstall the MCP Bridge workbench:
 If you previously used older versions of this project, you may have legacy components installed. Run this command to check what's installed and get cleanup instructions:
 
 ```bash
-just freecad::mcp-status
+just install::status
 ```
 
 ##### Manual Cleanup (if needed)
@@ -332,7 +333,7 @@ Run FreeCAD in console mode without GUI. Useful for automation.
 
 ```bash
 # If installed from source:
-just run-headless
+just freecad::run-headless
 ```
 
 **Note:** Screenshot and view features are not available in headless mode.
@@ -572,7 +573,7 @@ Export selected FreeCAD objects to multiple file formats simultaneously. Support
 
 ```bash
 # If you have the source:
-just freecad::install-export-macro
+just install::macro-export
 
 # Or manually copy MultiExport.FCMacro from macros/Multi_Export/
 # to your FreeCAD macro directory:
@@ -687,35 +688,45 @@ mise where uv | sed 's|/installs/.*|/shims|'
 
 ### Development Workflow
 
-Commands are organized into modules. Use `just --list` to see all shortcuts, or `just --list <module>` to see module-specific commands.
+Commands are organized into modules. Use `just` to see top-level commands, or `just list-<module>` to see module-specific commands.
 
 ```bash
-# Show all available commands
-just --list
+# Show top-level commands and available modules
+just
 
 # Show commands in a specific module
-just --list docker
-just --list quality
-just --list testing
-just --list freecad
+just list-mcp           # MCP server commands
+just list-freecad       # FreeCAD plugin/macro commands
+just list-install       # Installation commands
+just list-quality       # Code quality commands
+just list-testing       # Test commands
+just list-docker        # Docker commands
+just list-documentation # Documentation commands
+just list-dev           # Development utilities
+
+# List ALL commands from all modules
+just list-all
 
 # Install/update dependencies
-just install
+just install::mcp-server
 
 # Run all checks (linting, type checking, tests)
 just all
 
-# Individual checks (shortcuts to module commands)
-just lint        # Run ruff linter (quality::lint)
-just typecheck   # Run mypy type checker (quality::typecheck)
-just test        # Run unit tests (testing::unit)
-just check       # Run all pre-commit hooks (quality::check)
+# Quality commands
+just quality::lint       # Run ruff linter
+just quality::typecheck  # Run mypy type checker
+just quality::format     # Format code
+just quality::check      # Run all pre-commit hooks
 
-# Format code
-just format
+# Testing commands
+just testing::unit       # Run unit tests
+just testing::cov        # Run tests with coverage
+just testing::integration # Run integration tests
 
-# Run with debug logging
-just run-debug
+# Run the MCP server (or with debug logging)
+just mcp::run
+just mcp::run-debug
 
 # Docker commands
 just docker::build        # Build image for local architecture
@@ -729,29 +740,29 @@ just docker::run          # Run container
 
 ```bash
 # Start FreeCAD with auto-started bridge
-just run-gui
+just freecad::run-gui
 ```
 
 #### Headless Mode (for automation/CI)
 
 ```bash
-just run-headless
+just freecad::run-headless
 ```
 
 ### Running Tests
 
 ```bash
 # Unit tests only (no FreeCAD required)
-just test
+just testing::unit
 
 # Unit tests with coverage
-just test-cov
+just testing::cov
 
 # Integration tests (requires running FreeCAD bridge)
-just test-integration
+just testing::integration
 
-# All tests with automatic FreeCAD startup
-just integration
+# Integration tests with automatic FreeCAD startup
+just testing::integration-auto
 ```
 
 ### Code Quality
@@ -766,11 +777,11 @@ The project uses strict code quality checks via pre-commit:
 
 ```bash
 # Run all pre-commit hooks
-just check
+just quality::check
 
 # Run security/secrets scans
-just security
-just secrets
+just quality::security
+just quality::secrets
 ```
 
 ---
@@ -784,13 +795,13 @@ just secrets
 **Installation for development:**
 
 ```bash
-just install-cut-macro
+just install::macro-cut
 ```
 
 **Uninstall:**
 
 ```bash
-just uninstall-cut-macro
+just install::uninstall-macro-cut
 ```
 
 See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md) for detailed documentation on the macro's internals.
@@ -802,13 +813,13 @@ See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Obj
 **Installation for development:**
 
 ```bash
-just freecad::install-export-macro
+just install::macro-export
 ```
 
 **Uninstall:**
 
 ```bash
-just freecad::uninstall-export-macro
+just install::uninstall-macro-export
 ```
 
 See [macros/Multi_Export/README-MultiExport.md](macros/Multi_Export/README-MultiExport.md) for detailed documentation on the macro's internals.
@@ -817,7 +828,7 @@ See [macros/Multi_Export/README-MultiExport.md](macros/Multi_Export/README-Multi
 
 ## Architecture
 
-See [ARCHITECTURE-MCP.md](ARCHITECTURE-MCP.md) for detailed design documentation covering:
+See the [detailed architecture document](docs/development/architecture-detailed.md) for design documentation covering:
 
 - Module structure
 - Bridge communication protocols

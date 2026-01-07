@@ -9,4 +9,5 @@ It is bundled with the workbench addon for self-contained installation.
 
 from .server import FreecadMCPPlugin
 
-__all__ = ["FreecadMCPPlugin"]
+__version__ = "0.0.0"  # Updated by release workflow
+__all__ = ["FreecadMCPPlugin", "__version__"]

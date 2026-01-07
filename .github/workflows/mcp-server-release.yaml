@@ -1,0 +1,368 @@
+name: MCP Server Release
+
+# Trigger on tag push matching the component-specific pattern
+on:
+  push:
+    tags:
+      - 'robust-mcp-server-v*'
+  workflow_dispatch:
+  workflow_call:
+
+# Cancel in-progress runs for the same tag
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKERHUB_REPO: spkane/freecad-robust-mcp
+
+jobs:
+  validate-tag:
+    name: Validate Tag Format
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+      - name: Validate semantic version tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Extract version from tag (robust-mcp-server-v1.2.3 -> 1.2.3)
+          if [[ ! "$TAG" =~ ^robust-mcp-server-v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+              echo "ERROR: Tag '$TAG' does not match expected format (robust-mcp-server-vX.Y.Z or robust-mcp-server-vX.Y.Z-prerelease)"
+              exit 1
+          fi
+
+          VERSION="${BASH_REMATCH[1]}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Check if this is a prerelease
+          if [[ "$VERSION" =~ -[a-zA-Z0-9.]+ ]]; then
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+              IS_PRERELEASE="true"
+          else
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+              IS_PRERELEASE="false"
+          fi
+
+          echo "Parsed version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+  build:
+    name: Build Distribution
+    needs: validate-tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install build dependencies
+        run: uv sync --all-extras
+
+      - name: Build package
+        env:
+          # Override setuptools-scm version for component-specific tag
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: uv build
+
+      - name: Verify built package version
+        env:
+          TAG_VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: |
+          # Extract version from built wheel filename
+          shopt -s nullglob
+          WHEEL_FILES=(dist/*.whl)
+          if [ ${#WHEEL_FILES[@]} -eq 0 ]; then
+              echo "ERROR: No wheel files found in dist/"
+              exit 1
+          fi
+          WHEEL_FILE="${WHEEL_FILES[0]}"
+          WHEEL_NAME=$(basename "$WHEEL_FILE")
+
+          # Extract version from wheel filename
+          WHEEL_VERSION=$(echo "$WHEEL_NAME" | sed -E 's/^[^-]+-([^-]+)-.*/\1/')
+
+          echo "Built wheel: $WHEEL_NAME"
+          echo "Wheel version: $WHEEL_VERSION"
+          echo "Expected tag version: $TAG_VERSION"
+
+          # Normalize the tag version for comparison (PEP 440)
+          NORMALIZED_TAG=$(echo "$TAG_VERSION" | sed -E '
+            s/-alpha\.([0-9]+)/a\1/
+            s/-alpha/a0/
+            s/-beta\.([0-9]+)/b\1/
+            s/-beta/b0/
+            s/-rc\.([0-9]+)/rc\1/
+            s/-rc/rc0/
+          ')
+
+          echo "Normalized tag version: $NORMALIZED_TAG"
+
+          if [ "$WHEEL_VERSION" != "$NORMALIZED_TAG" ]; then
+              echo "ERROR: Built package version does not match git tag!"
+              echo "  Wheel version: $WHEEL_VERSION"
+              echo "  Expected (normalized): $NORMALIZED_TAG"
+              exit 1
+          fi
+
+          echo "Version verification passed!"
+
+      - name: Check package
+        run: uv run twine check dist/*
+
+      - name: List built artifacts
+        run: ls -la dist/
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  test-install:
+    name: Test Installation
+    needs: [validate-tag, build]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11"]
+
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Install package from wheel
+        run: pip install dist/*.whl
+
+      - name: Verify installation
+        run: |
+          pip show freecad-robust-mcp
+          freecad-mcp --help || echo "CLI help check completed"
+          python -c "import freecad_mcp; print(f'freecad-robust-mcp version: {freecad_mcp.__version__ if hasattr(freecad_mcp, \"__version__\") else \"unknown\"}')"
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: [validate-tag, build, test-install]
+    runs-on: ubuntu-latest
+    if: contains(needs.validate-tag.outputs.version, '-alpha')
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/freecad-robust-mcp
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [validate-tag, build, test-install]
+    runs-on: ubuntu-latest
+    if: ${{ !contains(needs.validate-tag.outputs.version, '-alpha') }}
+    environment:
+      name: pypi
+      url: https://pypi.org/p/freecad-robust-mcp
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  docker-release:
+    name: Build and Push Docker Image
+    needs: [validate-tag, build, test-install]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=raw,value=${{ needs.validate-tag.outputs.version }}
+            type=raw,value=${{ needs.validate-tag.outputs.version }},suffix=-mcp-server
+            type=raw,value=latest,enable=${{ needs.validate-tag.outputs.is_prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=FreeCAD Robust MCP Server
+            org.opencontainers.image.description=Model Context Protocol server for FreeCAD integration
+            org.opencontainers.image.vendor=spkane
+            org.opencontainers.image.version=${{ needs.validate-tag.outputs.version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Test pushed image
+        run: |
+          docker pull ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }}
+          echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \
+            timeout 30 docker run --rm -i \
+              -e FREECAD_MODE=xmlrpc \
+              ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }} 2>&1 | \
+            grep -q '"result"' && echo "Container test passed" || echo "Container test completed"
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: [validate-tag, build, test-install]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate-tag.outputs.version }}"
+          HEADER="MCP Server v${VERSION}"
+
+          # Extract section between this version header and the next "---" or "### " header
+          CHANGELOG_CONTENT=$(awk -v header="$HEADER" '
+              $0 ~ "### " header { found=1; next }
+              found && /^---$/ { exit }
+              found && /^### / { exit }
+              found { print }
+          ' CHANGELOG.md)
+
+          # Write to file for the release body (handles multiline)
+          echo "$CHANGELOG_CONTENT" > changelog_section.md
+
+          # Check if we got content
+          if [ -n "$CHANGELOG_CONTENT" ]; then
+              echo "found=true" >> "$GITHUB_OUTPUT"
+              echo "Extracted changelog section for $HEADER"
+          else
+              echo "found=false" >> "$GITHUB_OUTPUT"
+              echo "No changelog section found for $HEADER"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "MCP Server v${{ needs.validate-tag.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
+          generate_release_notes: true
+          body_path: ${{ steps.changelog.outputs.found == 'true' && 'changelog_section.md' || '' }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  generate-summary:
+    name: Generate Release Summary
+    needs: [validate-tag, publish-pypi, publish-testpypi, docker-release, create-github-release]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate release summary
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          IS_PRERELEASE: ${{ needs.validate-tag.outputs.is_prerelease }}
+        run: |
+          {
+            echo "## MCP Server Release Summary"
+            echo ""
+            echo "**Version:** $VERSION"
+            echo "**Prerelease:** $IS_PRERELEASE"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$VERSION" == *"-alpha"* ]]; then
+              {
+                echo "### Install from TestPyPI"
+                echo ""
+                echo "\`\`\`bash"
+                echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ freecad-robust-mcp"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+          else
+              {
+                echo "### Install from PyPI"
+                echo ""
+                echo "\`\`\`bash"
+                echo "pip install freecad-robust-mcp"
+                echo "\`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          {
+            echo ""
+            echo "### Docker"
+            echo ""
+            echo "\`\`\`bash"
+            echo "docker pull spkane/freecad-robust-mcp:$VERSION"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

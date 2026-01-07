@@ -1,0 +1,19 @@
+# Safety CLI 3.x Policy File
+# https://docs.safetycli.com/safety-docs/administration/safety-policy-files
+version: "3.0"
+
+scanning-settings:
+  # Maximum directory depth to scan
+  max-depth: 6
+
+  # Exclude virtual environments and other non-project directories
+  exclude:
+    - ".venv"
+    - "venv"
+    - ".git"
+    - "node_modules"
+    - "__pycache__"
+    - "*.egg-info"
+    - "dist"
+    - "build"
+    - "site"  # MkDocs build output

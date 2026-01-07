@@ -1,32 +1,39 @@
 # Testing commands
 # Usage: just testing::unit, just testing::integration, etc.
 
+# Project root directory (justfile_directory() returns the main justfile's directory)
+project_root := justfile_directory()
+
 # Run unit tests only (excludes integration tests)
 unit:
-    uv run pytest --ignore=tests/integration
+    uv run pytest {{project_root}}/tests/unit
 
 # Run tests with coverage (excludes integration tests)
 cov:
-    uv run pytest --ignore=tests/integration --cov=src/freecad_mcp --cov-report=term-missing --cov-report=html
+    cd {{project_root}} && uv run pytest tests/unit --cov=freecad_mcp --cov-report=term-missing --cov-report=html:{{project_root}}/htmlcov
 
 # Run tests without slow markers (excludes integration tests)
 fast:
-    uv run pytest --ignore=tests/integration -m "not slow"
+    uv run pytest {{project_root}}/tests/unit -m "not slow"
 
 # Run only integration tests (requires running FreeCAD MCP bridge)
 integration:
-    uv run pytest tests/integration -v
+    uv run pytest {{project_root}}/tests/integration -v
 
 # Run tests with verbose output (excludes integration tests)
 verbose:
-    uv run pytest --ignore=tests/integration -v --tb=long
+    uv run pytest {{project_root}}/tests/unit -v --tb=long
 
 # Run all tests including integration (requires running FreeCAD MCP bridge)
 all:
-    uv run pytest
+    uv run pytest {{project_root}}/tests
+
+# Run tests in watch mode (re-runs on file changes)
+watch:
+    uv run pytest-watch {{project_root}}/tests/unit
 
 # Run integration tests with automatic FreeCAD headless startup
-integration-auto:
+integration-freecad:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Starting FreeCAD headless server for integration tests..."
@@ -59,7 +66,7 @@ integration-auto:
 
     # Run integration tests
     TEST_EXIT_CODE=0
-    uv run pytest tests/integration -v || TEST_EXIT_CODE=$?
+    uv run pytest "{{project_root}}/tests/integration" -v || TEST_EXIT_CODE=$?
 
     # Stop FreeCAD
     echo ""

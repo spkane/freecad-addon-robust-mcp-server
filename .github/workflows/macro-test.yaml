@@ -19,6 +19,8 @@ on:
       - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
+  workflow_dispatch:
+  workflow_call:
 
 # Cancel in-progress runs for the same branch
 concurrency:

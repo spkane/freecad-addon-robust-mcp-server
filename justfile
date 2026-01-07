@@ -1,25 +1,34 @@
 # FreeCAD MCP Server - Development Workflow Commands
 # https://just.systems/
 #
-# Commands are organized into modules:
-#   just docker::build        - Docker commands
-#   just quality::check       - Code quality commands
-#   just testing::unit        - Testing commands
-#   just freecad::run-gui     - FreeCAD commands
-#   just documentation::build - Documentation commands
-#   just coderabbit::review   - AI code review commands
+# Commands are organized into modules. Run `just` to see top-level commands,
+# or `just list-<module>` to see commands in a specific module:
+#   just list-mcp           - MCP server commands
+#   just list-freecad       - FreeCAD plugin/macro commands
+#   just list-install       - Installation commands
+#   just list-quality       - Code quality commands
+#   just list-testing       - Test commands
+#   just list-docker        - Docker build/run commands
+#   just list-documentation - Documentation commands
+#   just list-dev           - Development utilities
+#   just list-release       - Release and tagging commands
+#   just list-coderabbit    - AI code review commands
 #
-# Or use the shortcut commands defined below.
+# Or use `just --list --list-submodules` to see everything at once.
 
 # Import modules
-mod docker 'just/docker.just'
-mod quality 'just/quality.just'
-mod testing 'just/testing.just'
-mod freecad 'just/freecad.just'
-mod documentation 'just/documentation.just'
 mod coderabbit 'just/coderabbit.just'
+mod dev 'just/dev.just'
+mod docker 'just/docker.just'
+mod documentation 'just/documentation.just'
+mod freecad 'just/freecad.just'
+mod install 'just/install.just'
+mod mcp 'just/mcp.just'
+mod quality 'just/quality.just'
+mod release 'just/release.just'
+mod testing 'just/testing.just'
 
-# Default recipe - show available commands
+# Default recipe - show top-level commands and available modules
 default:
     @just --list
 
@@ -27,156 +36,70 @@ default:
 # Setup & Installation
 # =============================================================================
 
-# Install all dependencies
-install:
-    uv sync --all-extras
-
-# Install pre-commit hooks
-setup-hooks:
-    uv run pre-commit install
-    uv run pre-commit install --hook-type commit-msg
-
-# Full development environment setup
-setup: install setup-hooks
+# Full development environment setup (installs deps + pre-commit hooks)
+setup: (dev::install-deps) (dev::install-pre-commit)
     @echo "Development environment ready!"
-
-# Update all dependencies to latest versions
-update-deps:
-    uv lock --upgrade
-    uv sync --all-extras
-    uv run pre-commit autoupdate
-
-# =============================================================================
-# Shortcut Commands (aliases to module commands)
-# =============================================================================
-
-# Run all pre-commit checks (shortcut for quality::check)
-check: (quality::check)
-
-# Format code with ruff (shortcut for quality::format)
-format: (quality::format)
-
-# Run linting (shortcut for quality::lint)
-lint: (quality::lint)
-
-# Run type checking (shortcut for quality::typecheck)
-typecheck: (quality::typecheck)
-
-# Run security scanning (shortcut for quality::security)
-security: (quality::security)
-
-# Run spell checking (shortcut for quality::spellcheck)
-spellcheck: (quality::spellcheck)
-
-# Run all secrets scanners (shortcut for quality::secrets)
-secrets: (quality::secrets)
-
-# Lint markdown files (shortcut for quality::markdown-lint)
-markdown-lint: (quality::markdown-lint)
-
-# Fix markdown files (shortcut for quality::markdown-fix)
-markdown-fix: (quality::markdown-fix)
-
-# Run unit tests (shortcut for testing::unit)
-test: (testing::unit)
-
-# Run tests with coverage (shortcut for testing::cov)
-test-cov: (testing::cov)
-
-# Run fast tests (shortcut for testing::fast)
-test-fast: (testing::fast)
-
-# Run integration tests (shortcut for testing::integration)
-test-integration: (testing::integration)
-
-# Run tests with verbose output (shortcut for testing::verbose)
-test-verbose: (testing::verbose)
-
-# Run all tests (shortcut for testing::all)
-test-all: (testing::all)
-
-# Build documentation (shortcut for documentation::build)
-docs: (documentation::build)
-
-# Build documentation with strict mode (shortcut for documentation::build-strict)
-docs-strict: (documentation::build-strict)
-
-# Serve documentation (shortcut for documentation::serve)
-docs-serve: (documentation::serve)
-
-# AI code review of staged changes (shortcut for coderabbit::review)
-review: (coderabbit::review)
-
-# =============================================================================
-# Running the MCP Server
-# =============================================================================
-
-# Run the MCP server (stdio mode)
-run:
-    uv run freecad-mcp
-
-# Run the MCP server with debug logging
-run-debug:
-    FREECAD_MCP_LOG_LEVEL=DEBUG uv run freecad-mcp
-
-# Run in HTTP mode for remote access
-run-http port="8000":
-    FREECAD_MCP_TRANSPORT=http FREECAD_MCP_PORT={{port}} uv run freecad-mcp
-
-# =============================================================================
-# FreeCAD Shortcuts (aliases to freecad module)
-# =============================================================================
-
-# Run FreeCAD GUI with MCP bridge (shortcut for freecad::run-gui)
-run-gui: (freecad::run-gui)
-
-# Run FreeCAD headless with MCP bridge (shortcut for freecad::run-headless)
-run-headless: (freecad::run-headless)
-
-# Install the CutObjectForMagnets macro (shortcut for freecad::install-cut-macro)
-install-cut-macro: (freecad::install-cut-macro)
-
-# Uninstall the CutObjectForMagnets macro (shortcut for freecad::uninstall-cut-macro)
-uninstall-cut-macro: (freecad::uninstall-cut-macro)
 
 # =============================================================================
 # Combined Workflows
 # =============================================================================
 
 # Run all quality checks and unit tests (use before committing)
-all: check test
+all: (quality::check) (testing::unit)
     @echo "All checks passed!"
 
-# Run integration tests with automatic FreeCAD headless startup
-integration: (testing::integration-auto)
-
 # Run all quality checks and ALL tests including integration
-all-integration: check test integration
+all-with-integration: (quality::check) (testing::unit) (testing::integration-freecad)
     @echo "All checks and integration tests passed!"
 
-# Full CI pipeline (unit tests only)
-ci: check test-cov
+# Full CI pipeline (pre-commit checks + unit tests with coverage)
+ci: (quality::check) (testing::cov)
     @echo "CI pipeline complete!"
 
-# Clean build artifacts
-clean:
-    rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov dist build
-    find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-    find . -type f -name "*.pyc" -delete 2>/dev/null || true
-
 # =============================================================================
-# Development Helpers
+# Module Listings (use these to explore available commands)
 # =============================================================================
 
-# Open Python REPL with project modules available
-repl:
-    uv run python -c "import freecad_mcp; print('FreeCAD MCP loaded')" && uv run python
+# List MCP server commands
+list-mcp:
+    @just --list mcp
 
-# Show project structure
-tree:
-    tree -I '__pycache__|*.egg-info|.git|.mypy_cache|.pytest_cache|.ruff_cache|htmlcov|dist|build' -a
+# List FreeCAD plugin and macro commands
+list-freecad:
+    @just --list freecad
 
-# Validate project configuration
-validate:
-    uv pip check
-    uv run validate-pyproject pyproject.toml
+# List installation commands
+list-install:
+    @just --list install
+
+# List code quality commands
+list-quality:
+    @just --list quality
+
+# List testing commands
+list-testing:
+    @just --list testing
+
+# List Docker build/run commands
+list-docker:
+    @just --list docker
+
+# List documentation commands
+list-documentation:
+    @just --list documentation
+
+# List development utility commands
+list-dev:
+    @just --list dev
+
+# List release and tagging commands
+list-release:
+    @just --list release
+
+# List AI code review commands
+list-coderabbit:
+    @just --list coderabbit
+
+# List ALL commands from all modules
+list-all:
+    @just --list --list-submodules

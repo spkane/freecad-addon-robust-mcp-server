@@ -8,6 +8,8 @@ on:
   schedule:
     # Run weekly on Sundays at midnight UTC
     - cron: "0 0 * * 0"
+  workflow_dispatch:
+  workflow_call:
 
 # Cancel in-progress runs for the same branch
 concurrency:

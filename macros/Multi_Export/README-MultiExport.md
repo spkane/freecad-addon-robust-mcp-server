@@ -2,7 +2,7 @@
 
 ![Macro Icon](MultiExport.svg)
 
-**Version:** 1.0.0
+**Version:** 0.5.0-beta
 **FreeCAD Version:** 0.19 or later
 **License:** MIT
 

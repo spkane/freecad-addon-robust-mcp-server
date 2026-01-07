@@ -5,8 +5,8 @@
     <description>A collection of FreeCAD macros including an MCP (Model Context Protocol) bridge for AI assistant integration, multi-format export utilities, and a tool for cutting objects with aligned magnet holes for 3D printing.</description>
     <icon>addon/FreecadRobustMCP/FreecadRobustMCP.svg</icon>
 
-    <version>0.5.0-beta</version>
-    <date>2026-01-05</date>
+    <!-- Note: Each component has its own version below. This top-level date is for reference only. -->
+    <date>2026-01-07</date>
 
     <maintainer email="spkane@gmail.com">Sean P. Kane</maintainer>
     <author email="spkane@gmail.com">Sean P. Kane</author>
@@ -37,6 +37,8 @@
 
         <workbench>
             <name>MCP Bridge</name>
+            <version>0.5.0-beta</version>
+            <date>2026-01-07</date>
             <description>MCP (Model Context Protocol) bridge workbench for AI assistant integration with FreeCAD. Works in both GUI mode (with full visual features including screenshots, colors, and camera control) and headless mode (for automation and CI/CD). Provides toolbar commands to start, stop, and monitor the MCP bridge server. Supports XML-RPC and JSON-RPC protocols. Connect Claude Code, Cursor, or other MCP-compatible AI assistants to control FreeCAD programmatically with 82+ CAD tools.</description>
             <classname>FreecadRobustMCPWorkbench</classname>
             <subdirectory>./addon/FreecadRobustMCP/</subdirectory>
@@ -46,6 +48,8 @@
 
         <macro>
             <name>Multi Export</name>
+            <version>0.5.0-beta</version>
+            <date>2026-01-07</date>
             <description>Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously with configurable mesh options.</description>
             <subdirectory>./macros/Multi_Export/</subdirectory>
             <file>MultiExport.FCMacro</file>
@@ -54,6 +58,8 @@
 
         <macro>
             <name>Cut Object for Magnets</name>
+            <version>0.5.0-beta</version>
+            <date>2026-01-07</date>
             <description>Cut an object along a plane and add aligned magnet holes with surface collision detection. Perfect for creating 3D printed parts that snap together with embedded magnets.</description>
             <subdirectory>./macros/Cut_Object_for_Magnets/</subdirectory>
             <file>CutObjectForMagnets.FCMacro</file>

@@ -19,6 +19,8 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/test.yaml"
+  workflow_dispatch:
+  workflow_call:
 
 # Cancel in-progress runs for the same branch
 concurrency:

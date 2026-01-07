@@ -120,7 +120,7 @@ def pytest_collection_modifyitems(
         return
 
     # Check bridge connection once
-    is_available, error, instance_id = _check_bridge_connection()
+    is_available, error, _instance_id = _check_bridge_connection()
 
     if not is_available:
         # Apply skip marker to all integration tests
