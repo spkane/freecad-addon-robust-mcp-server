@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-# FreeCAD MCP Server Dockerfile
+# FreeCAD Robust MCP Server Dockerfile
 # Multi-stage build with BuildKit optimizations for multi-arch support
 #
 # Uses Alpine Linux for minimal image size and reduced CVE surface.
@@ -58,8 +58,8 @@ FROM python:3.11-alpine AS runtime
 
 # Labels for container metadata (OCI Image Spec)
 # Note: version, revision, and created are set dynamically in CI/CD workflows
-LABEL org.opencontainers.image.title="FreeCAD MCP Server" \
-      org.opencontainers.image.description="MCP (Model Context Protocol) server for FreeCAD integration with AI assistants" \
+LABEL org.opencontainers.image.title="FreeCAD Robust MCP Server" \
+      org.opencontainers.image.description="Robust MCP Server for FreeCAD integration with AI assistants" \
       org.opencontainers.image.url="https://github.com/spkane/freecad-robust-mcp-and-more" \
       org.opencontainers.image.source="https://github.com/spkane/freecad-robust-mcp-and-more" \
       org.opencontainers.image.documentation="https://github.com/spkane/freecad-robust-mcp-and-more#readme" \

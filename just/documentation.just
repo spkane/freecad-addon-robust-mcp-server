@@ -14,7 +14,7 @@ build-strict:
 
 # Serve documentation locally
 serve:
-    cd {{project_root}} && uv run mkdocs serve
+    -cd {{project_root}} && uv run mkdocs serve
 
 # Build and open documentation in browser
 open:

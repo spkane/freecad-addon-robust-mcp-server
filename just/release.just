@@ -18,7 +18,7 @@
 #
 # Version Format (SemVer 2.0):
 #   - X.Y.Z           - Stable release
-#   - X.Y.Z-alpha     - Alpha (TestPyPI only for MCP server)
+#   - X.Y.Z-alpha     - Alpha (TestPyPI only for Robust MCP Server)
 #   - X.Y.Z-alpha.N   - Alpha with number
 #   - X.Y.Z-beta      - Beta
 #   - X.Y.Z-beta.N    - Beta with number
@@ -31,7 +31,7 @@ project_root := justfile_directory()
 # Version Bump Commands
 # =============================================================================
 
-# Bump the MCP Bridge workbench version in all source files
+# Bump the Robust MCP Bridge workbench version in all source files
 bump-workbench version:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -46,7 +46,7 @@ bump-workbench version:
         exit 1
     fi
 
-    echo "Bumping MCP Bridge Workbench to version: $VERSION (date: $TODAY)"
+    echo "Bumping Robust MCP Bridge Workbench to version: $VERSION (date: $TODAY)"
     echo ""
 
     # Update __version__ in the bridge module's __init__.py
@@ -191,8 +191,8 @@ bump-macro-export version: (_bump-macro "Multi_Export" "Multi Export" "MultiExpo
 # Tag Creation Commands
 # =============================================================================
 
-# Create and push a release tag for the MCP server (triggers PyPI + Docker release)
-# Note: MCP server uses setuptools-scm, so version is derived from git tag at build time
+# Create and push a release tag for the Robust MCP Server (triggers PyPI + Docker release)
+# Note: Robust MCP Server uses setuptools-scm, so version is derived from git tag at build time
 tag-mcp-server version:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -224,13 +224,13 @@ tag-mcp-server version:
         exit 1
     fi
 
-    git tag -a "$TAG" -m "Release MCP Server v{{version}}"
+    git tag -a "$TAG" -m "Release Robust MCP Server v{{version}}"
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
     echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
 
-# Create and push a release tag for the MCP Bridge workbench
+# Create and push a release tag for the Robust MCP Bridge workbench
 tag-workbench version:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -289,7 +289,7 @@ tag-workbench version:
         exit 1
     fi
 
-    git tag -a "$TAG" -m "Release MCP Bridge Workbench v{{version}}"
+    git tag -a "$TAG" -m "Release Robust MCP Bridge Workbench v{{version}}"
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
@@ -386,7 +386,7 @@ tag-macro-export version: (_tag-macro "Multi_Export" "Multi Export" "MultiExport
 # List all release tags grouped by component
 list-tags:
     #!/usr/bin/env bash
-    echo "=== MCP Server Releases ==="
+    echo "=== Robust MCP Server Releases ==="
     git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -10
     echo ""
     echo "=== MCP Workbench Releases ==="
@@ -407,8 +407,8 @@ latest-versions:
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -n1)
     MAGNETS_TAG=$(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -n1)
     EXPORT_TAG=$(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -n1)
-    echo "  MCP Server:      ${SERVER_TAG:-none}"
-    echo "  MCP Workbench:   ${WORKBENCH_TAG:-none}"
+    echo "  Robust MCP Server:      ${SERVER_TAG:-none}"
+    echo "  Robust MCP Workbench:   ${WORKBENCH_TAG:-none}"
     echo "  Macro Magnets:   ${MAGNETS_TAG:-none}"
     echo "  Macro Export:    ${EXPORT_TAG:-none}"
 
@@ -518,27 +518,27 @@ status:
         fi
     }
 
-    # MCP Server
+    # Robust MCP Server
     SERVER_CHANGES=$(count_changes "robust-mcp-server-v" "src/freecad_mcp pyproject.toml Dockerfile")
     SERVER_TAG=$(git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -1)
     if [ "$SERVER_CHANGES" -gt 0 ]; then
-        echo "MCP Server: $SERVER_CHANGES unreleased commit(s)"
+        echo "Robust MCP Server: $SERVER_CHANGES unreleased commit(s)"
         echo "  Latest: ${SERVER_TAG:-none}"
         echo "  View:   just release::changes-since mcp-server"
     else
-        echo "MCP Server: up to date (${SERVER_TAG:-no releases})"
+        echo "Robust MCP Server: up to date (${SERVER_TAG:-no releases})"
     fi
     echo ""
 
-    # Workbench
+    # Robust MCP Bridge Workbench
     WORKBENCH_CHANGES=$(count_changes "robust-mcp-workbench-v" "addon/FreecadRobustMCP")
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -1)
     if [ "$WORKBENCH_CHANGES" -gt 0 ]; then
-        echo "MCP Workbench: $WORKBENCH_CHANGES unreleased commit(s)"
+        echo "Robust MCP Bridge Workbench: $WORKBENCH_CHANGES unreleased commit(s)"
         echo "  Latest: ${WORKBENCH_TAG:-none}"
         echo "  View:   just release::changes-since workbench"
     else
-        echo "MCP Workbench: up to date (${WORKBENCH_TAG:-no releases})"
+        echo "Robust MCP Bridge Workbench: up to date (${WORKBENCH_TAG:-no releases})"
     fi
     echo ""
 
@@ -580,12 +580,12 @@ draft-notes component:
         mcp-server|server)
             PREFIX="robust-mcp-server-v"
             PATHS="src/freecad_mcp pyproject.toml Dockerfile"
-            COMPONENT_NAME="MCP Server"
+            COMPONENT_NAME="Robust MCP Server"
             ;;
         workbench)
             PREFIX="robust-mcp-workbench-v"
             PATHS="addon/FreecadRobustMCP"
-            COMPONENT_NAME="MCP Bridge Workbench"
+            COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
         macro-magnets|magnets)
             PREFIX="macro-cut-object-for-magnets-v"
@@ -659,10 +659,10 @@ extract-changelog component version:
     # Match header exactly as it appears in CHANGELOG.md
     case "{{component}}" in
         mcp-server|server)
-            HEADER="### MCP Server v{{version}}"
+            HEADER="### Robust MCP Server v{{version}}"
             ;;
         workbench)
-            HEADER="### MCP Bridge Workbench v{{version}}"
+            HEADER="### Robust MCP Bridge Workbench v{{version}}"
             ;;
         macro-magnets|magnets)
             HEADER="### Cut Object for Magnets Macro v{{version}}"

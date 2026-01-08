@@ -19,12 +19,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from tests.integration.conftest import requires_gui
+
 if TYPE_CHECKING:
     import xmlrpc.client
     from collections.abc import Generator
 
-# Mark all tests in this module as integration tests and gui tests
-pytestmark = [pytest.mark.integration, pytest.mark.gui]
+# Mark all tests in this module as integration tests, gui tests, and require GUI mode
+pytestmark = [pytest.mark.integration, pytest.mark.gui, requires_gui]
 
 # Note: xmlrpc_proxy fixture is defined in conftest.py
 

@@ -1,6 +1,6 @@
 # Bridge API Reference
 
-The bridge module provides the communication layer between the MCP server and FreeCAD.
+The bridge module provides the communication layer between the Robust MCP Server and FreeCAD.
 
 ## Base Classes
 

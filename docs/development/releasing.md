@@ -7,7 +7,7 @@ This project uses **component-specific versioning**. Each component (MCP Server,
 | Component | Tag Format | Releases To |
 | --------- | ---------- | ----------- |
 | MCP Server | `robust-mcp-server-vX.Y.Z` | PyPI, Docker Hub, GitHub Release |
-| MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive) |
+| Robust MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive) |
 | Cut Object for Magnets Macro | `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive) |
 | Multi Export Macro | `macro-multi-export-vX.Y.Z` | GitHub Release (archive) |
 
@@ -129,7 +129,7 @@ Brief description of the release.
 
 ---
 
-### MCP Bridge Workbench vX.Y.Z
+### Robust MCP Bridge Workbench vX.Y.Z
 
 ...
 ```
@@ -137,7 +137,7 @@ Brief description of the release.
 **Important:** The changelog section header format must match exactly for the GitHub Release workflow to extract it:
 
 - MCP Server: `### MCP Server vX.Y.Z`
-- Workbench: `### MCP Bridge Workbench vX.Y.Z`
+- Workbench: `### Robust MCP Bridge Workbench vX.Y.Z`
 - Magnets Macro: `### Cut Object for Magnets Macro vX.Y.Z`
 - Export Macro: `### Multi Export Macro vX.Y.Z`
 
@@ -184,9 +184,9 @@ just release::tag-mcp-server 1.0.0-beta.1
 just release::tag-mcp-server 1.0.0-rc.1
 ```
 
-### MCP Bridge Workbench Release
+### Robust MCP Bridge Workbench Release
 
-The workbench is a FreeCAD addon that provides the MCP bridge GUI.
+The workbench is a FreeCAD addon that provides the Robust MCP Bridge GUI.
 
 ```bash
 # 1. Bump version in source files

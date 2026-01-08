@@ -30,7 +30,7 @@ mod testing 'just/testing.just'
 
 # Default recipe - show top-level commands and available modules
 default:
-    @just --list
+    @just --list --unsorted
 
 # =============================================================================
 # Setup & Installation
@@ -44,41 +44,29 @@ setup: (dev::install-deps) (dev::install-pre-commit)
 # Combined Workflows
 # =============================================================================
 
-# Run all quality checks and unit tests (use before committing)
-all: (quality::check) (testing::unit)
-    @echo "All checks passed!"
+# Run all quality checks and unit/coverage tests (use before committing)
+all: (quality::check) (testing::cov)
+    @echo "All checks (minus integration) passed!"
 
 # Run all quality checks and ALL tests including integration
-all-with-integration: (quality::check) (testing::unit) (testing::integration-freecad)
+all-with-integration: (quality::check) (testing::cov) (testing::integration-freecad-auto)
     @echo "All checks and integration tests passed!"
-
-# Full CI pipeline (pre-commit checks + unit tests with coverage)
-ci: (quality::check) (testing::cov)
-    @echo "CI pipeline complete!"
 
 # =============================================================================
 # Module Listings (use these to explore available commands)
 # =============================================================================
 
-# List MCP server commands
-list-mcp:
-    @just --list mcp
+# List ALL commands from all modules
+list-all:
+    @just --list --list-submodules
 
-# List FreeCAD plugin and macro commands
-list-freecad:
-    @just --list freecad
+# List AI code review commands
+list-coderabbit:
+    @just --list coderabbit
 
-# List installation commands
-list-install:
-    @just --list install
-
-# List code quality commands
-list-quality:
-    @just --list quality
-
-# List testing commands
-list-testing:
-    @just --list testing
+# List development utility commands
+list-dev:
+    @just --list dev
 
 # List Docker build/run commands
 list-docker:
@@ -88,18 +76,26 @@ list-docker:
 list-documentation:
     @just --list documentation
 
-# List development utility commands
-list-dev:
-    @just --list dev
+# List FreeCAD plugin and macro commands
+list-freecad:
+    @just --list freecad
+
+# List installation commands
+list-install:
+    @just --list install
+
+# List MCP server commands
+list-mcp:
+    @just --list mcp
+
+# List code quality commands
+list-quality:
+    @just --list quality
 
 # List release and tagging commands
 list-release:
     @just --list release
 
-# List AI code review commands
-list-coderabbit:
-    @just --list coderabbit
-
-# List ALL commands from all modules
-list-all:
-    @just --list --list-submodules
+# List testing commands
+list-testing:
+    @just --list testing

@@ -1,4 +1,4 @@
-"""View and screenshot tools for FreeCAD MCP server.
+"""View and screenshot tools for FreeCAD Robust MCP Server.
 
 This module provides tools for controlling the 3D view and
 capturing screenshots. Based on learnings from neka-nat which
@@ -9,10 +9,10 @@ from typing import Any
 
 
 def register_view_tools(mcp, get_bridge) -> None:
-    """Register view-related tools with the MCP server.
+    """Register view-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
     """
 

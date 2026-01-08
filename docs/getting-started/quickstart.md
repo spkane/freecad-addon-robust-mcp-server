@@ -8,7 +8,7 @@ Get up and running with AI-assisted FreeCAD modeling in minutes.
 
 Before starting, ensure you have:
 
-1. FreeCAD installed with the MCP Bridge workbench
+1. FreeCAD installed with the Robust MCP Bridge workbench
 1. The MCP server installed (`pip install freecad-robust-mcp`)
 1. Your MCP client configured (see [Configuration](configuration.md))
 

@@ -1,4 +1,4 @@
-"""Export tools for FreeCAD MCP server.
+"""Export tools for FreeCAD Robust MCP Server.
 
 This module provides tools for exporting FreeCAD documents and objects
 to various file formats: STEP, STL, 3MF, OBJ, IGES, and FreeCAD native.
@@ -8,10 +8,10 @@ from typing import Any
 
 
 def register_export_tools(mcp, get_bridge) -> None:
-    """Register export-related tools with the MCP server.
+    """Register export-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
     """
 

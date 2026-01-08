@@ -1,4 +1,4 @@
-# FreeCAD MCP Server Comparison Analysis
+# FreeCAD Robust MCP Server Comparison Analysis
 
 This document analyzes existing FreeCAD MCP server implementations to identify best practices and improvements for our architecture.
 

@@ -39,7 +39,7 @@ FreeCAD's `FreeCAD.so` library links to `@rpath/libpython3.11.dylib` (FreeCAD's 
 
 1. Start FreeCAD and start the MCP bridge:
 
-   - Install the MCP Bridge workbench via Addon Manager, or
+   - Install the Robust MCP Bridge workbench via Addon Manager, or
    - Use `just freecad::run-gui` from the source repository
 
 1. The MCP server will then connect to FreeCAD over the network
@@ -197,7 +197,7 @@ just testing::unit         # Run unit tests
 just testing::cov          # Run tests with coverage
 just testing::fast         # Run tests without slow markers
 just testing::integration  # Run integration tests
-just testing::integration-freecad # Integration tests with auto FreeCAD startup
+just testing::integration-freecad-auto # Integration tests with auto FreeCAD startup
 just testing::watch        # Run tests in watch mode
 just testing::all          # Run all tests including integration
 
@@ -228,7 +228,7 @@ just coderabbit::review-fix # Review with auto-fix suggestions
 # Release commands (component-specific tagging)
 just release::status                  # Show unreleased changes across all components
 just release::tag-mcp-server 1.0.0    # Release MCP server (PyPI + Docker)
-just release::tag-workbench 1.0.0     # Release MCP Bridge workbench
+just release::tag-workbench 1.0.0     # Release Robust MCP Bridge workbench
 just release::tag-macro-magnets 1.0.0 # Release Cut Object for Magnets macro
 just release::tag-macro-export 1.0.0  # Release Multi Export macro
 just release::list-tags               # List all release tags
@@ -237,9 +237,8 @@ just release::delete-tag <tag>        # Delete a release tag (local and remote)
 
 # Combined workflows
 just setup                 # Full dev setup (install deps + hooks)
-just all                   # Run all quality checks and unit tests
-just all-with-integration  # Run all checks + integration tests
-just ci                    # Full CI pipeline (checks + coverage)
+just all                   # Run all quality checks and unit/coverage tests
+just all-with-integration  # Run all checks and integration tests
 ```
 
 #### Just Module Structure
@@ -250,7 +249,7 @@ just ci                    # Full CI pipeline (checks + coverage)
 | `freecad`       | FreeCAD running commands              | `run-gui`, `run-headless`, `run-gui-custom`         |
 | `install`       | User installation commands            | `mcp-server`, `mcp-bridge-workbench`, `macro-all`   |
 | `quality`       | Code quality and linting              | `check`, `lint`, `format`, `scan`                   |
-| `testing`       | Test execution                        | `unit`, `cov`, `integration-freecad`, `watch`       |
+| `testing`       | Test execution                        | `unit`, `cov`, `integration-freecad-auto`, `watch`  |
 | `docker`        | Docker build and run commands         | `build`, `build-multi`, `run`, `clean-all`          |
 | `documentation` | Documentation building                | `build`, `serve`, `open`                            |
 | `dev`           | Development utilities                 | `install-deps`, `update-deps`, `clean`              |
@@ -625,7 +624,7 @@ project-root/
 │   │   └── test.yaml             # Unit/integration tests
 │   └── dependabot.yaml       # Dependency updates
 ├── addon/                    # FreeCAD addon (workbench)
-│   └── FreecadRobustMCP/     # MCP Bridge workbench
+│   └── FreecadRobustMCP/     # Robust MCP Bridge workbench
 │       ├── freecad_mcp_bridge/   # Bridge Python package
 │       ├── Init.py           # FreeCAD workbench init
 │       ├── InitGui.py        # FreeCAD GUI init
@@ -719,11 +718,11 @@ This section describes the purpose and key settings in each configuration file.
 
 ### Tool Management
 
-| File               | Purpose                                                                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.mise.toml`       | Pins versions for Python, uv, just, pre-commit, and security tools (trivy, gitleaks, hadolint, shellcheck, actionlint, markdownlint-cli2). Also sets environment variables for FreeCAD connection settings. |
-| `pyproject.toml`   | Python project configuration: dependencies, build system, tool configs (ruff, mypy, pytest, bandit, codespell, commitizen).                                                                                  |
-| `uv.lock`          | Exact locked versions of all Python dependencies for reproducible builds.                                                                                                                                    |
+| File             | Purpose                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.mise.toml`     | Pins versions for Python, uv, just, pre-commit, and security tools (trivy, gitleaks, hadolint, shellcheck, actionlint, markdownlint-cli2). Also sets environment variables for FreeCAD connection settings.   |
+| `pyproject.toml` | Python project configuration: dependencies, build system, tool configs (ruff, mypy, pytest, bandit, codespell, commitizen).                                                                                   |
+| `uv.lock`        | Exact locked versions of all Python dependencies for reproducible builds.                                                                                                                                     |
 
 ### Code Quality
 
@@ -743,23 +742,23 @@ This section describes the purpose and key settings in each configuration file.
 
 ### Documentation
 
-| File                  | Purpose                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| File                  | Purpose                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `mkdocs.yaml`         | MkDocs configuration: Material theme, plugins (macros, mkdocstrings, git-revision-date), navigation structure. |
-| `docs/variables.yaml` | Variables for MkDocs macros plugin (project name, ports, paths). Use `{{@ variable @}}` syntax in docs.      |
+| `docs/variables.yaml` | Variables for MkDocs macros plugin (project name, ports, paths). Use `{{@ variable @}}` syntax in docs.        |
 
 ### FreeCAD Addon
 
-| File          | Purpose                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------ |
+| File          | Purpose                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------- |
 | `package.xml` | FreeCAD addon metadata with per-component versioning. Updated automatically by release workflows. |
 
 ### GitHub
 
-| File                         | Purpose                                                                    |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `.github/dependabot.yaml`    | Dependabot configuration for automated dependency updates.                 |
-| `.github/workflows/*.yaml`   | CI/CD workflows. See [GitHub Workflows](#github-actions-workflows) for details. |
+| File                       | Purpose                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `.github/dependabot.yaml`  | Dependabot configuration for automated dependency updates.                      |
+| `.github/workflows/*.yaml` | CI/CD workflows. See [GitHub Workflows](#github-actions-workflows) for details. |
 
 ---
 
@@ -1084,6 +1083,33 @@ This project uses relaxed mypy settings because FastMCP lacks proper type stubs.
 
 - **Horizontal rules**: Must use `---` format (3 dashes)
 
+### Markdownlint (MD060) - Table Formatting
+
+- **Table column style**: All markdown tables must use the "padded/aligned" style
+- Every row in a table must have the same total character width
+- Column separators (`|`) must align vertically across all rows
+- The separator row dashes must match the column width set by the widest content
+
+**Example - Correct (aligned):**
+
+```markdown
+| File             | Purpose                                      |
+| ---------------- | -------------------------------------------- |
+| `.mise.toml`     | Tool version management configuration.       |
+| `pyproject.toml` | Python project configuration and deps.       |
+```
+
+**Example - Incorrect (misaligned):**
+
+```markdown
+| File | Purpose |
+|------|---------|
+| `.mise.toml` | Tool version management configuration. |
+| `pyproject.toml` | Python project configuration and deps. |
+```
+
+When editing tables, ensure all columns align by adding padding spaces before the closing `|`.
+
 ### Bandit Security
 
 These checks are intentionally skipped in `pyproject.toml`:
@@ -1127,13 +1153,13 @@ This project uses component-specific release workflows along with CI/CD pipeline
 
 ### Release Workflows
 
-| Workflow                          | Trigger                              | Purpose                                                  |
-| --------------------------------- | ------------------------------------ | -------------------------------------------------------- |
-| `mcp-server-release.yaml`         | Tag: `robust-mcp-server-v*`          | Builds and publishes MCP server to PyPI and Docker Hub   |
-| `mcp-workbench-release.yaml`      | Tag: `robust-mcp-workbench-v*`       | Creates GitHub Release with workbench addon archive      |
-| `macro-cut-magnets-release.yaml`  | Tag: `macro-cut-object-for-magnets-v*` | Creates GitHub Release with macro archive              |
-| `macro-multi-export-release.yaml` | Tag: `macro-multi-export-v*`         | Creates GitHub Release with macro archive                |
-| `macro-release-reusable.yaml`     | Called by macro release workflows    | Shared logic for macro releases (DRY)                    |
+| Workflow                          | Trigger                                  | Purpose                                                |
+| --------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
+| `mcp-server-release.yaml`         | Tag: `robust-mcp-server-v*`              | Builds and publishes MCP server to PyPI and Docker Hub |
+| `mcp-workbench-release.yaml`      | Tag: `robust-mcp-workbench-v*`           | Creates GitHub Release with workbench addon archive    |
+| `macro-cut-magnets-release.yaml`  | Tag: `macro-cut-object-for-magnets-v*`   | Creates GitHub Release with macro archive              |
+| `macro-multi-export-release.yaml` | Tag: `macro-multi-export-v*`             | Creates GitHub Release with macro archive              |
+| `macro-release-reusable.yaml`     | Called by macro release workflows        | Shared logic for macro releases (DRY)                  |
 
 ### Release Workflow Features
 
@@ -1165,7 +1191,7 @@ This project uses **component-specific versioning**. Each component has its own 
 | Component                   | Tag Format                            | Releases To                          |
 | --------------------------- | ------------------------------------- | ------------------------------------ |
 | MCP Server                  | `robust-mcp-server-vX.Y.Z`            | PyPI, Docker Hub, GitHub Release     |
-| MCP Bridge Workbench        | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release (archive)             |
+| Robust MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release (archive)             |
 | Cut Object for Magnets Macro| `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive)             |
 | Multi Export Macro          | `macro-multi-export-vX.Y.Z`           | GitHub Release (archive)             |
 
@@ -1194,7 +1220,7 @@ The project uses a single `CHANGELOG.md` with sections for each component. Befor
 
    ---
 
-   ### MCP Bridge Workbench vX.Y.Z
+   ### Robust MCP Bridge Workbench vX.Y.Z
    ...
    ```
 
@@ -1215,7 +1241,7 @@ just release::changes-since workbench
 # Release the MCP server (triggers PyPI, Docker, GitHub release)
 just release::tag-mcp-server 1.0.0
 
-# Release the MCP Bridge workbench
+# Release the Robust MCP Bridge workbench
 just release::tag-workbench 1.0.0
 
 # Release macros

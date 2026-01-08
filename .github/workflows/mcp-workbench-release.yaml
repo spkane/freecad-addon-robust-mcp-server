@@ -96,7 +96,7 @@ jobs:
 
           # Create README for the archive
           cat > "staging/freecad-mcp-workbench-${VERSION}/README.md" << EOF
-          # FreeCAD MCP Bridge Workbench
+          # Robust MCP Bridge Workbench
 
           **Version:** ${VERSION}
 
@@ -106,7 +106,7 @@ jobs:
 
           1. Open FreeCAD
           2. Go to **Tools → Addon Manager**
-          3. Search for "MCP Bridge"
+          3. Search for "Robust MCP Bridge"
           4. Click **Install**
           5. Restart FreeCAD
 
@@ -120,7 +120,7 @@ jobs:
 
           ## Usage
 
-          1. Switch to the **MCP Bridge** workbench
+          1. Switch to the **Robust MCP Bridge** workbench
           2. Click **Start MCP Bridge** in the toolbar
           3. Connect your MCP client (Claude Code, etc.)
 
@@ -152,7 +152,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           # Match header exactly as it appears in CHANGELOG.md (with optional space before v)
-          HEADER="### MCP Bridge Workbench v${VERSION}"
+          HEADER="### Robust MCP Bridge Workbench v${VERSION}"
 
           # Extract section between this version header and the next component header or separator
           # Only exit on: "---" separator OR "### " followed by component name (capital letter)
@@ -167,19 +167,19 @@ jobs:
 
           # Build release body with changelog content if available
           cat > release_body.md << 'STATIC_EOF'
-          ## FreeCAD MCP Bridge Workbench v${{ steps.version.outputs.version }}
+          ## Robust MCP Bridge Workbench v${{ steps.version.outputs.version }}
 
-          This release contains the MCP Bridge workbench for FreeCAD.
+          This release contains the Robust MCP Bridge workbench for FreeCAD.
 
           ### Installation
 
-          **Recommended:** Install via FreeCAD's Addon Manager (search for "MCP Bridge").
+          **Recommended:** Install via FreeCAD's Addon Manager (search for "Robust MCP Bridge").
 
           **Manual:** Download and extract to your FreeCAD Mod directory.
 
           ### What's Included
 
-          - MCP Bridge workbench for GUI and headless FreeCAD
+          - Robust MCP Bridge workbench for GUI and headless FreeCAD
           - XML-RPC and JSON-RPC server support
           - Toolbar commands for bridge control
 
@@ -198,7 +198,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "MCP Bridge Workbench v${{ steps.version.outputs.version }}"
+          name: "Robust MCP Bridge Workbench v${{ steps.version.outputs.version }}"
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
@@ -214,7 +214,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
 
           {
-            echo "## MCP Bridge Workbench Release"
+            echo "## Robust MCP Bridge Workbench Release"
             echo ""
             echo "**Version:** ${VERSION}"
             echo ""

@@ -1,6 +1,6 @@
 """Embedded bridge - runs FreeCAD in-process.
 
-This bridge imports FreeCAD directly into the MCP server process,
+This bridge imports FreeCAD directly into the Robust MCP Server process,
 providing the fastest execution but limited to headless mode.
 
 Based on learnings from competitive analysis:
@@ -33,7 +33,7 @@ from freecad_mcp.bridge.base import (
 
 
 class EmbeddedBridge(FreecadBridge):
-    """Bridge that runs FreeCAD embedded in the MCP server process.
+    """Bridge that runs FreeCAD embedded in the Robust MCP Server process.
 
     This bridge imports FreeCAD directly, providing fast execution
     but only supports headless mode (no GUI).

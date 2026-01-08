@@ -1,6 +1,6 @@
 # Installation
 
-This guide covers installing the FreeCAD MCP Server and connecting it to your AI assistant.
+This guide covers installing the FreeCAD Robust MCP Server and connecting it to your AI assistant.
 
 ---
 
@@ -16,7 +16,7 @@ This guide covers installing the FreeCAD MCP Server and connecting it to your AI
 
 ### Method 1: pip (Recommended)
 
-The simplest way to install the MCP server:
+The simplest way to install the Robust MCP Server:
 
 ```bash
 pip install freecad-robust-mcp
@@ -38,7 +38,7 @@ just setup
 
 ### Method 3: Docker
 
-Run the MCP server in a container:
+Run the Robust MCP Server in a container:
 
 ```bash
 # Pull from Docker Hub
@@ -48,21 +48,21 @@ docker pull spkane/freecad-robust-mcp
 docker build -t freecad-robust-mcp .
 ```
 
-**Note:** The Docker container runs the MCP server only—it does not include FreeCAD itself. You must run FreeCAD with the MCP Bridge workbench on your host machine (or in a separate container) and configure the MCP server to connect via `xmlrpc` or `socket` mode.
+**Note:** The Docker container runs the Robust MCP Server only—it does not include FreeCAD itself. You must run FreeCAD with the Robust MCP Bridge workbench on your host machine (or in a separate container) and configure the Robust MCP Server to connect via `xmlrpc` or `socket` mode.
 
-**Why embedded mode doesn't work with Docker:** Embedded mode requires FreeCAD and the MCP server to run in the same process, which is impossible when FreeCAD runs on the host and the MCP server runs inside a Docker container. Additionally, embedded mode fails on macOS due to ABI incompatibility with FreeCAD's bundled Python libraries (`libpython3.11.dylib`). Always use `xmlrpc` or `socket` mode for Docker deployments.
+**Why embedded mode doesn't work with Docker:** Embedded mode requires FreeCAD and the Robust MCP Server to run in the same process, which is impossible when FreeCAD runs on the host and the Robust MCP Server runs inside a Docker container. Additionally, embedded mode fails on macOS due to ABI incompatibility with FreeCAD's bundled Python libraries (`libpython3.11.dylib`). Always use `xmlrpc` or `socket` mode for Docker deployments.
 
 ---
 
-## Installing the MCP Bridge Workbench
+## Installing the Robust MCP Bridge Workbench
 
-The MCP Bridge Workbench runs inside FreeCAD and provides the connection point for the MCP server.
+The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection point for the Robust MCP Server.
 
 ### Via FreeCAD Addon Manager (Recommended)
 
 1. Open FreeCAD
 1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD MCP and More" or "MCP Bridge"
+1. Search for "FreeCAD MCP and More" or "Robust MCP Bridge"
 1. Click **Install**
 1. Restart FreeCAD
 
@@ -81,9 +81,9 @@ The MCP Bridge Workbench runs inside FreeCAD and provides the connection point f
 
 After installation, verify everything is working:
 
-### Step 1: Start FreeCAD with the MCP Bridge
+### Step 1: Start FreeCAD with the Robust MCP Bridge
 
-1. **Start FreeCAD** and select the **MCP Bridge** workbench from the workbench selector dropdown
+1. **Start FreeCAD** and select the **Robust MCP Bridge** workbench from the workbench selector dropdown
 1. **Click "Start MCP Bridge"** in the toolbar (or use the MCP Bridge menu)
 1. Check the FreeCAD console for confirmation messages:
 
@@ -93,9 +93,9 @@ MCP Bridge started!
   - Socket:  localhost:9876
 ```
 
-### Step 2: Verify the MCP Server
+### Step 2: Verify the Robust MCP Server
 
-Test that the MCP server command is available:
+Test that the Robust MCP Server command is available:
 
 ```bash
 # With pip installation

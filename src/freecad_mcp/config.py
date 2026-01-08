@@ -1,6 +1,6 @@
-"""Configuration management for FreeCAD MCP Server.
+"""Configuration management for FreeCAD Robust MCP Server.
 
-This module handles all configuration settings for the MCP server,
+This module handles all configuration settings for the Robust MCP Server,
 including FreeCAD connection settings, execution limits, and logging.
 """
 
@@ -28,7 +28,7 @@ class TransportType(str, Enum):
 
 
 class ServerConfig(BaseSettings):
-    """Configuration for the FreeCAD MCP server.
+    """Configuration for the FreeCAD Robust MCP Server.
 
     Settings are loaded from environment variables with the FREECAD_ prefix.
     For example, FREECAD_MODE sets the mode field.

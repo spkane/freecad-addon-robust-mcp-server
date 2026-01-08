@@ -1,15 +1,15 @@
-# MCP Server commands
+# Robust MCP Server commands
 # Usage: just mcp::run, just mcp::run-debug, etc.
 #
-# These commands run the MCP server that connects to FreeCAD.
+# These commands run the Robust MCP Server that connects to FreeCAD.
 # Note: FreeCAD must be running with the MCP bridge for the server to connect.
 # Start FreeCAD with: just freecad::run-gui or just freecad::run-headless
 
-# Run the MCP server (stdio mode - default for Claude Code integration)
+# Run the Robust MCP Server (stdio mode - default for Claude Code integration)
 run:
     uv run freecad-mcp
 
-# Run the MCP server with debug logging
+# Run the Robust MCP Server with debug logging
 run-debug:
     FREECAD_MCP_LOG_LEVEL=DEBUG uv run freecad-mcp
 

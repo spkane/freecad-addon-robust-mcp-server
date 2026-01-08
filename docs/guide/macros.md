@@ -215,4 +215,4 @@ The MCP server excels at helping develop FreeCAD macros. Example workflows:
 ## Next Steps
 
 - [Tools Reference](tools.md) - Complete API for all MCP tools
-- [Workbench](workbench.md) - MCP Bridge Workbench details
+- [Workbench](workbench.md) - Robust MCP Bridge Workbench details

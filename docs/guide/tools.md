@@ -1,6 +1,6 @@
 # Tools Reference
 
-The FreeCAD MCP server provides 82+ tools for CAD operations. This page provides a quick reference organized by category.
+The FreeCAD Robust MCP Server provides 82+ tools for CAD operations. This page provides a quick reference organized by category.
 
 For detailed documentation including parameters and examples, see [MCP Tools Reference](../MCP_TOOLS_REFERENCE.md).
 
@@ -24,13 +24,13 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 
 ## Execution Tools
 
-| Tool                         | Description                         |
-| ---------------------------- | ----------------------------------- |
-| `execute_python`             | Execute arbitrary Python in FreeCAD |
-| `get_freecad_version`        | Get FreeCAD version and build info  |
-| `get_connection_status`      | Check MCP bridge connection         |
-| `get_console_output`         | Get recent console output           |
-| `get_mcp_server_environment` | Get MCP server environment info     |
+| Tool                         | Description                                |
+| ---------------------------- | ------------------------------------------ |
+| `execute_python`             | Execute arbitrary Python in FreeCAD        |
+| `get_freecad_version`        | Get FreeCAD version and build info         |
+| `get_connection_status`      | Check MCP bridge connection                |
+| `get_console_output`         | Get recent console output                  |
+| `get_mcp_server_environment` | Get Robust MCP Server environment info     |
 
 ---
 

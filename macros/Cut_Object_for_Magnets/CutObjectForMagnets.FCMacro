@@ -279,7 +279,7 @@ class CutObjectForMagnetsDialog(QtGui.QDialog):
                     for idx, face in enumerate(obj.Shape.Faces):
                         # Only add planar faces
                         if isinstance(face.Surface, Part.Plane):
-                            label = f"Face: {obj.Label} (Face{idx+1})"
+                            label = f"Face: {obj.Label} (Face{idx + 1})"
                             self.model_plane_combo.addItem(label)
                             self.plane_objects[label] = ("face", obj, idx)
 
@@ -1047,7 +1047,7 @@ class SmartCutter:
 
         # Log detailed information about the source object
         App.Console.PrintMessage(
-            f"\n{'='*60}\n"
+            f"\n{'=' * 60}\n"
             f"Starting cut operation on: {self.obj.Label} ({self.obj.Name})\n"
             f"Object type: {self.obj.TypeId}\n"
             f"Shape faces: {len(self.shape.Faces)}, volume: {self.shape.Volume:.2f}mm³\n"
@@ -1065,7 +1065,7 @@ class SmartCutter:
             App.Console.PrintMessage(
                 f"Body Tip: {self.obj.Tip.Name} ({self.obj.Tip.TypeId})\n"
             )
-        App.Console.PrintMessage(f"{'='*60}\n\n")
+        App.Console.PrintMessage(f"{'=' * 60}\n\n")
 
         if progress_callback:
             progress_callback(10, "Cutting object...")
@@ -1195,7 +1195,7 @@ class SmartCutter:
                 if bottom_safe_min and top_safe_min:
                     final_pos = pos
                     App.Console.PrintWarning(
-                        f"Existing hole {idx+1} at ({pos.x:.2f}, {pos.y:.2f}) "
+                        f"Existing hole {idx + 1} at ({pos.x:.2f}, {pos.y:.2f}) "
                         f"uses minimum clearance\n"
                     )
                 else:
@@ -1203,7 +1203,7 @@ class SmartCutter:
                     # This happens when cutting through a face that had holes,
                     # and some holes are now outside the new cut face boundary
                     App.Console.PrintWarning(
-                        f"Skipping existing hole {idx+1} at ({pos.x:.2f}, {pos.y:.2f}) "
+                        f"Skipping existing hole {idx + 1} at ({pos.x:.2f}, {pos.y:.2f}) "
                         f"- would break through outer wall (outside cut face boundary)\n"
                     )
                     holes_skipped += 1
@@ -1225,7 +1225,7 @@ class SmartCutter:
                     final_pos = alternative
                     holes_repositioned += 1
                     App.Console.PrintMessage(
-                        f"Repositioned new hole {idx+1} from ({pos.x:.2f}, {pos.y:.2f}) "
+                        f"Repositioned new hole {idx + 1} from ({pos.x:.2f}, {pos.y:.2f}) "
                         f"to ({alternative.x:.2f}, {alternative.y:.2f})\n"
                     )
 
@@ -1245,7 +1245,7 @@ class SmartCutter:
             else:
                 holes_skipped += 1
                 App.Console.PrintWarning(
-                    f"Skipping hole {idx+1} at ({pos.x:.2f}, {pos.y:.2f}) "
+                    f"Skipping hole {idx + 1} at ({pos.x:.2f}, {pos.y:.2f}) "
                     f"- could not find safe position for both parts\n"
                 )
 
@@ -1575,7 +1575,7 @@ class SmartCutter:
             )
             for m in planar_matches[:5]:  # Show up to 5
                 App.Console.PrintMessage(
-                    f"  Face{m['index']+1}: dist={m['dist']:.2f}mm, "
+                    f"  Face{m['index'] + 1}: dist={m['dist']:.2f}mm, "
                     f"dot={m['dot']:.3f}, area={m['area']:.1f}mm²\n"
                 )
 
@@ -1584,7 +1584,7 @@ class SmartCutter:
             planar_matches.sort(key=lambda x: (x["dist"], -x["area"]))
             best = planar_matches[0]
             App.Console.PrintMessage(
-                f"Selected cut face (planar, exact match): Face{best['index']+1} "
+                f"Selected cut face (planar, exact match): Face{best['index'] + 1} "
                 f"(dist={best['dist']:.2f}mm, dot={best['dot']:.3f}, "
                 f"area={best['area']:.1f}mm²)\n"
             )
@@ -1599,7 +1599,7 @@ class SmartCutter:
             close_matches.sort(key=lambda x: (-x["dot"], x["dist"], -x["area"]))
             best = close_matches[0]
             App.Console.PrintMessage(
-                f"Found cut face (close to plane): Face{best['index']+1} "
+                f"Found cut face (close to plane): Face{best['index'] + 1} "
                 f"(dist={best['dist']:.2f}mm, dot={best['dot']:.3f}, "
                 f"area={best['area']:.1f}mm², type={best['surface_type']})\n"
             )
@@ -1611,7 +1611,7 @@ class SmartCutter:
         best = candidates[0]
         App.Console.PrintWarning(
             f"Warning: No face close to cut plane found. Using best normal match: "
-            f"Face{best['index']+1} (dist={best['dist']:.2f}mm, dot={best['dot']:.3f})\n"
+            f"Face{best['index'] + 1} (dist={best['dist']:.2f}mm, dot={best['dot']:.3f})\n"
         )
         return f"Face{best['index'] + 1}"
 

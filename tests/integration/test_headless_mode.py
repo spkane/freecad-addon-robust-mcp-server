@@ -1,11 +1,12 @@
-"""Integration tests for FreeCAD MCP headless mode.
+"""Integration tests for FreeCAD MCP bridge functionality.
 
-These tests verify that the MCP bridge works correctly when FreeCAD is running
-in headless mode (without GUI). They test object creation, manipulation, and
-export functionality.
+These tests verify that the MCP bridge works correctly with FreeCAD, including
+object creation, manipulation, and export functionality. Most tests work in
+both GUI and headless modes, with specific tests marked as headless-only.
 
-Note: These tests require a running FreeCAD headless server.
-      Start it with: just freecad::run-headless
+Note: These tests require a running FreeCAD server.
+      Start with: just freecad::run-gui (GUI mode)
+              or: just freecad::run-headless (headless mode)
 
 To run these tests:
     pytest tests/integration/test_headless_mode.py -v
@@ -14,10 +15,13 @@ To run these tests:
 from __future__ import annotations
 
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+
+from tests.integration.conftest import requires_headless
 
 if TYPE_CHECKING:
     import xmlrpc.client
@@ -29,6 +33,11 @@ pytestmark = pytest.mark.integration
 # Note: xmlrpc_proxy fixture is defined in conftest.py
 
 
+def _unique_suffix() -> str:
+    """Generate a unique suffix using timestamp."""
+    return time.strftime("%Y%m%d%H%M%S")
+
+
 @pytest.fixture(scope="module")
 def temp_dir() -> Generator[str, None, None]:
     """Create a temporary directory for test files."""
@@ -36,11 +45,46 @@ def temp_dir() -> Generator[str, None, None]:
         yield tmpdir
 
 
+@pytest.fixture(scope="module")
+def unique_suffix() -> str:
+    """Generate a unique suffix for document names in this test session.
+
+    Uses timestamp format YYYYMMDDHHMMSS to ensure unique names across runs.
+    """
+    return _unique_suffix()
+
+
 def execute_code(proxy: xmlrpc.client.ServerProxy, code: str) -> dict[str, Any]:
     """Execute Python code via the MCP bridge and return the result."""
     result: dict[str, Any] = proxy.execute(code)  # type: ignore[assignment]
     assert result.get("success"), f"Execution failed: {result.get('error_traceback')}"
     return result
+
+
+# Common code snippet for centering viewport in GUI mode
+CENTER_VIEWPORT_CODE = """
+# Center viewport for GUI mode recording
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    if FreeCADGui.ActiveDocument and FreeCADGui.ActiveDocument.ActiveView:
+        FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+        FreeCADGui.ActiveDocument.ActiveView.fitAll()
+"""
+
+
+def center_viewport(proxy: xmlrpc.client.ServerProxy) -> None:
+    """Center all objects in the viewport if GUI is available.
+
+    Call this after creating/modifying objects to keep them centered.
+    Safe to call in headless mode - it will simply do nothing.
+    """
+    proxy.execute(  # type: ignore[union-attr]
+        f"""
+import FreeCAD
+{CENTER_VIEWPORT_CODE}
+_result_ = True
+"""
+    )
 
 
 class TestHeadlessConnection:
@@ -52,10 +96,14 @@ class TestHeadlessConnection:
         assert result["pong"] is True
         assert "timestamp" in result
 
+    @requires_headless
     def test_headless_mode_detected(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy
     ) -> None:
-        """Test that FreeCAD is running in headless mode (GuiUp=False)."""
+        """Test that FreeCAD is running in headless mode (GuiUp=False).
+
+        This test is skipped when FreeCAD is running in GUI mode.
+        """
         result = execute_code(
             xmlrpc_proxy,
             """
@@ -70,28 +118,40 @@ _result_ = {"gui_up": FreeCAD.GuiUp}
 class TestDocumentManagement:
     """Tests for document creation and management in headless mode."""
 
-    def test_create_document(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+    def test_create_document(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
+    ) -> None:
         """Test creating a new document."""
+        doc_name = f"TestDoc_{unique_suffix}"
         result = execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
-doc = FreeCAD.newDocument("TestDoc")
-_result_ = {"name": doc.Name, "object_count": len(doc.Objects)}
+doc_name = {doc_name!r}
+# Close if it already exists (from a previous failed run)
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+_result_ = {{"name": doc.Name, "object_count": len(doc.Objects)}}
 """,
         )
-        assert result["result"]["name"] == "TestDoc"
+        assert result["result"]["name"] == doc_name
         assert result["result"]["object_count"] == 0
 
-    def test_list_documents(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+    def test_list_documents(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
+    ) -> None:
         """Test listing open documents."""
+        doc_name = f"ListTestDoc_{unique_suffix}"
         # First create a document
         execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
-if not FreeCAD.listDocuments():
-    FreeCAD.newDocument("ListTestDoc")
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+FreeCAD.newDocument(doc_name)
 _result_ = True
 """,
         )
@@ -106,43 +166,60 @@ _result_ = {"documents": docs, "count": len(docs)}
         )
         assert result["result"]["count"] >= 1
 
-    def test_close_document(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+    def test_close_document(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
+    ) -> None:
         """Test closing a document."""
+        doc_name = f"ToClose_{unique_suffix}"
         # Create a document to close
         execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
-doc = FreeCAD.newDocument("ToClose")
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
 _result_ = True
 """,
         )
 
         result = execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
-FreeCAD.closeDocument("ToClose")
-_result_ = {"closed": "ToClose" not in FreeCAD.listDocuments()}
+doc_name = {doc_name!r}
+FreeCAD.closeDocument(doc_name)
+_result_ = {{"closed": doc_name not in FreeCAD.listDocuments()}}
 """,
         )
         assert result["result"]["closed"] is True
 
 
 class TestPrimitiveCreation:
-    """Tests for creating primitive shapes in headless mode."""
+    """Tests for creating primitive shapes."""
 
     @pytest.fixture(autouse=True)
-    def setup_document(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+    def setup_document(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
+    ) -> None:
         """Create a fresh document for each test."""
+        doc_name = f"PrimitiveTestDoc_{unique_suffix}"
         execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
-# Close any existing PrimitiveTestDoc
-if "PrimitiveTestDoc" in FreeCAD.listDocuments():
-    FreeCAD.closeDocument("PrimitiveTestDoc")
-doc = FreeCAD.newDocument("PrimitiveTestDoc")
+doc_name = {doc_name!r}
+# Close any existing document with this name
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+# Set up initial view for GUI mode
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+
 _result_ = True
 """,
         )
@@ -159,7 +236,17 @@ doc = FreeCAD.ActiveDocument
 box = Part.makeBox(10, 20, 30)
 obj = doc.addObject("Part::Feature", "TestBox")
 obj.Shape = box
+
+# Center viewport immediately after adding object (before it renders off-center)
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 _result_ = {
     "name": obj.Name,
@@ -186,7 +273,17 @@ doc = FreeCAD.ActiveDocument
 cylinder = Part.makeCylinder(5, 20)
 obj = doc.addObject("Part::Feature", "TestCylinder")
 obj.Shape = cylinder
+
+# Center viewport immediately after adding object
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 expected_volume = math.pi * 5**2 * 20
 
@@ -218,7 +315,17 @@ doc = FreeCAD.ActiveDocument
 sphere = Part.makeSphere(10)
 obj = doc.addObject("Part::Feature", "TestSphere")
 obj.Shape = sphere
+
+# Center viewport immediately after adding object
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 expected_volume = (4/3) * math.pi * 10**3
 
@@ -249,7 +356,17 @@ doc = FreeCAD.ActiveDocument
 cone = Part.makeCone(10, 0, 20)  # Base radius=10, top radius=0, height=20
 obj = doc.addObject("Part::Feature", "TestCone")
 obj.Shape = cone
+
+# Center viewport immediately after adding object
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 _result_ = {
     "name": obj.Name,
@@ -275,7 +392,17 @@ doc = FreeCAD.ActiveDocument
 torus = Part.makeTorus(20, 5)  # Major radius=20, minor radius=5
 obj = doc.addObject("Part::Feature", "TestTorus")
 obj.Shape = torus
+
+# Center viewport immediately after adding object
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 _result_ = {
     "name": obj.Name,
@@ -290,18 +417,28 @@ _result_ = {
 
 
 class TestBooleanOperations:
-    """Tests for boolean operations in headless mode."""
+    """Tests for boolean operations."""
 
     @pytest.fixture(autouse=True)
-    def setup_document(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+    def setup_document(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
+    ) -> None:
         """Create a fresh document for each test."""
+        doc_name = f"BooleanTestDoc_{unique_suffix}"
         execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
-if "BooleanTestDoc" in FreeCAD.listDocuments():
-    FreeCAD.closeDocument("BooleanTestDoc")
-doc = FreeCAD.newDocument("BooleanTestDoc")
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+# Set up initial view for GUI mode
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+
 _result_ = True
 """,
         )
@@ -325,11 +462,20 @@ obj1.Shape = box1
 obj2 = doc.addObject("Part::Feature", "Box2")
 obj2.Shape = box2
 
+# Center viewport after adding initial objects
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 # Fuse them
 fused = box1.fuse(box2)
 obj_fused = doc.addObject("Part::Feature", "Fused")
 obj_fused.Shape = fused
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 # Fused volume should be less than 2000 (two boxes) due to overlap
 _result_ = {
@@ -360,7 +506,17 @@ cylinder = Part.makeCylinder(5, 30, FreeCAD.Vector(10, 10, -5))
 cut = box.cut(cylinder)
 obj_cut = doc.addObject("Part::Feature", "Cut")
 obj_cut.Shape = cut
+
+# Center viewport immediately after adding object
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
+
+# Final viewport adjustment
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 box_volume = 20 * 20 * 20
 import math
@@ -382,25 +538,36 @@ _result_ = {
 
 
 class TestObjectManipulation:
-    """Tests for object manipulation in headless mode."""
+    """Tests for object manipulation."""
 
     @pytest.fixture(autouse=True)
-    def setup_document(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+    def setup_document(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
+    ) -> None:
         """Create a fresh document with a test box."""
+        doc_name = f"ManipTestDoc_{unique_suffix}"
         execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
 import Part
 
-if "ManipTestDoc" in FreeCAD.listDocuments():
-    FreeCAD.closeDocument("ManipTestDoc")
-doc = FreeCAD.newDocument("ManipTestDoc")
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
 
 box = Part.makeBox(10, 10, 10)
 obj = doc.addObject("Part::Feature", "ManipBox")
 obj.Shape = box
 doc.recompute()
+
+# Center viewport for GUI mode recording
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 _result_ = True
 """,
         )
@@ -419,6 +586,12 @@ obj = doc.getObject("ManipBox")
 
 # Move the object
 obj.Placement.Base = FreeCAD.Vector(100, 200, 300)
+
+# Center viewport for GUI mode recording
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 _result_ = {
     "x": obj.Placement.Base.x,
@@ -447,6 +620,12 @@ obj = doc.getObject("ManipBox")
 obj.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 45)
 doc.recompute()
 
+# Center viewport for GUI mode recording
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 euler = obj.Placement.Rotation.toEuler()
 _result_ = {
     "rotation_z": euler[0],  # Yaw
@@ -460,28 +639,36 @@ _result_ = {
 
 
 class TestExportOperations:
-    """Tests for export functionality in headless mode."""
+    """Tests for export functionality."""
 
     @pytest.fixture(autouse=True)
     def setup_document(
-        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, temp_dir: str
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, temp_dir: str, unique_suffix: str
     ) -> None:
         """Create a document with objects for export tests."""
+        doc_name = f"ExportTestDoc_{unique_suffix}"
         execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
 import Part
 
-if "ExportTestDoc" in FreeCAD.listDocuments():
-    FreeCAD.closeDocument("ExportTestDoc")
-doc = FreeCAD.newDocument("ExportTestDoc")
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
 
 # Create a simple box
 box = Part.makeBox(10, 10, 10)
 obj = doc.addObject("Part::Feature", "ExportBox")
 obj.Shape = box
 doc.recompute()
+
+# Center viewport for GUI mode recording
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
 
 _result_ = True
 """,
@@ -537,8 +724,12 @@ _result_ = {{
         assert fcstd_path.exists()
 
 
+@requires_headless
 class TestGUIFeaturesInHeadless:
-    """Tests to verify GUI features fail gracefully in headless mode."""
+    """Tests to verify GUI features fail gracefully in headless mode.
+
+    These tests are skipped when FreeCAD is running in GUI mode.
+    """
 
     def test_gui_features_not_available(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy
@@ -569,22 +760,24 @@ else:
 
 
 class TestComplexWorkflow:
-    """Tests for complex multi-step workflows in headless mode."""
+    """Tests for complex multi-step workflows."""
 
     def test_parametric_modeling_workflow(
-        self, xmlrpc_proxy: xmlrpc.client.ServerProxy
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
     ) -> None:
         """Test a complete parametric modeling workflow."""
+        doc_name = f"WorkflowTestDoc_{unique_suffix}"
         result = execute_code(
             xmlrpc_proxy,
-            """
+            f"""
 import FreeCAD
 import Part
 
 # Create document
-if "WorkflowTestDoc" in FreeCAD.listDocuments():
-    FreeCAD.closeDocument("WorkflowTestDoc")
-doc = FreeCAD.newDocument("WorkflowTestDoc")
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
 
 # Step 1: Create base box
 base_box = Part.makeBox(50, 50, 10)
@@ -609,14 +802,24 @@ try:
 except Exception:
     fillet_success = False
 
+# Center viewport immediately after adding objects (before recompute)
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
 doc.recompute()
 
-_result_ = {
+# Final viewport adjustment after recompute
+if FreeCAD.GuiUp:
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = {{
     "objects": [obj.Name for obj in doc.Objects],
     "final_volume": final_obj.Shape.Volume,
     "final_valid": final_obj.Shape.isValid(),
     "fillet_success": fillet_success
-}
+}}
 """,
         )
         assert "Base" in result["result"]["objects"]

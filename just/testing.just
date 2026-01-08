@@ -29,19 +29,70 @@ all:
     uv run pytest {{project_root}}/tests
 
 # Run tests in watch mode (re-runs on file changes)
+# Note: --config specifies .pytest-watch.cfg to avoid pytest-watch parsing
+# pyproject.toml as INI (it fails on valid TOML [[array.tables]] syntax)
 watch:
-    uv run pytest-watch {{project_root}}/tests/unit
+    uv run pytest-watch --config {{project_root}}/.pytest-watch.cfg {{project_root}}/tests/unit
 
 # Run integration tests with automatic FreeCAD headless startup
-integration-freecad:
+integration-freecad-auto:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    # Track whether we started FreeCAD (so cleanup knows to stop it)
+    STARTED_FREECAD=false
+
+    # Cleanup function to ensure FreeCAD is stopped
+    # We kill by port since the subshell approach makes PID tracking unreliable
+    cleanup() {
+        if [ "$STARTED_FREECAD" = true ]; then
+            echo ""
+            echo "Stopping FreeCAD..."
+            # Kill processes on our ports - these are the ones we started
+            lsof -ti:9875 | xargs kill 2>/dev/null || true
+            lsof -ti:9876 | xargs kill 2>/dev/null || true
+            # Wait briefly for graceful shutdown
+            sleep 1
+            # Force kill if still running
+            lsof -ti:9875 | xargs kill -9 2>/dev/null || true
+            lsof -ti:9876 | xargs kill -9 2>/dev/null || true
+        fi
+    }
+
+    # Set trap to cleanup on exit, interrupt, or error
+    trap cleanup EXIT INT TERM
+
     echo "Starting FreeCAD headless server for integration tests..."
     echo ""
 
+    # Check if a bridge is already running and responsive
+    if curl -s http://localhost:9875 > /dev/null 2>&1; then
+        # Try to ping - if it responds, there's a healthy bridge already running
+        if python3 -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+            echo "ERROR: A FreeCAD MCP bridge is already running on port 9875."
+            echo ""
+            echo "Options:"
+            echo "  1. Use 'just testing::integration' to run tests against the existing bridge"
+            echo "  2. Stop the existing FreeCAD instance and try again"
+            echo "  3. If this is a zombie process, kill it with: lsof -ti:9875 | xargs kill -9"
+            exit 1
+        else
+            # Port is bound but not responding to ping - likely a zombie
+            echo "WARNING: Port 9875 is bound but not responding (zombie process?)"
+            echo "Attempting to kill zombie process..."
+            lsof -ti:9875 | xargs kill -9 2>/dev/null || true
+            lsof -ti:9876 | xargs kill -9 2>/dev/null || true
+            sleep 2
+        fi
+    fi
+
+    # Mark that we're starting FreeCAD (for cleanup)
+    STARTED_FREECAD=true
+
     # Start FreeCAD headless in background
-    just freecad::run-headless &
-    FREECAD_PID=$!
+    # Redirect stderr to suppress "terminated by signal" messages from just
+    # The '|| true' ensures the subshell doesn't fail when killed
+    just freecad::run-headless 2>/dev/null &
 
     # Give FreeCAD time to start the XML-RPC server
     echo "Waiting for FreeCAD MCP bridge to start..."
@@ -54,7 +105,6 @@ integration-freecad:
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
             echo "ERROR: FreeCAD MCP bridge did not start within timeout"
-            kill $FREECAD_PID 2>/dev/null || true
             exit 1
         fi
         echo "  Waiting... ($RETRY_COUNT/$MAX_RETRIES)"
@@ -68,9 +118,5 @@ integration-freecad:
     TEST_EXIT_CODE=0
     uv run pytest "{{project_root}}/tests/integration" -v || TEST_EXIT_CODE=$?
 
-    # Stop FreeCAD
-    echo ""
-    echo "Stopping FreeCAD..."
-    kill $FREECAD_PID 2>/dev/null || true
-
+    # Cleanup is handled by trap
     exit $TEST_EXIT_CODE

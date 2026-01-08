@@ -1,6 +1,6 @@
 # Configuration
 
-Configure the FreeCAD MCP Server using environment variables and MCP client settings.
+Configure the FreeCAD Robust MCP Server using environment variables and MCP client settings.
 
 ---
 
@@ -19,7 +19,7 @@ Configure the FreeCAD MCP Server using environment variables and MCP client sett
 
 ## Connection Modes
 
-The MCP server supports three connection modes:
+The Robust MCP Server supports three connection modes:
 
 | Mode       | Description                                 | Platform Support                  |
 | ---------- | ------------------------------------------- | --------------------------------- |
@@ -50,7 +50,7 @@ freecad-mcp
 !!! warning "Linux Only"
 Embedded mode only works on Linux. On macOS and Windows, it will crash because FreeCAD's `FreeCAD.so` library links to its bundled Python, which conflicts with external Python interpreters.
 
-Embedded mode imports FreeCAD directly into the MCP server process for fastest execution.
+Embedded mode imports FreeCAD directly into the Robust MCP Server process for fastest execution.
 
 ```bash
 export FREECAD_MODE=embedded
@@ -119,7 +119,7 @@ If installed from source with mise/uv:
 
 ## GUI vs Headless Mode
 
-FreeCAD can run in two modes, and the MCP server works with both:
+FreeCAD can run in two modes, and the Robust MCP Server works with both:
 
 | Feature                  | Headless Mode | GUI Mode |
 | ------------------------ | ------------- | -------- |

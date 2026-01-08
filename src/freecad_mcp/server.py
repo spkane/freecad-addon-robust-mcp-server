@@ -1,6 +1,6 @@
-"""FreeCAD MCP Server - Main entry point.
+"""FreeCAD Robust MCP Server - Main entry point.
 
-This module provides the main MCP server implementation for FreeCAD
+This module provides the main Robust MCP Server implementation for FreeCAD
 integration with AI assistants (Claude, GPT, and other MCP-compatible tools).
 It exposes tools, resources, and prompts for interacting with FreeCAD.
 
@@ -54,7 +54,7 @@ _bridge: Any = None
 
 
 def get_instance_id() -> str:
-    """Get the unique instance ID for this MCP server process.
+    """Get the unique instance ID for this Robust MCP Server process.
 
     Returns:
         The UUID string that uniquely identifies this server instance.
@@ -149,7 +149,7 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
             _bridge = None
 
 
-# Create the MCP server instance with lifespan
+# Create the Robust MCP Server instance with lifespan
 mcp = FastMCP(
     name="freecad-mcp",
     lifespan=lifespan,
@@ -179,7 +179,7 @@ register_all_components()
 
 
 def main() -> None:
-    """Run the FreeCAD MCP server."""
+    """Run the FreeCAD Robust MCP Server."""
     config = get_config()
 
     # Set up logging
@@ -189,7 +189,7 @@ def main() -> None:
     # This is printed before logging to ensure it's easily parseable
     print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stdout, flush=True)
 
-    logger.info("Starting FreeCAD MCP server")
+    logger.info("Starting FreeCAD Robust MCP Server")
     logger.info("Instance ID: %s", INSTANCE_ID)
     logger.info("Mode: %s", config.mode.value)
     logger.info("Transport: %s", config.transport.value)

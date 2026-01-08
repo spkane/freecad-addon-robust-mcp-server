@@ -9,8 +9,8 @@ This is a multi-component project. Each component has its own versioning and rel
 
 | Component                      | Tag Format                            | Distribution             |
 | ------------------------------ | ------------------------------------- | ------------------------ |
-| MCP Server                     | `robust-mcp-server-vX.Y.Z`            | PyPI, Docker Hub, GitHub |
-| MCP Bridge Workbench           | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release           |
+| Robust MCP Server              | `robust-mcp-server-vX.Y.Z`            | PyPI, Docker Hub, GitHub |
+| Robust MCP Bridge Workbench    | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release           |
 | Cut Object for Magnets Macro   | `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release           |
 | Multi Export Macro             | `macro-multi-export-vX.Y.Z`           | GitHub Release           |
 
@@ -18,9 +18,9 @@ This is a multi-component project. Each component has its own versioning and rel
 
 ## [Unreleased]
 
-### MCP Server
+### Robust MCP Server
 
-### MCP Bridge Workbench
+### Robust MCP Bridge Workbench
 
 ### Cut Object for Magnets Macro
 
@@ -30,7 +30,7 @@ This is a multi-component project. Each component has its own versioning and rel
 
 ## Initial Public Beta - 2026-01-05
 
-### MCP Server v0.5.0-beta
+### Robust MCP Server v0.5.0-beta
 
 Initial public beta release.
 
@@ -59,14 +59,14 @@ Initial public beta release.
 
 ---
 
-### MCP Bridge Workbench v0.5.0-beta
+### Robust MCP Bridge Workbench v0.5.0-beta
 
 Initial public beta release.
 
 #### Added
 
 - **FreeCAD Workbench**: Installable via FreeCAD Addon Manager
-- **XML-RPC server**: Runs on port 9875 for MCP server communication
+- **XML-RPC server**: Runs on port 9875 for Robust MCP Server communication
 - **Socket server**: Alternative JSON-RPC on port 9876
 - **Auto-start option**: Configure bridge to start with FreeCAD
 - **GUI mode support**: Full 3D view integration with screenshots

@@ -1,12 +1,12 @@
-# FreeCAD MCP Tools Reference
+# FreeCAD Robust MCP Server Tools Reference
 
-This document provides a comprehensive reference for all MCP tools available in the FreeCAD MCP server.
+This document provides a comprehensive reference for all MCP tools available in the FreeCAD Robust MCP Server.
 
 ---
 
 ## Overview
 
-The FreeCAD MCP server exposes tools organized into the following categories:
+The FreeCAD Robust MCP Server exposes tools organized into the following categories:
 
 | Category                        | Description                      | Tool Count |
 | ------------------------------- | -------------------------------- | ---------- |
@@ -83,7 +83,7 @@ get_console_output(lines: int = 100) -> list[str]
 
 ### get_mcp_server_environment
 
-Get environment information about the MCP server process. Useful for identifying whether the MCP server is running in a Docker container or on the host system.
+Get environment information about the Robust MCP Server process. Useful for identifying the Robust MCP Server instance via the unique `instance_id`.
 
 ```python
 get_mcp_server_environment() -> dict
@@ -91,14 +91,14 @@ get_mcp_server_environment() -> dict
 
 **Returns:** Dictionary containing:
 
+- `instance_id`: Unique UUID for this server instance (generated at startup)
 - `hostname`: Server hostname
 - `os_name`: Operating system name (e.g., "Linux", "Darwin", "Windows")
 - `os_version`: OS version/release
 - `platform`: Full platform string
 - `python_version`: Python version
-- `in_docker`: Boolean indicating if running in Docker
-- `docker_container_id`: Container ID (first 12 chars) if in Docker
-- `env_vars`: Relevant environment variables (FREECAD_MODE, etc.)
+- `freecad`: FreeCAD connection information (connected, mode, version, gui_available, is_headless)
+- `env_vars`: Selected environment variables (FREECAD_MODE, ports, host)
 
 ---
 

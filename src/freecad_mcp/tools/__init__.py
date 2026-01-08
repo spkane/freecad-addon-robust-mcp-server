@@ -33,10 +33,10 @@ __all__ = [
 
 
 def register_all_tools(mcp, get_bridge_func) -> None:
-    """Register all FreeCAD tools with the MCP server.
+    """Register all FreeCAD tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge_func: Async function to get the active bridge.
     """
     register_execution_tools(mcp, get_bridge_func)

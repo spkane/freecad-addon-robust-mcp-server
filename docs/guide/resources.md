@@ -1,6 +1,6 @@
 # MCP Resources
 
-The FreeCAD MCP server exposes several resources that allow AI assistants to query FreeCAD's state without executing code.
+The FreeCAD Robust MCP Server exposes several resources that allow AI assistants to query FreeCAD's state without executing code.
 
 ---
 
@@ -16,13 +16,13 @@ MCP Resources are read-only endpoints that provide context about FreeCAD's curre
 
 ## Available Resources
 
-The MCP server provides 12 resources for querying FreeCAD state:
+The Robust MCP Server provides 12 resources for querying FreeCAD state:
 
 ### freecad://capabilities
 
 Returns a comprehensive JSON catalog of all available tools, resources, and prompts.
 
-**Use case:** Understanding what the MCP server can do.
+**Use case:** Understanding what the Robust MCP Server can do.
 
 **Example response:**
 
@@ -316,7 +316,7 @@ AI: [Reads freecad://documents resource]
 
 ## Implementing Custom Resources
 
-If you're extending the MCP server, you can add custom resources:
+If you're extending the Robust MCP Server, you can add custom resources:
 
 ```python
 @mcp.resource("freecad://custom/{param}")

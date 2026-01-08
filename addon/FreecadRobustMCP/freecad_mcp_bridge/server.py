@@ -22,6 +22,7 @@ import contextlib
 import io
 import json
 import queue
+import signal
 import sys
 import threading
 import time
@@ -262,27 +263,31 @@ class FreecadMCPPlugin:
                 self._timer.stop()
             self._timer = None
 
-        # Stop queue processor thread (headless mode)
-        if self._queue_thread:
-            self._queue_thread.join(timeout=2.0)
-            self._queue_thread = None
+        # Stop XML-RPC server by closing its socket directly
+        # This will cause handle_request() to raise an exception and exit
+        if self._xmlrpc_server:
+            with contextlib.suppress(Exception):
+                self._xmlrpc_server.socket.close()
+            self._xmlrpc_server = None
 
-        # Stop socket server
+        # Stop socket server - close the server and stop the event loop
         if self._socket_loop and self._socket_server:
             self._socket_loop.call_soon_threadsafe(self._socket_server.close)
+            self._socket_loop.call_soon_threadsafe(self._socket_loop.stop)
 
-        # Stop XML-RPC server
-        if self._xmlrpc_server:
-            self._xmlrpc_server.shutdown()
+        # Wait briefly for threads - they're daemon threads so they'll
+        # be killed when the main thread exits anyway
+        if self._queue_thread and self._queue_thread.is_alive():
+            self._queue_thread.join(timeout=0.5)
+        self._queue_thread = None
 
-        # Wait for threads
-        if self._socket_thread:
-            self._socket_thread.join(timeout=5.0)
-            self._socket_thread = None
+        if self._socket_thread and self._socket_thread.is_alive():
+            self._socket_thread.join(timeout=0.5)
+        self._socket_thread = None
 
-        if self._xmlrpc_thread:
-            self._xmlrpc_thread.join(timeout=5.0)
-            self._xmlrpc_thread = None
+        if self._xmlrpc_thread and self._xmlrpc_thread.is_alive():
+            self._xmlrpc_thread.join(timeout=0.5)
+        self._xmlrpc_thread = None
 
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
@@ -297,12 +302,21 @@ class FreecadMCPPlugin:
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("Server running. Press Ctrl+C to stop.\n")
         try:
+            # Use signal.pause() on Unix for efficient waiting
+            # This will be interrupted by any signal (SIGINT, SIGTERM)
             while self._running:
-                time.sleep(0.5)
+                try:
+                    # signal.pause() blocks until a signal is received
+                    # It's more efficient than sleep() and responds immediately to signals
+                    signal.pause()
+                except AttributeError:
+                    # Windows doesn't have signal.pause(), use sleep instead
+                    time.sleep(0.5)
         except KeyboardInterrupt:
+            pass  # Normal exit via Ctrl+C
+        finally:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintMessage("\nShutting down...\n")
-        finally:
             self.stop()
 
     # =========================================================================
@@ -698,6 +712,9 @@ class FreecadMCPPlugin:
             allow_none=True,
             logRequests=False,
         )
+        # Set a timeout so handle_request() doesn't block forever
+        # This allows the server to check self._running periodically
+        self._xmlrpc_server.timeout = 0.5
 
         # Register methods (type: ignore needed - xmlrpc types are overly restrictive)
         self._xmlrpc_server.register_function(self._xmlrpc_execute, "execute")  # type: ignore[arg-type]
@@ -709,7 +726,11 @@ class FreecadMCPPlugin:
         self._xmlrpc_server.register_introspection_functions()
 
         while self._running:
-            self._xmlrpc_server.handle_request()
+            try:
+                self._xmlrpc_server.handle_request()
+            except OSError:
+                # Socket was closed during shutdown - this is expected
+                break
 
     def _xmlrpc_ping(self) -> dict[str, Any]:
         """XML-RPC ping handler."""

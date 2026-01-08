@@ -86,57 +86,48 @@ run-headless-custom freecad_cmd:
     # Run FreeCADCmd with the headless server script
     "{{freecad_cmd}}" "$SCRIPT_PATH"
 
-# Run FreeCAD GUI with MCP bridge (requires workbench to be installed)
+# Run FreeCAD GUI with MCP bridge (uses local source code for development)
 run-gui:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
+    # Clean up any old temp files from previous runs
+    rm -f /tmp/freecad_mcp_startup.*.py 2>/dev/null || true
+
     # Create a temporary startup script that starts the MCP bridge
-    STARTUP_SCRIPT=$(mktemp /tmp/freecad_mcp_startup.XXXXXX.py)
+    # Use mktemp without template for better portability
+    STARTUP_SCRIPT=$(mktemp)
+    mv "$STARTUP_SCRIPT" "${STARTUP_SCRIPT}.py"
+    STARTUP_SCRIPT="${STARTUP_SCRIPT}.py"
 
-    # Use the server from the installed workbench location
-    # Note: For development, use run-gui-custom which passes the addon path explicitly
-    cat > "$STARTUP_SCRIPT" << 'PYTHON_EOF'
-    # FreeCAD MCP Bridge Auto-Start Script
+    # Use the server from the local addon directory (source of truth for development)
+    ADDON_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge"
+
+    cat > "$STARTUP_SCRIPT" << EOF
+    # FreeCAD MCP Bridge Auto-Start Script (using local source)
     import sys
-    import os
-    from pathlib import Path
+    addon_path = "${ADDON_PATH}"
+    if addon_path not in sys.path:
+        sys.path.insert(0, addon_path)
 
-    # Determine installed workbench location based on platform
-    if sys.platform == "darwin":
-        addon_path = Path.home() / "Library" / "Application Support" / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
-    elif sys.platform == "win32":
-        addon_path = Path(os.environ.get("APPDATA", "")) / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
-    else:
-        addon_path = Path.home() / ".local" / "share" / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
-
-    if not addon_path.exists():
+    try:
+        from server import FreecadMCPPlugin
+        plugin = FreecadMCPPlugin(
+            host="localhost",
+            port=9876,
+            xmlrpc_port=9875,
+            enable_xmlrpc=True,
+        )
+        plugin.start()
         import FreeCAD
-        FreeCAD.Console.PrintError("MCP Bridge workbench not found.\n")
-        FreeCAD.Console.PrintError(f"Expected at: {addon_path}\n")
-        FreeCAD.Console.PrintError("Install the workbench first: just freecad::install-workbench\n")
-    else:
-        try:
-            addon_path_str = str(addon_path)
-            if addon_path_str not in sys.path:
-                sys.path.insert(0, addon_path_str)
-            from server import FreecadMCPPlugin
-            plugin = FreecadMCPPlugin(
-                host="localhost",
-                port=9876,
-                xmlrpc_port=9875,
-                enable_xmlrpc=True,
-            )
-            plugin.start()
-            import FreeCAD
-            FreeCAD.Console.PrintMessage("\nMCP Bridge started!\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\n")
-            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\n\n")
-        except Exception as e:
-            import FreeCAD
-            FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
-    PYTHON_EOF
+        FreeCAD.Console.PrintMessage("\\nMCP Bridge started (from local source)!\\n")
+        FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
+        FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
+    except Exception as e:
+        import FreeCAD
+        FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\\n")
+    EOF
 
     # Find FreeCAD GUI executable based on OS
     FREECAD_GUI=""
@@ -209,7 +200,10 @@ run-gui-custom freecad_path:
     PROJECT_DIR="{{project_root}}"
 
     # Create a temporary startup script
-    STARTUP_SCRIPT=$(mktemp /tmp/freecad_mcp_startup.XXXXXX.py)
+    # Use mktemp without template for better portability
+    STARTUP_SCRIPT=$(mktemp)
+    mv "$STARTUP_SCRIPT" "${STARTUP_SCRIPT}.py"
+    STARTUP_SCRIPT="${STARTUP_SCRIPT}.py"
 
     # Use the server from the addon directory
     ADDON_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge"

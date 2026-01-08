@@ -2,7 +2,7 @@
 
 This module defines the abstract base class and data types for all FreeCAD
 bridge implementations. Bridges provide the communication layer between
-the MCP server and FreeCAD instances.
+the Robust MCP Server and FreeCAD instances.
 
 Based on learnings from existing implementations:
 - neka-nat: Queue-based thread safety for GUI operations
@@ -227,7 +227,7 @@ class ConnectionStatus:
 class FreecadBridge(ABC):
     """Abstract base class for FreeCAD bridges.
 
-    A bridge provides communication between the MCP server and a FreeCAD
+    A bridge provides communication between the Robust MCP Server and a FreeCAD
     instance. Implementations may run FreeCAD in-process (embedded),
     communicate via XML-RPC, or use JSON-RPC over sockets.
 
