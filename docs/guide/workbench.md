@@ -129,12 +129,52 @@ When a GUI-only feature is requested in headless mode, the Robust MCP Server ret
 
 ## Configuration
 
-The workbench uses default ports that can be customized in the Robust MCP Server configuration:
+### Workbench Preferences (FreeCAD Side)
 
-| Server  | Default Port | Environment Variable  |
-| ------- | ------------ | --------------------- |
-| XML-RPC | 9875         | `FREECAD_XMLRPC_PORT` |
-| Socket  | 9876         | `FREECAD_SOCKET_PORT` |
+The workbench has its own preferences that control how the bridge runs inside FreeCAD. Access them via:
+
+- **Edit → Preferences → Robust MCP Bridge** (in FreeCAD's main Preferences dialog)
+- **Robust MCP Bridge → MCP Bridge Preferences...** (from the workbench menu)
+
+| Setting               | Description                                  | Default  |
+| --------------------- | -------------------------------------------- | -------- |
+| Auto-start bridge     | Start bridge automatically on FreeCAD launch | Disabled |
+| Show status indicator | Display status in FreeCAD's status bar       | Enabled  |
+| XML-RPC Port          | Port for XML-RPC connections                 | 9875     |
+| Socket Port           | Port for JSON-RPC socket connections         | 9876     |
+
+!!! note "Port Configuration"
+    If you change the ports in the workbench preferences while the bridge is running, it will automatically restart with the new configuration.
+
+### MCP Server Configuration (Client Side)
+
+The external Robust MCP Server (used by Claude Code, etc.) is configured separately using environment variables. **These must match the workbench ports:**
+
+| Environment Variable  | Description                                    | Default     |
+| --------------------- | ---------------------------------------------- | ----------- |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, `embedded`| `xmlrpc`    |
+| `FREECAD_XMLRPC_PORT` | XML-RPC server port                            | 9875        |
+| `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                    | 9876        |
+| `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                 | `localhost` |
+
+Example MCP client configuration with custom ports:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "freecad-mcp",
+      "env": {
+        "FREECAD_MODE": "xmlrpc",
+        "FREECAD_XMLRPC_PORT": "9877"
+      }
+    }
+  }
+}
+```
+
+!!! warning "Port Matching Required"
+    The ports configured in the MCP Server (via environment variables) **must match** the ports configured in the FreeCAD workbench preferences. If they don't match, the server won't be able to connect to FreeCAD.
 
 ---
 

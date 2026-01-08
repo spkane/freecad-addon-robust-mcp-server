@@ -82,6 +82,12 @@ mcp-server:
     echo "Installing Robust MCP Server as a uv tool..."
     echo ""
 
+    # Remove existing installation if present (clean install)
+    if uv tool list 2>/dev/null | grep -q "freecad-robust-mcp"; then
+        echo "Removing existing Robust MCP Server installation..."
+        uv tool uninstall freecad-robust-mcp 2>/dev/null || true
+    fi
+
     # Install from the local project directory
     uv tool install --force "$PROJECT_DIR"
 
@@ -307,6 +313,13 @@ macro-cut:
 
     mkdir -p "$MACRO_DIR"
 
+    # Remove existing installation if present (clean install)
+    if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then
+        echo "Removing existing CutObjectForMagnets macro..."
+        rm -f "$MACRO_DIR/CutObjectForMagnets.FCMacro"
+        rm -f "$MACRO_DIR/CutObjectForMagnets.svg"
+    fi
+
     # Copy the macro file
     cp "$MACRO_SRC" "$MACRO_DIR/"
 
@@ -357,6 +370,13 @@ macro-export:
     fi
 
     mkdir -p "$MACRO_DIR"
+
+    # Remove existing installation if present (clean install)
+    if [[ -f "$MACRO_DIR/MultiExport.FCMacro" ]]; then
+        echo "Removing existing MultiExport macro..."
+        rm -f "$MACRO_DIR/MultiExport.FCMacro"
+        rm -f "$MACRO_DIR/MultiExport.svg"
+    fi
 
     # Copy the macro file
     cp "$MACRO_SRC" "$MACRO_DIR/"

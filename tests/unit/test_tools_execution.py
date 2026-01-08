@@ -240,7 +240,8 @@ class TestExecutionTools:
         assert "hostname" in result
         assert "os_name" in result
         assert "python_version" in result
-        assert "in_docker" in result
+        assert "platform" in result
+        assert "os_version" in result
 
         # Should have freecad status
         assert "freecad" in result
