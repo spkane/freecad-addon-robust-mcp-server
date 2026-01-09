@@ -125,7 +125,7 @@ target-version = "py311"
 line-length = 88
 src = ["src", "tests", "macros"]
 extend-include = ["*.FCMacro"]
-# Exclude auto-generated files (setuptools-scm version file)
+# Exclude auto-generated files (hatch-vcs version file)
 exclude = ["src/freecad_mcp/_version.py"]
 
 [tool.ruff.lint]
@@ -290,7 +290,9 @@ source = ["src/freecad_mcp"]
 branch = true
 parallel = true
 # Exclude bridge modules from unit test coverage - they require a running
-# FreeCAD instance and are tested via integration tests instead
+# FreeCAD instance. These modules are exercised by integration tests which
+# run separately (just testing::integration). To verify bridge coverage:
+#   uv run pytest tests/integration --cov=freecad_mcp.bridge --cov-report=term-missing
 omit = [
     "src/freecad_mcp/bridge/embedded.py",
     "src/freecad_mcp/bridge/socket.py",

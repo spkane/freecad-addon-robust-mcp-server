@@ -19,7 +19,7 @@ Before starting, ensure you have:
 ### Option A: GUI Mode (Recommended for getting started)
 
 1. Open FreeCAD
-1. Switch to the **MCP Bridge** workbench
+1. Switch to the **Robust MCP Bridge** workbench
 1. Click **Start Bridge** in the toolbar
 1. You should see: "MCP Bridge started! XML-RPC: localhost:9875, Socket: localhost:9876"
 

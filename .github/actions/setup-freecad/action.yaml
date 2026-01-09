@@ -1,0 +1,73 @@
+name: Setup FreeCAD
+description: Downloads and sets up FreeCAD AppImage for CI testing
+
+outputs:
+  freecad-tag:
+    description: The FreeCAD release tag that was installed
+    value: ${{ steps.freecad-release.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get latest FreeCAD release info
+      id: freecad-release
+      shell: bash
+      run: |
+        # Get the latest stable release tag from GitHub API
+        RELEASE_INFO=$(curl -s https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
+        TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+        echo "Latest FreeCAD release: $TAG_NAME"
+        echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+        # Find the Linux AppImage asset URL
+        APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
+        APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+
+        if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+            echo "ERROR: Could not find Linux AppImage in release assets"
+            exit 1
+        fi
+
+        echo "AppImage URL: $APPIMAGE_URL"
+        echo "AppImage name: $APPIMAGE_NAME"
+        echo "url=$APPIMAGE_URL" >> "$GITHUB_OUTPUT"
+        echo "name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
+
+    - name: Cache FreeCAD AppImage
+      id: cache-freecad
+      uses: actions/cache@v5
+      with:
+        path: ~/freecad-appimage
+        key: freecad-appimage-${{ steps.freecad-release.outputs.tag }}
+
+    - name: Download FreeCAD AppImage
+      if: steps.cache-freecad.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/freecad-appimage
+        echo "Downloading FreeCAD ${{ steps.freecad-release.outputs.tag }}..."
+        curl -L -o ~/freecad-appimage/FreeCAD.AppImage "${{ steps.freecad-release.outputs.url }}"
+        chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+    - name: Setup FreeCAD AppImage
+      shell: bash
+      run: |
+        # Make AppImage executable (in case restored from cache)
+        chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+        # Extract AppImage for headless use (AppImages need FUSE which isn't available in CI)
+        cd ~/freecad-appimage
+        ./FreeCAD.AppImage --appimage-extract > /dev/null 2>&1
+
+        # Create symlinks for easy access
+        sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecadcmd /usr/local/bin/freecadcmd
+        sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecad /usr/local/bin/freecad
+
+    - name: Verify FreeCAD installation
+      shell: bash
+      run: |
+        echo "Checking FreeCAD installation..."
+        freecadcmd --version || freecad --version || echo "Version check failed"
+        which freecadcmd
+        # Show Python version bundled with FreeCAD
+        freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.version}')" || true

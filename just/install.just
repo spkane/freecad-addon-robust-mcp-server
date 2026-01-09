@@ -52,7 +52,8 @@ _freecad-dirs:
     VERSIONED_DIR=""
     if [[ -d "$FREECAD_BASE" ]]; then
         # Find directories matching v1-* pattern and get the latest one
-        LATEST_VERSION=$(ls -d "$FREECAD_BASE"/v1-* 2>/dev/null | sort -V | tail -n 1)
+        # Use sort -t- -k2 -n for POSIX compatibility (sort -V is GNU-specific)
+        LATEST_VERSION=$(ls -d "$FREECAD_BASE"/v1-* 2>/dev/null | sort -t- -k2 -n | tail -n 1)
         if [[ -n "$LATEST_VERSION" && -d "$LATEST_VERSION" ]]; then
             VERSIONED_DIR="$LATEST_VERSION"
         fi
@@ -208,7 +209,9 @@ mcp-bridge-workbench:
         ET.SubElement(standalone, 'description').text = desc_text
         ver_text = wb_version.text if wb_version is not None else '0.0.0'
         ET.SubElement(standalone, 'version').text = ver_text
-        date_text = wb_date.text if wb_date is not None else '2026-01-01'
+        # Fall back to today's date if not specified
+        from datetime import date
+        date_text = wb_date.text if wb_date is not None else date.today().isoformat()
         ET.SubElement(standalone, 'date').text = date_text
 
         if maintainer is not None:
@@ -482,8 +485,21 @@ status:
         # Get version from package.xml if available
         WB_VERSION="unknown"
         if [[ -f "$MOD_DIR/FreecadRobustMCP/package.xml" ]]; then
-            # Extract version for "Robust MCP Bridge" workbench
-            WB_VERSION=$(grep -A1 '<name>Robust MCP Bridge</name>' "$MOD_DIR/FreecadRobustMCP/package.xml" 2>/dev/null | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/' || echo "unknown")
+            # Extract the top-level version element (not the one inside content/workbench)
+            # Use a more robust extraction that handles multiline XML
+            WB_VERSION=$(python3 -c "
+import xml.etree.ElementTree as ET
+import sys
+try:
+    tree = ET.parse('$MOD_DIR/FreecadRobustMCP/package.xml')
+    root = tree.getroot()
+    ns = {'pkg': 'https://wiki.freecad.org/Package_Metadata'}
+    # Try with namespace first, then without
+    ver = root.find('pkg:version', ns) or root.find('version')
+    print(ver.text if ver is not None else 'unknown')
+except Exception:
+    print('unknown')
+" 2>/dev/null || echo "unknown")
         fi
         WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCP/InitGui.py")
         echo "✓ Robust MCP Bridge Workbench: INSTALLED"

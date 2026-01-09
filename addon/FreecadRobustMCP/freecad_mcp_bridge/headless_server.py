@@ -74,8 +74,9 @@ try:
 except ImportError:
     # Workbench commands module not available, we'll start our own
     pass
-except Exception:
-    # Other error, proceed to start
+except AttributeError as e:
+    # _mcp_plugin exists but is malformed (missing is_running, etc.)
+    FreeCAD.Console.PrintWarning(f"MCP plugin state check failed: {e}\n")
     pass
 
 if not bridge_already_running:

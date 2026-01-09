@@ -243,6 +243,10 @@ class TestExecutionTools:
         assert "platform" in result
         assert "os_version" in result
 
+        # Verify removed fields are not present (prevent regressions)
+        assert "in_docker" not in result
+        assert "docker_container_id" not in result
+
         # Should have freecad status
         assert "freecad" in result
         assert result["freecad"]["connected"] is True

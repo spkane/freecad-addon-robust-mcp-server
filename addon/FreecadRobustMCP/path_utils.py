@@ -53,8 +53,8 @@ def get_addon_path() -> str:
         if os.path.exists(mod_path):  # noqa: PTH110
             _addon_path_cache = mod_path
             return _addon_path_cache
-    except Exception:
-        pass
+    except (OSError, PermissionError) as e:
+        FreeCAD.Console.PrintWarning(f"Could not access Mod directory: {e}\n")
 
     # Method 3: Try versioned FreeCAD directory (FreeCAD 1.x)
     try:
@@ -67,8 +67,8 @@ def get_addon_path() -> str:
                 if os.path.exists(versioned_mod):  # noqa: PTH110
                     _addon_path_cache = versioned_mod
                     return _addon_path_cache
-    except Exception:
-        pass
+    except (OSError, PermissionError) as e:
+        FreeCAD.Console.PrintWarning(f"Could not scan versioned directories: {e}\n")
 
     return ""
 
@@ -80,9 +80,12 @@ def get_icon_path(icon_name: str) -> str:
         icon_name: The icon filename or relative path (e.g., "icons/mcp_start.svg")
 
     Returns:
-        The absolute path to the icon file.
+        The absolute path to the icon file, or empty string if addon path not found.
     """
-    return os.path.join(get_addon_path(), icon_name)  # noqa: PTH118
+    addon_path = get_addon_path()
+    if not addon_path:
+        return ""
+    return os.path.join(addon_path, icon_name)  # noqa: PTH118
 
 
 def get_icons_dir() -> str:

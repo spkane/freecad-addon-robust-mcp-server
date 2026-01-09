@@ -21,11 +21,11 @@ Configure the FreeCAD Robust MCP Server using environment variables and MCP clie
 
 The Robust MCP Server supports three connection modes:
 
-| Mode       | Description                                 | Platform Support                  |
-| ---------- | ------------------------------------------- | --------------------------------- |
-| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms** (recommended)   |
-| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms**                 |
-| `embedded` | Imports FreeCAD directly into process       | **Linux only** (crashes on macOS) |
+| Mode       | Description                                 | Platform Support                          |
+| ---------- | ------------------------------------------- | ----------------------------------------- |
+| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms** (recommended)           |
+| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms**                         |
+| `embedded` | Imports FreeCAD directly into process       | **Linux only** (crashes on macOS/Windows) |
 
 ### XML-RPC Mode (Recommended)
 

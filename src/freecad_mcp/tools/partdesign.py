@@ -10,7 +10,7 @@ comprehensive PartDesign coverage.
 from typing import Any
 
 
-def register_partdesign_tools(mcp, get_bridge) -> None:
+def register_partdesign_tools(mcp: Any, get_bridge: Any) -> None:
     """Register PartDesign-related tools with the Robust MCP Server.
 
     Args:

@@ -7,7 +7,7 @@ creating, opening, saving, closing, and listing documents.
 from typing import Any
 
 
-def register_document_tools(mcp, get_bridge) -> None:
+def register_document_tools(mcp: Any, get_bridge: Any) -> None:
     """Register document-related tools with the Robust MCP Server.
 
     Args:

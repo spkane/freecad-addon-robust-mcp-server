@@ -20,6 +20,10 @@ This is a multi-component project. Each component has its own versioning and rel
 
 ### Robust MCP Server
 
+#### Removed
+
+- Docker detection fields (`in_docker`, `docker_container_id`) from `get_mcp_server_environment()` tool
+
 ### Robust MCP Bridge Workbench
 
 ### Cut Object for Magnets Macro

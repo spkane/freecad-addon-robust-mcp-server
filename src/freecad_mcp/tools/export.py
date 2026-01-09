@@ -4,15 +4,16 @@ This module provides tools for exporting FreeCAD documents and objects
 to various file formats: STEP, STL, 3MF, OBJ, IGES, and FreeCAD native.
 """
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_export_tools(mcp, get_bridge) -> None:
+def register_export_tools(mcp: Any, get_bridge: Callable[..., Awaitable[Any]]) -> None:
     """Register export-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
-        get_bridge: Async function to get the active bridge.
+        mcp: The FastMCP (Robust MCP Server) instance (Any due to lack of stubs).
+        get_bridge: Async function returning the active bridge connection.
     """
 
     @mcp.tool()
@@ -39,12 +40,6 @@ def register_export_tools(mcp, get_bridge) -> None:
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Part
 
@@ -52,7 +47,15 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-objects = {objects_filter}
+# Get objects to export
+if {object_names!r} is not None:
+    objects = [doc.getObject(n) for n in {object_names!r}]
+elif FreeCAD.GuiUp:
+    # GUI mode: export visible objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility]
+else:
+    # Headless mode: export all objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]
 objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
 
 if not objects:
@@ -103,12 +106,6 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Mesh
 import Part
@@ -117,7 +114,15 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-objects = {objects_filter}
+# Get objects to export
+if {object_names!r} is not None:
+    objects = [doc.getObject(n) for n in {object_names!r}]
+elif FreeCAD.GuiUp:
+    # GUI mode: export visible objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility]
+else:
+    # Headless mode: export all objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]
 objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
 
 if not objects:
@@ -178,12 +183,6 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Mesh
 import Part
@@ -192,7 +191,15 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-objects = {objects_filter}
+# Get objects to export
+if {object_names!r} is not None:
+    objects = [doc.getObject(n) for n in {object_names!r}]
+elif FreeCAD.GuiUp:
+    # GUI mode: export visible objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility]
+else:
+    # Headless mode: export all objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]
 objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
 
 if not objects:
@@ -232,6 +239,7 @@ _result_ = {{
         file_path: str,
         object_names: list[str] | None = None,
         doc_name: str | None = None,
+        mesh_tolerance: float = 0.1,
     ) -> dict[str, Any]:
         """Export objects to OBJ format.
 
@@ -242,6 +250,7 @@ _result_ = {{
             file_path: Path for the output .obj file.
             object_names: List of object names to export. Exports all visible if None.
             doc_name: Document to export from. Uses active document if None.
+            mesh_tolerance: Mesh approximation tolerance. Lower = finer mesh.
 
         Returns:
             Dictionary with export result:
@@ -251,12 +260,6 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Mesh
 
@@ -264,7 +267,15 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-objects = {objects_filter}
+# Get objects to export
+if {object_names!r} is not None:
+    objects = [doc.getObject(n) for n in {object_names!r}]
+elif FreeCAD.GuiUp:
+    # GUI mode: export visible objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility]
+else:
+    # Headless mode: export all objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]
 objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
 
 if not objects:
@@ -274,7 +285,7 @@ if not objects:
 meshes = []
 for obj in objects:
     mesh = Mesh.Mesh()
-    mesh.addFacets(obj.Shape.tessellate(0.1)[0])
+    mesh.addFacets(obj.Shape.tessellate({mesh_tolerance})[0])
     meshes.append(mesh)
 
 # Combine meshes
@@ -322,12 +333,6 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Part
 
@@ -335,7 +340,15 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-objects = {objects_filter}
+# Get objects to export
+if {object_names!r} is not None:
+    objects = [doc.getObject(n) for n in {object_names!r}]
+elif FreeCAD.GuiUp:
+    # GUI mode: export visible objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility]
+else:
+    # Headless mode: export all objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]
 objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
 
 if not objects:

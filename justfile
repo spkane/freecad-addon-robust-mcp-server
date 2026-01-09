@@ -3,18 +3,18 @@
 #
 # Commands are organized into modules. Run `just` to see top-level commands,
 # or `just list-<module>` to see commands in a specific module:
-#   just list-mcp           - MCP server commands
-#   just list-freecad       - FreeCAD plugin/macro commands
-#   just list-install       - Installation commands
-#   just list-quality       - Code quality commands
-#   just list-testing       - Test commands
+#   just list-coderabbit    - AI code review commands
+#   just list-dev           - Development utilities
 #   just list-docker        - Docker build/run commands
 #   just list-documentation - Documentation commands
-#   just list-dev           - Development utilities
+#   just list-freecad       - FreeCAD plugin/macro commands
+#   just list-install       - Installation commands
+#   just list-mcp           - MCP server commands
+#   just list-quality       - Code quality commands
 #   just list-release       - Release and tagging commands
-#   just list-coderabbit    - AI code review commands
+#   just list-testing       - Test commands
 #
-# Or use `just --list --list-submodules` to see everything at once.
+# Or use `just list-all` to see all commands from all modules at once.
 
 # Import modules
 mod coderabbit 'just/coderabbit.just'

@@ -97,9 +97,9 @@ class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
 
             if get_auto_start():
                 # Check if already running (timer might have started it)
-                from commands import _mcp_plugin
+                from commands import is_bridge_running
 
-                if _mcp_plugin is None or not _mcp_plugin.is_running:
+                if not is_bridge_running():
                     FreeCAD.Console.PrintMessage(
                         "Auto-starting MCP Bridge (configured in preferences)...\n"
                     )
@@ -109,35 +109,20 @@ class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
 
         # Sync status bar widget with current bridge state
         # (bridge may have been started by Init.py before workbench was selected)
-        self._sync_status_bar()
+        try:
+            from status_widget import sync_status_with_bridge
+
+            sync_status_with_bridge()
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(f"Could not sync status bar: {e}\n")
 
     def Activated(self) -> None:
         """Called when the workbench is activated."""
         # Sync status bar widget with current bridge state
-        self._sync_status_bar()
-
-    def _sync_status_bar(self) -> None:
-        """Sync status bar widget with current bridge state."""
         try:
-            from commands import _mcp_plugin
-            from preferences import get_status_bar_enabled
+            from status_widget import sync_status_with_bridge
 
-            if not get_status_bar_enabled():
-                return
-
-            from status_widget import (
-                update_status_running,
-                update_status_stopped,
-            )
-
-            if _mcp_plugin is not None and _mcp_plugin.is_running:
-                update_status_running(
-                    _mcp_plugin.xmlrpc_port,
-                    _mcp_plugin.socket_port,
-                    _mcp_plugin.request_count,
-                )
-            else:
-                update_status_stopped()
+            sync_status_with_bridge()
         except Exception as e:
             FreeCAD.Console.PrintWarning(f"Could not sync status bar: {e}\n")
 
@@ -164,15 +149,11 @@ try:
     def _deferred_status_bar_sync() -> None:
         """Sync status bar with bridge state after GUI is ready."""
         try:
-            from commands import _mcp_plugin
+            from commands import is_bridge_running
             from preferences import get_status_bar_enabled
             from status_widget import sync_status_with_bridge
 
-            if (
-                get_status_bar_enabled()
-                and _mcp_plugin is not None
-                and _mcp_plugin.is_running
-            ):
+            if get_status_bar_enabled() and is_bridge_running():
                 FreeCAD.Console.PrintMessage(
                     "Robust MCP Bridge: Syncing status bar from InitGui...\n"
                 )

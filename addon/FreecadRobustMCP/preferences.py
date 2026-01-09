@@ -13,7 +13,19 @@ Python features at load time.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 import FreeCAD
+
+
+class PreferencesDict(TypedDict):
+    """Type definition for the preferences dictionary."""
+
+    auto_start: bool
+    status_bar_enabled: bool
+    xmlrpc_port: int
+    socket_port: int
+
 
 # Parameter path for our workbench preferences
 PARAM_PATH = "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
@@ -116,7 +128,7 @@ def set_socket_port(port: int) -> None:
     get_param().SetInt("SocketPort", port)
 
 
-def get_all_preferences() -> dict:
+def get_all_preferences() -> PreferencesDict:
     """Get all preferences as a dictionary.
 
     Returns:

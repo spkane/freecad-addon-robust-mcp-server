@@ -8,7 +8,7 @@ has excellent screenshot handling with view type detection.
 from typing import Any
 
 
-def register_view_tools(mcp, get_bridge) -> None:
+def register_view_tools(mcp: Any, get_bridge: Any) -> None:
     """Register view-related tools with the Robust MCP Server.
 
     Args:

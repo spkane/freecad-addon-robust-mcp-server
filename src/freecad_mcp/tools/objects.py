@@ -7,7 +7,7 @@ creating, editing, deleting, and inspecting objects.
 from typing import Any
 
 
-def register_object_tools(mcp, get_bridge) -> None:
+def register_object_tools(mcp: Any, get_bridge: Any) -> None:
     """Register object-related tools with the Robust MCP Server.
 
     Args:

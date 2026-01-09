@@ -86,7 +86,12 @@ def is_gui_available() -> bool:
     """Check if FreeCAD GUI is available.
 
     Returns:
-        True if running in GUI mode, False if headless.
+        True if running in GUI mode, False if headless or bridge unavailable.
+
+    Note:
+        When the bridge is unavailable, this returns False. The
+        pytest_collection_modifyitems hook will raise a hard error in this case,
+        so tests won't actually run with an incorrect skip condition.
     """
     # Ensure bridge check has been performed
     _check_bridge_connection()
@@ -98,19 +103,55 @@ def is_headless_mode() -> bool:
 
     Returns:
         True if running in headless mode, False if GUI is available.
+
+    Note:
+        When the bridge is unavailable, this returns True (assumes headless).
+        The pytest_collection_modifyitems hook will raise a hard error before
+        any tests run, so this assumption doesn't affect actual test execution.
     """
     return not is_gui_available()
 
 
-# Skip marker for GUI-only tests
+def _should_skip_for_gui_requirement() -> bool:
+    """Return True if test should be skipped due to requiring GUI mode.
+
+    Returns False when:
+    - Bridge is available and in GUI mode
+
+    Returns True when:
+    - Bridge is unavailable (will fail anyway, skip is irrelevant)
+    - Bridge is available and in headless mode
+    """
+    _check_bridge_connection()
+    return _gui_available is not True
+
+
+def _should_skip_for_headless_requirement() -> bool:
+    """Return True if test should be skipped due to requiring headless mode.
+
+    Returns False when:
+    - Bridge is unavailable (collection will fail anyway)
+    - Bridge is available and in headless mode
+
+    Returns True when:
+    - Bridge is available and in GUI mode
+    """
+    _check_bridge_connection()
+    if not _bridge_available:
+        return False  # Don't skip, let collection error handle it
+    return _gui_available is True  # Skip if in GUI mode
+
+
+# Skip markers for mode-specific tests
+# These markers handle the bridge unavailable case by deferring to
+# pytest_collection_modifyitems which raises a hard error.
 requires_gui = pytest.mark.skipif(
-    is_headless_mode(),
+    _should_skip_for_gui_requirement(),
     reason="Test requires FreeCAD GUI mode (running in headless mode)",
 )
 
-# Skip marker for headless-only tests
 requires_headless = pytest.mark.skipif(
-    is_gui_available(),
+    _should_skip_for_headless_requirement(),
     reason="Test requires FreeCAD headless mode (running in GUI mode)",
 )
 

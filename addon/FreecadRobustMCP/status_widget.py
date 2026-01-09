@@ -20,8 +20,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PySide import QtWidgets
 
-# Global reference to the status widget
+# Global reference to the status widget (protected by _status_widget_lock)
 _status_widget: MCPStatusWidget | None = None
+_status_widget_lock = threading.Lock()
 
 
 def _is_main_thread() -> bool:
@@ -141,15 +142,26 @@ class MCPStatusWidget:
             return False
 
     def remove(self) -> None:
-        """Remove the status widget from the status bar."""
-        if self._widget is not None:
-            try:
-                self._widget.setParent(None)
-                self._widget.deleteLater()
-            except Exception:
-                pass
-            self._widget = None
-            self._installed = False
+        """Remove the status widget from the status bar.
+
+        Note:
+            This method must be called from the main Qt thread.
+            If called from another thread, it will silently return.
+        """
+        if self._widget is None:
+            return
+
+        # Thread safety check - GUI operations must be on main thread
+        if not _check_main_thread("remove"):
+            return
+
+        try:
+            self._widget.setParent(None)
+            self._widget.deleteLater()
+        except Exception:
+            pass
+        self._widget = None
+        self._installed = False
 
     def set_running(
         self, xmlrpc_port: int, socket_port: int, request_count: int = 0
@@ -256,13 +268,21 @@ class MCPStatusWidget:
 def get_status_widget() -> MCPStatusWidget:
     """Get the global status widget instance, creating if needed.
 
+    This function is thread-safe and uses double-checked locking.
+
     Returns:
         The MCPStatusWidget instance.
     """
     global _status_widget
-    if _status_widget is None:
-        _status_widget = MCPStatusWidget()
-    return _status_widget
+    # Fast path: if already created, return it without acquiring lock
+    if _status_widget is not None:
+        return _status_widget
+
+    # Slow path: acquire lock and check again before creating
+    with _status_widget_lock:
+        if _status_widget is None:
+            _status_widget = MCPStatusWidget()
+        return _status_widget
 
 
 def install_status_widget() -> bool:

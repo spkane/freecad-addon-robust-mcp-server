@@ -78,9 +78,9 @@ scan-detect:
 scan-audit:
     uv run detect-secrets audit {{project_root}}/.secrets.baseline
 
-# Update detect-secrets baseline with new findings (regenerates baseline)
+# Update detect-secrets baseline with new findings (preserves audit metadata)
 scan-baseline-update:
-    uv run detect-secrets scan > {{project_root}}/.secrets.baseline
+    uv run detect-secrets scan --baseline {{project_root}}/.secrets.baseline --update {{project_root}}
 
 # Run trufflehog for verified secrets (via pre-commit - not installed standalone)
 scan-trufflehog:

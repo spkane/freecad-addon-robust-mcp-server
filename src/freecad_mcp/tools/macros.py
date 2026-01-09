@@ -10,7 +10,7 @@ macro-centric workflow with templates and validation.
 from typing import Any
 
 
-def register_macro_tools(mcp, get_bridge) -> None:
+def register_macro_tools(mcp: Any, get_bridge: Any) -> None:
     """Register macro-related tools with the Robust MCP Server.
 
     Args:

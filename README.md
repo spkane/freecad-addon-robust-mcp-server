@@ -224,7 +224,7 @@ If using Docker:
         "--add-host=host.docker.internal:host-gateway",
         "-e", "FREECAD_MODE=xmlrpc",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
-        "freecad-mcp"
+        "spkane/freecad-robust-mcp"
       ]
     }
   }

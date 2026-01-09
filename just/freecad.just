@@ -87,67 +87,20 @@ run-headless-custom freecad_cmd:
     "{{freecad_cmd}}" "$SCRIPT_PATH"
 
 # Run FreeCAD GUI with MCP bridge (uses local source code for development)
+# Note: Uses default ports (XML-RPC: 9875, Socket: 9876) regardless of workbench
+# preferences. For custom ports, use the workbench GUI instead.
 run-gui:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Clean up any old temp files from previous runs
-    rm -f /tmp/freecad_mcp_startup.*.py 2>/dev/null || true
+    # Use the shared startup script from the addon directory
+    STARTUP_SCRIPT="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/startup_bridge.py"
 
-    # Create a temporary startup script that starts the MCP bridge
-    # Use mktemp without template for better portability
-    STARTUP_SCRIPT=$(mktemp)
-    mv "$STARTUP_SCRIPT" "${STARTUP_SCRIPT}.py"
-    STARTUP_SCRIPT="${STARTUP_SCRIPT}.py"
-
-    # Use the server from the local addon directory (source of truth for development)
-    ADDON_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge"
-
-    cat > "$STARTUP_SCRIPT" << EOF
-    # FreeCAD MCP Bridge Auto-Start Script (using local source)
-    # This script checks if the bridge is already running (e.g., from auto-start)
-    # before starting a new instance to avoid port conflicts.
-    import sys
-    addon_path = "${ADDON_PATH}"
-    if addon_path not in sys.path:
-        sys.path.insert(0, addon_path)
-
-    import FreeCAD
-
-    # Check if bridge is already running (from auto-start in Init.py)
-    bridge_already_running = False
-    try:
-        # Check if the workbench commands module has a running plugin
-        from commands import _mcp_plugin
-        if _mcp_plugin is not None and _mcp_plugin.is_running:
-            bridge_already_running = True
-            FreeCAD.Console.PrintMessage("\\nMCP Bridge already running (from auto-start).\\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
-            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
-    except ImportError:
-        # Workbench not installed, we'll start our own
-        pass
-    except Exception:
-        # Other error, proceed to start
-        pass
-
-    if not bridge_already_running:
-        try:
-            from server import FreecadMCPPlugin
-            plugin = FreecadMCPPlugin(
-                host="localhost",
-                port=9876,
-                xmlrpc_port=9875,
-                enable_xmlrpc=True,
-            )
-            plugin.start()
-            FreeCAD.Console.PrintMessage("\\nMCP Bridge started (from local source)!\\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
-            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
-        except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\\n")
-    EOF
+    if [[ ! -f "$STARTUP_SCRIPT" ]]; then
+        echo "ERROR: Startup script not found: $STARTUP_SCRIPT"
+        exit 1
+    fi
 
     # Find FreeCAD GUI executable based on OS
     FREECAD_GUI=""
@@ -219,59 +172,13 @@ run-gui-custom freecad_path:
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Create a temporary startup script
-    # Use mktemp without template for better portability
-    STARTUP_SCRIPT=$(mktemp)
-    mv "$STARTUP_SCRIPT" "${STARTUP_SCRIPT}.py"
-    STARTUP_SCRIPT="${STARTUP_SCRIPT}.py"
+    # Use the shared startup script from the addon directory
+    STARTUP_SCRIPT="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/startup_bridge.py"
 
-    # Use the server from the addon directory
-    ADDON_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge"
-
-    cat > "$STARTUP_SCRIPT" << EOF
-    # FreeCAD MCP Bridge Auto-Start Script
-    # This script checks if the bridge is already running (e.g., from auto-start)
-    # before starting a new instance to avoid port conflicts.
-    import sys
-    addon_path = "${ADDON_PATH}"
-    if addon_path not in sys.path:
-        sys.path.insert(0, addon_path)
-
-    import FreeCAD
-
-    # Check if bridge is already running (from auto-start in Init.py)
-    bridge_already_running = False
-    try:
-        # Check if the workbench commands module has a running plugin
-        from commands import _mcp_plugin
-        if _mcp_plugin is not None and _mcp_plugin.is_running:
-            bridge_already_running = True
-            FreeCAD.Console.PrintMessage("\\nMCP Bridge already running (from auto-start).\\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
-            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
-    except ImportError:
-        # Workbench not installed, we'll start our own
-        pass
-    except Exception:
-        # Other error, proceed to start
-        pass
-
-    if not bridge_already_running:
-        try:
-            from server import FreecadMCPPlugin
-            plugin = FreecadMCPPlugin(
-                host="localhost",
-                port=9876,
-                xmlrpc_port=9875,
-                enable_xmlrpc=True,
-            )
-            plugin.start()
-            FreeCAD.Console.PrintMessage("\\nMCP Bridge started!\\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
-            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
-        except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\\n")
-    EOF
+    if [[ ! -f "$STARTUP_SCRIPT" ]]; then
+        echo "ERROR: Startup script not found: $STARTUP_SCRIPT"
+        exit 1
+    fi
 
     echo "Starting FreeCAD with MCP bridge..."
     echo "Using FreeCAD: {{freecad_path}}"

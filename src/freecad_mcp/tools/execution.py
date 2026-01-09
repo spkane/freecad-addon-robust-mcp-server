@@ -12,7 +12,7 @@ from typing import Any
 from freecad_mcp.server import get_instance_id
 
 
-def register_execution_tools(mcp, get_bridge) -> None:
+def register_execution_tools(mcp: Any, get_bridge: Any) -> None:
     """Register execution-related tools with the Robust MCP Server.
 
     Args:

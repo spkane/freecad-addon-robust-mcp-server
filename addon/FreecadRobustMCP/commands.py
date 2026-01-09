@@ -12,8 +12,10 @@ from __future__ import annotations
 from typing import Any
 
 import FreeCAD
-import FreeCADGui
 from path_utils import get_addon_path, get_icon_path
+
+# FreeCADGui is imported lazily in methods that need it, as this module
+# may be imported during headless operation where FreeCADGui is not available
 
 # Re-export for any modules that might import from commands
 __all__ = ["get_addon_path", "get_icon_path"]
@@ -25,23 +27,43 @@ _mcp_plugin: Any = None
 _running_config: dict[str, int] | None = None
 
 
+def is_bridge_running() -> bool:
+    """Check if the MCP bridge is currently running.
+
+    This is a public helper to encapsulate access to the private _mcp_plugin state.
+
+    Returns:
+        True if the bridge is running, False otherwise.
+    """
+    return _mcp_plugin is not None and _mcp_plugin.is_running
+
+
 class StartMCPBridgeCommand:
     """Command to start the MCP bridge server."""
 
     def GetResources(self) -> dict[str, str]:
         """Return the command resources (icon, menu text, tooltip)."""
+        # Get configured ports for tooltip (fall back to defaults if import fails)
+        try:
+            from preferences import get_socket_port, get_xmlrpc_port
+
+            xmlrpc_port = get_xmlrpc_port()
+            socket_port = get_socket_port()
+        except Exception:
+            xmlrpc_port = 9875
+            socket_port = 9876
+
         return {
             "Pixmap": get_icon_path("icons/mcp_start.svg"),
             "MenuText": "Start MCP Bridge",
             "ToolTip": (
                 "Start the MCP bridge server for AI assistant integration.\n"
-                "Listens on XML-RPC (port 9875) and Socket (port 9876)."
+                f"Listens on XML-RPC (port {xmlrpc_port}) and Socket (port {socket_port})."
             ),
         }
 
     def IsActive(self) -> bool:
         """Return True if the command can be executed."""
-        global _mcp_plugin  # noqa: PLW0602
         return _mcp_plugin is None or not _mcp_plugin.is_running
 
     def Activated(self) -> None:
@@ -149,7 +171,6 @@ class StopMCPBridgeCommand:
 
     def IsActive(self) -> bool:
         """Return True if the command can be executed."""
-        global _mcp_plugin  # noqa: PLW0602
         return _mcp_plugin is not None and _mcp_plugin.is_running
 
     def Activated(self) -> None:
@@ -201,8 +222,6 @@ class MCPBridgeStatusCommand:
 
     def Activated(self) -> None:
         """Execute the command to show MCP bridge status."""
-        global _mcp_plugin  # noqa: PLW0602
-
         FreeCAD.Console.PrintMessage("\n")
         FreeCAD.Console.PrintMessage("=" * 50 + "\n")
         FreeCAD.Console.PrintMessage("MCP Bridge Status\n")
@@ -326,6 +345,7 @@ class MCPBridgePreferencesCommand:
     def Activated(self) -> None:
         """Execute the command to show preferences dialog."""
         # Import here to avoid issues during module loading
+        import FreeCADGui
         from preferences import (
             get_auto_start,
             get_socket_port,
@@ -336,7 +356,15 @@ class MCPBridgePreferencesCommand:
             set_status_bar_enabled,
             set_xmlrpc_port,
         )
-        from PySide import QtWidgets  # type: ignore[import-not-found]
+
+        # Import QtWidgets with fallback for different PySide versions
+        try:
+            from PySide6 import QtWidgets
+        except ImportError:
+            try:
+                from PySide2 import QtWidgets
+            except ImportError:
+                from PySide import QtWidgets  # type: ignore[import-not-found]
 
         # Create the dialog
         dialog = QtWidgets.QDialog(FreeCADGui.getMainWindow())
@@ -414,8 +442,8 @@ class MCPBridgePreferencesCommand:
         button_box.rejected.connect(dialog.reject)
         layout.addWidget(button_box)
 
-        # Show dialog
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+        # Show dialog (use exec() not exec_() which is deprecated in PySide6)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
             # Save preferences
             old_xmlrpc = get_xmlrpc_port()
             old_socket = get_socket_port()

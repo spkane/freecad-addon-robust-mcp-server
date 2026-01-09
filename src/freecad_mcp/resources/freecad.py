@@ -23,7 +23,7 @@ import json
 from typing import Any
 
 
-def register_resources(mcp, get_bridge) -> None:
+def register_resources(mcp: Any, get_bridge: Any) -> None:
     """Register FreeCAD resources with the Robust MCP Server.
 
     Args:

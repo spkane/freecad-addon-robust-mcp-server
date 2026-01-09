@@ -13,6 +13,7 @@ build-strict:
     cd {{project_root}} && uv run mkdocs build --strict
 
 # Serve documentation locally
+# Note: The leading `-` suppresses the error when the user interrupts with Ctrl+C
 serve:
     -cd {{project_root}} && uv run mkdocs serve
 
