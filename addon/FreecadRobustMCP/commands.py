@@ -72,15 +72,18 @@ class StartMCPBridgeCommand:
             xmlrpc_port = get_xmlrpc_port()
             socket_port = get_socket_port()
 
-            _mcp_plugin = FreecadMCPPlugin(
+            # Create plugin in a local variable first to avoid leaving
+            # a partially initialized instance in _mcp_plugin if start() fails
+            plugin = FreecadMCPPlugin(
                 host="localhost",
                 port=socket_port,
                 xmlrpc_port=xmlrpc_port,
                 enable_xmlrpc=True,
             )
-            _mcp_plugin.start()
+            plugin.start()
 
-            # Track running configuration for restart detection
+            # Only assign to globals after start() succeeds
+            _mcp_plugin = plugin
             _running_config = {
                 "xmlrpc_port": xmlrpc_port,
                 "socket_port": socket_port,
@@ -103,6 +106,9 @@ class StartMCPBridgeCommand:
             )
 
         except ImportError as e:
+            # Clear any stale state to ensure clean retry
+            _mcp_plugin = None
+            _running_config = None
             FreeCAD.Console.PrintError(f"Failed to import MCP Bridge module: {e}\n")
             FreeCAD.Console.PrintError(
                 "Ensure the FreecadRobustMCP addon is properly installed.\n"
@@ -116,6 +122,9 @@ class StartMCPBridgeCommand:
             except Exception:
                 pass
         except Exception as e:
+            # Clear any stale state to ensure clean retry
+            _mcp_plugin = None
+            _running_config = None
             FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
             try:
                 from preferences import get_status_bar_enabled
