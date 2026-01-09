@@ -1085,7 +1085,7 @@ This project uses relaxed mypy settings because FastMCP lacks proper type stubs.
 
 ### Markdownlint (MD060) - Table Formatting
 
-- **Table column style**: All markdown tables must use the "padded/aligned" style
+- **Table column style**: All Markdown tables must use the "padded/aligned" style
 - Every row in a table must have the same total character width
 - Column separators (`|`) must align vertically across all rows
 - The separator row dashes must match the column width set by the widest content

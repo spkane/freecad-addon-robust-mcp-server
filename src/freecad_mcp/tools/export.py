@@ -27,7 +27,10 @@ if {object_names!r} is not None:
     objects = [doc.getObject(n) for n in {object_names!r}]
 elif FreeCAD.GuiUp:
     # GUI mode: export visible objects with shapes
-    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility]
+    objects = [
+        obj for obj in doc.Objects
+        if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility
+    ]
 else:
     # Headless mode: export all objects with shapes
     objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]

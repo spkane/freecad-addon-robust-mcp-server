@@ -48,8 +48,15 @@ if get_running_plugin() is None:
         from server import FreecadMCPPlugin
 
         # Get configuration from environment variables (with defaults)
-        socket_port = int(os.environ.get("FREECAD_SOCKET_PORT", "9876"))
-        xmlrpc_port = int(os.environ.get("FREECAD_XMLRPC_PORT", "9875"))
+        try:
+            socket_port = int(os.environ.get("FREECAD_SOCKET_PORT", "9876"))
+            xmlrpc_port = int(os.environ.get("FREECAD_XMLRPC_PORT", "9875"))
+        except ValueError as e:
+            FreeCAD.Console.PrintError(f"Invalid port configuration: {e}\n")
+            FreeCAD.Console.PrintError(
+                "FREECAD_SOCKET_PORT and FREECAD_XMLRPC_PORT must be integers.\n"
+            )
+            raise
 
         plugin = FreecadMCPPlugin(
             host="localhost",

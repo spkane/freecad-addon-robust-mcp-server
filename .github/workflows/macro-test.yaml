@@ -222,14 +222,38 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Verify fontconfig setup
+        run: |
+          echo "Checking fontconfig configuration..."
+          # Verify the system fontconfig config exists
+          if [ -f /etc/fonts/fonts.conf ]; then
+              echo "System fontconfig found at /etc/fonts/fonts.conf"
+          else
+              echo "ERROR: /etc/fonts/fonts.conf not found!"
+              ls -la /etc/fonts/ || echo "/etc/fonts/ directory doesn't exist"
+          fi
+          # Test fontconfig is working
+          echo "Testing fc-list..."
+          fc-list | head -5 || echo "fc-list failed"
+          echo "Fontconfig setup verified."
+
       - name: Start FreeCAD GUI with MCP bridge
         env:
           DISPLAY: ":99"
           QT_QPA_PLATFORM: xcb
           # Use software rendering for OpenGL (more reliable in CI)
           LIBGL_ALWAYS_SOFTWARE: "1"
+          # Explicit fontconfig paths for AppImage compatibility
+          # The AppImage's bundled fontconfig may not find system config automatically
+          FONTCONFIG_FILE: /etc/fonts/fonts.conf
+          FONTCONFIG_PATH: /etc/fonts
         run: |
           echo "Starting FreeCAD GUI with MCP bridge under Xvfb..."
+          echo "FONTCONFIG_FILE=$FONTCONFIG_FILE"
+          echo "FONTCONFIG_PATH=$FONTCONFIG_PATH"
+
+          # Export fontconfig vars so they're available to backgrounded process
+          export FONTCONFIG_FILE FONTCONFIG_PATH
 
           # Start FreeCAD GUI (not headless) with MCP bridge
           # Uses blocking_bridge.py which blocks with run_forever() to keep process alive
