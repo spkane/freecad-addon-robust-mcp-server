@@ -12,9 +12,13 @@ runs:
     - name: Get latest FreeCAD release info
       id: freecad-release
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         # Get the latest stable release tag from GitHub API
-        RELEASE_INFO=$(curl -s https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
+        # Use GitHub token to avoid rate limiting
+        RELEASE_INFO=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
         TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
         echo "Latest FreeCAD release: $TAG_NAME"
         echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
@@ -46,7 +50,10 @@ runs:
       run: |
         mkdir -p ~/freecad-appimage
         echo "Downloading FreeCAD ${{ steps.freecad-release.outputs.tag }}..."
-        curl -L -o ~/freecad-appimage/FreeCAD.AppImage "${{ steps.freecad-release.outputs.url }}"
+        # Use retry, timeout, and fail-fast flags for reliable downloads
+        curl -L --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 600 \
+            -f -o ~/freecad-appimage/FreeCAD.AppImage \
+            "${{ steps.freecad-release.outputs.url }}"
         chmod +x ~/freecad-appimage/FreeCAD.AppImage
 
     - name: Setup FreeCAD AppImage
@@ -60,7 +67,15 @@ runs:
         cd ~/freecad-appimage
         if [ ! -d "squashfs-root" ]; then
             echo "Extracting AppImage..."
-            ./FreeCAD.AppImage --appimage-extract > /dev/null 2>&1
+            if ! ./FreeCAD.AppImage --appimage-extract > /dev/null 2>&1; then
+                echo "ERROR: AppImage extraction failed"
+                exit 1
+            fi
+            # Verify extraction produced expected structure
+            if [ ! -d "squashfs-root/usr/bin" ]; then
+                echo "ERROR: Extracted AppImage missing expected structure"
+                exit 1
+            fi
         else
             echo "Using cached extracted AppImage"
         fi

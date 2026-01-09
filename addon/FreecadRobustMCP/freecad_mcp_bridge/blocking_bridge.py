@@ -27,6 +27,7 @@ For full functionality, run with FreeCAD GUI executable.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -67,11 +68,15 @@ from server import FreecadMCPPlugin  # noqa: E402
 plugin = get_running_plugin()
 
 if plugin is None:
+    # Get configuration from environment variables (with defaults)
+    socket_port = int(os.environ.get("FREECAD_SOCKET_PORT", "9876"))
+    xmlrpc_port = int(os.environ.get("FREECAD_XMLRPC_PORT", "9875"))
+
     # Create and run the plugin
     plugin = FreecadMCPPlugin(
         host="localhost",
-        port=9876,  # JSON-RPC socket port
-        xmlrpc_port=9875,  # XML-RPC port
+        port=socket_port,  # JSON-RPC socket port
+        xmlrpc_port=xmlrpc_port,  # XML-RPC port
         enable_xmlrpc=True,
     )
 
@@ -80,12 +85,16 @@ if plugin is None:
 
 # Print status messages with flush to ensure they appear immediately
 # (FreeCAD's Python may have buffered stdout)
+# Use configured ports from plugin or defaults if plugin existed before
+actual_xmlrpc_port = getattr(plugin, "xmlrpc_port", 9875) if plugin else 9875
+actual_socket_port = getattr(plugin, "port", 9876) if plugin else 9876
+
 print("", flush=True)
 print("=" * 60, flush=True)
 gui_mode = "GUI" if FreeCAD.GuiUp else "headless"
 print(f"MCP Bridge started in {gui_mode} mode!", flush=True)
-print("  - XML-RPC: localhost:9875", flush=True)
-print("  - Socket: localhost:9876", flush=True)
+print(f"  - XML-RPC: localhost:{actual_xmlrpc_port}", flush=True)
+print(f"  - Socket: localhost:{actual_socket_port}", flush=True)
 print("", flush=True)
 if not FreeCAD.GuiUp:
     print(

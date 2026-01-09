@@ -14,7 +14,7 @@ from freecad_mcp.server import get_instance_id
 
 
 def register_execution_tools(
-    mcp: Any, get_bridge: Callable[..., Awaitable[Any]]
+    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
 ) -> None:
     """Register execution-related tools with the Robust MCP Server.
 
@@ -134,11 +134,11 @@ def register_execution_tools(
 
     @mcp.tool()
     async def get_mcp_server_environment() -> dict[str, Any]:
-        """Get environment information about the Robust MCP Server and FreeCAD connection.
+        """Get environment info about the MCP Server and FreeCAD connection.
 
-        This tool returns information about the environment where the Robust MCP Server
+        This tool returns information about the environment where the MCP Server
         is running and the FreeCAD connection state, which is useful for debugging,
-        verifying which Robust MCP Server instance you are connected to, and determining
+        verifying which MCP Server instance you are connected to, and determining
         if GUI features are available.
 
         Returns:
@@ -150,7 +150,7 @@ def register_execution_tools(
                 - os_name: Operating system name (Linux, Darwin, Windows)
                 - os_version: Operating system version
                 - platform: Platform identifier string
-                - python_version: Python version running the Robust MCP Server
+                - python_version: Python version running the MCP Server
                 - freecad: FreeCAD connection information:
                     - connected: Whether bridge is connected to FreeCAD
                     - mode: Connection mode (embedded, xmlrpc, socket)

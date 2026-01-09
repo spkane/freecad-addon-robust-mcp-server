@@ -176,7 +176,7 @@ jobs:
     name: Publish to TestPyPI
     needs: [validate-tag, build, test-install]
     runs-on: ubuntu-latest
-    if: contains(needs.validate-tag.outputs.version, '-alpha')
+    if: contains(needs.validate-tag.outputs.version, '-')
     environment:
       name: testpypi
       url: https://test.pypi.org/p/freecad-robust-mcp
@@ -199,7 +199,7 @@ jobs:
     name: Publish to PyPI
     needs: [validate-tag, build, test-install]
     runs-on: ubuntu-latest
-    if: ${{ !contains(needs.validate-tag.outputs.version, '-alpha') }}
+    if: ${{ !contains(needs.validate-tag.outputs.version, '-') }}
     environment:
       name: pypi
       url: https://pypi.org/p/freecad-robust-mcp
@@ -356,7 +356,7 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$VERSION" == *"-alpha"* ]]; then
+          if [[ "$VERSION" == *"-"* ]]; then
               {
                 echo "### Install from TestPyPI"
                 echo ""

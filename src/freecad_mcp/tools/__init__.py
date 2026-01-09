@@ -35,9 +35,7 @@ __all__ = [
 ]
 
 
-def register_all_tools(
-    mcp: Any, get_bridge_func: Callable[..., Awaitable[Any]]
-) -> None:
+def register_all_tools(mcp: Any, get_bridge_func: Callable[[], Awaitable[Any]]) -> None:
     """Register all FreeCAD tools with the Robust MCP Server.
 
     Args:

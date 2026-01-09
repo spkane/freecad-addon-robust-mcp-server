@@ -18,11 +18,11 @@
 #
 # Version Format (SemVer 2.0):
 #   - X.Y.Z           - Stable release
-#   - X.Y.Z-alpha     - Alpha (TestPyPI only for Robust MCP Server)
-#   - X.Y.Z-alpha.N   - Alpha with number
-#   - X.Y.Z-beta      - Beta
-#   - X.Y.Z-beta.N    - Beta with number
-#   - X.Y.Z-rc.N      - Release candidate
+#   - X.Y.Z-alpha     - Alpha (TestPyPI only)
+#   - X.Y.Z-alpha.N   - Alpha with number (TestPyPI only)
+#   - X.Y.Z-beta      - Beta (TestPyPI only)
+#   - X.Y.Z-beta.N    - Beta with number (TestPyPI only)
+#   - X.Y.Z-rc.N      - Release candidate (TestPyPI only)
 
 # Project root directory
 project_root := justfile_directory()
@@ -213,7 +213,7 @@ tag-mcp-server version:
     echo "Creating tag: $TAG"
     echo ""
     echo "This will trigger:"
-    echo "  - PyPI release (beta/rc/stable) or TestPyPI (alpha)"
+    echo "  - PyPI release (stable) or TestPyPI (alpha/beta/rc)"
     echo "  - Docker Hub release"
     echo "  - GitHub release with wheel and tar.gz"
     echo ""

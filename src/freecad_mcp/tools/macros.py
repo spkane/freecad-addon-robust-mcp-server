@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_macro_tools(mcp: Any, get_bridge: Callable[..., Awaitable[Any]]) -> None:
+def register_macro_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register macro-related tools with the Robust MCP Server.
 
     Args:

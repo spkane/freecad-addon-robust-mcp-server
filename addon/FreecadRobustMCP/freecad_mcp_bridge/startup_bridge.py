@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -46,15 +47,19 @@ if get_running_plugin() is None:
     try:
         from server import FreecadMCPPlugin
 
+        # Get configuration from environment variables (with defaults)
+        socket_port = int(os.environ.get("FREECAD_SOCKET_PORT", "9876"))
+        xmlrpc_port = int(os.environ.get("FREECAD_XMLRPC_PORT", "9875"))
+
         plugin = FreecadMCPPlugin(
             host="localhost",
-            port=9876,  # JSON-RPC socket port
-            xmlrpc_port=9875,  # XML-RPC port
+            port=socket_port,  # JSON-RPC socket port
+            xmlrpc_port=xmlrpc_port,  # XML-RPC port
             enable_xmlrpc=True,
         )
         plugin.start()
         FreeCAD.Console.PrintMessage("\nMCP Bridge started!\n")
-        FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\n")
-        FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\n\n")
+        FreeCAD.Console.PrintMessage(f"  - XML-RPC: localhost:{xmlrpc_port}\n")
+        FreeCAD.Console.PrintMessage(f"  - Socket: localhost:{socket_port}\n\n")
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")

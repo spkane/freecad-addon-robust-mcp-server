@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_object_tools(mcp: Any, get_bridge: Callable[..., Awaitable[Any]]) -> None:
+def register_object_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register object-related tools with the Robust MCP Server.
 
     Args:

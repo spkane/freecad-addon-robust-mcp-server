@@ -68,13 +68,21 @@ integration-freecad-auto:
     STARTED_FREECAD=false
 
     # Helper function to kill process on a port (with fallback for systems without lsof)
+    # Usage: kill_port PORT [SIGNAL]
+    # Examples: kill_port 9875      (sends SIGTERM)
+    #           kill_port 9875 -9   (sends SIGKILL)
     kill_port() {
         local port=$1
-        local signal=${2:-}
+        local signal=${2:--TERM}  # Default to SIGTERM if no signal specified
         if command -v lsof &>/dev/null; then
-            lsof -ti:"$port" | xargs ${signal:+kill $signal} ${signal:-kill} 2>/dev/null || true
+            lsof -ti:"$port" | xargs kill "$signal" 2>/dev/null || true
         elif command -v fuser &>/dev/null; then
-            fuser ${signal:+-k $signal} -k "$port/tcp" 2>/dev/null || true
+            # fuser -k sends SIGKILL by default; use --signal for others
+            if [ "$signal" = "-9" ] || [ "$signal" = "-KILL" ]; then
+                fuser -k "$port/tcp" 2>/dev/null || true
+            else
+                fuser -k --signal "${signal#-}" "$port/tcp" 2>/dev/null || true
+            fi
         fi
     }
 
@@ -104,7 +112,7 @@ integration-freecad-auto:
     # Check if a bridge is already running and responsive
     if curl -s http://localhost:9875 > /dev/null 2>&1; then
         # Try to ping - if it responds, there's a healthy bridge already running
-        if python3 -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+        if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
             echo "ERROR: A FreeCAD MCP bridge is already running on port 9875."
             echo ""
             echo "Options:"

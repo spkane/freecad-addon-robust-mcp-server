@@ -8,9 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_document_tools(
-    mcp: Any, get_bridge: Callable[..., Awaitable[Any]]
-) -> None:
+def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register document-related tools with the Robust MCP Server.
 
     Args:

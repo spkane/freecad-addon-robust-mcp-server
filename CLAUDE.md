@@ -1168,7 +1168,7 @@ This project uses component-specific release workflows along with CI/CD pipeline
 - Validates SemVer tag format
 - Builds Python wheel and sdist
 - Tests installation on Ubuntu and macOS
-- Publishes to PyPI (stable) or TestPyPI (alpha)
+- Publishes to PyPI (stable) or TestPyPI (alpha, beta, rc)
 - Builds multi-arch Docker image (amd64 + arm64)
 - Pushes to Docker Hub with version tags
 - Creates GitHub Release with artifacts and changelog
@@ -1257,10 +1257,10 @@ just release::latest-versions
 
 All versions follow SemVer 2.0:
 
-- `X.Y.Z` - Stable release
+- `X.Y.Z` - Stable release (PyPI only)
 - `X.Y.Z-alpha` or `X.Y.Z-alpha.N` - Alpha (TestPyPI only)
-- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta (PyPI)
-- `X.Y.Z-rc.N` - Release candidate (PyPI)
+- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta (TestPyPI only)
+- `X.Y.Z-rc.N` - Release candidate (TestPyPI only)
 
 ### What Happens on Release
 
@@ -1269,7 +1269,7 @@ All versions follow SemVer 2.0:
 1. Validates tag format
 2. Builds Python wheel and sdist
 3. Tests installation on Ubuntu and macOS
-4. Publishes to PyPI (or TestPyPI for alpha)
+4. Publishes to PyPI (or TestPyPI for alpha, beta, rc)
 5. Builds multi-arch Docker image
 6. Pushes to Docker Hub
 7. Creates GitHub release with artifacts

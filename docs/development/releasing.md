@@ -54,10 +54,10 @@ just release::wiki-update macro-magnets     # Copies content to clipboard & open
 
 All versions follow [Semantic Versioning 2.0](https://semver.org/):
 
-- `X.Y.Z` - Stable release (published to PyPI for MCP Server)
-- `X.Y.Z-alpha` or `X.Y.Z-alpha.N` - Alpha pre-release (TestPyPI only)
-- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta pre-release (PyPI)
-- `X.Y.Z-rc.N` - Release candidate (PyPI)
+- `X.Y.Z` - Stable release (published to PyPI only)
+- `X.Y.Z-alpha` or `X.Y.Z-alpha.N` - Alpha pre-release (published to TestPyPI only)
+- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta pre-release (published to TestPyPI only)
+- `X.Y.Z-rc.N` - Release candidate (published to TestPyPI only)
 
 ## Release Workflow Overview
 
@@ -205,7 +205,7 @@ just release::tag-mcp-server 1.0.0
 1. GitHub Actions validates the tag format
 2. Builds Python wheel and source distribution (version from tag)
 3. Tests installation on Ubuntu and macOS
-4. Publishes to PyPI (or TestPyPI for alpha versions)
+4. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
 5. Builds multi-architecture Docker image (amd64 + arm64)
 6. Pushes to Docker Hub as `spkane/freecad-robust-mcp:1.0.0`
 7. Creates GitHub Release with wheel and tar.gz artifacts
@@ -216,10 +216,10 @@ just release::tag-mcp-server 1.0.0
 # Alpha (goes to TestPyPI only)
 just release::tag-mcp-server 1.0.0-alpha.1
 
-# Beta (goes to PyPI)
+# Beta (goes to TestPyPI only)
 just release::tag-mcp-server 1.0.0-beta.1
 
-# Release candidate (goes to PyPI)
+# Release candidate (goes to TestPyPI only)
 just release::tag-mcp-server 1.0.0-rc.1
 ```
 

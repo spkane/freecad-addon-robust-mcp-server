@@ -12,7 +12,7 @@ from typing import Any
 
 
 def register_partdesign_tools(
-    mcp: Any, get_bridge: Callable[..., Awaitable[Any]]
+    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
 ) -> None:
     """Register PartDesign-related tools with the Robust MCP Server.
 
