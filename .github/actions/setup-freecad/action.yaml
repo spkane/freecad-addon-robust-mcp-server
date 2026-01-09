@@ -80,9 +80,36 @@ runs:
             echo "Using cached extracted AppImage"
         fi
 
-        # Create symlinks for easy access
-        sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecadcmd /usr/local/bin/freecadcmd
-        sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecad /usr/local/bin/freecad
+        # Create wrapper scripts that use AppRun to properly set up library paths
+        # This is required because running the binaries directly from extracted AppImage
+        # doesn't set LD_LIBRARY_PATH and other environment variables
+        APPIMAGE_DIR="$HOME/freecad-appimage/squashfs-root"
+
+        # Create freecadcmd wrapper using echo to avoid YAML heredoc issues
+        {
+            echo '#!/bin/bash'
+            echo "export APPDIR=\"$APPIMAGE_DIR\""
+            echo 'export LD_LIBRARY_PATH="$APPDIR/usr/lib:$LD_LIBRARY_PATH"'
+            echo 'export PYTHONHOME="$APPDIR/usr"'
+            echo 'export PYTHONPATH="$APPDIR/usr/lib/python3.11:$APPDIR/usr/lib/python3.11/site-packages"'
+            echo 'exec "$APPDIR/usr/bin/freecadcmd" "$@"'
+        } | sudo tee /usr/local/bin/freecadcmd > /dev/null
+        sudo chmod +x /usr/local/bin/freecadcmd
+
+        # Create freecad (GUI) wrapper
+        {
+            echo '#!/bin/bash'
+            echo "export APPDIR=\"$APPIMAGE_DIR\""
+            echo 'export LD_LIBRARY_PATH="$APPDIR/usr/lib:$LD_LIBRARY_PATH"'
+            echo 'export PYTHONHOME="$APPDIR/usr"'
+            echo 'export PYTHONPATH="$APPDIR/usr/lib/python3.11:$APPDIR/usr/lib/python3.11/site-packages"'
+            echo 'export QT_PLUGIN_PATH="$APPDIR/usr/lib/plugins"'
+            echo 'export QT_QPA_PLATFORM_PLUGIN_PATH="$APPDIR/usr/lib/plugins/platforms"'
+            echo 'exec "$APPDIR/usr/bin/freecad" "$@"'
+        } | sudo tee /usr/local/bin/freecad > /dev/null
+        sudo chmod +x /usr/local/bin/freecad
+
+        echo "Created wrapper scripts for freecad and freecadcmd"
 
     - name: Verify FreeCAD installation
       shell: bash

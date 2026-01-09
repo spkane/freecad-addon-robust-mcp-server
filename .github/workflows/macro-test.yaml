@@ -251,6 +251,17 @@ jobs:
           echo "Starting FreeCAD GUI with MCP bridge under Xvfb..."
           echo "FONTCONFIG_FILE=$FONTCONFIG_FILE"
           echo "FONTCONFIG_PATH=$FONTCONFIG_PATH"
+          echo "DISPLAY=$DISPLAY"
+          echo "QT_QPA_PLATFORM=$QT_QPA_PLATFORM"
+          echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
+
+          # Check if FreeCAD wrapper script exists and show its contents
+          echo "=== FreeCAD wrapper script ==="
+          cat /usr/local/bin/freecad || echo "Wrapper not found"
+
+          # Quick test: try running freecad --version first to verify it works
+          echo "=== Testing freecad --version ==="
+          timeout 10 freecad --version 2>&1 || echo "Version check timed out or failed"
 
           # Export fontconfig vars so they're available to backgrounded process
           export FONTCONFIG_FILE FONTCONFIG_PATH
@@ -264,6 +275,13 @@ jobs:
 
           echo "Waiting for MCP bridge to start..."
           for i in {1..90}; do
+              # Check if process is still running
+              if ! ps -p "$FREECAD_PID" > /dev/null 2>&1; then
+                  echo "ERROR: FreeCAD process died (PID $FREECAD_PID)"
+                  echo "=== FreeCAD GUI log ==="
+                  cat /tmp/freecad_gui.log || echo "Log file is empty or missing"
+                  exit 1
+              fi
               if curl -s --max-time 2 -X POST \
                   -H "Content-Type: text/xml" \
                   -d '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>' \
@@ -274,9 +292,17 @@ jobs:
               if [ "$i" -eq 90 ]; then
                   echo "ERROR: MCP bridge did not start within 90s"
                   echo "=== FreeCAD GUI log ==="
-                  cat /tmp/freecad_gui.log || true
+                  cat /tmp/freecad_gui.log || echo "Log file is empty or missing"
+                  echo "=== Process status ==="
+                  pgrep -a freecad || echo "No freecad processes found"
                   kill "$FREECAD_PID" 2>/dev/null || true
                   exit 1
+              fi
+              # Show progress every 10 seconds
+              if [ $((i % 10)) -eq 0 ]; then
+                  echo "Still waiting... (${i}s)"
+                  # Show last few lines of log
+                  tail -5 /tmp/freecad_gui.log 2>/dev/null || true
               fi
               sleep 1
           done
