@@ -24,9 +24,13 @@ if TYPE_CHECKING:
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
-@dataclass
+@dataclass(frozen=True)
 class JustResult:
-    """Result of running a just command."""
+    """Result of running a just command.
+
+    This dataclass is frozen (immutable) since results should not be modified
+    after creation - they represent a snapshot of command execution.
+    """
 
     command: str
     returncode: int

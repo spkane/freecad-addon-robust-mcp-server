@@ -85,13 +85,8 @@ mcp-server:
     echo "Installing Robust MCP Server as a uv tool..."
     echo ""
 
-    # Remove existing installation if present (clean install)
-    if uv tool list 2>/dev/null | grep -q "freecad-robust-mcp"; then
-        echo "Removing existing Robust MCP Server installation..."
-        uv tool uninstall freecad-robust-mcp 2>/dev/null || true
-    fi
-
     # Install from the local project directory
+    # --force handles reinstallation automatically, no need to uninstall first
     uv tool install --force "$PROJECT_DIR"
 
     echo ""
@@ -525,17 +520,20 @@ except Exception:
 
     # Check macros
     # Helper function to extract __Version__ from macro files (handles single/double quotes)
+    # Uses environment variable to pass file path safely to Python (avoids shell interpolation)
     extract_macro_version() {
         local file="$1"
-        python3 -c "
-    import re
-    try:
-        content = open('$file').read()
-        match = re.search(r'__Version__\s*=\s*[\"']([^\"']+)[\"']', content)
-        print(match.group(1) if match else 'unknown')
-    except Exception:
-        print('unknown')
-    " 2>/dev/null || echo "unknown"
+        MACRO_FILE="$file" python3 -c '
+import os
+import re
+try:
+    macro_file = os.environ.get("MACRO_FILE", "")
+    content = open(macro_file).read()
+    match = re.search(r"__Version__\s*=\s*[\"'"'"']([^\"'"'"']+)[\"'"'"']", content)
+    print(match.group(1) if match else "unknown")
+except Exception:
+    print("unknown")
+' 2>/dev/null || echo "unknown"
     }
 
     echo "Macros:"

@@ -116,8 +116,10 @@ cd "$APPIMAGE_DIR"
 if [ ! -d "squashfs-root" ]; then
     echo "Extracting AppImage..."
     EXTRACTION_ERR=$(mktemp)
-    if ! ./FreeCAD.AppImage --appimage-extract > /dev/null 2>"$EXTRACTION_ERR"; then
-        EXTRACTION_EXIT_CODE=$?
+    # Capture exit code directly to avoid shell negation issues with $?
+    EXTRACTION_EXIT_CODE=0
+    ./FreeCAD.AppImage --appimage-extract > /dev/null 2>"$EXTRACTION_ERR" || EXTRACTION_EXIT_CODE=$?
+    if [[ $EXTRACTION_EXIT_CODE -ne 0 ]]; then
         echo "ERROR: AppImage extraction failed with exit code $EXTRACTION_EXIT_CODE"
         if [[ -s "$EXTRACTION_ERR" ]]; then
             echo "Extraction stderr:"
@@ -141,8 +143,9 @@ if [ ! -d "squashfs-root/usr/bin" ]; then
 fi
 
 echo "Checking AppImage structure..."
-# Use find instead of ls|pipe to satisfy shellcheck SC2012
-find "$APPIMAGE_DIR/squashfs-root/" -maxdepth 1 -printf '%M %u %g %s %f\n' 2>/dev/null | head -20
+# Display directory contents for diagnostic purposes (not parsed programmatically)
+# shellcheck disable=SC2012 # ls output piped to head for display only, not parsed
+ls -la "$APPIMAGE_DIR/squashfs-root/" 2>/dev/null | head -20
 
 # Create wrapper scripts using AppRun
 echo "Creating wrapper scripts..."

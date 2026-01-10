@@ -101,6 +101,8 @@ class TestDockerRuntime:
     ) -> None:
         """Docker build should run successfully."""
         docker_image_cleanup.append(DOCKER_IMAGE_NAME)
+        # 10 minute timeout: Docker builds can be slow, especially on first run
+        # when base images need to be pulled and dependencies compiled
         result = just.run("docker::build", timeout=600)
         assert result.success, f"Docker build failed: {result.stderr}"
 
