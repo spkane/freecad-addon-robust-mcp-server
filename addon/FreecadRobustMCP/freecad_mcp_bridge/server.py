@@ -294,31 +294,65 @@ class FreecadMCPPlugin:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
 
     def run_forever(self) -> None:
-        """Run the server indefinitely (for headless mode).
+        """Run the server indefinitely.
 
         This method blocks until interrupted (Ctrl+C) or stop() is called.
-        Use this when running FreeCAD in headless/console mode.
+        Works in both GUI and headless modes:
+        - GUI mode: Uses Qt event loop to allow timers to fire
+        - Headless mode: Uses signal.pause() for efficient waiting
         """
         self.start()
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("Server running. Press Ctrl+C to stop.\n")
+
+        # Check if we're in GUI mode and have Qt available
+        gui_mode = FREECAD_AVAILABLE and FreeCAD.GuiUp
+        QtCore = None
+        if gui_mode:
+            with contextlib.suppress(ImportError):
+                from PySide2 import QtCore as QtCore2
+
+                QtCore = QtCore2
+            if QtCore is None:
+                with contextlib.suppress(ImportError):
+                    from PySide6 import QtCore as QtCore6
+
+                    QtCore = QtCore6
+
         try:
-            # Use signal.pause() on Unix for efficient waiting
-            # This will be interrupted by any signal (SIGINT, SIGTERM)
-            while self._running:
-                try:
-                    # signal.pause() blocks until a signal is received
-                    # It's more efficient than sleep() and responds immediately to signals
-                    signal.pause()
-                except AttributeError:
-                    # Windows doesn't have signal.pause(), use sleep instead
-                    time.sleep(0.5)
+            if gui_mode and QtCore is not None:
+                # GUI mode: use Qt's processEvents to keep the event loop running
+                # This allows QTimers to fire for queue processing
+                app = QtCore.QCoreApplication.instance()
+                if app is not None:
+                    while self._running:
+                        # Process Qt events (including our QTimer callbacks)
+                        app.processEvents()
+                        # Small sleep to prevent busy-waiting
+                        time.sleep(0.01)
+                else:
+                    # No QApplication - fall back to headless behavior
+                    self._run_forever_headless()
+            else:
+                # Headless mode
+                self._run_forever_headless()
         except KeyboardInterrupt:
             pass  # Normal exit via Ctrl+C
         finally:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintMessage("\nShutting down...\n")
             self.stop()
+
+    def _run_forever_headless(self) -> None:
+        """Run forever in headless mode using signal.pause()."""
+        while self._running:
+            try:
+                # signal.pause() blocks until a signal is received
+                # It's more efficient than sleep() and responds immediately to signals
+                signal.pause()
+            except AttributeError:
+                # Windows doesn't have signal.pause(), use sleep instead
+                time.sleep(0.5)
 
     # =========================================================================
     # Status Bar Updates (GUI mode only)

@@ -10,6 +10,7 @@ on:
       - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
+      - ".github/actions/setup-freecad/**"
   pull_request:
     branches: [main, master]
     paths:
@@ -19,6 +20,7 @@ on:
       - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
+      - ".github/actions/setup-freecad/**"
   workflow_dispatch:
   workflow_call:
 
@@ -148,6 +150,9 @@ jobs:
     name: GUI Tests with FreeCAD + Xvfb
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # FreeCAD GUI requires a window manager to generate expose/configure events.
+    # Without a WM, the GUI binary hangs during Qt initialization.
+    # Solution: Xvfb + openbox window manager + xdotool for synthetic events.
 
     steps:
       - name: Checkout code
@@ -159,11 +164,13 @@ jobs:
       # Note: apt cache removed - caching /var/cache/apt/archives causes permission
       # issues and is largely negated by the immediate sudo apt-get update
 
-      - name: Install Xvfb and X11 dependencies
+      - name: Install Xvfb, openbox, and X11 dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             xvfb \
+            openbox \
+            xdotool \
             libxkbcommon-x11-0 \
             libxcb-icccm4 \
             libxcb-image0 \
@@ -187,7 +194,7 @@ jobs:
       - name: Setup FreeCAD
         uses: ./.github/actions/setup-freecad
 
-      - name: Start Xvfb
+      - name: Start Xvfb and openbox
         run: |
           echo "Starting Xvfb virtual display..."
           # Use -nolisten tcp to prevent TCP listeners for security
@@ -203,12 +210,25 @@ jobs:
           fi
           echo "Xvfb started on display :99 (PID: $XVFB_PID)"
 
+          # Start openbox window manager (required for FreeCAD GUI)
+          # FreeCAD needs a WM to generate expose/configure events
+          echo "Starting openbox window manager..."
+          DISPLAY=:99 openbox &
+          OPENBOX_PID=$!
+          echo "OPENBOX_PID=$OPENBOX_PID" >> "$GITHUB_ENV"
+          sleep 1
+          if ! ps -p $OPENBOX_PID > /dev/null; then
+              echo "WARNING: openbox may have failed to start"
+          else
+              echo "openbox started (PID: $OPENBOX_PID)"
+          fi
+
       - name: Verify X11 display
         env:
           DISPLAY: ":99"
         run: |
           echo "Checking X11 display..."
-          xdpyinfo | head -20 || echo "xdpyinfo not available"
+          xdpyinfo | head -10 || echo "xdpyinfo not available"
 
       - name: Cache uv dependencies
         uses: astral-sh/setup-uv@v7
@@ -244,29 +264,22 @@ jobs:
           # The AppImage's bundled fontconfig may not find system config automatically
           FONTCONFIG_FILE: /etc/fonts/fonts.conf
           FONTCONFIG_PATH: /etc/fonts
+          # Set XDG_RUNTIME_DIR to avoid Qt warning
+          XDG_RUNTIME_DIR: /tmp/runtime-root
         run: |
-          echo "Starting FreeCAD GUI with MCP bridge under Xvfb..."
-          echo "FONTCONFIG_FILE=$FONTCONFIG_FILE"
-          echo "FONTCONFIG_PATH=$FONTCONFIG_PATH"
+          # Create XDG_RUNTIME_DIR
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+
+          echo "Starting FreeCAD GUI with MCP bridge under Xvfb + openbox..."
           echo "DISPLAY=$DISPLAY"
           echo "QT_QPA_PLATFORM=$QT_QPA_PLATFORM"
           echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
 
-          # Check if FreeCAD wrapper script exists and show its contents
-          echo "=== FreeCAD wrapper script ==="
-          cat /usr/local/bin/freecad || echo "Wrapper not found"
-
-          # Quick test: try running freecad --version first to verify it works
-          echo "=== Testing freecad --version ==="
-          timeout 10 freecad --version 2>&1 || echo "Version check timed out or failed"
-
-          # Try to get more info about what's happening
-          echo "=== Testing with QT_DEBUG_PLUGINS ==="
-          QT_DEBUG_PLUGINS=1 timeout 15 freecad --version 2>&1 | head -50 || echo "Debug test failed/timed out"
-
-          # Check X11 connection
-          echo "=== Verifying X11 display ==="
-          xdpyinfo -display :99 | head -5 || echo "Cannot connect to display :99"
+          # Verify freecadcmd works (headless mode)
+          echo "=== Testing freecadcmd (headless) ==="
+          freecadcmd --version || echo "freecadcmd failed"
 
           # Export fontconfig vars so they're available to backgrounded process
           export FONTCONFIG_FILE FONTCONFIG_PATH
@@ -275,12 +288,18 @@ jobs:
           # Uses blocking_bridge.py which blocks with run_forever() to keep process alive
           # GUI features are available since we're using 'freecad' not 'freecadcmd'
           # Use setsid to create a new process group for reliable cleanup
-          setsid freecad --no-splash addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_gui.log 2>&1 &
+          # Note: --no-splash causes FreeCAD to exit immediately when running scripts
+          setsid freecad addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_gui.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 
           echo "Waiting for MCP bridge to start..."
+          # Send xdotool events to help FreeCAD GUI initialize
+          # FreeCAD needs mouse/keyboard events to process its event queue
           for i in {1..90}; do
+              # Send synthetic events to help FreeCAD initialize
+              xdotool mousemove $((400 + i*3)) $((300 + i*3)) click 1 key Escape 2>/dev/null || true
+
               # Check if process is still running
               if ! ps -p "$FREECAD_PID" > /dev/null 2>&1; then
                   echo "ERROR: FreeCAD process died (PID $FREECAD_PID)"
@@ -301,7 +320,7 @@ jobs:
                   cat /tmp/freecad_gui.log || echo "Log file is empty or missing"
                   echo "=== Process status ==="
                   pgrep -a freecad || echo "No freecad processes found"
-                  kill "$FREECAD_PID" 2>/dev/null || true
+                  kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
                   exit 1
               fi
               # Show progress every 10 seconds
@@ -344,12 +363,15 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Stop FreeCAD and Xvfb
+      - name: Stop FreeCAD, openbox, and Xvfb
         if: always()
         run: |
           if [ -n "$FREECAD_PID" ]; then
               # Kill process group (handles child processes spawned by FreeCAD/AppImage)
               kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
+          fi
+          if [ -n "$OPENBOX_PID" ]; then
+              kill "$OPENBOX_PID" 2>/dev/null || true
           fi
           if [ -n "$XVFB_PID" ]; then
               kill "$XVFB_PID" 2>/dev/null || true

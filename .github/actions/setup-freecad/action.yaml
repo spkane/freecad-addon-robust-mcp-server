@@ -45,11 +45,31 @@ runs:
         echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
         # Find the Linux AppImage asset URL
-        APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
-        APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+        # Priority: conda build with py311 > any conda build > any x86_64 AppImage
+        # The conda builds are the officially recommended AppImages
+        APPIMAGE_URL=""
+        APPIMAGE_NAME=""
+
+        # First try: conda build with py311 (most specific, preferred)
+        APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64-py311\\.AppImage$")) | .browser_download_url' | head -1)
+        APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64-py311\\.AppImage$")) | .name' | head -1)
+
+        # Second try: any conda build for x86_64
+        if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+            echo "Note: py311 conda build not found, trying any conda build..."
+            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
+            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+        fi
+
+        # Third try: any x86_64 AppImage (fallback)
+        if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+            echo "Note: conda build not found, trying any x86_64 AppImage..."
+            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
+            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+        fi
 
         if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
-            echo "ERROR: Could not find Linux AppImage in release assets"
+            echo "ERROR: Could not find Linux x86_64 AppImage in release assets"
             echo "Available assets:"
             echo "$RELEASE_INFO" | jq -r '.assets[].name'
             exit 1
@@ -153,8 +173,11 @@ runs:
       shell: bash
       run: |
         echo "Checking FreeCAD installation..."
-        if ! freecadcmd --version && ! freecad --version; then
-            echo "ERROR: FreeCAD version check failed"
+        # Use short-circuit OR: if freecadcmd succeeds, skip freecad check
+        if freecadcmd --version || freecad --version; then
+            echo "FreeCAD version check passed"
+        else
+            echo "ERROR: FreeCAD version check failed (both freecadcmd and freecad failed)"
             echo ""
             echo "=== Diagnostic Information ==="
             echo "--- which freecadcmd ---"
@@ -170,7 +193,6 @@ runs:
             echo "=== End Diagnostic Information ==="
             exit 1
         fi
-        echo "FreeCAD version check passed"
         which freecadcmd
         which freecad
         # Show Python version bundled with FreeCAD

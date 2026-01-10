@@ -4,6 +4,7 @@
 # Default Docker image name (matches Docker Hub and PyPI package name)
 image_name := "freecad-robust-mcp"
 registry := "spkane"
+gui_test_image := "freecad-gui-test"
 
 # Project root directory (justfile_directory() returns the main justfile's directory)
 project_root := justfile_directory()
@@ -274,3 +275,38 @@ test:
     if [ "$TEST_PASSED" = false ]; then
         exit 1
     fi
+
+# ============================================================================
+# GUI Test Container (for CI debugging)
+# ============================================================================
+
+# Build the GUI test container (replicates GitHub Actions CI environment)
+# Supports both x86_64 and aarch64 architectures (downloads correct AppImage)
+build-gui-test:
+    docker build -f {{project_root}}/tests/ci-test/Dockerfile.gui-test \
+        -t {{gui_test_image}} \
+        {{project_root}}
+
+# Run GUI test container interactively for debugging
+gui-test-shell:
+    docker run --rm -it \
+        -v {{project_root}}:/workspace \
+        {{gui_test_image}} \
+        /bin/bash
+
+# Run the automated GUI tests in the container
+gui-test-run:
+    docker run --rm -i \
+        -v {{project_root}}:/workspace \
+        {{gui_test_image}} \
+        /usr/local/bin/run-gui-test.sh
+
+# Run GUI test with custom command
+gui-test-cmd *args:
+    docker run --rm -it \
+        -v {{project_root}}:/workspace \
+        {{gui_test_image}} \
+        {{args}}
+
+# Quick rebuild and test cycle for GUI debugging
+gui-test: build-gui-test gui-test-run

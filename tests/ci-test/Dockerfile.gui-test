@@ -1,0 +1,89 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dockerfile for testing FreeCAD GUI with Xvfb
+# Replicates the GitHub Actions CI environment for local debugging
+#
+# Build:
+#   docker build -f tests/ci-test/Dockerfile.gui-test -t freecad-gui-test .
+#
+# Run interactively:
+#   docker run --rm -it freecad-gui-test
+#
+# Run with local code mounted:
+#   docker run --rm -it -v $(pwd):/workspace freecad-gui-test
+
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install X11, Xvfb, and dependencies (matching CI workflow)
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Xvfb and X11
+    xvfb \
+    libxkbcommon-x11-0 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-xinerama0 \
+    libxcb-xfixes0 \
+    libxcb-shape0 \
+    libxcb-cursor0 \
+    x11-utils \
+    libegl1 \
+    libgl1-mesa-dri \
+    libgl1 \
+    mesa-utils \
+    fontconfig \
+    fonts-dejavu-core \
+    # Window manager and X11 tools (required for FreeCAD GUI)
+    openbox \
+    xdotool \
+    # Tools for debugging
+    curl \
+    jq \
+    procps \
+    strace \
+    psmisc \
+    file \
+    # Python (for uv/pytest)
+    python3 \
+    python3-pip \
+    python3-venv \
+    # For downloading FreeCAD
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -f -v
+
+# Install uv for Python package management
+# hadolint ignore=DL3013
+RUN pip3 install --no-cache-dir uv
+
+# Set up working directory
+WORKDIR /workspace
+
+# Environment variables for GUI testing
+ENV DISPLAY=:99 \
+    QT_QPA_PLATFORM=xcb \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    FONTCONFIG_FILE=/etc/fonts/fonts.conf \
+    FONTCONFIG_PATH=/etc/fonts \
+    FREECAD_TAG=1.0.2
+
+# Script to setup FreeCAD AppImage
+COPY tests/ci-test/setup-freecad.sh /usr/local/bin/setup-freecad.sh
+RUN chmod +x /usr/local/bin/setup-freecad.sh
+
+# Script to run GUI tests
+COPY tests/ci-test/run-gui-test.sh /usr/local/bin/run-gui-test.sh
+RUN chmod +x /usr/local/bin/run-gui-test.sh
+
+# Download and setup FreeCAD during build (for faster iteration)
+# hadolint ignore=DL3001,DL3059
+RUN /usr/local/bin/setup-freecad.sh
+
+# Default: interactive shell for debugging
+CMD ["/bin/bash"]

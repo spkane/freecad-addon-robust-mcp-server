@@ -488,18 +488,18 @@ status:
             # Extract the top-level version element (not the one inside content/workbench)
             # Use a more robust extraction that handles multiline XML
             WB_VERSION=$(python3 -c "
-import xml.etree.ElementTree as ET
-import sys
-try:
-    tree = ET.parse('$MOD_DIR/FreecadRobustMCP/package.xml')
-    root = tree.getroot()
-    ns = {'pkg': 'https://wiki.freecad.org/Package_Metadata'}
-    # Try with namespace first, then without
-    ver = root.find('pkg:version', ns) or root.find('version')
-    print(ver.text if ver is not None else 'unknown')
-except Exception:
-    print('unknown')
-" 2>/dev/null || echo "unknown")
+    import xml.etree.ElementTree as ET
+    import sys
+    try:
+        tree = ET.parse('$MOD_DIR/FreecadRobustMCP/package.xml')
+        root = tree.getroot()
+        ns = {'pkg': 'https://wiki.freecad.org/Package_Metadata'}
+        # Try with namespace first, then without
+        ver = root.find('pkg:version', ns) or root.find('version')
+        print(ver.text if ver is not None else 'unknown')
+    except Exception:
+        print('unknown')
+    " 2>/dev/null || echo "unknown")
         fi
         WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCP/InitGui.py")
         echo "✓ Robust MCP Bridge Workbench: INSTALLED"

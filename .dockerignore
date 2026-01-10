@@ -83,6 +83,8 @@ macros/
 
 # Tests (not needed in runtime container)
 tests/
+# But allow CI test scripts for GUI testing container
+!tests/ci-test/
 
 # Development files
 justfile
