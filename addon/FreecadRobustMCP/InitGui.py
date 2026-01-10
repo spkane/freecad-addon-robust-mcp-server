@@ -1,179 +1,39 @@
-"""FreeCAD Robust MCP Workbench - GUI Initialization.
+"""Robust MCP Bridge Workbench - GUI Initialization.
 
 SPDX-License-Identifier: MIT
 Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
 
-This module defines the workbench class and GUI commands for the
-MCP Bridge. It provides toolbar buttons and menu items to start
-and stop the MCP bridge server.
+This module defines the workbench class for the Robust MCP Bridge.
+It provides toolbar buttons and menu items to start and stop the
+MCP bridge server. Commands are defined in the commands module.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
-
 import FreeCAD
 import FreeCADGui
 
-# Global reference to the plugin instance
-_mcp_plugin: Any = None
+# Register icons path for preferences page icon
+# This must be done at module level, before the preferences page is registered
+try:
+    from path_utils import get_icons_dir
 
+    _icons_dir = get_icons_dir()
+    if _icons_dir:
+        FreeCADGui.addIconPath(_icons_dir)
+except Exception as e:
+    FreeCAD.Console.PrintWarning(f"Could not register icon path: {e}\n")
 
-def get_addon_path() -> str:
-    """Get the path to this addon's directory."""
-    return str(Path(__file__).resolve().parent)
+# Register preferences page with FreeCAD's Preferences dialog
+# This must be done at module level, before the workbench is registered
+try:
+    from preferences_page import MCPBridgePreferencesPage
 
-
-def get_icon_path(icon_name: str) -> str:
-    """Get the full path to an icon file.
-
-    Args:
-        icon_name: Name of the icon file (e.g., "FreecadRobustMCP.svg")
-
-    Returns:
-        Full path to the icon file.
-    """
-    return str(Path(get_addon_path()) / icon_name)
-
-
-class StartMCPBridgeCommand:
-    """Command to start the MCP bridge server."""
-
-    def GetResources(self) -> dict[str, str]:
-        """Return the command resources (icon, menu text, tooltip)."""
-        return {
-            "Pixmap": get_icon_path("FreecadRobustMCP.svg"),
-            "MenuText": "Start MCP Bridge",
-            "ToolTip": (
-                "Start the MCP bridge server for AI assistant integration.\n"
-                "Listens on XML-RPC (port 9875) and Socket (port 9876)."
-            ),
-        }
-
-    def IsActive(self) -> bool:
-        """Return True if the command can be executed."""
-        global _mcp_plugin  # noqa: PLW0602
-        # Can only start if not already running
-        return _mcp_plugin is None or not _mcp_plugin.is_running
-
-    def Activated(self) -> None:
-        """Execute the command to start the MCP bridge."""
-        global _mcp_plugin
-
-        if _mcp_plugin is not None and _mcp_plugin.is_running:
-            FreeCAD.Console.PrintWarning("MCP Bridge is already running.\n")
-            return
-
-        try:
-            # Import the server module from the bundled code
-            from freecad_mcp_bridge.server import FreecadMCPPlugin
-
-            # Create and start the plugin
-            _mcp_plugin = FreecadMCPPlugin(
-                host="localhost",
-                port=9876,  # JSON-RPC socket port
-                xmlrpc_port=9875,  # XML-RPC port
-                enable_xmlrpc=True,
-            )
-            _mcp_plugin.start()
-
-            FreeCAD.Console.PrintMessage("\n")
-            FreeCAD.Console.PrintMessage("=" * 50 + "\n")
-            FreeCAD.Console.PrintMessage("MCP Bridge started!\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\n")
-            FreeCAD.Console.PrintMessage("  - Socket:  localhost:9876\n")
-            FreeCAD.Console.PrintMessage("=" * 50 + "\n")
-            FreeCAD.Console.PrintMessage(
-                "\nYou can now connect your MCP client (Claude Code, etc.) to FreeCAD.\n"
-            )
-
-        except ImportError as e:
-            FreeCAD.Console.PrintError(f"Failed to import MCP Bridge module: {e}\n")
-            FreeCAD.Console.PrintError(
-                "Ensure the FreecadRobustMCP addon is properly installed.\n"
-            )
-        except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
-
-
-class StopMCPBridgeCommand:
-    """Command to stop the MCP bridge server."""
-
-    def GetResources(self) -> dict[str, str]:
-        """Return the command resources (icon, menu text, tooltip)."""
-        return {
-            "Pixmap": get_icon_path("FreecadRobustMCP.svg"),
-            "MenuText": "Stop MCP Bridge",
-            "ToolTip": "Stop the running MCP bridge server.",
-        }
-
-    def IsActive(self) -> bool:
-        """Return True if the command can be executed."""
-        global _mcp_plugin  # noqa: PLW0602
-        # Can only stop if currently running
-        return _mcp_plugin is not None and _mcp_plugin.is_running
-
-    def Activated(self) -> None:
-        """Execute the command to stop the MCP bridge."""
-        global _mcp_plugin
-
-        if _mcp_plugin is None or not _mcp_plugin.is_running:
-            FreeCAD.Console.PrintWarning("MCP Bridge is not running.\n")
-            return
-
-        try:
-            _mcp_plugin.stop()
-            _mcp_plugin = None
-
-            FreeCAD.Console.PrintMessage("\n")
-            FreeCAD.Console.PrintMessage("=" * 50 + "\n")
-            FreeCAD.Console.PrintMessage("MCP Bridge stopped.\n")
-            FreeCAD.Console.PrintMessage("=" * 50 + "\n")
-
-        except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to stop MCP Bridge: {e}\n")
-
-
-class MCPBridgeStatusCommand:
-    """Command to show MCP bridge status."""
-
-    def GetResources(self) -> dict[str, str]:
-        """Return the command resources (icon, menu text, tooltip)."""
-        return {
-            "Pixmap": get_icon_path("FreecadRobustMCP.svg"),
-            "MenuText": "MCP Bridge Status",
-            "ToolTip": "Show the current status of the MCP bridge server.",
-        }
-
-    def IsActive(self) -> bool:
-        """Return True if the command can be executed."""
-        # Always active - can always show status
-        return True
-
-    def Activated(self) -> None:
-        """Execute the command to show MCP bridge status."""
-        global _mcp_plugin  # noqa: PLW0602
-
-        FreeCAD.Console.PrintMessage("\n")
-        FreeCAD.Console.PrintMessage("=" * 50 + "\n")
-        FreeCAD.Console.PrintMessage("MCP Bridge Status\n")
-        FreeCAD.Console.PrintMessage("=" * 50 + "\n")
-
-        if _mcp_plugin is None:
-            FreeCAD.Console.PrintMessage("Status: Not initialized\n")
-        elif not _mcp_plugin.is_running:
-            FreeCAD.Console.PrintMessage("Status: Stopped\n")
-        else:
-            FreeCAD.Console.PrintMessage("Status: Running\n")
-            FreeCAD.Console.PrintMessage(f"  Instance ID: {_mcp_plugin.instance_id}\n")
-            FreeCAD.Console.PrintMessage(f"  XML-RPC Port: {_mcp_plugin.xmlrpc_port}\n")
-            FreeCAD.Console.PrintMessage(f"  Socket Port: {_mcp_plugin.socket_port}\n")
-            FreeCAD.Console.PrintMessage(
-                f"  Requests processed: {_mcp_plugin.request_count}\n"
-            )
-
-        FreeCAD.Console.PrintMessage("=" * 50 + "\n")
+    FreeCADGui.addPreferencePage(MCPBridgePreferencesPage, "Robust MCP Bridge")
+except Exception as e:
+    FreeCAD.Console.PrintWarning(
+        f"Could not register MCP Bridge preferences page: {e}\n"
+    )
 
 
 class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
@@ -183,34 +43,91 @@ class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
     the MCP bridge server for AI assistant integration.
     """
 
-    MenuText = "MCP Bridge"
-    ToolTip = "MCP Bridge for AI assistant integration with FreeCAD"
-    Icon = get_icon_path("FreecadRobustMCP.svg")
+    MenuText = "Robust MCP Bridge"
+    ToolTip = "Robust MCP Bridge for AI assistant integration with FreeCAD"
+
+    def __init__(self) -> None:
+        """Initialize workbench with icon path."""
+        from path_utils import get_workbench_icon
+
+        self.Icon = get_workbench_icon()
 
     def Initialize(self) -> None:
         """Initialize the workbench - called once when first activated."""
+        # Import commands module here (not at top level) to ensure
+        # it's available during FreeCAD's module loading process
+        from commands import (
+            MCPBridgePreferencesCommand,
+            MCPBridgeStatusCommand,
+            StartMCPBridgeCommand,
+            StopMCPBridgeCommand,
+        )
+
         # Register commands
         FreeCADGui.addCommand("Start_MCP_Bridge", StartMCPBridgeCommand())
         FreeCADGui.addCommand("Stop_MCP_Bridge", StopMCPBridgeCommand())
         FreeCADGui.addCommand("MCP_Bridge_Status", MCPBridgeStatusCommand())
+        FreeCADGui.addCommand("MCP_Bridge_Preferences", MCPBridgePreferencesCommand())
 
-        # Create toolbar and menu
-        commands = ["Start_MCP_Bridge", "Stop_MCP_Bridge", "MCP_Bridge_Status"]
-        self.appendToolbar("MCP Bridge", commands)
-        self.appendMenu("MCP Bridge", commands)
+        # Create toolbar with main commands
+        toolbar_commands = [
+            "Start_MCP_Bridge",
+            "Stop_MCP_Bridge",
+            "MCP_Bridge_Status",
+        ]
+        self.appendToolbar("Robust MCP Bridge", toolbar_commands)
 
-        FreeCAD.Console.PrintMessage("FreeCAD Robust MCP workbench initialized\n")
+        # Create menu with all commands including preferences
+        menu_commands = [
+            "Start_MCP_Bridge",
+            "Stop_MCP_Bridge",
+            "MCP_Bridge_Status",
+            "Separator",
+            "MCP_Bridge_Preferences",
+        ]
+        self.appendMenu("Robust MCP Bridge", menu_commands)
+
+        FreeCAD.Console.PrintMessage("Robust MCP Bridge workbench initialized\n")
+
+        # Auto-start bridge if preference is enabled
+        # This is a fallback if the module-level timer didn't fire
+        # (which can happen if the module isn't loaded until workbench selection)
+        try:
+            from preferences import get_auto_start
+
+            if get_auto_start():
+                # Check if already running (timer might have started it)
+                from commands import is_bridge_running
+
+                if not is_bridge_running():
+                    FreeCAD.Console.PrintMessage(
+                        "Auto-starting MCP Bridge (configured in preferences)...\n"
+                    )
+                    FreeCADGui.runCommand("Start_MCP_Bridge")
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(f"Could not auto-start MCP Bridge: {e}\n")
+
+        # Sync status bar widget with current bridge state
+        # (bridge may have been started by Init.py before workbench was selected)
+        try:
+            from status_widget import sync_status_with_bridge
+
+            sync_status_with_bridge()
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(f"Could not sync status bar: {e}\n")
 
     def Activated(self) -> None:
         """Called when the workbench is activated."""
-        pass
+        # Sync status bar widget with current bridge state
+        try:
+            from status_widget import sync_status_with_bridge
+
+            sync_status_with_bridge()
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(f"Could not sync status bar: {e}\n")
 
     def Deactivated(self) -> None:
         """Called when the workbench is deactivated."""
-        pass
-
-    def ContextMenu(self, recipient: Any) -> None:
-        """Called when right-clicking in the view or object tree."""
         pass
 
     def GetClassName(self) -> str:
@@ -220,3 +137,38 @@ class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
 
 # Register the workbench
 FreeCADGui.addWorkbench(FreecadRobustMCPWorkbench())
+
+# Schedule status bar sync after a short delay to allow GUI to finish initializing
+# This runs on the main thread (InitGui.py is executed on main thread)
+try:
+    try:
+        from PySide2 import QtCore
+    except ImportError:
+        from PySide6 import QtCore
+
+    def _deferred_status_bar_sync() -> None:
+        """Sync status bar with bridge state after GUI is ready."""
+        try:
+            from commands import is_bridge_running
+            from preferences import get_status_bar_enabled
+            from status_widget import sync_status_with_bridge
+
+            if get_status_bar_enabled() and is_bridge_running():
+                FreeCAD.Console.PrintMessage(
+                    "Robust MCP Bridge: Syncing status bar from InitGui...\n"
+                )
+                sync_status_with_bridge()
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(
+                f"Robust MCP Bridge: Deferred status bar sync failed: {e}\n"
+            )
+
+    # Use QTimer.singleShot on the main thread - this should work
+    QtCore.QTimer.singleShot(2000, _deferred_status_bar_sync)
+    FreeCAD.Console.PrintMessage(
+        "Robust MCP Bridge: Status bar sync scheduled from InitGui (2s)\n"
+    )
+except Exception as e:
+    FreeCAD.Console.PrintWarning(
+        f"Robust MCP Bridge: Could not schedule status bar sync: {e}\n"
+    )

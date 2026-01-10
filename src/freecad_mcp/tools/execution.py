@@ -1,4 +1,4 @@
-"""Execution tools for FreeCAD MCP server.
+"""Execution tools for FreeCAD Robust MCP Server.
 
 This module provides tools for executing Python code in FreeCAD's context,
 getting version information, and accessing the console.
@@ -7,17 +7,19 @@ getting version information, and accessing the console.
 import os
 import platform
 import socket
-from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from freecad_mcp.server import get_instance_id
 
 
-def register_execution_tools(mcp, get_bridge) -> None:
-    """Register execution-related tools with the MCP server.
+def register_execution_tools(
+    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
+) -> None:
+    """Register execution-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
     """
 
@@ -132,12 +134,12 @@ def register_execution_tools(mcp, get_bridge) -> None:
 
     @mcp.tool()
     async def get_mcp_server_environment() -> dict[str, Any]:
-        """Get environment information about the MCP server and FreeCAD connection.
+        """Get environment info about the MCP Server and FreeCAD connection.
 
-        This tool returns information about the environment where the MCP server
+        This tool returns information about the environment where the MCP Server
         is running and the FreeCAD connection state, which is useful for debugging,
-        verifying which MCP server instance you are connected to (e.g., host vs
-        Docker container), and determining if GUI features are available.
+        verifying which MCP Server instance you are connected to, and determining
+        if GUI features are available.
 
         Returns:
             Dictionary containing environment information:
@@ -148,9 +150,7 @@ def register_execution_tools(mcp, get_bridge) -> None:
                 - os_name: Operating system name (Linux, Darwin, Windows)
                 - os_version: Operating system version
                 - platform: Platform identifier string
-                - python_version: Python version running the MCP server
-                - in_docker: Whether running inside a Docker container
-                - docker_container_id: Container ID if in Docker (first 12 chars)
+                - python_version: Python version running the MCP Server
                 - freecad: FreeCAD connection information:
                     - connected: Whether bridge is connected to FreeCAD
                     - mode: Connection mode (embedded, xmlrpc, socket)
@@ -177,54 +177,7 @@ def register_execution_tools(mcp, get_bridge) -> None:
                 env = get_mcp_server_environment()
                 if env["freecad"]["is_headless"]:
                     pytest.skip("Test requires GUI mode")
-
-            Verify you're talking to the containerized MCP server::
-
-                env = get_mcp_server_environment()
-                if env["in_docker"]:
-                    print(f"Connected to container: {env['docker_container_id']}")
-                else:
-                    print("Connected to host MCP server")
         """
-
-        def _detect_docker() -> tuple[bool, str | None]:
-            """Detect if running inside Docker and get container ID."""
-            # Check for .dockerenv file (most reliable)
-            dockerenv = Path("/.dockerenv")
-            if dockerenv.exists():
-                # Try to get container ID from cgroup
-                container_id = None
-                try:
-                    cgroup_path = Path("/proc/self/cgroup")
-                    with cgroup_path.open() as f:
-                        for line in f:
-                            if "docker" in line or "containerd" in line:
-                                # Extract container ID from path
-                                parts = line.strip().split("/")
-                                if parts:
-                                    cid = parts[-1]
-                                    # Container IDs are 64 hex chars
-                                    if len(cid) >= 12:
-                                        container_id = cid[:12]
-                                        break
-                except (OSError, IndexError):
-                    pass
-                return True, container_id
-
-            # Also check cgroup for containerized environments
-            try:
-                cgroup_init = Path("/proc/1/cgroup")
-                with cgroup_init.open() as f:
-                    content = f.read()
-                    if "docker" in content or "containerd" in content:
-                        return True, None
-            except OSError:
-                pass
-
-            return False, None
-
-        in_docker, container_id = _detect_docker()
-
         # Get FreeCAD connection status
         bridge = await get_bridge()
         status = await bridge.get_status()
@@ -236,8 +189,6 @@ def register_execution_tools(mcp, get_bridge) -> None:
             "os_version": platform.release(),
             "platform": platform.platform(),
             "python_version": platform.python_version(),
-            "in_docker": in_docker,
-            "docker_container_id": container_id,
             "freecad": {
                 "connected": status.connected,
                 "mode": status.mode,

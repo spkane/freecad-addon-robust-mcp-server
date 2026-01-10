@@ -1,6 +1,6 @@
 # Connection Modes
 
-The FreeCAD MCP Server supports multiple ways to connect to FreeCAD. Choose the mode that best fits your workflow.
+The FreeCAD Robust MCP Server supports multiple ways to connect to FreeCAD. Choose the mode that best fits your workflow.
 
 ---
 
@@ -21,16 +21,16 @@ XML-RPC mode is the **default and recommended** connection method. It works on a
 ### How It Works
 
 ```text
-MCP Client <--stdio--> MCP Server <--XML-RPC:9875--> FreeCAD
+MCP Client <--stdio--> Robust MCP Server <--XML-RPC:9875--> FreeCAD
 ```
 
-The MCP server communicates with FreeCAD via XML-RPC protocol on port 9875.
+The Robust MCP Server communicates with FreeCAD via XML-RPC protocol on port 9875.
 
 ### Setup
 
-1. Start FreeCAD with the MCP Bridge workbench
+1. Start FreeCAD with the Robust MCP Bridge workbench
 1. Click **Start Bridge** (or it auto-starts if configured)
-1. Configure the MCP server:
+1. Configure the Robust MCP Server:
 
 ```bash
 export FREECAD_MODE=xmlrpc
@@ -41,7 +41,7 @@ freecad-mcp
 ### Advantages
 
 - Works on all platforms (macOS, Linux, Windows)
-- Process isolation (FreeCAD crash doesn't affect MCP server)
+- Process isolation (FreeCAD crash doesn't affect Robust MCP Server)
 - Supports both GUI and headless FreeCAD
 
 ---
@@ -53,7 +53,7 @@ Socket mode uses JSON-RPC over TCP sockets instead of XML-RPC.
 ### How It Works
 
 ```text
-MCP Client <--stdio--> MCP Server <--JSON-RPC:9876--> FreeCAD
+MCP Client <--stdio--> Robust MCP Server <--JSON-RPC:9876--> FreeCAD
 ```
 
 ### Setup
@@ -78,7 +78,7 @@ freecad-mcp
 !!! danger "Platform Limitation"
 Embedded mode **only works on Linux**. On macOS and Windows, it causes crashes due to Python ABI incompatibility.
 
-Embedded mode imports FreeCAD directly into the MCP server process, providing the fastest execution.
+Embedded mode imports FreeCAD directly into the Robust MCP Server process, providing the fastest execution.
 
 ### Why It Crashes on macOS/Windows
 
@@ -162,7 +162,7 @@ just freecad::run-gui  # From source
 **Headless Mode:**
 
 ```bash
-FreeCADCmd /path/to/headless_server.py
+FreeCADCmd /path/to/blocking_bridge.py
 just freecad::run-headless  # From source
 ```
 
@@ -176,7 +176,7 @@ just freecad::run-headless  # From source
 Error: Connection refused on localhost:9875
 ```
 
-**Solution:** Ensure FreeCAD is running with the MCP Bridge started. Check the bridge status in FreeCAD's toolbar.
+**Solution:** Ensure FreeCAD is running with the Robust MCP Bridge started. Check the bridge status in FreeCAD's toolbar.
 
 ### Embedded Mode Crash on macOS
 

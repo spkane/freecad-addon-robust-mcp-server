@@ -16,7 +16,7 @@ install-deps:
     @echo ""
     @echo "Dependencies installed!"
     @echo ""
-    @echo "To run the MCP server:"
+    @echo "To run the Robust MCP Server:"
     @echo "  just mcp::run              # stdio mode"
     @echo "  just mcp::run-debug        # with debug logging"
     @echo "  just mcp::run-http         # HTTP mode for remote access"
@@ -26,11 +26,29 @@ install-pre-commit:
     cd {{project_root}} && uv run pre-commit install
     cd {{project_root}} && uv run pre-commit install --hook-type commit-msg
 
-# Update all dependencies to latest versions (uv.lock + pre-commit hooks)
+# Update all dependencies to latest versions (mise tools, uv.lock, pre-commit hooks)
 update-deps:
-    cd {{project_root}} && uv lock --upgrade
-    cd {{project_root}} && uv sync --all-extras
-    cd {{project_root}} && uv run pre-commit autoupdate
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{project_root}}"
+
+    echo "Updating mise-managed tools..."
+    mise upgrade
+    echo ""
+
+    echo "Updating Python dependencies..."
+    uv lock --upgrade
+    uv sync --all-extras
+
+    echo ""
+    echo "Updating pre-commit hooks..."
+    uv run pre-commit autoupdate
+
+    echo ""
+    echo "All dependencies updated!"
+    echo "  - mise tools: updated (see .mise.toml)"
+    echo "  - Python deps: updated (see uv.lock)"
+    echo "  - pre-commit hooks: updated (see .pre-commit-config.yaml)"
 
 # =============================================================================
 # Development Utilities

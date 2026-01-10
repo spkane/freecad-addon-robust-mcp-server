@@ -1,4 +1,4 @@
-"""PartDesign tools for FreeCAD MCP server.
+"""PartDesign tools for FreeCAD Robust MCP Server.
 
 This module provides tools for the PartDesign workbench, enabling
 parametric solid modeling operations like Pad, Pocket, Fillet, etc.
@@ -7,14 +7,17 @@ Based on learnings from contextform/freecad-mcp which has the most
 comprehensive PartDesign coverage.
 """
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_partdesign_tools(mcp, get_bridge) -> None:
-    """Register PartDesign-related tools with the MCP server.
+def register_partdesign_tools(
+    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
+) -> None:
+    """Register PartDesign-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
     """
 

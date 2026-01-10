@@ -1,4 +1,4 @@
-# FreeCAD Tools and MCP Server
+# FreeCAD Tools and Robust MCP Server
 
 [![CI Tests](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/test.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/test.yaml)
 [![Integration Tests](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/macro-test.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/macro-test.yaml)
@@ -19,13 +19,13 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 <!--TOC-->
 
-- [FreeCAD Tools and MCP Server](#freecad-tools-and-mcp-server)
+- [FreeCAD Tools and Robust MCP Server](#freecad-tools-and-robust-mcp-server)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Requirements](#requirements)
   - [For Users](#for-users)
     - [Quick Links](#quick-links)
-  - [MCP Server](#mcp-server)
+  - [Robust MCP Server](#robust-mcp-server)
     - [Installation](#installation)
       - [Using pip (recommended)](#using-pip-recommended)
       - [Using mise and just (from source)](#using-mise-and-just-from-source)
@@ -63,7 +63,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
     - [CutObjectForMagnets](#cutobjectformagnets)
     - [MultiExport](#multiexport)
   - [For Developers](#for-developers)
-  - [MCP Server Development](#mcp-server-development)
+  - [Robust MCP Server Development](#robust-mcp-server-development)
     - [Prerequisites](#prerequisites)
     - [Initial Setup](#initial-setup)
     - [MCP Client Configuration (Development)](#mcp-client-configuration-development)
@@ -89,7 +89,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **Multiple Connection Modes**: XML-RPC (recommended), JSON-RPC socket, or embedded
 - **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development**: Create, edit, run, and template FreeCAD macros via MCP
-- **Standalone Macros**: Useful FreeCAD macros that work independently of the MCP server
+- **Standalone Macros**: Useful FreeCAD macros that work independently of the Robust MCP Server
 
 ## Requirements
 
@@ -100,7 +100,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 ## For Users
 
-This section covers installation and usage for end users who want to use the MCP server with AI assistants or the standalone FreeCAD macros.
+This section covers installation and usage for end users who want to use the Robust MCP Server with AI assistants or the standalone FreeCAD macros.
 
 ### Quick Links
 
@@ -110,9 +110,9 @@ This section covers installation and usage for end users who want to use the MCP
 | [PyPI](https://pypi.org/project/freecad-robust-mcp/)                              | Python package for pip installation                          |
 | [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases) | Release archives, changelogs, and standalone macro downloads |
 
-## MCP Server
+## Robust MCP Server
 
-> **Note**: Since this repository has more than just the MCP server in it, the Linux container and PyPi projects releases are both simply named `freecad-robust-mcp` which differs from the name of this git repository.
+> **Note**: Since this repository has more than just the Robust MCP Server in it, the Linux container and PyPi projects releases are both simply named `freecad-robust-mcp` which differs from the name of this git repository.
 
 ### Installation
 
@@ -138,7 +138,7 @@ just setup
 
 #### Using Docker
 
-Run the MCP server in a container. This is useful for isolated environments or when you don't want to install Python dependencies on your host.
+Run the Robust MCP Server in a container. This is useful for isolated environments or when you don't want to install Python dependencies on your host.
 
 ```bash
 # Pull from Docker Hub (when published)
@@ -154,7 +154,7 @@ just docker::build        # Build for local architecture
 just docker::build-multi  # Build multi-arch (amd64 + arm64)
 ```
 
-**Note:** The containerized MCP server only supports `xmlrpc` and `socket` modes since FreeCAD runs on your host machine (not in the container). The container connects to FreeCAD via `host.docker.internal`.
+**Note:** The containerized Robust MCP Server only supports `xmlrpc` and `socket` modes since FreeCAD runs on your host machine (not in the container). The container connects to FreeCAD via `host.docker.internal`.
 
 ### Configuration
 
@@ -224,7 +224,7 @@ If using Docker:
         "--add-host=host.docker.internal:host-gateway",
         "-e", "FREECAD_MODE=xmlrpc",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
-        "freecad-mcp"
+        "spkane/freecad-robust-mcp"
       ]
     }
   }
@@ -236,7 +236,7 @@ If using Docker:
 - `--rm` removes the container after it exits
 - `-i` keeps stdin open for MCP communication
 - `--add-host=host.docker.internal:host-gateway` allows the container to connect to FreeCAD on your host (Linux only; macOS/Windows have this built-in)
-- `FREECAD_SOCKET_HOST=host.docker.internal` tells the MCP server to connect to FreeCAD on your host machine
+- `FREECAD_SOCKET_HOST=host.docker.internal` tells the Robust MCP Server to connect to FreeCAD on your host machine
 
 ### Usage
 
@@ -246,15 +246,15 @@ Before your AI assistant can connect, you need to start the MCP bridge inside Fr
 
 ##### Option A: Using the Workbench (Recommended)
 
-1. Install the MCP Bridge workbench via FreeCAD's Addon Manager:
+1. Install the Robust MCP Bridge workbench via FreeCAD's Addon Manager:
 
    - **Edit -> Preferences -> Addon Manager**
-   - Search for "MCP Bridge"
+   - Search for "Robust MCP Bridge"
    - Install and restart FreeCAD
 
 1. Start the bridge:
 
-   - Switch to the MCP Bridge workbench
+   - Switch to the Robust MCP Bridge workbench
    - Click the **Start MCP Bridge** button in the toolbar
    - Or use the menu: **MCP Bridge -> Start Bridge**
 
@@ -280,11 +280,11 @@ After starting the bridge, start/restart your MCP client (Claude Code, etc.) - i
 
 #### Uninstalling the MCP Bridge
 
-To uninstall the MCP Bridge workbench:
+To uninstall the Robust MCP Bridge workbench:
 
 1. Open FreeCAD
 1. Go to **Edit -> Preferences -> Addon Manager**
-1. Find "MCP Bridge" in the list
+1. Find "Robust MCP Bridge" in the list
 1. Click **Uninstall**
 1. Restart FreeCAD
 
@@ -349,17 +349,17 @@ FREECAD_MODE=embedded freecad-mcp
 
 ### Available Tools
 
-The MCP server provides **83 tools** organized into categories. Tools marked with **GUI** require FreeCAD to be running in GUI mode; they will return an error in headless mode.
+The Robust MCP Server provides **83 tools** organized into categories. Tools marked with **GUI** require FreeCAD to be running in GUI mode; they will return an error in headless mode.
 
 #### Execution & Debugging (5 tools)
 
-| Tool                         | Description                                            | Mode |
-| ---------------------------- | ------------------------------------------------------ | ---- |
-| `execute_python`             | Execute arbitrary Python code in FreeCAD's context     | All  |
-| `get_freecad_version`        | Get FreeCAD version, build date, and Python version    | All  |
-| `get_connection_status`      | Check MCP bridge connection status and latency         | All  |
-| `get_console_output`         | Get recent FreeCAD console output (up to N lines)      | All  |
-| `get_mcp_server_environment` | Get MCP server environment (OS, hostname, Docker info) | All  |
+| Tool                         | Description                                                   | Mode |
+| ---------------------------- | ------------------------------------------------------------- | ---- |
+| `execute_python`             | Execute arbitrary Python code in FreeCAD's context            | All  |
+| `get_freecad_version`        | Get FreeCAD version, build date, and Python version           | All  |
+| `get_connection_status`      | Check MCP bridge connection status and latency                | All  |
+| `get_console_output`         | Get recent FreeCAD console output (up to N lines)             | All  |
+| `get_mcp_server_environment` | Get Robust MCP Server environment (OS, hostname, instance_id) | All  |
 
 #### Document Management (7 tools)
 
@@ -491,7 +491,7 @@ The MCP server provides **83 tools** organized into categories. Tools marked wit
 
 ## FreeCAD Macros
 
-This project includes standalone FreeCAD macros that can be used independently of the MCP server. These are useful for FreeCAD users who want the macros without setting up the full MCP integration.
+This project includes standalone FreeCAD macros that can be used independently of the Robust MCP Server. These are useful for FreeCAD users who want the macros without setting up the full MCP integration.
 
 ### Downloading Macros
 
@@ -619,7 +619,7 @@ just freecad::uninstall-export-macro
 
 This section covers development setup, contributing, and working with the codebase.
 
-## MCP Server Development
+## Robust MCP Server Development
 
 ### Prerequisites
 
@@ -696,7 +696,7 @@ Commands are organized into modules. Use `just` to see top-level commands, or `j
 just
 
 # Show commands in a specific module
-just list-mcp           # MCP server commands
+just list-mcp           # Robust MCP Server commands
 just list-freecad       # FreeCAD plugin/macro commands
 just list-install       # Installation commands
 just list-quality       # Code quality commands
@@ -725,7 +725,7 @@ just testing::unit       # Run unit tests
 just testing::cov        # Run tests with coverage
 just testing::integration # Run integration tests
 
-# Run the MCP server (or with debug logging)
+# Run the Robust MCP Server (or with debug logging)
 just mcp::run
 just mcp::run-debug
 

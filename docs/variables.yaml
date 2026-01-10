@@ -1,8 +1,8 @@
 # Variables for mkdocs-macros-plugin
-# Use in docs with {{ variable_name }}
+# Use in docs with {{@ variable_name @}} (custom delimiters to avoid Python dict conflicts)
 
 # Project info
-project_name: FreeCAD MCP Server
+project_name: FreeCAD Robust MCP Server
 package_name: freecad-robust-mcp
 docker_image: spkane/freecad-robust-mcp
 

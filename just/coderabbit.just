@@ -62,10 +62,9 @@ install:
     echo ""
     echo "CodeRabbit CLI installed. Run 'just coderabbit::login' to authenticate."
 
-# Check if CodeRabbit CLI is installed
+# Check if CodeRabbit CLI is installed (silent check)
 check-installed:
     @command -v coderabbit >/dev/null 2>&1 || { echo "CodeRabbit CLI not installed. Run: just coderabbit::install"; exit 1; }
-    @coderabbit --version
 
 # =============================================================================
 # Authentication
@@ -199,13 +198,13 @@ review-json: check-installed
     fi
 
 # =============================================================================
-# Configuration
+# Help & Info
 # =============================================================================
-
-# Show CodeRabbit configuration
-config-show: check-installed
-    coderabbit config show
 
 # Show help for all CodeRabbit commands
 help: check-installed
     coderabbit --help
+
+# Show CodeRabbit CLI version
+version: check-installed
+    @coderabbit --version

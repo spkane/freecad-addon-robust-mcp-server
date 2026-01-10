@@ -52,10 +52,15 @@ class TestAddonFileStructure:
         server_file = ADDON_DIR / "freecad_mcp_bridge" / "server.py"
         assert server_file.exists(), f"Bridge server.py not found: {server_file}"
 
-    def test_headless_server_exists(self):
-        """The headless_server.py should exist for headless mode support."""
-        headless_file = ADDON_DIR / "freecad_mcp_bridge" / "headless_server.py"
-        assert headless_file.exists(), f"headless_server.py not found: {headless_file}"
+    def test_blocking_bridge_exists(self):
+        """The blocking_bridge.py should exist for blocking server mode."""
+        blocking_file = ADDON_DIR / "freecad_mcp_bridge" / "blocking_bridge.py"
+        assert blocking_file.exists(), f"blocking_bridge.py not found: {blocking_file}"
+
+    def test_bridge_utils_exists(self):
+        """The bridge_utils.py should exist for shared utilities."""
+        utils_file = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
+        assert utils_file.exists(), f"bridge_utils.py not found: {utils_file}"
 
 
 class TestAddonPythonSyntax:
@@ -87,10 +92,16 @@ class TestAddonPythonSyntax:
         code = server_file.read_text()
         ast.parse(code)
 
-    def test_headless_server_valid_syntax(self):
-        """headless_server.py should have valid Python syntax."""
-        headless_file = ADDON_DIR / "freecad_mcp_bridge" / "headless_server.py"
-        code = headless_file.read_text()
+    def test_blocking_bridge_valid_syntax(self):
+        """blocking_bridge.py should have valid Python syntax."""
+        blocking_file = ADDON_DIR / "freecad_mcp_bridge" / "blocking_bridge.py"
+        code = blocking_file.read_text()
+        ast.parse(code)
+
+    def test_bridge_utils_valid_syntax(self):
+        """bridge_utils.py should have valid Python syntax."""
+        utils_file = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
+        code = utils_file.read_text()
         ast.parse(code)
 
 
@@ -129,17 +140,23 @@ class TestAddonMetadata:
         code = server_file.read_text()
         assert "class FreecadMCPPlugin" in code
 
-    def test_headless_server_imports_plugin(self):
-        """headless_server.py should import FreecadMCPPlugin."""
-        headless_file = ADDON_DIR / "freecad_mcp_bridge" / "headless_server.py"
-        code = headless_file.read_text()
+    def test_blocking_bridge_imports_plugin(self):
+        """blocking_bridge.py should import FreecadMCPPlugin."""
+        blocking_file = ADDON_DIR / "freecad_mcp_bridge" / "blocking_bridge.py"
+        code = blocking_file.read_text()
         assert "FreecadMCPPlugin" in code
 
-    def test_headless_server_has_run_forever(self):
-        """headless_server.py should call run_forever for blocking execution."""
-        headless_file = ADDON_DIR / "freecad_mcp_bridge" / "headless_server.py"
-        code = headless_file.read_text()
+    def test_blocking_bridge_has_run_forever(self):
+        """blocking_bridge.py should call run_forever for blocking execution."""
+        blocking_file = ADDON_DIR / "freecad_mcp_bridge" / "blocking_bridge.py"
+        code = blocking_file.read_text()
         assert "run_forever" in code
+
+    def test_bridge_utils_has_get_running_plugin(self):
+        """bridge_utils.py should have get_running_plugin function."""
+        utils_file = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
+        code = utils_file.read_text()
+        assert "def get_running_plugin" in code
 
     def test_icon_is_valid_svg(self):
         """The icon should be a valid SVG file."""

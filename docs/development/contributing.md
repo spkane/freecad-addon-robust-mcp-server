@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for your interest in contributing to FreeCAD MCP Server!
+Thank you for your interest in contributing to FreeCAD Robust MCP Server!
 
 ---
 

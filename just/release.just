@@ -18,11 +18,11 @@
 #
 # Version Format (SemVer 2.0):
 #   - X.Y.Z           - Stable release
-#   - X.Y.Z-alpha     - Alpha (TestPyPI only for MCP server)
-#   - X.Y.Z-alpha.N   - Alpha with number
-#   - X.Y.Z-beta      - Beta
-#   - X.Y.Z-beta.N    - Beta with number
-#   - X.Y.Z-rc.N      - Release candidate
+#   - X.Y.Z-alpha     - Alpha (TestPyPI only)
+#   - X.Y.Z-alpha.N   - Alpha with number (TestPyPI only)
+#   - X.Y.Z-beta      - Beta (TestPyPI only)
+#   - X.Y.Z-beta.N    - Beta with number (TestPyPI only)
+#   - X.Y.Z-rc.N      - Release candidate (TestPyPI only)
 
 # Project root directory
 project_root := justfile_directory()
@@ -31,7 +31,7 @@ project_root := justfile_directory()
 # Version Bump Commands
 # =============================================================================
 
-# Bump the MCP Bridge workbench version in all source files
+# Bump the Robust MCP Bridge workbench version in all source files
 bump-workbench version:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -46,7 +46,7 @@ bump-workbench version:
         exit 1
     fi
 
-    echo "Bumping MCP Bridge Workbench to version: $VERSION (date: $TODAY)"
+    echo "Bumping Robust MCP Bridge Workbench to version: $VERSION (date: $TODAY)"
     echo ""
 
     # Update __version__ in the bridge module's __init__.py
@@ -191,8 +191,8 @@ bump-macro-export version: (_bump-macro "Multi_Export" "Multi Export" "MultiExpo
 # Tag Creation Commands
 # =============================================================================
 
-# Create and push a release tag for the MCP server (triggers PyPI + Docker release)
-# Note: MCP server uses setuptools-scm, so version is derived from git tag at build time
+# Create and push a release tag for the Robust MCP Server (triggers PyPI + Docker release)
+# Note: Robust MCP Server uses setuptools-scm, so version is derived from git tag at build time
 tag-mcp-server version:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -213,7 +213,7 @@ tag-mcp-server version:
     echo "Creating tag: $TAG"
     echo ""
     echo "This will trigger:"
-    echo "  - PyPI release (beta/rc/stable) or TestPyPI (alpha)"
+    echo "  - PyPI release (stable) or TestPyPI (alpha/beta/rc)"
     echo "  - Docker Hub release"
     echo "  - GitHub release with wheel and tar.gz"
     echo ""
@@ -224,13 +224,13 @@ tag-mcp-server version:
         exit 1
     fi
 
-    git tag -a "$TAG" -m "Release MCP Server v{{version}}"
+    git tag -a "$TAG" -m "Release Robust MCP Server v{{version}}"
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
     echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
 
-# Create and push a release tag for the MCP Bridge workbench
+# Create and push a release tag for the Robust MCP Bridge workbench
 tag-workbench version:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -289,7 +289,7 @@ tag-workbench version:
         exit 1
     fi
 
-    git tag -a "$TAG" -m "Release MCP Bridge Workbench v{{version}}"
+    git tag -a "$TAG" -m "Release Robust MCP Bridge Workbench v{{version}}"
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
@@ -386,7 +386,7 @@ tag-macro-export version: (_tag-macro "Multi_Export" "Multi Export" "MultiExport
 # List all release tags grouped by component
 list-tags:
     #!/usr/bin/env bash
-    echo "=== MCP Server Releases ==="
+    echo "=== Robust MCP Server Releases ==="
     git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -10
     echo ""
     echo "=== MCP Workbench Releases ==="
@@ -407,8 +407,8 @@ latest-versions:
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -n1)
     MAGNETS_TAG=$(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -n1)
     EXPORT_TAG=$(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -n1)
-    echo "  MCP Server:      ${SERVER_TAG:-none}"
-    echo "  MCP Workbench:   ${WORKBENCH_TAG:-none}"
+    echo "  Robust MCP Server:      ${SERVER_TAG:-none}"
+    echo "  Robust MCP Workbench:   ${WORKBENCH_TAG:-none}"
     echo "  Macro Magnets:   ${MAGNETS_TAG:-none}"
     echo "  Macro Export:    ${EXPORT_TAG:-none}"
 
@@ -518,27 +518,27 @@ status:
         fi
     }
 
-    # MCP Server
+    # Robust MCP Server
     SERVER_CHANGES=$(count_changes "robust-mcp-server-v" "src/freecad_mcp pyproject.toml Dockerfile")
     SERVER_TAG=$(git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -1)
     if [ "$SERVER_CHANGES" -gt 0 ]; then
-        echo "MCP Server: $SERVER_CHANGES unreleased commit(s)"
+        echo "Robust MCP Server: $SERVER_CHANGES unreleased commit(s)"
         echo "  Latest: ${SERVER_TAG:-none}"
         echo "  View:   just release::changes-since mcp-server"
     else
-        echo "MCP Server: up to date (${SERVER_TAG:-no releases})"
+        echo "Robust MCP Server: up to date (${SERVER_TAG:-no releases})"
     fi
     echo ""
 
-    # Workbench
+    # Robust MCP Bridge Workbench
     WORKBENCH_CHANGES=$(count_changes "robust-mcp-workbench-v" "addon/FreecadRobustMCP")
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -1)
     if [ "$WORKBENCH_CHANGES" -gt 0 ]; then
-        echo "MCP Workbench: $WORKBENCH_CHANGES unreleased commit(s)"
+        echo "Robust MCP Bridge Workbench: $WORKBENCH_CHANGES unreleased commit(s)"
         echo "  Latest: ${WORKBENCH_TAG:-none}"
         echo "  View:   just release::changes-since workbench"
     else
-        echo "MCP Workbench: up to date (${WORKBENCH_TAG:-no releases})"
+        echo "Robust MCP Bridge Workbench: up to date (${WORKBENCH_TAG:-no releases})"
     fi
     echo ""
 
@@ -580,12 +580,12 @@ draft-notes component:
         mcp-server|server)
             PREFIX="robust-mcp-server-v"
             PATHS="src/freecad_mcp pyproject.toml Dockerfile"
-            COMPONENT_NAME="MCP Server"
+            COMPONENT_NAME="Robust MCP Server"
             ;;
         workbench)
             PREFIX="robust-mcp-workbench-v"
             PATHS="addon/FreecadRobustMCP"
-            COMPONENT_NAME="MCP Bridge Workbench"
+            COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
         macro-magnets|magnets)
             PREFIX="macro-cut-object-for-magnets-v"
@@ -659,10 +659,10 @@ extract-changelog component version:
     # Match header exactly as it appears in CHANGELOG.md
     case "{{component}}" in
         mcp-server|server)
-            HEADER="### MCP Server v{{version}}"
+            HEADER="### Robust MCP Server v{{version}}"
             ;;
         workbench)
-            HEADER="### MCP Bridge Workbench v{{version}}"
+            HEADER="### Robust MCP Bridge Workbench v{{version}}"
             ;;
         macro-magnets|magnets)
             HEADER="### Cut Object for Magnets Macro v{{version}}"
@@ -730,3 +730,234 @@ dry-run-tag component version:
             exit 1
             ;;
     esac
+
+# =============================================================================
+# FreeCAD Wiki Update Helpers
+# =============================================================================
+
+# Helper to update FreeCAD wiki for a macro (copies content to clipboard and opens edit page)
+wiki-update macro:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "{{macro}}" in
+        macro-magnets|magnets|cut)
+            WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
+            WIKI_PAGE="Macro_Cut_Object_for_Magnets"
+            MACRO_NAME="Cut Object for Magnets"
+            ;;
+        macro-export|export|multi)
+            WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
+            WIKI_PAGE="Macro_Multi_Export"
+            MACRO_NAME="Multi Export"
+            ;;
+        *)
+            echo "Unknown macro: {{macro}}"
+            echo "Valid options: macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            exit 1
+            ;;
+    esac
+
+    WIKI_URL="https://wiki.freecad.org/index.php?title=${WIKI_PAGE}&action=edit"
+
+    echo "=========================================="
+    echo "FreeCAD Wiki Update Helper"
+    echo "=========================================="
+    echo ""
+    echo "Macro: $MACRO_NAME"
+    echo "Wiki Page: https://wiki.freecad.org/${WIKI_PAGE}"
+    echo ""
+
+    # Check if wiki-source.txt exists
+    if [ ! -f "$WIKI_SOURCE" ]; then
+        echo "ERROR: Wiki source file not found: $WIKI_SOURCE"
+        exit 1
+    fi
+
+    # Extract current version from wiki-source.txt
+    CURRENT_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
+    CURRENT_DATE=$(grep -o '|Date=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
+
+    echo "Current version in wiki-source.txt:"
+    echo "  Version: $CURRENT_VERSION"
+    echo "  Date:    $CURRENT_DATE"
+    echo ""
+
+    # Try to copy to clipboard (platform-specific)
+    COPIED=false
+    if command -v pbcopy &> /dev/null; then
+        # macOS
+        cat "$WIKI_SOURCE" | pbcopy
+        COPIED=true
+        echo "Content copied to clipboard (macOS pbcopy)"
+    elif command -v xclip &> /dev/null; then
+        # Linux with xclip
+        cat "$WIKI_SOURCE" | xclip -selection clipboard
+        COPIED=true
+        echo "Content copied to clipboard (xclip)"
+    elif command -v xsel &> /dev/null; then
+        # Linux with xsel
+        cat "$WIKI_SOURCE" | xsel --clipboard --input
+        COPIED=true
+        echo "Content copied to clipboard (xsel)"
+    elif command -v wl-copy &> /dev/null; then
+        # Wayland
+        cat "$WIKI_SOURCE" | wl-copy
+        COPIED=true
+        echo "Content copied to clipboard (wl-copy)"
+    else
+        echo "NOTE: No clipboard utility found (pbcopy, xclip, xsel, wl-copy)"
+        echo "      You'll need to manually copy the content."
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "INSTRUCTIONS"
+    echo "=========================================="
+    echo ""
+    echo "1. The wiki edit page will open in your browser"
+    echo "2. Log in to your FreeCAD wiki account if prompted"
+    echo "3. Select ALL content in the edit box (Ctrl+A / Cmd+A)"
+    echo "4. Paste the new content (Ctrl+V / Cmd+V)"
+    echo "5. Add an edit summary like: 'Update to version $CURRENT_VERSION'"
+    echo "6. Click 'Show preview' to verify changes"
+    echo "7. Click 'Save changes' when satisfied"
+    echo ""
+
+    # Ask for confirmation before opening browser
+    read -p "Open wiki edit page in browser? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        echo ""
+        echo "Aborted. You can manually visit:"
+        echo "  $WIKI_URL"
+        echo ""
+        echo "Wiki source file location:"
+        echo "  $WIKI_SOURCE"
+        exit 0
+    fi
+
+    # Open the wiki edit page in browser (platform-specific)
+    if command -v open &> /dev/null; then
+        # macOS
+        open "$WIKI_URL"
+    elif command -v xdg-open &> /dev/null; then
+        # Linux
+        xdg-open "$WIKI_URL"
+    elif command -v wslview &> /dev/null; then
+        # WSL
+        wslview "$WIKI_URL"
+    else
+        echo "Could not open browser automatically."
+        echo "Please manually visit: $WIKI_URL"
+    fi
+
+    echo ""
+    echo "Browser opened to: $WIKI_URL"
+    if [ "$COPIED" = true ]; then
+        echo ""
+        echo "The wiki content is in your clipboard - ready to paste!"
+    fi
+
+# Show the wiki source content for a macro (for review)
+wiki-show macro:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "{{macro}}" in
+        macro-magnets|magnets|cut)
+            WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
+            MACRO_NAME="Cut Object for Magnets"
+            ;;
+        macro-export|export|multi)
+            WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
+            MACRO_NAME="Multi Export"
+            ;;
+        *)
+            echo "Unknown macro: {{macro}}"
+            echo "Valid options: macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            exit 1
+            ;;
+    esac
+
+    echo "=========================================="
+    echo "Wiki Source: $MACRO_NAME"
+    echo "=========================================="
+    echo "File: $WIKI_SOURCE"
+    echo ""
+
+    # Show version info
+    CURRENT_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
+    CURRENT_DATE=$(grep -o '|Date=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
+    echo "Version: $CURRENT_VERSION"
+    echo "Date:    $CURRENT_DATE"
+    echo ""
+    echo "=========================================="
+    echo ""
+
+    cat "$WIKI_SOURCE"
+
+# Diff the local wiki source against the current wiki page (requires curl)
+wiki-diff macro:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "{{macro}}" in
+        macro-magnets|magnets|cut)
+            WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
+            WIKI_PAGE="Macro_Cut_Object_for_Magnets"
+            MACRO_NAME="Cut Object for Magnets"
+            ;;
+        macro-export|export|multi)
+            WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
+            WIKI_PAGE="Macro_Multi_Export"
+            MACRO_NAME="Multi Export"
+            ;;
+        *)
+            echo "Unknown macro: {{macro}}"
+            echo "Valid options: macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            exit 1
+            ;;
+    esac
+
+    WIKI_RAW_URL="https://wiki.freecad.org/index.php?title=${WIKI_PAGE}&action=raw"
+
+    echo "Fetching current wiki content for $MACRO_NAME..."
+    echo ""
+
+    # Create temp file for wiki content
+    TEMP_WIKI=$(mktemp)
+    trap "rm -f $TEMP_WIKI" EXIT
+
+    # Fetch current wiki content
+    if ! curl -sS "$WIKI_RAW_URL" > "$TEMP_WIKI" 2>/dev/null; then
+        echo "ERROR: Could not fetch wiki page. The page may not exist yet."
+        echo "URL: $WIKI_RAW_URL"
+        exit 1
+    fi
+
+    # Check if page exists (MediaWiki returns specific content for missing pages)
+    if grep -q "There is currently no text in this page" "$TEMP_WIKI"; then
+        echo "NOTE: Wiki page does not exist yet."
+        echo "This will be a new page creation."
+        echo ""
+        echo "Local content to be uploaded:"
+        echo "=========================================="
+        head -20 "$WIKI_SOURCE"
+        echo "..."
+        echo "(truncated - run 'just release::wiki-show {{macro}}' to see full content)"
+        exit 0
+    fi
+
+    echo "Comparing local wiki-source.txt with live wiki page..."
+    echo ""
+
+    # Show diff
+    if diff -u "$TEMP_WIKI" "$WIKI_SOURCE"; then
+        echo "No differences found - wiki is up to date!"
+    else
+        echo ""
+        echo "=========================================="
+        echo "Differences found (above)"
+        echo "Run 'just release::wiki-update {{macro}}' to update the wiki"
+    fi

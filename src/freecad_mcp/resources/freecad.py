@@ -23,11 +23,11 @@ import json
 from typing import Any
 
 
-def register_resources(mcp, get_bridge) -> None:
-    """Register FreeCAD resources with the MCP server.
+def register_resources(mcp: Any, get_bridge: Any) -> None:
+    """Register FreeCAD resources with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
     """
 
@@ -316,7 +316,7 @@ def register_resources(mcp, get_bridge) -> None:
 
         This resource provides a complete catalog of all available tools,
         resources, and prompts. Use this to discover what functionality
-        is available when working with the FreeCAD MCP server.
+        is available when working with the FreeCAD Robust MCP Server.
 
         Returns:
             JSON string containing:
@@ -326,7 +326,7 @@ def register_resources(mcp, get_bridge) -> None:
                 - examples: Common usage patterns
         """
         capabilities = {
-            "description": "FreeCAD MCP Server - Control FreeCAD via Model Context Protocol",
+            "description": "FreeCAD Robust MCP Server - Control FreeCAD via Model Context Protocol",
             "tools": {
                 "execution": {
                     "description": "Execute Python code and access console",
@@ -358,7 +358,7 @@ def register_resources(mcp, get_bridge) -> None:
                         },
                         {
                             "name": "get_mcp_server_environment",
-                            "description": "Get MCP server environment info (instance_id, OS, hostname, Docker detection)",
+                            "description": "Get Robust MCP Server environment info (instance_id, OS, hostname, FreeCAD connection)",
                             "key_params": [],
                         },
                     ],

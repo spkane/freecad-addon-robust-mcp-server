@@ -1,10 +1,14 @@
 """Tests for the main server module."""
 
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from freecad_mcp.config import FreecadMode
+
+# Default argv for main() tests to avoid argparse errors
+DEFAULT_ARGV: list[str] = ["freecad-mcp"]
 
 
 class TestGetInstanceId:
@@ -232,6 +236,7 @@ class TestMain:
         mock_config.transport = TransportType.STDIO
 
         with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
             patch.object(server_module.mcp, "run") as mock_run,
             patch("builtins.print") as mock_print,
@@ -257,6 +262,7 @@ class TestMain:
         mock_config.http_port = 8080
 
         with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
             patch.object(server_module.mcp, "run") as mock_run,
             patch("builtins.print"),
@@ -280,6 +286,7 @@ class TestMain:
         mock_config.transport = TransportType.STDIO
 
         with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
             patch.object(server_module.mcp, "run") as mock_run,
             patch("builtins.print"),

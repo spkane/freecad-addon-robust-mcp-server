@@ -10,6 +10,7 @@ on:
       - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
+      - ".github/actions/setup-freecad/**"
   pull_request:
     branches: [main, master]
     paths:
@@ -19,6 +20,7 @@ on:
       - "addon/FreecadRobustMCP/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
+      - ".github/actions/setup-freecad/**"
   workflow_dispatch:
   workflow_call:
 
@@ -31,6 +33,7 @@ jobs:
   test-integration:
     name: Integration Tests with FreeCAD
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -39,64 +42,8 @@ jobs:
       - name: Install mise
         uses: jdx/mise-action@v3
 
-      - name: Get latest FreeCAD release info
-        id: freecad-release
-        run: |
-          # Get the latest stable release tag from GitHub API
-          RELEASE_INFO=$(curl -s https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
-          TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
-          echo "Latest FreeCAD release: $TAG_NAME"
-          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
-
-          # Find the Linux AppImage asset URL
-          APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
-          APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
-
-          if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
-              echo "ERROR: Could not find Linux AppImage in release assets"
-              exit 1
-          fi
-
-          echo "AppImage URL: $APPIMAGE_URL"
-          echo "AppImage name: $APPIMAGE_NAME"
-          echo "url=$APPIMAGE_URL" >> "$GITHUB_OUTPUT"
-          echo "name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
-
-      - name: Cache FreeCAD AppImage
-        id: cache-freecad
-        uses: actions/cache@v5
-        with:
-          path: ~/freecad-appimage
-          key: freecad-appimage-${{ steps.freecad-release.outputs.tag }}
-
-      - name: Download FreeCAD AppImage
-        if: steps.cache-freecad.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/freecad-appimage
-          echo "Downloading FreeCAD ${{ steps.freecad-release.outputs.tag }}..."
-          curl -L -o ~/freecad-appimage/FreeCAD.AppImage "${{ steps.freecad-release.outputs.url }}"
-          chmod +x ~/freecad-appimage/FreeCAD.AppImage
-
-      - name: Setup FreeCAD AppImage
-        run: |
-          # Make AppImage executable (in case restored from cache)
-          chmod +x ~/freecad-appimage/FreeCAD.AppImage
-
-          # Extract AppImage for headless use (AppImages need FUSE which isn't available in CI)
-          cd ~/freecad-appimage
-          ./FreeCAD.AppImage --appimage-extract > /dev/null 2>&1
-
-          # Create symlinks for easy access
-          sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecadcmd /usr/local/bin/freecadcmd
-          sudo ln -sf ~/freecad-appimage/squashfs-root/usr/bin/freecad /usr/local/bin/freecad
-
-      - name: Verify FreeCAD installation
-        run: |
-          echo "Checking FreeCAD installation..."
-          freecadcmd --version || freecad --version || echo "Version check failed"
-          which freecadcmd
-          # Show Python version bundled with FreeCAD
-          freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.version}')" || true
+      - name: Setup FreeCAD
+        uses: ./.github/actions/setup-freecad
 
       - name: Cache uv dependencies
         uses: astral-sh/setup-uv@v7
@@ -124,8 +71,9 @@ jobs:
           echo "Using FreeCAD: freecadcmd"
 
           # Start FreeCAD headless with MCP bridge in background
-          # Uses the workbench addon's headless server script
-          freecadcmd addon/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py > /tmp/freecad_bridge.log 2>&1 &
+          # Uses the workbench addon's blocking bridge script
+          # Use setsid to create a new process group for reliable cleanup
+          setsid freecadcmd addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 
@@ -181,11 +129,251 @@ jobs:
         run: |
           uv run pytest tests/integration/test_headless_mode.py -v --tb=short
 
+      - name: Upload FreeCAD logs on failure
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v6
+        with:
+          name: freecad-headless-logs
+          path: /tmp/freecad_bridge.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Stop FreeCAD
         if: always()
         run: |
           if [ -n "$FREECAD_PID" ]; then
-              kill "$FREECAD_PID" 2>/dev/null || true
+              # Kill process group (handles child processes spawned by FreeCAD/AppImage)
+              kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
+          fi
+
+  test-gui:
+    name: GUI Tests with FreeCAD + Xvfb
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # FreeCAD GUI requires a window manager to generate expose/configure events.
+    # Without a WM, the GUI binary hangs during Qt initialization.
+    # Solution: Xvfb + openbox window manager + xdotool for synthetic events.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      # Note: apt cache removed - caching /var/cache/apt/archives causes permission
+      # issues and is largely negated by the immediate sudo apt-get update
+
+      - name: Install Xvfb, openbox, and X11 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            openbox \
+            xdotool \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xfixes0 \
+            libxcb-shape0 \
+            libxcb-cursor0 \
+            x11-utils \
+            libegl1 \
+            libgl1-mesa-dri \
+            libgl1 \
+            mesa-utils \
+            fontconfig \
+            fonts-dejavu-core
+          # Rebuild font cache (required after installing fonts, especially from cache)
+          sudo fc-cache -f -v
+
+      - name: Setup FreeCAD
+        uses: ./.github/actions/setup-freecad
+
+      - name: Start Xvfb and openbox
+        run: |
+          echo "Starting Xvfb virtual display..."
+          # Use -nolisten tcp to prevent TCP listeners for security
+          Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
+          XVFB_PID=$!
+          echo "XVFB_PID=$XVFB_PID" >> "$GITHUB_ENV"
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 2
+          # Verify Xvfb is running
+          if ! ps -p $XVFB_PID > /dev/null; then
+              echo "ERROR: Xvfb failed to start"
+              exit 1
+          fi
+          echo "Xvfb started on display :99 (PID: $XVFB_PID)"
+
+          # Start openbox window manager (required for FreeCAD GUI)
+          # FreeCAD needs a WM to generate expose/configure events
+          echo "Starting openbox window manager..."
+          DISPLAY=:99 openbox &
+          OPENBOX_PID=$!
+          echo "OPENBOX_PID=$OPENBOX_PID" >> "$GITHUB_ENV"
+          sleep 1
+          if ! ps -p $OPENBOX_PID > /dev/null; then
+              echo "WARNING: openbox may have failed to start"
+          else
+              echo "openbox started (PID: $OPENBOX_PID)"
+          fi
+
+      - name: Verify X11 display
+        env:
+          DISPLAY: ":99"
+        run: |
+          echo "Checking X11 display..."
+          xdpyinfo | head -10 || echo "xdpyinfo not available"
+
+      - name: Cache uv dependencies
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Verify fontconfig setup
+        run: |
+          echo "Checking fontconfig configuration..."
+          # Verify the system fontconfig config exists
+          if [ -f /etc/fonts/fonts.conf ]; then
+              echo "System fontconfig found at /etc/fonts/fonts.conf"
+          else
+              echo "ERROR: /etc/fonts/fonts.conf not found!"
+              ls -la /etc/fonts/ || echo "/etc/fonts/ directory doesn't exist"
+          fi
+          # Test fontconfig is working
+          echo "Testing fc-list..."
+          fc-list | head -5 || echo "fc-list failed"
+          echo "Fontconfig setup verified."
+
+      - name: Start FreeCAD GUI with MCP bridge
+        env:
+          DISPLAY: ":99"
+          QT_QPA_PLATFORM: xcb
+          # Use software rendering for OpenGL (more reliable in CI)
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          # Explicit fontconfig paths for AppImage compatibility
+          # The AppImage's bundled fontconfig may not find system config automatically
+          FONTCONFIG_FILE: /etc/fonts/fonts.conf
+          FONTCONFIG_PATH: /etc/fonts
+          # Set XDG_RUNTIME_DIR to avoid Qt warning
+          XDG_RUNTIME_DIR: /tmp/runtime-root
+        run: |
+          # Create XDG_RUNTIME_DIR
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+
+          echo "Starting FreeCAD GUI with MCP bridge under Xvfb + openbox..."
+          echo "DISPLAY=$DISPLAY"
+          echo "QT_QPA_PLATFORM=$QT_QPA_PLATFORM"
+          echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+
+          # Verify freecadcmd works (headless mode)
+          echo "=== Testing freecadcmd (headless) ==="
+          freecadcmd --version || echo "freecadcmd failed"
+
+          # Export fontconfig vars so they're available to backgrounded process
+          export FONTCONFIG_FILE FONTCONFIG_PATH
+
+          # Start FreeCAD GUI (not headless) with MCP bridge
+          # Uses blocking_bridge.py which blocks with run_forever() to keep process alive
+          # GUI features are available since we're using 'freecad' not 'freecadcmd'
+          # Use setsid to create a new process group for reliable cleanup
+          setsid freecad addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_gui.log 2>&1 &
+          FREECAD_PID=$!
+          echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
+
+          echo "Waiting for MCP bridge to start..."
+          # Send xdotool events to help FreeCAD GUI initialize
+          # FreeCAD needs mouse/keyboard events to process its event queue
+          for i in {1..90}; do
+              # Send synthetic events to help FreeCAD initialize
+              xdotool mousemove $((400 + i*3)) $((300 + i*3)) click 1 key Escape 2>/dev/null || true
+
+              # Check if process is still running
+              if ! ps -p "$FREECAD_PID" > /dev/null 2>&1; then
+                  echo "ERROR: FreeCAD process died (PID $FREECAD_PID)"
+                  echo "=== FreeCAD GUI log ==="
+                  cat /tmp/freecad_gui.log || echo "Log file is empty or missing"
+                  exit 1
+              fi
+              if curl -s --max-time 2 -X POST \
+                  -H "Content-Type: text/xml" \
+                  -d '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>' \
+                  http://localhost:9875 > /dev/null 2>&1; then
+                  echo "MCP bridge is ready (took ${i}s)"
+                  break
+              fi
+              if [ "$i" -eq 90 ]; then
+                  echo "ERROR: MCP bridge did not start within 90s"
+                  echo "=== FreeCAD GUI log ==="
+                  cat /tmp/freecad_gui.log || echo "Log file is empty or missing"
+                  echo "=== Process status ==="
+                  pgrep -a freecad || echo "No freecad processes found"
+                  kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
+                  exit 1
+              fi
+              # Show progress every 10 seconds
+              if [ $((i % 10)) -eq 0 ]; then
+                  echo "Still waiting... (${i}s)"
+                  # Show last few lines of log
+                  tail -5 /tmp/freecad_gui.log 2>/dev/null || true
+              fi
+              sleep 1
+          done
+
+          # Verify GUI is available
+          sleep 2
+          BRIDGE_INSTANCE_ID=$(grep -o 'FREECAD_MCP_BRIDGE_INSTANCE_ID=[^ ]*' /tmp/freecad_gui.log | cut -d= -f2 | head -1)
+          echo "Bridge Instance ID: $BRIDGE_INSTANCE_ID"
+
+          # Check if GUI is up
+          if grep -q "GuiUp.*True\|GUI.*available" /tmp/freecad_gui.log 2>/dev/null; then
+              echo "FreeCAD GUI is available"
+          else
+              echo "Note: Could not confirm GUI status from log (may still work)"
+          fi
+
+      - name: Run GUI mode integration tests
+        env:
+          FREECAD_MODE: xmlrpc
+          DISPLAY: ":99"
+        # Tests for GUI-only features (screenshots, visibility, colors, camera, etc.)
+        # GUI tests under Xvfb can be flaky; don't fail the workflow during stabilization
+        continue-on-error: true
+        run: |
+          uv run pytest tests/integration/test_gui_mode.py -v --tb=short
+
+      - name: Upload FreeCAD logs on failure
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v6
+        with:
+          name: freecad-gui-logs
+          path: /tmp/freecad_gui.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Stop FreeCAD, openbox, and Xvfb
+        if: always()
+        run: |
+          if [ -n "$FREECAD_PID" ]; then
+              # Kill process group (handles child processes spawned by FreeCAD/AppImage)
+              kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
+          fi
+          if [ -n "$OPENBOX_PID" ]; then
+              kill "$OPENBOX_PID" 2>/dev/null || true
+          fi
+          if [ -n "$XVFB_PID" ]; then
+              kill "$XVFB_PID" 2>/dev/null || true
           fi
 
   lint-macros:

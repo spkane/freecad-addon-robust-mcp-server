@@ -1,4 +1,4 @@
-name: MCP Server Release
+name: Robust MCP Server Release
 
 # Trigger on tag push matching the component-specific pattern
 on:
@@ -176,7 +176,7 @@ jobs:
     name: Publish to TestPyPI
     needs: [validate-tag, build, test-install]
     runs-on: ubuntu-latest
-    if: contains(needs.validate-tag.outputs.version, '-alpha')
+    if: contains(needs.validate-tag.outputs.version, '-')
     environment:
       name: testpypi
       url: https://test.pypi.org/p/freecad-robust-mcp
@@ -199,7 +199,7 @@ jobs:
     name: Publish to PyPI
     needs: [validate-tag, build, test-install]
     runs-on: ubuntu-latest
-    if: ${{ !contains(needs.validate-tag.outputs.version, '-alpha') }}
+    if: ${{ !contains(needs.validate-tag.outputs.version, '-') }}
     environment:
       name: pypi
       url: https://pypi.org/p/freecad-robust-mcp
@@ -299,7 +299,7 @@ jobs:
         run: |
           VERSION="${{ needs.validate-tag.outputs.version }}"
           # Match header exactly as it appears in CHANGELOG.md
-          HEADER="### MCP Server v${VERSION}"
+          HEADER="### Robust MCP Server v${VERSION}"
 
           # Extract section between this version header and the next component header or separator
           # Only exit on: "---" separator OR "### " followed by component name (capital letter)
@@ -327,7 +327,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "MCP Server v${{ needs.validate-tag.outputs.version }}"
+          name: "Robust MCP Server v${{ needs.validate-tag.outputs.version }}"
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
@@ -349,14 +349,14 @@ jobs:
           IS_PRERELEASE: ${{ needs.validate-tag.outputs.is_prerelease }}
         run: |
           {
-            echo "## MCP Server Release Summary"
+            echo "## Robust MCP Server Release Summary"
             echo ""
             echo "**Version:** $VERSION"
             echo "**Prerelease:** $IS_PRERELEASE"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$VERSION" == *"-alpha"* ]]; then
+          if [[ "$VERSION" == *"-"* ]]; then
               {
                 echo "### Install from TestPyPI"
                 echo ""

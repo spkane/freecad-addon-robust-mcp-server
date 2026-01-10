@@ -1,7 +1,8 @@
 """Pytest configuration for integration tests.
 
-This module handles connection checking and provides consolidated skip behavior
-when the FreeCAD MCP bridge is not available.
+This module handles connection checking and provides hard error behavior
+when the FreeCAD MCP bridge is not available. Connection failures are
+treated as test errors, not skips.
 
 Instance ID Verification:
     The FreeCAD MCP bridge generates a unique instance ID at startup which is
@@ -13,7 +14,6 @@ Instance ID Verification:
 from __future__ import annotations
 
 import os
-import warnings
 import xmlrpc.client
 from typing import Any
 
@@ -24,7 +24,7 @@ _bridge_available: bool | None = None
 _bridge_error: str | None = None
 _bridge_instance_id: str | None = None
 _gui_available: bool | None = None
-_warning_emitted: bool = False
+_connection_checked: bool = False
 
 
 def _check_bridge_connection() -> tuple[bool, str | None, str | None]:
@@ -47,12 +47,21 @@ def _check_bridge_connection() -> tuple[bool, str | None, str | None]:
             # The ping response includes instance_id
             _bridge_instance_id = result.get("instance_id")
 
-            # Check if GUI is available via get_status
+            # Check if GUI is available by executing code to check FreeCAD.GuiUp
             try:
-                status: dict[str, Any] = proxy.get_status()  # type: ignore[assignment]
-                _gui_available = status.get("gui_available", False)
+                gui_check: dict[str, Any] = proxy.execute(  # type: ignore[assignment]
+                    """
+import FreeCAD
+_result_ = {"gui_up": bool(FreeCAD.GuiUp)}
+"""
+                )
+                if gui_check.get("success") and gui_check.get("result"):
+                    _gui_available = gui_check["result"].get("gui_up", False)
+                else:
+                    # Execution failed, assume headless
+                    _gui_available = False
             except Exception:
-                # If get_status fails, assume headless
+                # If execute fails, assume headless
                 _gui_available = False
         else:
             _bridge_available = False
@@ -77,7 +86,12 @@ def is_gui_available() -> bool:
     """Check if FreeCAD GUI is available.
 
     Returns:
-        True if running in GUI mode, False if headless.
+        True if running in GUI mode, False if headless or bridge unavailable.
+
+    Note:
+        When the bridge is unavailable, this returns False. The
+        pytest_collection_modifyitems hook will raise a hard error in this case,
+        so tests won't actually run with an incorrect skip condition.
     """
     # Ensure bridge check has been performed
     _check_bridge_connection()
@@ -89,14 +103,56 @@ def is_headless_mode() -> bool:
 
     Returns:
         True if running in headless mode, False if GUI is available.
+
+    Note:
+        When the bridge is unavailable, this returns True (assumes headless).
+        The pytest_collection_modifyitems hook will raise a hard error before
+        any tests run, so this assumption doesn't affect actual test execution.
     """
     return not is_gui_available()
 
 
-# Skip marker for GUI-only tests
+def _should_skip_for_gui_requirement() -> bool:
+    """Return True if test should be skipped due to requiring GUI mode.
+
+    Returns False when:
+    - Bridge is available and in GUI mode
+
+    Returns True when:
+    - Bridge is unavailable (will fail anyway, skip is irrelevant)
+    - Bridge is available and in headless mode
+    """
+    _check_bridge_connection()
+    return _gui_available is not True
+
+
+def _should_skip_for_headless_requirement() -> bool:
+    """Return True if test should be skipped due to requiring headless mode.
+
+    Returns False when:
+    - Bridge is unavailable (collection will fail anyway)
+    - Bridge is available and in headless mode
+
+    Returns True when:
+    - Bridge is available and in GUI mode
+    """
+    _check_bridge_connection()
+    if not _bridge_available:
+        return False  # Don't skip, let collection error handle it
+    return _gui_available is True  # Skip if in GUI mode
+
+
+# Skip markers for mode-specific tests
+# These markers handle the bridge unavailable case by deferring to
+# pytest_collection_modifyitems which raises a hard error.
 requires_gui = pytest.mark.skipif(
-    is_headless_mode(),
+    _should_skip_for_gui_requirement(),
     reason="Test requires FreeCAD GUI mode (running in headless mode)",
+)
+
+requires_headless = pytest.mark.skipif(
+    _should_skip_for_headless_requirement(),
+    reason="Test requires FreeCAD headless mode (running in GUI mode)",
 )
 
 
@@ -104,12 +160,12 @@ def pytest_collection_modifyitems(
     config: pytest.Config,  # noqa: ARG001
     items: list[pytest.Item],
 ) -> None:
-    """Skip all integration tests if the bridge is not available.
+    """Verify bridge connection for integration tests.
 
-    This runs once during test collection and emits a single warning instead of
-    per-test skip messages.
+    This runs once during test collection. If the bridge is not available,
+    this raises a hard error instead of skipping tests.
     """
-    global _warning_emitted
+    global _connection_checked
 
     # Filter to only integration tests in this directory
     integration_tests = [
@@ -122,21 +178,51 @@ def pytest_collection_modifyitems(
     # Check bridge connection once
     is_available, error, _instance_id = _check_bridge_connection()
 
-    if not is_available:
-        # Apply skip marker to all integration tests
-        skip_marker = pytest.mark.skip(reason="FreeCAD MCP bridge unavailable")
-        for item in integration_tests:
-            item.add_marker(skip_marker)
+    if not is_available and not _connection_checked:
+        _connection_checked = True
+        pytest.fail(
+            f"\n\n{'=' * 60}\n"
+            f"INTEGRATION TEST ERROR: FreeCAD MCP bridge not available\n"
+            f"{'=' * 60}\n\n"
+            f"Error: {error}\n\n"
+            f"To run integration tests, start FreeCAD with the MCP bridge:\n"
+            f"  • GUI mode:      just freecad::run-gui\n"
+            f"  • Headless mode: just freecad::run-headless\n\n"
+            f"Then run the tests again.\n"
+            f"{'=' * 60}\n",
+            pytrace=False,
+        )
 
-        # Emit a single warning (only once)
-        if not _warning_emitted:
-            _warning_emitted = True
-            warnings.warn(
-                f"Skipping {len(integration_tests)} integration tests: {error}. "
-                f"Start the bridge with 'just run-gui' or 'just run-headless'.",
-                pytest.PytestWarning,
-                stacklevel=1,
-            )
+
+def pytest_terminal_summary(
+    terminalreporter: Any,
+    exitstatus: int,  # noqa: ARG001
+    config: pytest.Config,  # noqa: ARG001
+) -> None:
+    """Print a summary of FreeCAD connection status at the end of test run.
+
+    This provides clear visibility into which mode was used and confirms
+    successful connection.
+    """
+    # Only show summary if we ran integration tests
+    if _bridge_available is None:
+        return
+
+    # Build the summary message
+    terminalreporter.write_sep("=", "FreeCAD MCP Bridge Status")
+
+    if _bridge_available:
+        mode = "GUI" if _gui_available else "Headless"
+        terminalreporter.write_line("  Connection: SUCCESS")
+        terminalreporter.write_line(f"  Mode:       {mode}")
+        if _bridge_instance_id:
+            terminalreporter.write_line(f"  Instance:   {_bridge_instance_id}")
+    else:
+        terminalreporter.write_line("  Connection: FAILED")
+        if _bridge_error:
+            terminalreporter.write_line(f"  Error:      {_bridge_error}")
+
+    terminalreporter.write_line("")
 
 
 @pytest.fixture(scope="module")

@@ -2,23 +2,64 @@
 
 This project uses **component-specific versioning**. Each component (MCP Server, Workbench, Macros) has its own version and release cycle, allowing independent updates without affecting other components.
 
+## Quick Start
+
+The complete release workflow in order:
+
+```bash
+# 1. Pre-release checks
+just release::status                        # Check which components have unreleased changes
+just release::changes-since mcp-server      # View specific changes (or workbench, macro-magnets, macro-export)
+just all                                    # Run all quality checks (must pass)
+
+# 2. Update changelog
+just release::draft-notes mcp-server        # Generate draft notes from commits
+# Then manually edit CHANGELOG.md with appropriate section header
+
+# 3. Version bump (workbench & macros only - MCP Server uses setuptools-scm)
+just release::bump-workbench 1.0.0          # or bump-macro-magnets, bump-macro-export
+
+# 4. Commit changes
+git add -A
+git commit -m "chore: bump workbench to 1.0.0"  # or appropriate component/message
+
+# 5. Create & push tag (triggers CI/CD automatically)
+just release::tag-workbench 1.0.0           # or tag-mcp-server, tag-macro-magnets, tag-macro-export
+
+# 6. Monitor release at GitHub Actions, then verify
+just release::list-tags
+just release::latest-versions
+
+# 7. Update FreeCAD wiki (macros only)
+just release::wiki-update macro-magnets     # Copies content to clipboard & opens wiki edit page
+```
+
+| Component     | Bump Command                             | Tag Command                             |
+| ------------- | ---------------------------------------- | --------------------------------------- |
+| MCP Server    | *(none - uses setuptools-scm)*           | `just release::tag-mcp-server X.Y.Z`    |
+| Workbench     | `just release::bump-workbench X.Y.Z`     | `just release::tag-workbench X.Y.Z`     |
+| Magnets Macro | `just release::bump-macro-magnets X.Y.Z` | `just release::tag-macro-magnets X.Y.Z` |
+| Export Macro  | `just release::bump-macro-export X.Y.Z`  | `just release::tag-macro-export X.Y.Z`  |
+
 ## Components and Their Release Targets
 
-| Component | Tag Format | Releases To |
-| --------- | ---------- | ----------- |
-| MCP Server | `robust-mcp-server-vX.Y.Z` | PyPI, Docker Hub, GitHub Release |
-| MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive) |
-| Cut Object for Magnets Macro | `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive) |
-| Multi Export Macro | `macro-multi-export-vX.Y.Z` | GitHub Release (archive) |
+| Component                    | Tag Format                            | Releases To                                |
+| ---------------------------- | ------------------------------------- | ------------------------------------------ |
+| MCP Server                   | `robust-mcp-server-vX.Y.Z`            | PyPI/TestPyPI*, Docker Hub, GitHub Release |
+| Robust MCP Bridge Workbench  | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release (archive)                   |
+| Cut Object for Magnets Macro | `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive)                   |
+| Multi Export Macro           | `macro-multi-export-vX.Y.Z`           | GitHub Release (archive)                   |
+
+*Stable releases (`X.Y.Z`) publish to PyPI; non-stable releases (alpha, beta, rc) publish to TestPyPI only.
 
 ## Version Format
 
 All versions follow [Semantic Versioning 2.0](https://semver.org/):
 
-- `X.Y.Z` - Stable release (published to PyPI for MCP Server)
-- `X.Y.Z-alpha` or `X.Y.Z-alpha.N` - Alpha pre-release (TestPyPI only)
-- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta pre-release (PyPI)
-- `X.Y.Z-rc.N` - Release candidate (PyPI)
+- `X.Y.Z` - Stable release (published to PyPI only)
+- `X.Y.Z-alpha` or `X.Y.Z-alpha.N` - Alpha pre-release (published to TestPyPI only)
+- `X.Y.Z-beta` or `X.Y.Z-beta.N` - Beta pre-release (published to TestPyPI only)
+- `X.Y.Z-rc.N` - Release candidate (published to TestPyPI only)
 
 ## Release Workflow Overview
 
@@ -129,7 +170,7 @@ Brief description of the release.
 
 ---
 
-### MCP Bridge Workbench vX.Y.Z
+### Robust MCP Bridge Workbench vX.Y.Z
 
 ...
 ```
@@ -137,7 +178,7 @@ Brief description of the release.
 **Important:** The changelog section header format must match exactly for the GitHub Release workflow to extract it:
 
 - MCP Server: `### MCP Server vX.Y.Z`
-- Workbench: `### MCP Bridge Workbench vX.Y.Z`
+- Workbench: `### Robust MCP Bridge Workbench vX.Y.Z`
 - Magnets Macro: `### Cut Object for Magnets Macro vX.Y.Z`
 - Export Macro: `### Multi Export Macro vX.Y.Z`
 
@@ -166,7 +207,7 @@ just release::tag-mcp-server 1.0.0
 1. GitHub Actions validates the tag format
 2. Builds Python wheel and source distribution (version from tag)
 3. Tests installation on Ubuntu and macOS
-4. Publishes to PyPI (or TestPyPI for alpha versions)
+4. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
 5. Builds multi-architecture Docker image (amd64 + arm64)
 6. Pushes to Docker Hub as `spkane/freecad-robust-mcp:1.0.0`
 7. Creates GitHub Release with wheel and tar.gz artifacts
@@ -177,16 +218,16 @@ just release::tag-mcp-server 1.0.0
 # Alpha (goes to TestPyPI only)
 just release::tag-mcp-server 1.0.0-alpha.1
 
-# Beta (goes to PyPI)
+# Beta (goes to TestPyPI only)
 just release::tag-mcp-server 1.0.0-beta.1
 
-# Release candidate (goes to PyPI)
+# Release candidate (goes to TestPyPI only)
 just release::tag-mcp-server 1.0.0-rc.1
 ```
 
-### MCP Bridge Workbench Release
+### Robust MCP Bridge Workbench Release
 
-The workbench is a FreeCAD addon that provides the MCP bridge GUI.
+The workbench is a FreeCAD addon that provides the Robust MCP Bridge GUI.
 
 ```bash
 # 1. Bump version in source files
@@ -375,6 +416,55 @@ just release::tag-mcp-server 1.0.0
 - **Workbench**: Release in sync with server changes that affect the bridge protocol
 - **Macros**: Release independently when macro functionality changes
 
+## Updating the FreeCAD Wiki
+
+After releasing a macro, you should update its FreeCAD wiki page. The `wiki-source.txt` files are automatically updated by the `bump-macro-*` commands with the new version and date.
+
+### Wiki Update Commands
+
+```bash
+# Check differences between local and live wiki
+just release::wiki-diff macro-magnets
+just release::wiki-diff macro-export
+
+# View the wiki source content locally
+just release::wiki-show macro-magnets
+just release::wiki-show macro-export
+
+# Update the wiki (copies to clipboard and opens edit page)
+just release::wiki-update macro-magnets
+just release::wiki-update macro-export
+```
+
+### Wiki Update Workflow
+
+The `wiki-update` command provides a safe, assisted workflow:
+
+1. Copies the updated wiki-source.txt content to your clipboard
+2. Opens the FreeCAD wiki edit page in your browser
+3. Displays step-by-step instructions
+
+**Manual steps after running the command:**
+
+1. Log in to your FreeCAD wiki account if prompted
+2. Select all content in the edit box (Ctrl+A / Cmd+A)
+3. Paste the new content (Ctrl+V / Cmd+V)
+4. Add an edit summary like "Update to version X.Y.Z"
+5. Click "Show preview" to verify changes
+6. Click "Save changes" when satisfied
+
+!!! note "Wiki Account Required"
+    You need a FreeCAD wiki account to edit pages. Register at [wiki.freecad.org](https://wiki.freecad.org) if you don't have one.
+
+### Macro Shortcuts
+
+The wiki commands accept multiple aliases for convenience:
+
+| Macro                    | Aliases                          |
+| ------------------------ | -------------------------------- |
+| Cut Object for Magnets   | `macro-magnets`, `magnets`, `cut`|
+| Multi Export             | `macro-export`, `export`, `multi`|
+
 ## Quick Reference
 
 ```bash
@@ -410,6 +500,11 @@ just release::latest-versions
 
 # Extract changelog for a version (used by CI)
 just release::extract-changelog mcp-server 1.0.0
+
+# Update FreeCAD wiki for macros (after release)
+just release::wiki-diff macro-magnets   # Check differences
+just release::wiki-update macro-magnets # Copy to clipboard & open edit page
+just release::wiki-update macro-export
 
 # Delete a tag if needed
 just release::delete-tag <full-tag-name>

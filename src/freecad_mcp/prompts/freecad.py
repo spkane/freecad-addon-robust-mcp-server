@@ -11,20 +11,14 @@ Prompt Categories:
     - Troubleshooting: Common issues and solutions
 """
 
-from collections.abc import Callable, Coroutine
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
 
-
-def register_prompts(
-    mcp: FastMCP,
-    get_bridge: Callable[[], Coroutine[Any, Any, Any]],  # noqa: ARG001
-) -> None:
-    """Register FreeCAD prompts with the MCP server.
+def register_prompts(mcp: Any, get_bridge: Any) -> None:  # noqa: ARG001
+    """Register FreeCAD prompts with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge (unused but kept
             for interface consistency with other register functions).
     """

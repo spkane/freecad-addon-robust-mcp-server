@@ -15,9 +15,9 @@ github-cli = "2.74"     # GitHub CLI for PR/issue management
 # Security and code quality tools
 trivy = "0.62"          # container vulnerability scanner
 gitleaks = "8.30"       # secrets scanner
-hadolint = "2.14"       # Dockerfile linter
-shellcheck = "0.11"     # shell script linter
 actionlint = "1.7"      # GitHub Actions linter
+# Note: hadolint and shellcheck are managed by their pre-commit repos
+# (hadolint-py and shellcheck-py auto-download binaries)
 
 # Markdown tools
 markdownlint-cli2 = "0.20"  # markdown linter

@@ -120,10 +120,10 @@ The FreeCAD MCP bridge server is not running. To fix this:
 
 2. Start the MCP bridge using one of these methods:
 
-   Option A: Using the MCP Bridge Workbench (recommended)
+   Option A: Using the Robust MCP Bridge Workbench (recommended)
    - Install via FreeCAD Addon Manager: Tools → Addon Manager
-   - Search for "MCP Bridge" and install
-   - Switch to the MCP Bridge workbench
+   - Search for "Robust MCP Bridge" and install
+   - Switch to the Robust MCP Bridge workbench
    - Click "Start MCP Bridge" in the toolbar
 
    Option B: From source (for developers)

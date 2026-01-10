@@ -8,13 +8,13 @@ project_root := justfile_directory()
 # Running FreeCAD with MCP Bridge
 # =============================================================================
 
-# Run MCP bridge server in FreeCAD headless mode
+# Run MCP bridge server in FreeCAD headless mode (blocking)
 run-headless:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    # Use the headless server from the addon directory (source of truth)
-    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py"
+    # Use the blocking bridge script from the addon directory (source of truth)
+    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py"
 
     # Find FreeCADCmd executable based on OS
     FREECAD_CMD=""
@@ -65,15 +65,15 @@ run-headless:
     echo "Using FreeCAD: $FREECAD_CMD"
     echo ""
 
-    # Run FreeCADCmd with the headless server script
+    # Run FreeCADCmd with the blocking bridge script
     "$FREECAD_CMD" "$SCRIPT_PATH"
 
-# Run MCP bridge with custom FreeCAD path
+# Run MCP bridge with custom FreeCAD path (blocking)
 run-headless-custom freecad_cmd:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py"
+    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py"
 
     if [[ ! -x "{{freecad_cmd}}" ]]; then
         echo "ERROR: FreeCADCmd not found or not executable: {{freecad_cmd}}"
@@ -83,60 +83,24 @@ run-headless-custom freecad_cmd:
     echo "Using FreeCAD: {{freecad_cmd}}"
     echo ""
 
-    # Run FreeCADCmd with the headless server script
+    # Run FreeCADCmd with the blocking bridge script
     "{{freecad_cmd}}" "$SCRIPT_PATH"
 
-# Run FreeCAD GUI with MCP bridge (requires workbench to be installed)
+# Run FreeCAD GUI with MCP bridge (uses local source code for development)
+# Note: Uses default ports (XML-RPC: 9875, Socket: 9876) regardless of workbench
+# preferences. For custom ports, use the workbench GUI instead.
 run-gui:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Create a temporary startup script that starts the MCP bridge
-    STARTUP_SCRIPT=$(mktemp /tmp/freecad_mcp_startup.XXXXXX.py)
+    # Use the shared startup script from the addon directory
+    STARTUP_SCRIPT="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/startup_bridge.py"
 
-    # Use the server from the installed workbench location
-    # Note: For development, use run-gui-custom which passes the addon path explicitly
-    cat > "$STARTUP_SCRIPT" << 'PYTHON_EOF'
-    # FreeCAD MCP Bridge Auto-Start Script
-    import sys
-    import os
-    from pathlib import Path
-
-    # Determine installed workbench location based on platform
-    if sys.platform == "darwin":
-        addon_path = Path.home() / "Library" / "Application Support" / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
-    elif sys.platform == "win32":
-        addon_path = Path(os.environ.get("APPDATA", "")) / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
-    else:
-        addon_path = Path.home() / ".local" / "share" / "FreeCAD" / "Mod" / "FreecadRobustMCP" / "freecad_mcp_bridge"
-
-    if not addon_path.exists():
-        import FreeCAD
-        FreeCAD.Console.PrintError("MCP Bridge workbench not found.\n")
-        FreeCAD.Console.PrintError(f"Expected at: {addon_path}\n")
-        FreeCAD.Console.PrintError("Install the workbench first: just freecad::install-workbench\n")
-    else:
-        try:
-            addon_path_str = str(addon_path)
-            if addon_path_str not in sys.path:
-                sys.path.insert(0, addon_path_str)
-            from server import FreecadMCPPlugin
-            plugin = FreecadMCPPlugin(
-                host="localhost",
-                port=9876,
-                xmlrpc_port=9875,
-                enable_xmlrpc=True,
-            )
-            plugin.start()
-            import FreeCAD
-            FreeCAD.Console.PrintMessage("\nMCP Bridge started!\n")
-            FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\n")
-            FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\n\n")
-        except Exception as e:
-            import FreeCAD
-            FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
-    PYTHON_EOF
+    if [[ ! -f "$STARTUP_SCRIPT" ]]; then
+        echo "ERROR: Startup script not found: $STARTUP_SCRIPT"
+        exit 1
+    fi
 
     # Find FreeCAD GUI executable based on OS
     FREECAD_GUI=""
@@ -171,7 +135,6 @@ run-gui:
     fi
 
     if [[ -z "$FREECAD_GUI" ]]; then
-        rm -f "$STARTUP_SCRIPT"
         echo "ERROR: FreeCAD not found!"
         echo ""
         echo "Please install FreeCAD or use:"
@@ -208,36 +171,13 @@ run-gui-custom freecad_path:
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    # Create a temporary startup script
-    STARTUP_SCRIPT=$(mktemp /tmp/freecad_mcp_startup.XXXXXX.py)
+    # Use the shared startup script from the addon directory
+    STARTUP_SCRIPT="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge/startup_bridge.py"
 
-    # Use the server from the addon directory
-    ADDON_PATH="${PROJECT_DIR}/addon/FreecadRobustMCP/freecad_mcp_bridge"
-
-    cat > "$STARTUP_SCRIPT" << EOF
-    # FreeCAD MCP Bridge Auto-Start Script
-    import sys
-    addon_path = "${ADDON_PATH}"
-    if addon_path not in sys.path:
-        sys.path.insert(0, addon_path)
-
-    try:
-        from server import FreecadMCPPlugin
-        plugin = FreecadMCPPlugin(
-            host="localhost",
-            port=9876,
-            xmlrpc_port=9875,
-            enable_xmlrpc=True,
-        )
-        plugin.start()
-        import FreeCAD
-        FreeCAD.Console.PrintMessage("\\nMCP Bridge started!\\n")
-        FreeCAD.Console.PrintMessage("  - XML-RPC: localhost:9875\\n")
-        FreeCAD.Console.PrintMessage("  - Socket: localhost:9876\\n\\n")
-    except Exception as e:
-        import FreeCAD
-        FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\\n")
-    EOF
+    if [[ ! -f "$STARTUP_SCRIPT" ]]; then
+        echo "ERROR: Startup script not found: $STARTUP_SCRIPT"
+        exit 1
+    fi
 
     echo "Starting FreeCAD with MCP bridge..."
     echo "Using FreeCAD: {{freecad_path}}"

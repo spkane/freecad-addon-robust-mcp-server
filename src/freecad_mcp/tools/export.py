@@ -1,18 +1,52 @@
-"""Export tools for FreeCAD MCP server.
+"""Export tools for FreeCAD Robust MCP Server.
 
 This module provides tools for exporting FreeCAD documents and objects
 to various file formats: STEP, STL, 3MF, OBJ, IGES, and FreeCAD native.
 """
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_export_tools(mcp, get_bridge) -> None:
-    """Register export-related tools with the MCP server.
+def _build_object_selection_code(object_names: list[str] | None) -> str:
+    """Generate Python code for GUI-aware object selection.
+
+    This helper eliminates code duplication across export functions by
+    generating the common object selection logic that handles both GUI
+    and headless modes appropriately.
 
     Args:
-        mcp: The FastMCP server instance.
-        get_bridge: Async function to get the active bridge.
+        object_names: Optional list of specific object names to select.
+
+    Returns:
+        Python code string for object selection logic.
+    """
+    return f"""
+# Get objects to export
+if {object_names!r} is not None:
+    objects = [doc.getObject(n) for n in {object_names!r}]
+elif FreeCAD.GuiUp:
+    # GUI mode: export visible objects with shapes
+    objects = [
+        obj for obj in doc.Objects
+        if hasattr(obj, 'Shape') and obj.ViewObject and obj.ViewObject.Visibility
+    ]
+else:
+    # Headless mode: export all objects with shapes
+    objects = [obj for obj in doc.Objects if hasattr(obj, 'Shape')]
+objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
+
+if not objects:
+    raise ValueError("No exportable objects found")
+"""
+
+
+def register_export_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
+    """Register export-related tools with the Robust MCP Server.
+
+    Args:
+        mcp: The FastMCP (Robust MCP Server) instance (Any due to lack of stubs).
+        get_bridge: Async function returning the active bridge connection.
     """
 
     @mcp.tool()
@@ -39,25 +73,13 @@ def register_export_tools(mcp, get_bridge) -> None:
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Part
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
-
-objects = {objects_filter}
-objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
-
-if not objects:
-    raise ValueError("No exportable objects found")
-
+{_build_object_selection_code(object_names)}
 # Combine shapes
 if len(objects) == 1:
     shape = objects[0].Shape
@@ -103,12 +125,6 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Mesh
 import Part
@@ -116,13 +132,7 @@ import Part
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
-
-objects = {objects_filter}
-objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
-
-if not objects:
-    raise ValueError("No exportable objects found")
-
+{_build_object_selection_code(object_names)}
 # Create mesh from shapes
 meshes = []
 for obj in objects:
@@ -178,12 +188,6 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Mesh
 import Part
@@ -191,13 +195,7 @@ import Part
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
-
-objects = {objects_filter}
-objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
-
-if not objects:
-    raise ValueError("No exportable objects found")
-
+{_build_object_selection_code(object_names)}
 # Create mesh from shapes
 meshes = []
 for obj in objects:
@@ -232,6 +230,7 @@ _result_ = {{
         file_path: str,
         object_names: list[str] | None = None,
         doc_name: str | None = None,
+        mesh_tolerance: float = 0.1,
     ) -> dict[str, Any]:
         """Export objects to OBJ format.
 
@@ -242,6 +241,7 @@ _result_ = {{
             file_path: Path for the output .obj file.
             object_names: List of object names to export. Exports all visible if None.
             doc_name: Document to export from. Uses active document if None.
+            mesh_tolerance: Mesh approximation tolerance. Lower = finer mesh.
 
         Returns:
             Dictionary with export result:
@@ -251,30 +251,18 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Mesh
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
-
-objects = {objects_filter}
-objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
-
-if not objects:
-    raise ValueError("No exportable objects found")
-
+{_build_object_selection_code(object_names)}
 # Create mesh from shapes
 meshes = []
 for obj in objects:
     mesh = Mesh.Mesh()
-    mesh.addFacets(obj.Shape.tessellate(0.1)[0])
+    mesh.addFacets(obj.Shape.tessellate({mesh_tolerance})[0])
     meshes.append(mesh)
 
 # Combine meshes
@@ -322,25 +310,13 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        objects_filter = (
-            f"[doc.getObject(n) for n in {object_names!r}]"
-            if object_names
-            else "[obj for obj in doc.Objects if hasattr(obj, 'Shape') and obj.ViewObject.Visibility]"
-        )
-
         code = f"""
 import Part
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
-
-objects = {objects_filter}
-objects = [obj for obj in objects if obj is not None and hasattr(obj, 'Shape')]
-
-if not objects:
-    raise ValueError("No exportable objects found")
-
+{_build_object_selection_code(object_names)}
 # Combine shapes
 if len(objects) == 1:
     shape = objects[0].Shape

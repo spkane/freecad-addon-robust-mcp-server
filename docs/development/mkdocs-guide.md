@@ -269,7 +269,7 @@ Create diagrams using Mermaid syntax:
 ````markdown
 ```mermaid
 graph LR
-    A[MCP Client] --> B[MCP Server]
+    A[MCP Client] --> B[Robust MCP Server]
     B --> C[FreeCAD Bridge]
     C --> D[FreeCAD]
 ```
@@ -279,7 +279,7 @@ graph LR
 
 ```mermaid
 graph LR
-    A[MCP Client] --> B[MCP Server]
+    A[MCP Client] --> B[Robust MCP Server]
     B --> C[FreeCAD Bridge]
     C --> D[FreeCAD]
 ```
@@ -338,7 +338,7 @@ Variables are defined in `docs/variables.yaml`:
 
 ```yaml
 # docs/variables.yaml
-project_name: FreeCAD MCP Server
+project_name: FreeCAD Robust MCP Server
 package_name: freecad-robust-mcp
 xmlrpc_port: 9875
 socket_port: 9876
@@ -353,16 +353,16 @@ Install with: `pip install {{@ package_name @}}`
 
 ### Available Variables
 
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `project_name` | FreeCAD MCP Server | Display name |
-| `package_name` | freecad-robust-mcp | PyPI package name |
-| `docker_image` | spkane/freecad-robust-mcp | Docker image |
-| `xmlrpc_port` | 9875 | XML-RPC server port |
-| `socket_port` | 9876 | Socket server port |
-| `paths.macos.macro` | ~/Library/... | macOS macro path |
-| `paths.linux.macro` | ~/.local/share/... | Linux macro path |
-| `paths.windows.macro` | %APPDATA%/... | Windows macro path |
+| Variable               | Value                     | Description         |
+| ---------------------- | ------------------------- | ------------------- |
+| `project_name`         | FreeCAD Robust MCP Server | Display name        |
+| `package_name`         | freecad-robust-mcp        | PyPI package name   |
+| `docker_image`         | spkane/freecad-robust-mcp | Docker image        |
+| `xmlrpc_port`          | 9875                      | XML-RPC server port |
+| `socket_port`          | 9876                      | Socket server port  |
+| `paths.macos.macro`    | ~/Library/...             | macOS macro path    |
+| `paths.linux.macro`    | ~/.local/share/...        | Linux macro path    |
+| `paths.windows.macro`  | %APPDATA%/...             | Windows macro path  |
 
 ### Built-in Macros
 

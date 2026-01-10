@@ -47,6 +47,8 @@ jobs:
           # Skip hooks that don't work well in CI:
           # - no-commit-to-branch: Always fails in CI (we're on main/master)
           # - trufflehog: Has wasm/go-re2 panic bug in GitHub Actions environment
+          # Note: shellcheck, hadolint, trivy use mise-managed binaries which ARE
+          # installed by mise-action above, so they should work in CI.
           SKIP: no-commit-to-branch,trufflehog
           # Safety CLI API key for dependency vulnerability scanning
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}

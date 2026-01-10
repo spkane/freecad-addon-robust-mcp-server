@@ -55,5 +55,7 @@ jobs:
         run: uv run mypy src/
 
   # Note: FreeCAD integration tests are handled by the "Integration Tests" workflow
-  # (macro-test.yaml) which runs on every PR. That workflow sets up FreeCAD
-  # AppImage and runs tests/integration/ tests with proper headless configuration.
+  # (macro-test.yaml) which runs on every PR. That workflow provides:
+  #   - Headless tests: test_headless_mode.py, test_cut_object_for_magnets.py, test_multi_export.py
+  #   - GUI tests: test_gui_mode.py (uses Xvfb virtual display)
+  # See .github/workflows/macro-test.yaml for details.

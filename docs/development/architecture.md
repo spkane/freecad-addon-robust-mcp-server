@@ -132,7 +132,8 @@ addon/FreecadRobustMCP/
 └── freecad_mcp_bridge/    # Bridge plugin
     ├── __init__.py
     ├── server.py          # XML-RPC/JSON-RPC server
-    └── headless_server.py # Headless mode launcher
+    ├── blocking_bridge.py # Blocking server (keeps FreeCAD running)
+    └── startup_bridge.py  # Non-blocking startup (for interactive GUI)
 
 package.xml                # FreeCAD addon metadata (in project root)
 ```

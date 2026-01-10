@@ -2,8 +2,8 @@
 # Usage: just install::mcp-server, just install::mcp-bridge-workbench, etc.
 #
 # This module installs components for end users:
-# - MCP Server (as a uv tool, available system-wide)
-# - MCP Bridge Workbench (FreeCAD addon)
+# - Robust MCP Server (as a uv tool, available system-wide)
+# - Robust MCP Bridge Workbench (FreeCAD addon)
 # - FreeCAD Macros (CutObjectForMagnets, MultiExport)
 #
 # For developer setup (Python dependencies in virtualenv), use: just dev::install-deps
@@ -23,52 +23,75 @@ project_root := justfile_directory()
 #   echo "Macro directory: $MACRO_DIR"
 
 # Private recipe that outputs shell code to set FreeCAD directories
+# FreeCAD 1.x uses versioned directories (v1-1, v1-2, etc.) for user data.
+# This helper detects the latest versioned directory if present.
 [private]
 _freecad-dirs:
     #!/usr/bin/env bash
     cat << 'DIRS_EOF'
+    # Determine base FreeCAD directory based on OS
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        MOD_DIR="$HOME/Library/Application Support/FreeCAD/Mod"
-        MACRO_DIR="$HOME/Library/Application Support/FreeCAD/Macro"
+        FREECAD_BASE="$HOME/Library/Application Support/FreeCAD"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        MOD_DIR="$HOME/.local/share/FreeCAD/Mod"
-        MACRO_DIR="$HOME/.local/share/FreeCAD/Macro"
+        FREECAD_BASE="$HOME/.local/share/FreeCAD"
     else
         # Windows: validate APPDATA or use fallback
         if [[ -n "$APPDATA" ]]; then
-            FREECAD_BASE="$APPDATA"
+            FREECAD_BASE="$APPDATA/FreeCAD"
         elif [[ -n "$HOME" ]]; then
-            # Fallback to standard Windows location under HOME
-            FREECAD_BASE="$HOME/AppData/Roaming"
+            FREECAD_BASE="$HOME/AppData/Roaming/FreeCAD"
             echo "Warning: APPDATA not set, using fallback: $FREECAD_BASE" >&2
         else
             echo "Error: Neither APPDATA nor HOME is set. Cannot determine FreeCAD directory." >&2
             exit 1
         fi
-        MOD_DIR="$FREECAD_BASE/FreeCAD/Mod"
-        MACRO_DIR="$FREECAD_BASE/FreeCAD/Macro"
+    fi
+
+    # FreeCAD 1.x+ uses versioned directories (v1-1, v1-2, v2-0, etc.)
+    # Find the latest versioned directory if present
+    VERSIONED_DIR=""
+    if [[ -d "$FREECAD_BASE" ]]; then
+        # Find directories matching v*-* pattern (supports v1-*, v2-*, etc.)
+        # Use sort -t- -k1.2 -k2 -n to sort by major then minor version
+        LATEST_VERSION=$(ls -d "$FREECAD_BASE"/v*-* 2>/dev/null | sort -t- -k1.2 -k2 -n | tail -n 1)
+        if [[ -n "$LATEST_VERSION" && -d "$LATEST_VERSION" ]]; then
+            VERSIONED_DIR="$LATEST_VERSION"
+        fi
+    fi
+
+    # Use versioned directory if found, otherwise use base directory
+    if [[ -n "$VERSIONED_DIR" ]]; then
+        MOD_DIR="$VERSIONED_DIR/Mod"
+        MACRO_DIR="$VERSIONED_DIR/Macro"
+        echo "Note: Using FreeCAD versioned directory: $VERSIONED_DIR" >&2
+    else
+        MOD_DIR="$FREECAD_BASE/Mod"
+        MACRO_DIR="$FREECAD_BASE/Macro"
     fi
     DIRS_EOF
 
 # =============================================================================
-# MCP Server Installation
+# Robust MCP Server Installation
 # =============================================================================
 
-# Install the MCP server as a user tool (available system-wide via uv)
+# Install the Robust MCP Server as a user tool (available system-wide via uv)
+# Uses cached builds for faster installation. For development with uncommitted
+# changes, use mcp-server-clean instead.
 mcp-server:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
 
-    echo "Installing MCP server as a uv tool..."
+    echo "Installing Robust MCP Server as a uv tool..."
     echo ""
 
     # Install from the local project directory
+    # --force handles reinstallation automatically, no need to uninstall first
     uv tool install --force "$PROJECT_DIR"
 
     echo ""
     echo "=========================================="
-    echo "MCP Server installed!"
+    echo "Robust MCP Server installed!"
     echo "=========================================="
     echo ""
     echo "The 'freecad-mcp' command is now available system-wide."
@@ -82,16 +105,27 @@ mcp-server:
     echo '    "command": "freecad-mcp"'
     echo '  }'
     echo ""
+    echo "Note: If you have uncommitted local changes, use 'just install::mcp-server-clean'"
+    echo ""
 
-# Uninstall the MCP server tool
+# Install with cache clearing (for development with uncommitted changes)
+# Clears uv cache first to ensure the build picks up all local changes.
+mcp-server-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Clearing uv cache for fresh build..."
+    uv cache clean --force 2>/dev/null || true
+    just install::mcp-server
+
+# Uninstall the Robust MCP Server tool
 uninstall-mcp-server:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Uninstalling MCP server..."
-    uv tool uninstall freecad-robust-mcp || echo "MCP server was not installed as a uv tool"
+    echo "Uninstalling Robust MCP Server..."
+    uv tool uninstall freecad-robust-mcp || echo "Robust MCP Server was not installed as a uv tool"
 
 # =============================================================================
-# MCP Bridge Workbench Installation
+# Robust MCP Bridge Workbench Installation
 # =============================================================================
 
 # Install the FreeCAD Robust MCP workbench addon to FreeCAD's Mod directory
@@ -125,6 +159,135 @@ mcp-bridge-workbench:
     # Copy the addon directory
     cp -r "$ADDON_SRC" "$ADDON_DEST"
 
+    # Generate package.xml for the workbench from root package.xml
+    # FreeCAD requires package.xml in the addon directory for proper workbench detection
+    ROOT_PACKAGE_XML="${PROJECT_DIR}/package.xml"
+    if [[ -f "$ROOT_PACKAGE_XML" ]]; then
+        echo "Generating package.xml from root package.xml..."
+        export ROOT_PACKAGE_XML ADDON_DEST
+        python3 << 'PYEOF'
+    import xml.etree.ElementTree as ET
+    import sys
+    import os
+
+    try:
+        root_pkg = os.environ.get('ROOT_PACKAGE_XML', '')
+        addon_dest = os.environ.get('ADDON_DEST', '')
+
+        tree = ET.parse(root_pkg)
+        root = tree.getroot()
+        ns = {'pkg': 'https://wiki.freecad.org/Package_Metadata'}
+
+        # Find the workbench content element
+        workbench = root.find('.//pkg:content/pkg:workbench', ns)
+        if workbench is None:
+            print("Warning: No workbench found in root package.xml", file=sys.stderr)
+            sys.exit(0)
+
+        # Extract workbench metadata
+        wb_name = workbench.find('pkg:name', ns)
+        wb_version = workbench.find('pkg:version', ns)
+        wb_date = workbench.find('pkg:date', ns)
+        wb_description = workbench.find('pkg:description', ns)
+        wb_classname = workbench.find('pkg:classname', ns)
+        wb_icon = workbench.find('pkg:icon', ns)
+        wb_freecadmin = workbench.find('pkg:freecadmin', ns)
+
+        # Get maintainer and license from root
+        maintainer = root.find('pkg:maintainer', ns)
+        license_el = root.find('pkg:license', ns)
+        repo_url = root.find('pkg:url[@type="repository"]', ns)
+        readme_url = root.find('pkg:url[@type="readme"]', ns)
+
+        # Create standalone package.xml
+        standalone = ET.Element('package', {
+            'format': '1',
+            'xmlns': 'https://wiki.freecad.org/Package_Metadata'
+        })
+
+        # Add metadata
+        name_text = wb_name.text if wb_name is not None else 'Robust MCP Bridge'
+        ET.SubElement(standalone, 'name').text = name_text
+        desc_text = wb_description.text if wb_description is not None else 'MCP Bridge for FreeCAD'
+        ET.SubElement(standalone, 'description').text = desc_text
+        ver_text = wb_version.text if wb_version is not None else '0.0.0'
+        ET.SubElement(standalone, 'version').text = ver_text
+        # Fall back to today's date if not specified
+        from datetime import date
+        date_text = wb_date.text if wb_date is not None else date.today().isoformat()
+        ET.SubElement(standalone, 'date').text = date_text
+
+        if maintainer is not None:
+            m = ET.SubElement(standalone, 'maintainer')
+            m.text = maintainer.text
+            if maintainer.get('email'):
+                m.set('email', maintainer.get('email'))
+
+        if license_el is not None:
+            l = ET.SubElement(standalone, 'license')
+            l.text = license_el.text
+            if license_el.get('file'):
+                l.set('file', license_el.get('file'))
+
+        if repo_url is not None:
+            u = ET.SubElement(standalone, 'url', type='repository')
+            u.text = repo_url.text
+            if repo_url.get('branch'):
+                u.set('branch', repo_url.get('branch'))
+
+        if readme_url is not None:
+            u = ET.SubElement(standalone, 'url', type='readme')
+            u.text = readme_url.text
+
+        icon_text = wb_icon.text if wb_icon is not None else 'FreecadRobustMCP.svg'
+        ET.SubElement(standalone, 'icon').text = icon_text
+        fcmin_text = wb_freecadmin.text if wb_freecadmin is not None else '0.21'
+        ET.SubElement(standalone, 'freecadmin').text = fcmin_text
+
+        # Add content/workbench section
+        content = ET.SubElement(standalone, 'content')
+        wb_el = ET.SubElement(content, 'workbench')
+        cls_text = wb_classname.text if wb_classname is not None else 'FreecadRobustMCPWorkbench'
+        ET.SubElement(wb_el, 'classname').text = cls_text
+        ET.SubElement(wb_el, 'subdirectory').text = './'
+
+        # Add tags
+        for tag in ['MCP', 'AI', 'automation', 'Claude', 'bridge', 'headless']:
+            ET.SubElement(wb_el, 'tag').text = tag
+
+        # Helper to indent XML for Python < 3.9 compatibility
+        def indent_xml(elem, level=0, space='    '):
+            """Indent XML element tree (fallback for Python < 3.9)."""
+            indent_str = '\n' + level * space
+            if len(elem):
+                if not elem.text or not elem.text.strip():
+                    elem.text = indent_str + space
+                for child in elem:
+                    indent_xml(child, level + 1, space)
+                if not child.tail or not child.tail.strip():
+                    child.tail = indent_str
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = indent_str
+
+        # Write the standalone package.xml
+        # Use ET.indent if available (Python 3.9+), otherwise use fallback
+        if hasattr(ET, 'indent'):
+            ET.indent(standalone, space='    ')
+        else:
+            indent_xml(standalone)
+        tree = ET.ElementTree(standalone)
+        output_path = os.path.join(addon_dest, 'package.xml')
+        tree.write(output_path, encoding='UTF-8', xml_declaration=True)
+        print("Generated package.xml successfully")
+
+    except Exception as e:
+        print(f"Warning: Could not generate package.xml: {e}", file=sys.stderr)
+        # Don't fail the installation if package.xml generation fails
+    PYEOF
+    else
+        echo "Warning: Root package.xml not found, skipping package.xml generation"
+    fi
+
     echo ""
     echo "=========================================="
     echo "FreeCAD Robust MCP Workbench installed!"
@@ -134,7 +297,7 @@ mcp-bridge-workbench:
     echo ""
     echo "To use:"
     echo "  1. Start FreeCAD"
-    echo "  2. Select the 'MCP Bridge' workbench from the workbench selector"
+    echo "  2. Select the 'Robust MCP Bridge' workbench from the workbench selector"
     echo "  3. Click 'Start MCP Bridge' in the toolbar"
     echo "  4. Connect your MCP client (Claude Code, etc.) to FreeCAD"
     echo ""
@@ -178,6 +341,13 @@ macro-cut:
     fi
 
     mkdir -p "$MACRO_DIR"
+
+    # Remove existing installation if present (clean install)
+    if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then
+        echo "Removing existing CutObjectForMagnets macro..."
+        rm -f "$MACRO_DIR/CutObjectForMagnets.FCMacro"
+        rm -f "$MACRO_DIR/CutObjectForMagnets.svg"
+    fi
 
     # Copy the macro file
     cp "$MACRO_SRC" "$MACRO_DIR/"
@@ -230,6 +400,13 @@ macro-export:
 
     mkdir -p "$MACRO_DIR"
 
+    # Remove existing installation if present (clean install)
+    if [[ -f "$MACRO_DIR/MultiExport.FCMacro" ]]; then
+        echo "Removing existing MultiExport macro..."
+        rm -f "$MACRO_DIR/MultiExport.FCMacro"
+        rm -f "$MACRO_DIR/MultiExport.svg"
+    fi
+
     # Copy the macro file
     cp "$MACRO_SRC" "$MACRO_DIR/"
 
@@ -281,53 +458,123 @@ status:
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
 
+    # Helper function to get file modification time (cross-platform)
+    get_mod_time() {
+        local file="$1"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$file" 2>/dev/null || echo "unknown"
+        else
+            stat -c "%y" "$file" 2>/dev/null | cut -d'.' -f1 || echo "unknown"
+        fi
+    }
+
     echo "=========================================="
     echo "Installation Status"
     echo "=========================================="
     echo ""
 
-    # Check MCP Server (installed as uv tool)
+    # Check Robust MCP Server (installed as uv tool)
     if command -v freecad-mcp &> /dev/null; then
-        echo "✓ MCP Server: INSTALLED (as uv tool)"
+        MCP_VERSION=$(freecad-mcp --version 2>/dev/null || echo "unknown")
+        MCP_PATH=$(command -v freecad-mcp)
+        MCP_MOD_TIME=$(get_mod_time "$MCP_PATH")
+        echo "✓ Robust MCP Server: INSTALLED (as uv tool)"
+        echo "  Version: $MCP_VERSION"
+        echo "  Updated: $MCP_MOD_TIME"
         echo "  Run: freecad-mcp"
     elif [[ -f "{{project_root}}/pyproject.toml" ]] && grep -q 'name = "freecad-robust-mcp"' "{{project_root}}/pyproject.toml" 2>/dev/null; then
         # Dev environment exists - check if synced by looking for .venv
         if [[ -d "{{project_root}}/.venv" ]]; then
-            echo "✓ MCP Server: AVAILABLE (via dev environment)"
+            DEV_VERSION=$(cd "{{project_root}}" && uv run python -c "from freecad_mcp import __version__; print(__version__)" 2>/dev/null || echo "unknown")
+            echo "✓ Robust MCP Server: AVAILABLE (via dev environment)"
+            echo "  Version: $DEV_VERSION"
             echo "  Run: just mcp::run"
             echo "  For system-wide install: just install::mcp-server"
         else
-            echo "○ MCP Server: DEV SOURCE AVAILABLE (needs setup)"
+            echo "○ Robust MCP Server: DEV SOURCE AVAILABLE (needs setup)"
             echo "  Setup: uv sync --all-extras"
             echo "  Then run: just mcp::run"
         fi
     else
-        echo "✗ MCP Server: NOT INSTALLED"
+        echo "✗ Robust MCP Server: NOT INSTALLED"
         echo "  Install: just install::mcp-server"
     fi
     echo ""
 
+    # Helper function to extract version from package.xml files
+    # Uses environment variable to pass file path safely to Python (avoids shell interpolation)
+    extract_package_version() {
+        local package_file="$1"
+        PACKAGE_FILE="$package_file" python3 -c '
+import os
+import xml.etree.ElementTree as ET
+try:
+    package_file = os.environ.get("PACKAGE_FILE", "")
+    tree = ET.parse(package_file)
+    root = tree.getroot()
+    ns = {"pkg": "https://wiki.freecad.org/Package_Metadata"}
+    # Try with namespace first, then without
+    ver = root.find("pkg:version", ns) or root.find("version")
+    print(ver.text if ver is not None else "unknown")
+except Exception:
+    print("unknown")
+' 2>/dev/null || echo "unknown"
+    }
+
+    # Helper function to extract __Version__ from macro files (handles single/double quotes)
+    # Uses environment variable to pass file path safely to Python (avoids shell interpolation)
+    extract_macro_version() {
+        local file="$1"
+        MACRO_FILE="$file" python3 -c '
+import os
+import re
+try:
+    macro_file = os.environ.get("MACRO_FILE", "")
+    content = open(macro_file).read()
+    match = re.search(r"__Version__\s*=\s*[\"'"'"']([^\"'"'"']+)[\"'"'"']", content)
+    print(match.group(1) if match else "unknown")
+except Exception:
+    print("unknown")
+' 2>/dev/null || echo "unknown"
+    }
+
     # Check workbench
     if [[ -d "$MOD_DIR/FreecadRobustMCP" ]]; then
-        echo "✓ MCP Bridge Workbench: INSTALLED"
+        WB_VERSION="unknown"
+        if [[ -f "$MOD_DIR/FreecadRobustMCP/package.xml" ]]; then
+            WB_VERSION=$(extract_package_version "$MOD_DIR/FreecadRobustMCP/package.xml")
+        fi
+        WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCP/InitGui.py")
+        echo "✓ Robust MCP Bridge Workbench: INSTALLED"
+        echo "  Version: $WB_VERSION"
+        echo "  Updated: $WB_MOD_TIME"
         echo "  Path: $MOD_DIR/FreecadRobustMCP"
     else
-        echo "✗ MCP Bridge Workbench: NOT INSTALLED"
+        echo "✗ Robust MCP Bridge Workbench: NOT INSTALLED"
         echo "  Install: just install::mcp-bridge-workbench"
     fi
     echo ""
 
     # Check macros
+
     echo "Macros:"
     if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then
+        CUT_VERSION=$(extract_macro_version "$MACRO_DIR/CutObjectForMagnets.FCMacro")
+        CUT_MOD_TIME=$(get_mod_time "$MACRO_DIR/CutObjectForMagnets.FCMacro")
         echo "  ✓ CutObjectForMagnets: INSTALLED"
+        echo "    Version: $CUT_VERSION"
+        echo "    Updated: $CUT_MOD_TIME"
     else
         echo "  ✗ CutObjectForMagnets: NOT INSTALLED"
         echo "    Install: just install::macro-cut"
     fi
 
     if [[ -f "$MACRO_DIR/MultiExport.FCMacro" ]]; then
+        EXPORT_VERSION=$(extract_macro_version "$MACRO_DIR/MultiExport.FCMacro")
+        EXPORT_MOD_TIME=$(get_mod_time "$MACRO_DIR/MultiExport.FCMacro")
         echo "  ✓ MultiExport: INSTALLED"
+        echo "    Version: $EXPORT_VERSION"
+        echo "    Updated: $EXPORT_MOD_TIME"
     else
         echo "  ✗ MultiExport: NOT INSTALLED"
         echo "    Install: just install::macro-export"

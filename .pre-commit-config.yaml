@@ -9,7 +9,7 @@ repos:
   # General File Hygiene
   # ==========================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: \.md$  # Allow trailing spaces in markdown for line breaks
@@ -48,7 +48,7 @@ repos:
   # Python - Linting and Formatting
   # ==========================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.14.11
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -62,7 +62,7 @@ repos:
   # Python - Type Checking
   # ==========================================================================
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         additional_dependencies:
@@ -77,7 +77,7 @@ repos:
   # Python - Security Scanning
   # ==========================================================================
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.0
+    rev: 1.9.2
     hooks:
       - id: bandit
         args: [-c, pyproject.toml, -r, src, macros]
@@ -107,7 +107,7 @@ repos:
   # Scans git history and current files using regex patterns
   # Config: .gitleaks.toml
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.2
+    rev: v8.30.0
     hooks:
       - id: gitleaks
         name: gitleaks (secrets scanner)
@@ -141,7 +141,7 @@ repos:
   # It's skipped in CI (via SKIP env var) but runs locally.
   # See: https://github.com/trufflesecurity/trufflehog/issues/3321
   - repo: https://github.com/trufflesecurity/trufflehog
-    rev: v3.88.7
+    rev: v3.92.4
     hooks:
       - id: trufflehog
         name: trufflehog (verified secrets scan)
@@ -156,7 +156,7 @@ repos:
   # markdownlint-cli2 - Comprehensive markdown linter with auto-fix
   # Config: .markdownlint.yaml
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.17.1
+    rev: v0.20.0
     hooks:
       - id: markdownlint-cli2
         name: markdownlint (linter)
@@ -176,7 +176,7 @@ repos:
   # Spell Checking
   # ==========================================================================
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
+    rev: v2.4.1
     hooks:
       - id: codespell
         additional_dependencies:
@@ -191,12 +191,12 @@ repos:
   # Configuration Validation
   # ==========================================================================
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.23
+    rev: v0.24.1
     hooks:
       - id: validate-pyproject
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.30.0
+    rev: 0.36.0
     hooks:
       - id: check-github-workflows
         name: validate GitHub workflows
@@ -207,7 +207,7 @@ repos:
   # GitHub Actions Linting
   # ==========================================================================
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.4
+    rev: v1.7.10
     hooks:
       - id: actionlint
         name: actionlint (GitHub Actions linter)
@@ -216,7 +216,7 @@ repos:
   # Shell Script Linting
   # ==========================================================================
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         name: shellcheck (shell linter)
@@ -225,26 +225,34 @@ repos:
   # ==========================================================================
   # Dockerfile Linting
   # ==========================================================================
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.13.1-beta
+  # hadolint-py: Python wrapper that auto-downloads hadolint binary
+  # No Docker or system installation required
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: v2.14.0
     hooks:
-      - id: hadolint-docker
-        name: hadolint (Dockerfile linter)
+      - id: hadolint
 
   # ==========================================================================
   # Dockerfile Security Scanning (Misconfigurations)
   # ==========================================================================
-  - repo: https://github.com/mxab/pre-commit-trivy.git
-    rev: v0.16.0
+  # Uses mise-managed trivy binary instead of pre-commit repo.
+  # This avoids case-conflicting git refs in pre-commit-trivy repo that break
+  # `pre-commit autoupdate` on case-insensitive filesystems (macOS).
+  # Version is managed in .mise.toml - update with `mise upgrade trivy`
+  - repo: local
     hooks:
-      - id: trivyconfig-docker
+      - id: trivy
         name: trivy (Dockerfile misconfig)
+        entry: trivy
         args:
+          - config
           - --severity
           - HIGH,CRITICAL
           - --exit-code
           - "1"
-          - .
+        language: system
+        files: (Dockerfile|\.dockerfile)$
+        pass_filenames: true
 
   # ==========================================================================
   # Documentation Build Validation
@@ -262,7 +270,7 @@ repos:
   # Commit Message Linting
   # ==========================================================================
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.1.0
+    rev: v4.11.1
     hooks:
       - id: commitizen
         name: commitizen (commit format)
@@ -303,7 +311,6 @@ ci:
   autoupdate_commit_msg: "chore(deps): update pre-commit hooks"
   skip:
     - mypy              # Needs dependencies installed
-    - hadolint-docker   # Needs Docker
-    - trivyconfig-docker  # Needs Docker
+    - trivy             # Uses mise-managed binary (local repo)
     - trufflehog        # Can be slow in CI
     - coderabbit        # GitHub App handles PR reviews; CLI is for local use

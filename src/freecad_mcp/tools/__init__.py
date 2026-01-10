@@ -12,6 +12,9 @@ Tools are organized by category:
 - view: View and screenshot tools
 """
 
+from collections.abc import Awaitable, Callable
+from typing import Any
+
 from freecad_mcp.tools.documents import register_document_tools
 from freecad_mcp.tools.execution import register_execution_tools
 from freecad_mcp.tools.export import register_export_tools
@@ -32,12 +35,12 @@ __all__ = [
 ]
 
 
-def register_all_tools(mcp, get_bridge_func) -> None:
-    """Register all FreeCAD tools with the MCP server.
+def register_all_tools(mcp: Any, get_bridge_func: Callable[[], Awaitable[Any]]) -> None:
+    """Register all FreeCAD tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
-        get_bridge_func: Async function to get the active bridge.
+        mcp: The FastMCP (Robust MCP Server) instance (Any due to lack of stubs).
+        get_bridge_func: Async function returning the active bridge connection.
     """
     register_execution_tools(mcp, get_bridge_func)
     register_document_tools(mcp, get_bridge_func)

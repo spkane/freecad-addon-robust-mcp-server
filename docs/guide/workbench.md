@@ -1,6 +1,6 @@
-# MCP Bridge Workbench
+# Robust MCP Bridge Workbench
 
-The MCP Bridge Workbench is a FreeCAD addon that provides the server-side connection point for the MCP server. It runs inside FreeCAD and exposes XML-RPC and JSON-RPC interfaces.
+The Robust MCP Bridge Workbench is a FreeCAD addon that provides the server-side connection point for the Robust MCP Server. It runs inside FreeCAD and exposes XML-RPC and JSON-RPC interfaces.
 
 ---
 
@@ -22,7 +22,7 @@ The workbench provides:
 
 1. Open FreeCAD
 1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD MCP and More" or "MCP Bridge"
+1. Search for "FreeCAD MCP and More" or "Robust MCP Bridge"
 1. Click **Install**
 1. Restart FreeCAD
 
@@ -68,21 +68,21 @@ Click **Stop Bridge** in the toolbar. The status indicator turns red.
 
 ## Headless Mode Usage
 
-The workbench includes a headless server script for running without the FreeCAD GUI.
+The workbench includes a blocking bridge script for running in server mode (keeps FreeCAD running).
 
 ### Starting Headless Mode
 
 **Linux:**
 
 ```bash
-freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py
+freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **macOS:**
 
 ```bash
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/headless_server.py
+    ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **Using just commands (from source):**
@@ -123,18 +123,63 @@ Press Ctrl+C to stop.
 | Interactive selection    | Yes      | **No**        |
 
 !!! info "GUI-Only Features"
-When a GUI-only feature is requested in headless mode, the MCP server returns a structured error response instead of crashing: `{"success": false, "error": "GUI not available - screenshots cannot be captured in headless mode"}`
+When a GUI-only feature is requested in headless mode, the Robust MCP Server returns a structured error response instead of crashing: `{"success": false, "error": "GUI not available - screenshots cannot be captured in headless mode"}`
 
 ---
 
 ## Configuration
 
-The workbench uses default ports that can be customized in the MCP server configuration:
+### Workbench Preferences (FreeCAD Side)
 
-| Server  | Default Port | Environment Variable  |
-| ------- | ------------ | --------------------- |
-| XML-RPC | 9875         | `FREECAD_XMLRPC_PORT` |
-| Socket  | 9876         | `FREECAD_SOCKET_PORT` |
+The workbench has its own preferences that control how the bridge runs inside FreeCAD. Access them via:
+
+- **Edit → Preferences → Robust MCP Bridge** (in FreeCAD's main Preferences dialog)
+- **Robust MCP Bridge → MCP Bridge Preferences...** (from the workbench menu)
+
+| Setting               | Description                                  | Default  |
+| --------------------- | -------------------------------------------- | -------- |
+| Auto-start bridge     | Start bridge automatically on FreeCAD launch | Disabled |
+| Show status indicator | Display status in FreeCAD's status bar       | Enabled  |
+| XML-RPC Port          | Port for XML-RPC connections                 | 9875     |
+| Socket Port           | Port for JSON-RPC socket connections         | 9876     |
+
+!!! note "Port Configuration"
+    If you change the ports in the workbench preferences while the bridge is running, it will automatically restart with the new configuration.
+
+### MCP Server Configuration (Client Side)
+
+The external Robust MCP Server (used by Claude Code, etc.) is configured separately using environment variables. **These must match the workbench ports:**
+
+| Environment Variable  | Description                                    | Default     |
+| --------------------- | ---------------------------------------------- | ----------- |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, `embedded`| `xmlrpc`    |
+| `FREECAD_XMLRPC_PORT` | XML-RPC server port                            | 9875        |
+| `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                    | 9876        |
+| `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                 | `localhost` |
+
+Example MCP client configuration with custom ports:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "freecad-mcp",
+      "env": {
+        "FREECAD_MODE": "xmlrpc",
+        "FREECAD_XMLRPC_PORT": "9877"
+      }
+    }
+  }
+}
+```
+
+!!! info "Choosing a Connection Mode"
+    - **`xmlrpc`** (recommended): Most reliable, works on all platforms. Connects to FreeCAD via XML-RPC protocol.
+    - **`socket`**: Alternative protocol using JSON-RPC over TCP sockets. Also works on all platforms.
+    - **`embedded`**: Direct Python import of FreeCAD (Linux only). Does not require the workbench but crashes on macOS due to library linking issues. Not recommended for production use.
+
+!!! warning "Port Matching Required"
+    The ports configured in the MCP Server (via environment variables) **must match** the ports configured in the FreeCAD workbench preferences. If they don't match, the server won't be able to connect to FreeCAD.
 
 ---
 
@@ -144,7 +189,7 @@ The workbench uses default ports that can be customized in the MCP server config
 ┌─────────────────────────────────────────────────────────────┐
 │                    FreeCAD (GUI or Headless)                │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │              MCP Bridge Workbench/Plugin              │  │
+│  │           Robust MCP Bridge Workbench/Plugin          │  │
 │  │  ┌─────────────────┐  ┌─────────────────┐             │  │
 │  │  │ XML-RPC Server  │  │ Socket Server   │             │  │
 │  │  │   (port 9875)   │  │   (port 9876)   │             │  │
@@ -168,7 +213,7 @@ The workbench uses default ports that can be customized in the MCP server config
                            │ Network (localhost)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              FreeCAD MCP Server (External Process)          │
+│           FreeCAD Robust MCP Server (External Process)      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -188,14 +233,14 @@ The workbench uses a **queue-based thread safety system** to ensure FreeCAD oper
 1. Ensure no other process is using ports 9875/9876
 1. Try restarting FreeCAD
 
-### Connection Refused from MCP Server
+### Connection Refused from Robust MCP Server
 
-**Problem:** MCP server reports "Connection refused"
+**Problem:** Robust MCP Server reports "Connection refused"
 
 **Solution:**
 
 1. Verify the bridge is running (green status indicator)
-1. Check that ports match between workbench and MCP server config
+1. Check that ports match between workbench and Robust MCP Server config
 1. If using Docker, ensure you're using `host.docker.internal` as the host
 
 ### Headless Mode Hangs

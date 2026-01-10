@@ -1,0 +1,215 @@
+name: Setup FreeCAD
+description: Downloads and sets up FreeCAD AppImage for CI testing (supports x86_64 and ARM64 runners)
+
+inputs:
+  freecad-tag:
+    description: "Specific FreeCAD release tag to install (e.g., '1.0.2'). If empty, uses latest stable release."
+    required: false
+    default: ""
+
+outputs:
+  freecad-tag:
+    description: The FreeCAD release tag that was installed
+    value: ${{ steps.freecad-release.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get latest FreeCAD release info
+      id: freecad-release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_FREECAD_TAG: ${{ inputs.freecad-tag }}
+      run: |
+        # Detect runner architecture
+        RUNNER_ARCH=$(uname -m)
+        case "$RUNNER_ARCH" in
+            x86_64)
+                ARCH_SUFFIX="x86_64"
+                ;;
+            aarch64|arm64)
+                ARCH_SUFFIX="aarch64"
+                ;;
+            *)
+                echo "ERROR: Unsupported architecture: $RUNNER_ARCH"
+                exit 1
+                ;;
+        esac
+        echo "Detected architecture: $RUNNER_ARCH -> $ARCH_SUFFIX"
+        echo "arch=$ARCH_SUFFIX" >> "$GITHUB_OUTPUT"
+
+        # Get FreeCAD release info from GitHub API
+        # Use GitHub token to avoid rate limiting
+        if [ -n "$INPUT_FREECAD_TAG" ]; then
+            echo "Using specified FreeCAD tag: $INPUT_FREECAD_TAG"
+            RELEASE_INFO=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+                "https://api.github.com/repos/FreeCAD/FreeCAD/releases/tags/$INPUT_FREECAD_TAG")
+        else
+            echo "Fetching latest FreeCAD release..."
+            RELEASE_INFO=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+                https://api.github.com/repos/FreeCAD/FreeCAD/releases/latest)
+        fi
+
+        # Validate response has required fields
+        TAG_NAME=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+        if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "null" ]; then
+            echo "ERROR: Could not get tag_name from release info"
+            echo "Response: $RELEASE_INFO"
+            exit 1
+        fi
+        echo "FreeCAD release: $TAG_NAME"
+        echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+        # Find the Linux AppImage asset URL for the detected architecture
+        # Priority: conda build with py311 > any conda build > any AppImage
+        # The conda builds are the officially recommended AppImages
+        APPIMAGE_URL=""
+        APPIMAGE_NAME=""
+
+        # First try: conda build with py311 (most specific, preferred)
+        APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}-py311\\\\.AppImage$\")) | .browser_download_url" | head -1)
+        APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}-py311\\\\.AppImage$\")) | .name" | head -1)
+
+        # Second try: any conda build for the architecture
+        if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+            echo "Note: py311 conda build not found, trying any conda build..."
+            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .browser_download_url" | head -1)
+            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .name" | head -1)
+        fi
+
+        # Third try: any AppImage for the architecture (fallback)
+        if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+            echo "Note: conda build not found, trying any ${ARCH_SUFFIX} AppImage..."
+            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .browser_download_url" | head -1)
+            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .name" | head -1)
+        fi
+
+        if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
+            echo "ERROR: Could not find Linux ${ARCH_SUFFIX} AppImage in release assets"
+            echo "Available assets:"
+            echo "$RELEASE_INFO" | jq -r '.assets[].name'
+            exit 1
+        fi
+
+        echo "AppImage URL: $APPIMAGE_URL"
+        echo "AppImage name: $APPIMAGE_NAME"
+        echo "url=$APPIMAGE_URL" >> "$GITHUB_OUTPUT"
+        echo "name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
+
+    - name: Cache FreeCAD AppImage
+      id: cache-freecad
+      uses: actions/cache@v5
+      with:
+        path: ~/freecad-appimage
+        key: ${{ runner.os }}-${{ steps.freecad-release.outputs.arch }}-freecad-appimage-${{ steps.freecad-release.outputs.tag }}
+
+    - name: Download FreeCAD AppImage
+      if: steps.cache-freecad.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/freecad-appimage
+        echo "Downloading FreeCAD ${{ steps.freecad-release.outputs.tag }}..."
+        # Use retry, timeout, and fail-fast flags for reliable downloads
+        curl -L --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 600 \
+            -f -o ~/freecad-appimage/FreeCAD.AppImage \
+            "${{ steps.freecad-release.outputs.url }}"
+        chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+    - name: Setup FreeCAD AppImage
+      shell: bash
+      run: |
+        # Make AppImage executable (in case restored from cache)
+        chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+        # Extract AppImage for headless use (AppImages need FUSE which isn't available in CI)
+        # Skip extraction if already extracted (from cache)
+        cd ~/freecad-appimage
+        if [ ! -d "squashfs-root" ]; then
+            echo "Extracting AppImage..."
+            if ! ./FreeCAD.AppImage --appimage-extract > /dev/null 2>&1; then
+                echo "ERROR: AppImage extraction failed"
+                exit 1
+            fi
+            # Verify extraction produced expected structure
+            if [ ! -d "squashfs-root/usr/bin" ]; then
+                echo "ERROR: Extracted AppImage missing expected structure"
+                exit 1
+            fi
+        else
+            echo "Using cached extracted AppImage"
+        fi
+
+        # Create wrapper scripts that use AppRun to properly set up the environment
+        # The conda-based FreeCAD AppImage has complex environment requirements
+        # Using AppRun ensures all paths and variables are correctly configured
+        APPIMAGE_DIR="$HOME/freecad-appimage/squashfs-root"
+
+        # Check if AppRun exists and show its structure
+        echo "Checking AppImage structure..."
+        ls -la "$APPIMAGE_DIR/" | head -20
+        if [ -f "$APPIMAGE_DIR/AppRun" ]; then
+            echo "AppRun found, will use it for wrappers"
+        else
+            echo "WARNING: AppRun not found, falling back to direct execution"
+        fi
+
+        # Create freecadcmd wrapper - use AppRun with freecadcmd as argument
+        {
+            echo '#!/bin/bash'
+            echo "export APPDIR=\"$APPIMAGE_DIR\""
+            echo "export APPIMAGE_EXTRACT_AND_RUN=1"
+            echo "# Use AppRun if available, otherwise direct execution"
+            echo "if [ -f \"\$APPDIR/AppRun\" ]; then"
+            echo "    exec \"\$APPDIR/AppRun\" freecadcmd \"\$@\""
+            echo "else"
+            echo "    export LD_LIBRARY_PATH=\"\$APPDIR/usr/lib:\$LD_LIBRARY_PATH\""
+            echo "    exec \"\$APPDIR/usr/bin/freecadcmd\" \"\$@\""
+            echo "fi"
+        } | sudo tee /usr/local/bin/freecadcmd > /dev/null
+        sudo chmod +x /usr/local/bin/freecadcmd
+
+        # Create freecad (GUI) wrapper - use AppRun with freecad as argument
+        {
+            echo '#!/bin/bash'
+            echo "export APPDIR=\"$APPIMAGE_DIR\""
+            echo "export APPIMAGE_EXTRACT_AND_RUN=1"
+            echo "# Use AppRun if available, otherwise direct execution"
+            echo "if [ -f \"\$APPDIR/AppRun\" ]; then"
+            echo "    exec \"\$APPDIR/AppRun\" freecad \"\$@\""
+            echo "else"
+            echo "    export LD_LIBRARY_PATH=\"\$APPDIR/usr/lib:\$LD_LIBRARY_PATH\""
+            echo "    exec \"\$APPDIR/usr/bin/freecad\" \"\$@\""
+            echo "fi"
+        } | sudo tee /usr/local/bin/freecad > /dev/null
+        sudo chmod +x /usr/local/bin/freecad
+
+        echo "Created wrapper scripts for freecad and freecadcmd"
+
+    - name: Verify FreeCAD installation
+      shell: bash
+      run: |
+        echo "Checking FreeCAD installation..."
+        # Only verify with freecadcmd (headless) - freecad --version displays a GUI dialog
+        # and would hang without a window manager (Xvfb + openbox)
+        if freecadcmd --version; then
+            echo "FreeCAD version check passed"
+        else
+            echo "ERROR: freecadcmd --version failed"
+            echo ""
+            echo "=== Diagnostic Information ==="
+            echo "--- which freecadcmd ---"
+            which freecadcmd || echo "freecadcmd not found in PATH"
+            echo "--- which freecad ---"
+            which freecad || echo "freecad not found in PATH"
+            echo "--- FreeCAD AppImage bin directory ---"
+            ls -la ~/freecad-appimage/squashfs-root/usr/bin/ | head -20 || echo "Directory not found"
+            echo "--- PATH ---"
+            echo "$PATH"
+            echo "=== End Diagnostic Information ==="
+            exit 1
+        fi
+        which freecadcmd
+        which freecad
+        # Show Python version bundled with FreeCAD
+        freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.version}')" || true

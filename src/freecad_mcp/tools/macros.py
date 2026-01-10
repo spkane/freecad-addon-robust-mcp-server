@@ -1,4 +1,4 @@
-"""Macro management tools for FreeCAD MCP server.
+"""Macro management tools for FreeCAD Robust MCP Server.
 
 This module provides tools for managing FreeCAD macros:
 listing, running, creating, and editing macros.
@@ -7,14 +7,15 @@ Based on learnings from ATOI-Ming/FreeCAD-MCP which has a
 macro-centric workflow with templates and validation.
 """
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 
-def register_macro_tools(mcp, get_bridge) -> None:
-    """Register macro-related tools with the MCP server.
+def register_macro_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
+    """Register macro-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP server instance.
+        mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
     """
 

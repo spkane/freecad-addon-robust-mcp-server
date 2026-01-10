@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import errno
 import io
 import json
 import queue
@@ -45,6 +46,33 @@ DEFAULT_SOCKET_PORT = 9876
 DEFAULT_XMLRPC_PORT = 9875
 QUEUE_POLL_INTERVAL_MS = 50
 STATUS_UPDATE_INTERVAL_MS = 5000  # Update status bar every 5 seconds
+HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
+
+
+def _get_qt_core() -> Any:
+    """Get the QtCore module if GUI mode is available.
+
+    This helper checks if FreeCAD is available with GUI enabled and
+    attempts to import QtCore from PySide2 or PySide6.
+
+    Returns:
+        The QtCore module if available in GUI mode, None otherwise.
+    """
+    if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        return None
+
+    # Try PySide2 first, then PySide6
+    with contextlib.suppress(ImportError):
+        from PySide2 import QtCore
+
+        return QtCore
+
+    with contextlib.suppress(ImportError):
+        from PySide6 import QtCore
+
+        return QtCore
+
+    return None
 
 
 class ExecutionRequest:
@@ -262,48 +290,88 @@ class FreecadMCPPlugin:
                 self._timer.stop()
             self._timer = None
 
-        # Stop queue processor thread (headless mode)
-        if self._queue_thread:
-            self._queue_thread.join(timeout=2.0)
-            self._queue_thread = None
+        # Stop XML-RPC server by closing its socket directly
+        # This will cause handle_request() to raise an exception and exit
+        # Keep server reference until thread exits to avoid race condition
+        if self._xmlrpc_server:
+            with contextlib.suppress(Exception):
+                self._xmlrpc_server.socket.close()
 
-        # Stop socket server
+        # Stop socket server - close the server and stop the event loop
         if self._socket_loop and self._socket_server:
             self._socket_loop.call_soon_threadsafe(self._socket_server.close)
+            self._socket_loop.call_soon_threadsafe(self._socket_loop.stop)
 
-        # Stop XML-RPC server
-        if self._xmlrpc_server:
-            self._xmlrpc_server.shutdown()
+        # Wait briefly for threads - they're daemon threads so they'll
+        # be killed when the main thread exits anyway
+        if self._queue_thread and self._queue_thread.is_alive():
+            self._queue_thread.join(timeout=0.5)
+        self._queue_thread = None
 
-        # Wait for threads
-        if self._socket_thread:
-            self._socket_thread.join(timeout=5.0)
-            self._socket_thread = None
+        if self._socket_thread and self._socket_thread.is_alive():
+            self._socket_thread.join(timeout=0.5)
+        self._socket_thread = None
 
-        if self._xmlrpc_thread:
-            self._xmlrpc_thread.join(timeout=5.0)
-            self._xmlrpc_thread = None
+        # Wait for XML-RPC thread to exit before clearing server reference
+        if self._xmlrpc_thread and self._xmlrpc_thread.is_alive():
+            self._xmlrpc_thread.join(timeout=0.5)
+        self._xmlrpc_thread = None
+        # Now safe to clear the server reference
+        self._xmlrpc_server = None
 
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
 
     def run_forever(self) -> None:
-        """Run the server indefinitely (for headless mode).
+        """Run the server indefinitely.
 
         This method blocks until interrupted (Ctrl+C) or stop() is called.
-        Use this when running FreeCAD in headless/console mode.
+        Works in both GUI and headless modes:
+        - GUI mode: Uses Qt event loop to allow timers to fire
+        - Headless mode: Uses short sleep intervals for responsive shutdown
         """
         self.start()
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("Server running. Press Ctrl+C to stop.\n")
+
+        # Check if we're in GUI mode and have Qt available
+        QtCore = _get_qt_core()
+
         try:
-            while self._running:
-                time.sleep(0.5)
+            if QtCore is not None:
+                # GUI mode: use Qt's processEvents to keep the event loop running
+                # This allows QTimers to fire for queue processing
+                app = QtCore.QCoreApplication.instance()
+                if app is not None:
+                    while self._running:
+                        # Process Qt events (including our QTimer callbacks)
+                        app.processEvents()
+                        # Small sleep to prevent busy-waiting
+                        time.sleep(0.01)
+                else:
+                    # No QApplication - fall back to headless behavior
+                    self._run_forever_headless()
+            else:
+                # Headless mode
+                self._run_forever_headless()
         except KeyboardInterrupt:
+            pass  # Normal exit via Ctrl+C
+        finally:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintMessage("\nShutting down...\n")
-        finally:
             self.stop()
+
+    def _run_forever_headless(self) -> None:
+        """Run forever in headless mode using short sleep intervals.
+
+        Uses a short sleep interval to allow responsive shutdown when
+        stop() sets _running to False.
+        """
+        while self._running:
+            # Use short sleep to allow responsive shutdown
+            # This is more portable than signal.pause() and responds
+            # quickly when stop() sets _running = False
+            time.sleep(HEADLESS_POLL_INTERVAL_S)
 
     # =========================================================================
     # Status Bar Updates (GUI mode only)
@@ -311,17 +379,7 @@ class FreecadMCPPlugin:
 
     def _start_status_updates(self) -> None:
         """Start periodic status bar updates in GUI mode."""
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
-            return
-
-        # Try to import Qt - need to check both PySide2 and PySide6
-        QtCore = None
-        with contextlib.suppress(ImportError):
-            from PySide2 import QtCore  # type: ignore[no-redef]
-        if QtCore is None:
-            with contextlib.suppress(ImportError):
-                from PySide6 import QtCore  # type: ignore[no-redef]
-
+        QtCore = _get_qt_core()
         if QtCore is None:
             return
 
@@ -562,6 +620,19 @@ class FreecadMCPPlugin:
         try:
             self._socket_loop.run_until_complete(self._start_socket_server())
             self._socket_loop.run_forever()
+        except OSError as e:
+            # Server failed to start - mark as not running
+            self._running = False
+            if e.errno == errno.EADDRINUSE:
+                if FREECAD_AVAILABLE:
+                    FreeCAD.Console.PrintWarning(
+                        f"MCP Bridge: JSON-RPC port {self._port} already in use. "
+                        f"Another instance may be running.\n"
+                    )
+            elif FREECAD_AVAILABLE:
+                FreeCAD.Console.PrintError(
+                    f"MCP Bridge: Failed to start JSON-RPC server: {e}\n"
+                )
         finally:
             self._socket_loop.close()
 
@@ -584,10 +655,6 @@ class FreecadMCPPlugin:
             reader: Stream reader for incoming data.
             writer: Stream writer for outgoing data.
         """
-        peer = writer.get_extra_info("peername")
-        if FREECAD_AVAILABLE:
-            FreeCAD.Console.PrintMessage(f"MCP client connected (socket): {peer}\n")
-
         try:
             while self._running:
                 data = await reader.readline()
@@ -616,8 +683,6 @@ class FreecadMCPPlugin:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")
         finally:
-            if FREECAD_AVAILABLE:
-                FreeCAD.Console.PrintMessage(f"MCP client disconnected: {peer}\n")
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
@@ -693,11 +758,28 @@ class FreecadMCPPlugin:
 
     def _run_xmlrpc_server(self) -> None:
         """Run the XML-RPC server."""
-        self._xmlrpc_server = xmlrpc.server.SimpleXMLRPCServer(
-            (self._host, self._xmlrpc_port),
-            allow_none=True,
-            logRequests=False,
-        )
+        try:
+            self._xmlrpc_server = xmlrpc.server.SimpleXMLRPCServer(
+                (self._host, self._xmlrpc_port),
+                allow_none=True,
+                logRequests=False,
+            )
+        except OSError as e:
+            if e.errno == errno.EADDRINUSE:
+                if FREECAD_AVAILABLE:
+                    FreeCAD.Console.PrintWarning(
+                        f"MCP Bridge: XML-RPC port {self._xmlrpc_port} already in use. "
+                        f"Another instance may be running.\n"
+                    )
+            elif FREECAD_AVAILABLE:
+                FreeCAD.Console.PrintError(
+                    f"MCP Bridge: Failed to start XML-RPC server: {e}\n"
+                )
+            return
+
+        # Set a timeout so handle_request() doesn't block forever
+        # This allows the server to check self._running periodically
+        self._xmlrpc_server.timeout = 0.5
 
         # Register methods (type: ignore needed - xmlrpc types are overly restrictive)
         self._xmlrpc_server.register_function(self._xmlrpc_execute, "execute")  # type: ignore[arg-type]
@@ -709,7 +791,11 @@ class FreecadMCPPlugin:
         self._xmlrpc_server.register_introspection_functions()
 
         while self._running:
-            self._xmlrpc_server.handle_request()
+            try:
+                self._xmlrpc_server.handle_request()
+            except OSError:
+                # Socket was closed during shutdown - this is expected
+                break
 
     def _xmlrpc_ping(self) -> dict[str, Any]:
         """XML-RPC ping handler."""
@@ -738,6 +824,11 @@ class FreecadMCPPlugin:
         """
         return self._execute_via_queue(code, 30000)
 
+    # Valid view types for screenshot capture
+    _VALID_VIEW_TYPES = frozenset(
+        {"FitAll", "Isometric", "Front", "Back", "Top", "Bottom", "Left", "Right"}
+    )
+
     def _xmlrpc_get_view(
         self,
         width: int = 800,
@@ -754,6 +845,21 @@ class FreecadMCPPlugin:
         Returns:
             Dictionary with base64 image data or error.
         """
+        # Validate inputs to prevent code injection
+        # Type hints don't enforce at runtime, so explicit conversion is needed
+        try:
+            width = int(width)
+            height = int(height)
+        except (ValueError, TypeError) as e:
+            return {"success": False, "error": f"Invalid dimensions: {e}"}
+
+        if view_type not in self._VALID_VIEW_TYPES:
+            return {
+                "success": False,
+                "error": f"Invalid view_type: {view_type}. "
+                f"Must be one of: {', '.join(sorted(self._VALID_VIEW_TYPES))}",
+            }
+
         code = f"""
 import base64
 import tempfile

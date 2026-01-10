@@ -48,11 +48,11 @@ typecheck:
 # Run security scanning (code vulnerabilities)
 security:
     uv run bandit -c {{project_root}}/pyproject.toml -r {{project_root}}/src
-    uv run safety scan --detailed-output
+    cd {{project_root}} && uv run safety scan --detailed-output
 
 # Run spell checking
 spellcheck:
-    uv run codespell {{project_root}}/src {{project_root}}/tests {{project_root}}/docs
+    uv run codespell --ignore-words {{project_root}}/.codespell-ignore-words.txt {{project_root}}/src {{project_root}}/tests {{project_root}}/docs
 
 # =============================================================================
 # Secrets Scanning (quality::scan-* commands)
@@ -78,9 +78,9 @@ scan-detect:
 scan-audit:
     uv run detect-secrets audit {{project_root}}/.secrets.baseline
 
-# Update detect-secrets baseline with new findings
+# Update detect-secrets baseline with new findings (preserves audit metadata)
 scan-baseline-update:
-    uv run detect-secrets scan --baseline {{project_root}}/.secrets.baseline --update
+    uv run detect-secrets scan --baseline {{project_root}}/.secrets.baseline --update {{project_root}}
 
 # Run trufflehog for verified secrets (via pre-commit - not installed standalone)
 scan-trufflehog:

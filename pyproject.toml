@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "freecad-robust-mcp"
 dynamic = ["version"]
-description = "MCP (Model Context Protocol) server for FreeCAD integration with Claude Code and other AI assistants"
+description = "Robust MCP Server for FreeCAD integration with Claude Code and other AI assistants"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -125,6 +125,8 @@ target-version = "py311"
 line-length = 88
 src = ["src", "tests", "macros"]
 extend-include = ["*.FCMacro"]
+# Exclude auto-generated files (hatch-vcs version file)
+exclude = ["src/freecad_mcp/_version.py"]
 
 [tool.ruff.lint]
 select = [
@@ -287,6 +289,15 @@ markers = [
 source = ["src/freecad_mcp"]
 branch = true
 parallel = true
+# Exclude bridge modules from unit test coverage - they require a running
+# FreeCAD instance. These modules are exercised by integration tests which
+# run separately (just testing::integration). To verify bridge coverage:
+#   uv run pytest tests/integration --cov=freecad_mcp.bridge --cov-report=term-missing
+omit = [
+    "src/freecad_mcp/bridge/embedded.py",
+    "src/freecad_mcp/bridge/socket.py",
+    "src/freecad_mcp/bridge/xmlrpc.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [

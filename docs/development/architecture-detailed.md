@@ -277,7 +277,8 @@ freecad_mcp/
 │   ├── __init__.py
 │   ├── server.py            # XML-RPC/JSON-RPC server
 │   ├── handlers.py          # Request handlers
-│   └── headless_server.py   # Headless mode launcher
+│   ├── blocking_bridge.py   # Blocking server (keeps FreeCAD running)
+│   └── startup_bridge.py    # Non-blocking startup (for interactive GUI)
 │
 └── utils/                    # Utility modules
     └── __init__.py
@@ -1515,7 +1516,7 @@ FREECAD_XMLRPC_PORT = "9875"
 
 **Setup:**
 
-1. Install the MCP Bridge workbench via FreeCAD Addon Manager, or run `just run-gui` from source
+1. Install the Robust MCP Bridge workbench via FreeCAD Addon Manager, or run `just freecad::run-gui` from source
 1. Start the bridge using the workbench toolbar button or menu
 1. The bridge starts both XML-RPC (port 9875) and JSON-RPC (port 9876) servers
 

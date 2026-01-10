@@ -1,5 +1,5 @@
-site_name: FreeCAD MCP Server
-site_description: MCP server for FreeCAD integration with AI assistants
+site_name: FreeCAD Robust MCP Server
+site_description: Robust MCP Server for FreeCAD integration with AI assistants
 site_url: https://github.com/spkane/freecad-robust-mcp-and-more
 repo_url: https://github.com/spkane/freecad-robust-mcp-and-more
 repo_name: spkane/freecad-robust-mcp-and-more
@@ -122,7 +122,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
   - User Guide:
       - Connection Modes: guide/connection-modes.md
-      - MCP Bridge Workbench: guide/workbench.md
+      - Robust MCP Bridge Workbench: guide/workbench.md
       - FreeCAD Macros: guide/macros.md
       - Tools Overview: guide/tools.md
       - MCP Resources: guide/resources.md
