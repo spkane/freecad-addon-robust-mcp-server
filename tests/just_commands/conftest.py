@@ -261,7 +261,16 @@ def git_tag_cleanup() -> Generator[list[str], None, None]:
         # Safety guard: only delete tags starting with "test-" to prevent
         # accidental deletion of real release tags
         if not tag.startswith("test-"):
-            # Log and skip non-test tags
+            # Warn about skipped non-test tags to surface accidental additions
+            import warnings
+
+            warnings.warn(
+                f"Skipping cleanup of non-test tag '{tag}' - "
+                "only 'test-' prefixed tags are allowed in git_tag_cleanup fixture. "
+                "This may indicate a bug in the test.",
+                UserWarning,
+                stacklevel=1,
+            )
             continue
 
         # Delete local tag
@@ -281,14 +290,40 @@ def git_tag_cleanup() -> Generator[list[str], None, None]:
         )
 
 
+# Safe image name patterns for docker_image_cleanup fixture
+# Only images matching these patterns will be removed during cleanup
+SAFE_DOCKER_IMAGE_PATTERNS = (
+    "freecad-robust-mcp",  # Project's Docker image
+    "test-",  # Any test-prefixed images
+)
+
+
 @pytest.fixture
 def docker_image_cleanup() -> Generator[list[str], None, None]:
     """Fixture that tracks and cleans up Docker images created during tests."""
     images_to_cleanup: list[str] = []
     yield images_to_cleanup
 
-    # Cleanup: delete all tracked images
+    # Cleanup: delete all tracked images (only safe/known patterns)
     for image in images_to_cleanup:
+        # Safety guard: only delete images matching safe patterns
+        is_safe = any(
+            image == pattern or image.startswith(pattern)
+            for pattern in SAFE_DOCKER_IMAGE_PATTERNS
+        )
+        if not is_safe:
+            # Warn about skipped images to surface accidental additions
+            import warnings
+
+            warnings.warn(
+                f"Skipping cleanup of Docker image '{image}' - "
+                f"not in safe patterns {SAFE_DOCKER_IMAGE_PATTERNS}. "
+                "This may indicate a bug in the test.",
+                UserWarning,
+                stacklevel=1,
+            )
+            continue
+
         # S603, S607: docker is a well-known command, safe in test cleanup context
         subprocess.run(  # noqa: S603
             ["docker", "rmi", "-f", image],  # noqa: S607

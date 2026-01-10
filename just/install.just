@@ -47,13 +47,13 @@ _freecad-dirs:
         fi
     fi
 
-    # FreeCAD 1.x uses versioned directories (v1-1, v1-2, etc.)
+    # FreeCAD 1.x+ uses versioned directories (v1-1, v1-2, v2-0, etc.)
     # Find the latest versioned directory if present
     VERSIONED_DIR=""
     if [[ -d "$FREECAD_BASE" ]]; then
-        # Find directories matching v1-* pattern and get the latest one
-        # Use sort -t- -k2 -n for POSIX compatibility (sort -V is GNU-specific)
-        LATEST_VERSION=$(ls -d "$FREECAD_BASE"/v1-* 2>/dev/null | sort -t- -k2 -n | tail -n 1)
+        # Find directories matching v*-* pattern (supports v1-*, v2-*, etc.)
+        # Use sort -t- -k1.2 -k2 -n to sort by major then minor version
+        LATEST_VERSION=$(ls -d "$FREECAD_BASE"/v*-* 2>/dev/null | sort -t- -k1.2 -k2 -n | tail -n 1)
         if [[ -n "$LATEST_VERSION" && -d "$LATEST_VERSION" ]]; then
             VERSIONED_DIR="$LATEST_VERSION"
         fi
@@ -255,8 +255,26 @@ mcp-bridge-workbench:
         for tag in ['MCP', 'AI', 'automation', 'Claude', 'bridge', 'headless']:
             ET.SubElement(wb_el, 'tag').text = tag
 
+        # Helper to indent XML for Python < 3.9 compatibility
+        def indent_xml(elem, level=0, space='    '):
+            """Indent XML element tree (fallback for Python < 3.9)."""
+            indent_str = '\n' + level * space
+            if len(elem):
+                if not elem.text or not elem.text.strip():
+                    elem.text = indent_str + space
+                for child in elem:
+                    indent_xml(child, level + 1, space)
+                if not child.tail or not child.tail.strip():
+                    child.tail = indent_str
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = indent_str
+
         # Write the standalone package.xml
-        ET.indent(standalone, space='    ')
+        # Use ET.indent if available (Python 3.9+), otherwise use fallback
+        if hasattr(ET, 'indent'):
+            ET.indent(standalone, space='    ')
+        else:
+            indent_xml(standalone)
         tree = ET.ElementTree(standalone)
         output_path = os.path.join(addon_dest, 'package.xml')
         tree.write(output_path, encoding='UTF-8', xml_declaration=True)
