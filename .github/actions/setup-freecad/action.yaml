@@ -1,5 +1,5 @@
 name: Setup FreeCAD
-description: Downloads and sets up FreeCAD AppImage for CI testing
+description: Downloads and sets up FreeCAD AppImage for CI testing (supports x86_64 and ARM64 runners)
 
 inputs:
   freecad-tag:
@@ -22,6 +22,23 @@ runs:
         GH_TOKEN: ${{ github.token }}
         INPUT_FREECAD_TAG: ${{ inputs.freecad-tag }}
       run: |
+        # Detect runner architecture
+        RUNNER_ARCH=$(uname -m)
+        case "$RUNNER_ARCH" in
+            x86_64)
+                ARCH_SUFFIX="x86_64"
+                ;;
+            aarch64|arm64)
+                ARCH_SUFFIX="aarch64"
+                ;;
+            *)
+                echo "ERROR: Unsupported architecture: $RUNNER_ARCH"
+                exit 1
+                ;;
+        esac
+        echo "Detected architecture: $RUNNER_ARCH -> $ARCH_SUFFIX"
+        echo "arch=$ARCH_SUFFIX" >> "$GITHUB_OUTPUT"
+
         # Get FreeCAD release info from GitHub API
         # Use GitHub token to avoid rate limiting
         if [ -n "$INPUT_FREECAD_TAG" ]; then
@@ -44,32 +61,32 @@ runs:
         echo "FreeCAD release: $TAG_NAME"
         echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
-        # Find the Linux AppImage asset URL
-        # Priority: conda build with py311 > any conda build > any x86_64 AppImage
+        # Find the Linux AppImage asset URL for the detected architecture
+        # Priority: conda build with py311 > any conda build > any AppImage
         # The conda builds are the officially recommended AppImages
         APPIMAGE_URL=""
         APPIMAGE_NAME=""
 
         # First try: conda build with py311 (most specific, preferred)
-        APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64-py311\\.AppImage$")) | .browser_download_url' | head -1)
-        APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64-py311\\.AppImage$")) | .name' | head -1)
+        APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}-py311\\\\.AppImage$\")) | .browser_download_url" | head -1)
+        APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}-py311\\\\.AppImage$\")) | .name" | head -1)
 
-        # Second try: any conda build for x86_64
+        # Second try: any conda build for the architecture
         if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
             echo "Note: py311 conda build not found, trying any conda build..."
-            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
-            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("conda-Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .browser_download_url" | head -1)
+            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"conda-Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .name" | head -1)
         fi
 
-        # Third try: any x86_64 AppImage (fallback)
+        # Third try: any AppImage for the architecture (fallback)
         if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
-            echo "Note: conda build not found, trying any x86_64 AppImage..."
-            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .browser_download_url' | head -1)
-            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | test("Linux-x86_64.*\\.AppImage$")) | .name' | head -1)
+            echo "Note: conda build not found, trying any ${ARCH_SUFFIX} AppImage..."
+            APPIMAGE_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .browser_download_url" | head -1)
+            APPIMAGE_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[] | select(.name | test(\"Linux-${ARCH_SUFFIX}.*\\\\.AppImage$\")) | .name" | head -1)
         fi
 
         if [ -z "$APPIMAGE_URL" ] || [ "$APPIMAGE_URL" = "null" ]; then
-            echo "ERROR: Could not find Linux x86_64 AppImage in release assets"
+            echo "ERROR: Could not find Linux ${ARCH_SUFFIX} AppImage in release assets"
             echo "Available assets:"
             echo "$RELEASE_INFO" | jq -r '.assets[].name'
             exit 1
@@ -85,7 +102,7 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/freecad-appimage
-        key: ${{ runner.os }}-freecad-appimage-${{ steps.freecad-release.outputs.tag }}
+        key: ${{ runner.os }}-${{ steps.freecad-release.outputs.arch }}-freecad-appimage-${{ steps.freecad-release.outputs.tag }}
 
     - name: Download FreeCAD AppImage
       if: steps.cache-freecad.outputs.cache-hit != 'true'

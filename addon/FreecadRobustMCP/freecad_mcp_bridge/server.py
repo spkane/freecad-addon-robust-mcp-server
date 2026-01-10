@@ -23,7 +23,6 @@ import errno
 import io
 import json
 import queue
-import signal
 import sys
 import threading
 import time
@@ -47,6 +46,33 @@ DEFAULT_SOCKET_PORT = 9876
 DEFAULT_XMLRPC_PORT = 9875
 QUEUE_POLL_INTERVAL_MS = 50
 STATUS_UPDATE_INTERVAL_MS = 5000  # Update status bar every 5 seconds
+HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
+
+
+def _get_qt_core() -> Any:
+    """Get the QtCore module if GUI mode is available.
+
+    This helper checks if FreeCAD is available with GUI enabled and
+    attempts to import QtCore from PySide2 or PySide6.
+
+    Returns:
+        The QtCore module if available in GUI mode, None otherwise.
+    """
+    if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        return None
+
+    # Try PySide2 first, then PySide6
+    with contextlib.suppress(ImportError):
+        from PySide2 import QtCore
+
+        return QtCore
+
+    with contextlib.suppress(ImportError):
+        from PySide6 import QtCore
+
+        return QtCore
+
+    return None
 
 
 class ExecutionRequest:
@@ -266,10 +292,10 @@ class FreecadMCPPlugin:
 
         # Stop XML-RPC server by closing its socket directly
         # This will cause handle_request() to raise an exception and exit
+        # Keep server reference until thread exits to avoid race condition
         if self._xmlrpc_server:
             with contextlib.suppress(Exception):
                 self._xmlrpc_server.socket.close()
-            self._xmlrpc_server = None
 
         # Stop socket server - close the server and stop the event loop
         if self._socket_loop and self._socket_server:
@@ -286,9 +312,12 @@ class FreecadMCPPlugin:
             self._socket_thread.join(timeout=0.5)
         self._socket_thread = None
 
+        # Wait for XML-RPC thread to exit before clearing server reference
         if self._xmlrpc_thread and self._xmlrpc_thread.is_alive():
             self._xmlrpc_thread.join(timeout=0.5)
         self._xmlrpc_thread = None
+        # Now safe to clear the server reference
+        self._xmlrpc_server = None
 
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
@@ -299,28 +328,17 @@ class FreecadMCPPlugin:
         This method blocks until interrupted (Ctrl+C) or stop() is called.
         Works in both GUI and headless modes:
         - GUI mode: Uses Qt event loop to allow timers to fire
-        - Headless mode: Uses signal.pause() for efficient waiting
+        - Headless mode: Uses short sleep intervals for responsive shutdown
         """
         self.start()
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("Server running. Press Ctrl+C to stop.\n")
 
         # Check if we're in GUI mode and have Qt available
-        gui_mode = FREECAD_AVAILABLE and FreeCAD.GuiUp
-        QtCore = None
-        if gui_mode:
-            with contextlib.suppress(ImportError):
-                from PySide2 import QtCore as QtCore2
-
-                QtCore = QtCore2
-            if QtCore is None:
-                with contextlib.suppress(ImportError):
-                    from PySide6 import QtCore as QtCore6
-
-                    QtCore = QtCore6
+        QtCore = _get_qt_core()
 
         try:
-            if gui_mode and QtCore is not None:
+            if QtCore is not None:
                 # GUI mode: use Qt's processEvents to keep the event loop running
                 # This allows QTimers to fire for queue processing
                 app = QtCore.QCoreApplication.instance()
@@ -344,15 +362,16 @@ class FreecadMCPPlugin:
             self.stop()
 
     def _run_forever_headless(self) -> None:
-        """Run forever in headless mode using signal.pause()."""
+        """Run forever in headless mode using short sleep intervals.
+
+        Uses a short sleep interval to allow responsive shutdown when
+        stop() sets _running to False.
+        """
         while self._running:
-            try:
-                # signal.pause() blocks until a signal is received
-                # It's more efficient than sleep() and responds immediately to signals
-                signal.pause()
-            except AttributeError:
-                # Windows doesn't have signal.pause(), use sleep instead
-                time.sleep(0.5)
+            # Use short sleep to allow responsive shutdown
+            # This is more portable than signal.pause() and responds
+            # quickly when stop() sets _running = False
+            time.sleep(HEADLESS_POLL_INTERVAL_S)
 
     # =========================================================================
     # Status Bar Updates (GUI mode only)
@@ -360,17 +379,7 @@ class FreecadMCPPlugin:
 
     def _start_status_updates(self) -> None:
         """Start periodic status bar updates in GUI mode."""
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
-            return
-
-        # Try to import Qt - need to check both PySide2 and PySide6
-        QtCore = None
-        with contextlib.suppress(ImportError):
-            from PySide2 import QtCore  # type: ignore[no-redef]
-        if QtCore is None:
-            with contextlib.suppress(ImportError):
-                from PySide6 import QtCore  # type: ignore[no-redef]
-
+        QtCore = _get_qt_core()
         if QtCore is None:
             return
 

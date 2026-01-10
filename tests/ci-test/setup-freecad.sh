@@ -62,13 +62,14 @@ if [ ! -d "squashfs-root/usr/bin" ]; then
 fi
 
 echo "Checking AppImage structure..."
-ls -la "$APPIMAGE_DIR/squashfs-root/" | head -20
+# Use find instead of ls|pipe to satisfy shellcheck SC2012
+find "$APPIMAGE_DIR/squashfs-root/" -maxdepth 1 -printf '%M %u %g %s %f\n' 2>/dev/null | head -20
 
 # Create wrapper scripts using AppRun
 echo "Creating wrapper scripts..."
 
-# Use fixed path for APPDIR (not $HOME which varies)
-APPDIR_PATH="/root/freecad-appimage/squashfs-root"
+# Derive APPDIR_PATH from APPIMAGE_DIR for consistency
+APPDIR_PATH="$APPIMAGE_DIR/squashfs-root"
 
 # freecadcmd wrapper
 cat > /usr/local/bin/freecadcmd << WRAPPER_EOF

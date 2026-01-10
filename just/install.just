@@ -75,6 +75,8 @@ _freecad-dirs:
 # =============================================================================
 
 # Install the Robust MCP Server as a user tool (available system-wide via uv)
+# Uses cached builds for faster installation. For development with uncommitted
+# changes, use mcp-server-clean instead.
 mcp-server:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -88,11 +90,6 @@ mcp-server:
         echo "Removing existing Robust MCP Server installation..."
         uv tool uninstall freecad-robust-mcp 2>/dev/null || true
     fi
-
-    # Clear uv cache to ensure we rebuild from current source
-    # This is needed because uv caches wheels and may not pick up uncommitted changes
-    echo "Clearing uv cache for fresh build..."
-    uv cache clean --force 2>/dev/null || true
 
     # Install from the local project directory
     uv tool install --force "$PROJECT_DIR"
@@ -113,6 +110,17 @@ mcp-server:
     echo '    "command": "freecad-mcp"'
     echo '  }'
     echo ""
+    echo "Note: If you have uncommitted local changes, use 'just install::mcp-server-clean'"
+    echo ""
+
+# Install with cache clearing (for development with uncommitted changes)
+# Clears uv cache first to ensure the build picks up all local changes.
+mcp-server-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Clearing uv cache for fresh build..."
+    uv cache clean --force 2>/dev/null || true
+    just install::mcp-server
 
 # Uninstall the Robust MCP Server tool
 uninstall-mcp-server:
@@ -513,9 +521,23 @@ status:
     echo ""
 
     # Check macros
+    # Helper function to extract __Version__ from macro files (handles single/double quotes)
+    extract_macro_version() {
+        local file="$1"
+        python3 -c "
+import re
+try:
+    content = open('$file').read()
+    match = re.search(r'__Version__\s*=\s*[\"']([^\"']+)[\"']', content)
+    print(match.group(1) if match else 'unknown')
+except Exception:
+    print('unknown')
+" 2>/dev/null || echo "unknown"
+    }
+
     echo "Macros:"
     if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then
-        CUT_VERSION=$(grep '__Version__' "$MACRO_DIR/CutObjectForMagnets.FCMacro" 2>/dev/null | sed 's/.*= *"\([^"]*\)".*/\1/' || echo "unknown")
+        CUT_VERSION=$(extract_macro_version "$MACRO_DIR/CutObjectForMagnets.FCMacro")
         CUT_MOD_TIME=$(get_mod_time "$MACRO_DIR/CutObjectForMagnets.FCMacro")
         echo "  ✓ CutObjectForMagnets: INSTALLED"
         echo "    Version: $CUT_VERSION"
@@ -526,7 +548,7 @@ status:
     fi
 
     if [[ -f "$MACRO_DIR/MultiExport.FCMacro" ]]; then
-        EXPORT_VERSION=$(grep '__Version__' "$MACRO_DIR/MultiExport.FCMacro" 2>/dev/null | sed 's/.*= *"\([^"]*\)".*/\1/' || echo "unknown")
+        EXPORT_VERSION=$(extract_macro_version "$MACRO_DIR/MultiExport.FCMacro")
         EXPORT_MOD_TIME=$(get_mod_time "$MACRO_DIR/MultiExport.FCMacro")
         echo "  ✓ MultiExport: INSTALLED"
         echo "    Version: $EXPORT_VERSION"

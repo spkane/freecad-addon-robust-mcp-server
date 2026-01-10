@@ -45,3 +45,20 @@ jango
 # File extensions and paths
 md
 js
+
+# X11/Display/CI terms
+AppImage
+Xvfb
+xvfb-run
+xcb
+ConfigureNotify
+Expose
+MapNotify
+openbox
+xdotool
+qmlscene
+ppoll
+eventfd
+
+# Environment variables
+QT_QPA_PLATFORM

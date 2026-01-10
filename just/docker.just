@@ -207,6 +207,8 @@ test:
     # Using temp file for input so stdin closes after message
     # Note: Container may exit non-zero when stdin closes (ClosedResourceError), which is expected
     MCP_INPUT=$(mktemp)
+    # Ensure temp file is cleaned up on any exit (normal, error, or signal)
+    trap 'rm -f "$MCP_INPUT"' EXIT
     echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' > "$MCP_INPUT"
 
     # Capture output; ignore exit code since stdin close causes expected error
@@ -215,7 +217,7 @@ test:
         -e FREECAD_MODE=xmlrpc \
         -e FREECAD_SOCKET_HOST=host.docker.internal \
         {{image_name}}:test 2>&1 < "$MCP_INPUT" || true)
-    rm -f "$MCP_INPUT"
+    # Temp file will be cleaned up by trap on EXIT
 
     echo ""
     echo "Step 4: Verifying response..."
