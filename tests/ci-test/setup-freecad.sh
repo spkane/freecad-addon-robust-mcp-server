@@ -16,8 +16,63 @@ fi
 
 # Marker file to indicate complete installation
 MARKER_FILE="$APPIMAGE_DIR/.freecad_installed"
+# Lock file for atomic operations (prevents race conditions in parallel CI)
+LOCK_FILE="$APPIMAGE_DIR/.freecad_install.lock"
+# Derive APPIMAGE_PATH early for cleanup function
+APPIMAGE_PATH="$APPIMAGE_DIR/FreeCAD.AppImage"
+
+# Track whether installation completed successfully
+INSTALL_SUCCESSFUL=false
+
+# Cleanup function to remove partial artifacts on failure
+cleanup_on_error() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]] && [[ "$INSTALL_SUCCESSFUL" != "true" ]]; then
+        echo "ERROR: Installation failed (exit code $exit_code), cleaning up partial artifacts..."
+        rm -f "$MARKER_FILE" 2>/dev/null || true
+        rm -f "$APPIMAGE_PATH" 2>/dev/null || true
+        rm -rf "$APPIMAGE_DIR/squashfs-root" 2>/dev/null || true
+        rm -f "$LOCK_FILE" 2>/dev/null || true
+    fi
+}
+trap cleanup_on_error EXIT
+
+# Detect if running in CI environment
+is_ci_environment() {
+    # Check common CI environment variables
+    [[ -n "${CI:-}" ]] || \
+    [[ -n "${GITHUB_ACTIONS:-}" ]] || \
+    [[ -n "${GITLAB_CI:-}" ]] || \
+    [[ -n "${TRAVIS:-}" ]] || \
+    [[ -n "${CIRCLECI:-}" ]] || \
+    [[ -n "${JENKINS_URL:-}" ]] || \
+    [[ -n "${BUILDKITE:-}" ]]
+}
+
+# In CI, require SHA256 checksum for security
+if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
+    echo "ERROR: APPIMAGE_SHA256 is required in CI environments for security verification"
+    echo "Set the APPIMAGE_SHA256 environment variable to the expected checksum"
+    exit 1
+fi
 
 echo "=== Setting up FreeCAD $FREECAD_TAG ==="
+
+# Create directory for lock file
+mkdir -p "$APPIMAGE_DIR"
+
+# Use flock for atomic marker file operations (prevents race conditions in parallel CI)
+# The lock is held for the entire installation process
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "Another installation is in progress, waiting for lock..."
+    flock 200
+    # Re-check marker file after acquiring lock (another process may have completed)
+    if [[ -f "$MARKER_FILE" ]] && grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
+        echo "FreeCAD $FREECAD_TAG already set up by another process, skipping"
+        exit 0
+    fi
+fi
 
 # Check for complete setup using marker file
 if [[ -f "$MARKER_FILE" ]]; then
@@ -72,7 +127,7 @@ echo "Detected architecture: $ARCH -> Linux-$ARCH_SUFFIX"
 # Format: FreeCAD_1.0.2-conda-Linux-aarch64-py311.AppImage
 APPIMAGE_URL="https://github.com/FreeCAD/FreeCAD/releases/download/${FREECAD_TAG}/FreeCAD_${FREECAD_TAG}-conda-Linux-${ARCH_SUFFIX}-py311.AppImage"
 APPIMAGE_NAME="FreeCAD_${FREECAD_TAG}-conda-Linux-${ARCH_SUFFIX}-py311.AppImage"
-APPIMAGE_PATH="$APPIMAGE_DIR/FreeCAD.AppImage"
+# APPIMAGE_PATH is defined earlier for use in cleanup_on_error trap
 
 echo "FreeCAD release: $FREECAD_TAG"
 echo "AppImage URL: $APPIMAGE_URL"
@@ -221,8 +276,17 @@ if ! /usr/local/bin/freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.vers
     exit 1
 fi
 
+echo "--- FreeCAD module import test ---"
+if ! /usr/local/bin/freecadcmd -c "import FreeCAD; print(f'FreeCAD version: {FreeCAD.Version()}')"; then
+    echo "ERROR: FreeCAD module import failed - FreeCAD bindings may be missing or corrupted"
+    exit 1
+fi
+
 # Create marker file to indicate successful installation
 echo "$FREECAD_TAG" > "$MARKER_FILE"
 echo "Created marker file: $MARKER_FILE"
+
+# Mark installation as successful (prevents cleanup_on_error from removing artifacts)
+INSTALL_SUCCESSFUL=true
 
 echo "=== FreeCAD setup complete ==="

@@ -483,21 +483,16 @@ status:
     fi
     echo ""
 
-    # Check workbench
-    if [[ -d "$MOD_DIR/FreecadRobustMCP" ]]; then
-        # Get version from package.xml if available
-        WB_VERSION="unknown"
-        if [[ -f "$MOD_DIR/FreecadRobustMCP/package.xml" ]]; then
-            # Extract the top-level version element (not the one inside content/workbench)
-            # Use a more robust extraction that handles multiline XML
-            # Export MOD_DIR for Python to access via environment (avoids shell interpolation issues)
-            export MOD_DIR
-            WB_VERSION=$(python3 -c '
+    # Helper function to extract version from package.xml files
+    # Uses environment variable to pass file path safely to Python (avoids shell interpolation)
+    extract_package_version() {
+        local package_file="$1"
+        PACKAGE_FILE="$package_file" python3 -c '
 import os
 import xml.etree.ElementTree as ET
 try:
-    mod_dir = os.environ.get("MOD_DIR", "")
-    tree = ET.parse(os.path.join(mod_dir, "FreecadRobustMCP", "package.xml"))
+    package_file = os.environ.get("PACKAGE_FILE", "")
+    tree = ET.parse(package_file)
     root = tree.getroot()
     ns = {"pkg": "https://wiki.freecad.org/Package_Metadata"}
     # Try with namespace first, then without
@@ -505,20 +500,9 @@ try:
     print(ver.text if ver is not None else "unknown")
 except Exception:
     print("unknown")
-' 2>/dev/null || echo "unknown")
-        fi
-        WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCP/InitGui.py")
-        echo "✓ Robust MCP Bridge Workbench: INSTALLED"
-        echo "  Version: $WB_VERSION"
-        echo "  Updated: $WB_MOD_TIME"
-        echo "  Path: $MOD_DIR/FreecadRobustMCP"
-    else
-        echo "✗ Robust MCP Bridge Workbench: NOT INSTALLED"
-        echo "  Install: just install::mcp-bridge-workbench"
-    fi
-    echo ""
+' 2>/dev/null || echo "unknown"
+    }
 
-    # Check macros
     # Helper function to extract __Version__ from macro files (handles single/double quotes)
     # Uses environment variable to pass file path safely to Python (avoids shell interpolation)
     extract_macro_version() {
@@ -535,6 +519,25 @@ except Exception:
     print("unknown")
 ' 2>/dev/null || echo "unknown"
     }
+
+    # Check workbench
+    if [[ -d "$MOD_DIR/FreecadRobustMCP" ]]; then
+        WB_VERSION="unknown"
+        if [[ -f "$MOD_DIR/FreecadRobustMCP/package.xml" ]]; then
+            WB_VERSION=$(extract_package_version "$MOD_DIR/FreecadRobustMCP/package.xml")
+        fi
+        WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCP/InitGui.py")
+        echo "✓ Robust MCP Bridge Workbench: INSTALLED"
+        echo "  Version: $WB_VERSION"
+        echo "  Updated: $WB_MOD_TIME"
+        echo "  Path: $MOD_DIR/FreecadRobustMCP"
+    else
+        echo "✗ Robust MCP Bridge Workbench: NOT INSTALLED"
+        echo "  Install: just install::mcp-bridge-workbench"
+    fi
+    echo ""
+
+    # Check macros
 
     echo "Macros:"
     if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then

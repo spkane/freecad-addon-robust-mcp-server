@@ -125,11 +125,9 @@ class JustRunner:
                 success=result.returncode == 0,
             )
         except subprocess.TimeoutExpired as e:
-            stdout_val = ""
-            if hasattr(e, "stdout") and e.stdout is not None:
-                stdout_val = (
-                    e.stdout if isinstance(e.stdout, str) else e.stdout.decode()
-                )
+            # subprocess.run with text=True means e.stdout is str|None at runtime,
+            # but the type stub says bytes|str|None. Cast to satisfy mypy.
+            stdout_val = str(e.stdout) if e.stdout else ""
             return JustResult(
                 command=command,
                 returncode=-1,
