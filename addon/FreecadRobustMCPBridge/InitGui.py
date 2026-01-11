@@ -36,7 +36,7 @@ except Exception as e:
     )
 
 
-class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
+class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
     """FreeCAD Robust MCP Workbench.
 
     Provides toolbar and menu commands to start, stop, and monitor
@@ -136,7 +136,7 @@ class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
 
 
 # Register the workbench
-FreeCADGui.addWorkbench(FreecadRobustMCPWorkbench())
+FreeCADGui.addWorkbench(FreecadRobustMCPBridgeWorkbench())
 
 # Schedule status bar sync after a short delay to allow GUI to finish initializing
 # This runs on the main thread (InitGui.py is executed on main thread)

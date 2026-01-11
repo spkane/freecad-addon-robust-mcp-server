@@ -170,7 +170,8 @@ class TestReleaseBumpCommands:
         """Backup files before bump tests and restore after."""
         # Files that bump commands modify
         files_to_backup = [
-            PROJECT_ROOT / "addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py",
+            PROJECT_ROOT
+            / "addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py",
             PROJECT_ROOT / "package.xml",
             PROJECT_ROOT / "macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro",
             PROJECT_ROOT
@@ -204,7 +205,7 @@ class TestReleaseBumpCommands:
 
         # Verify version was updated
         init_file = (
-            PROJECT_ROOT / "addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py"
+            PROJECT_ROOT / "addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
         )
         content = init_file.read_text()
         assert "99.99.99-test" in content

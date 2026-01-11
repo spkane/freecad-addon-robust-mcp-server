@@ -10,7 +10,9 @@ from pathlib import Path
 import pytest
 
 # Get the addon directory path
-ADDON_DIR = Path(__file__).parent.parent.parent.parent / "addon" / "FreecadRobustMCP"
+ADDON_DIR = (
+    Path(__file__).parent.parent.parent.parent / "addon" / "FreecadRobustMCPBridge"
+)
 
 
 class TestAddonFileStructure:
@@ -33,7 +35,7 @@ class TestAddonFileStructure:
 
     def test_icon_exists(self):
         """The workbench icon should exist."""
-        icon_file = ADDON_DIR / "FreecadRobustMCP.svg"
+        icon_file = ADDON_DIR / "FreecadRobustMCPBridge.svg"
         assert icon_file.exists(), f"Icon not found: {icon_file}"
 
     def test_bridge_module_exists(self):
@@ -118,7 +120,7 @@ class TestAddonMetadata:
         """InitGui.py should define the workbench class."""
         initgui_file = ADDON_DIR / "InitGui.py"
         code = initgui_file.read_text()
-        assert "FreecadRobustMCPWorkbench" in code
+        assert "FreecadRobustMCPBridgeWorkbench" in code
         assert "Gui.Workbench" in code or "Workbench" in code
 
     def test_initgui_py_has_commands(self):
@@ -160,7 +162,7 @@ class TestAddonMetadata:
 
     def test_icon_is_valid_svg(self):
         """The icon should be a valid SVG file."""
-        icon_file = ADDON_DIR / "FreecadRobustMCP.svg"
+        icon_file = ADDON_DIR / "FreecadRobustMCPBridge.svg"
         content = icon_file.read_text()
         assert content.startswith("<?xml") or content.startswith("<svg")
         assert "<svg" in content
@@ -172,7 +174,7 @@ class TestAddonIconSize:
 
     def test_icon_size_under_10kb(self):
         """The icon file should be under 10KB (FreeCAD requirement)."""
-        icon_file = ADDON_DIR / "FreecadRobustMCP.svg"
+        icon_file = ADDON_DIR / "FreecadRobustMCPBridge.svg"
         size_bytes = icon_file.stat().st_size
         size_kb = size_bytes / 1024
         assert size_kb <= 10, f"Icon is {size_kb:.2f}KB, must be <= 10KB"
@@ -193,12 +195,12 @@ class TestPackageXml:
 
     def test_workbench_classname(self, package_xml):
         """package.xml should reference the correct workbench classname."""
-        assert "<classname>FreecadRobustMCPWorkbench</classname>" in package_xml
+        assert "<classname>FreecadRobustMCPBridgeWorkbench</classname>" in package_xml
 
     def test_workbench_subdirectory(self, package_xml):
         """package.xml should reference the correct subdirectory."""
-        assert "./addon/FreecadRobustMCP/" in package_xml
+        assert "./addon/FreecadRobustMCPBridge/" in package_xml
 
     def test_workbench_icon(self, package_xml):
         """package.xml should reference the workbench icon."""
-        assert "<icon>FreecadRobustMCP.svg</icon>" in package_xml
+        assert "<icon>FreecadRobustMCPBridge.svg</icon>" in package_xml

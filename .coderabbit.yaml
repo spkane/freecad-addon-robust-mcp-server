@@ -64,7 +64,7 @@ reviews:
         - Proper docstrings for tool discovery
         - Consistent error handling patterns
         - GUI-safe checks (FreeCAD.GuiUp) for view operations
-    - path: "addon/FreecadRobustMCP/**/*.py"
+    - path: "addon/FreecadRobustMCPBridge/**/*.py"
       instructions: >
         This code runs inside FreeCAD's Python environment as a workbench addon.
         It cannot import packages from the project's virtualenv (mcp, pydantic).

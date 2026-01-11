@@ -3,7 +3,7 @@
 
     <name>FreeCAD MCP and More</name>
     <description>A collection of FreeCAD macros including an MCP (Model Context Protocol) bridge for AI assistant integration, multi-format export utilities, and a tool for cutting objects with aligned magnet holes for 3D printing.</description>
-    <icon>addon/FreecadRobustMCP/FreecadRobustMCP.svg</icon>
+    <icon>addon/FreecadRobustMCPBridge/FreecadRobustMCPBridge.svg</icon>
 
     <!-- Note: Each component has its own version below. This top-level date is for reference only. -->
     <date>2026-01-07</date>
@@ -40,9 +40,9 @@
             <version>0.5.0-beta</version>
             <date>2026-01-07</date>
             <description>Robust MCP Bridge workbench for AI assistant integration with FreeCAD. Uses the Model Context Protocol (MCP) to connect AI assistants like Claude Code and Cursor to FreeCAD. Works in both GUI mode (with full visual features including screenshots, colors, and camera control) and headless mode (for automation and CI/CD). Provides toolbar commands to start, stop, and monitor the MCP bridge server. Supports XML-RPC and JSON-RPC protocols with 82+ CAD tools.</description>
-            <classname>FreecadRobustMCPWorkbench</classname>
-            <subdirectory>./addon/FreecadRobustMCP/</subdirectory>
-            <icon>FreecadRobustMCP.svg</icon>
+            <classname>FreecadRobustMCPBridgeWorkbench</classname>
+            <subdirectory>./addon/FreecadRobustMCPBridge/</subdirectory>
+            <icon>FreecadRobustMCPBridge.svg</icon>
             <freecadmin>0.21</freecadmin>
         </workbench>
 

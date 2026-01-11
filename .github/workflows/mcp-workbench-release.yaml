@@ -55,7 +55,7 @@ jobs:
           echo "Verifying version in source files matches tag: $VERSION"
 
           # Check __version__ in __init__.py
-          INIT_FILE="addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py"
+          INIT_FILE="addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
           INIT_VERSION=$(grep -o '__version__ = "[^"]*"' "$INIT_FILE" | cut -d'"' -f2)
           if [ "$INIT_VERSION" != "$VERSION" ]; then
               echo "ERROR: Version mismatch in $INIT_FILE"
@@ -67,6 +67,21 @@ jobs:
               exit 1
           fi
           echo "✓ $INIT_FILE: $INIT_VERSION"
+
+          # Check wiki-source.txt
+          WIKI_FILE="addon/FreecadRobustMCPBridge/wiki-source.txt"
+          if [ -f "$WIKI_FILE" ]; then
+              WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
+              if [ "$WIKI_VERSION" != "$VERSION" ]; then
+                  echo "ERROR: Version mismatch in $WIKI_FILE"
+                  echo "  Expected: $VERSION"
+                  echo "  Found:    $WIKI_VERSION"
+                  echo ""
+                  echo "Run: just release::bump-workbench $VERSION"
+                  exit 1
+              fi
+              echo "✓ $WIKI_FILE: $WIKI_VERSION"
+          fi
 
           # Check package.xml
           PKG_VERSION=$(awk '/<workbench>/,/<\/workbench>/' package.xml | grep -o '<version>[^<]*</version>' | head -1 | sed 's/<[^>]*>//g')
@@ -89,7 +104,7 @@ jobs:
           mkdir -p "staging/freecad-mcp-workbench-${VERSION}"
 
           # Copy workbench files
-          cp -r addon/FreecadRobustMCP/* "staging/freecad-mcp-workbench-${VERSION}/"
+          cp -r addon/FreecadRobustMCPBridge/* "staging/freecad-mcp-workbench-${VERSION}/"
 
           # Copy LICENSE
           cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/"
@@ -114,9 +129,9 @@ jobs:
 
           Copy the contents of this archive to your FreeCAD Mod directory:
 
-          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCP/\`
-          - **Linux**: \`~/.local/share/FreeCAD/Mod/FreecadRobustMCP/\`
-          - **Windows**: \`%APPDATA%/FreeCAD/Mod/FreecadRobustMCP/\`
+          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCPBridge/\`
+          - **Linux**: \`~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/\`
+          - **Windows**: \`%APPDATA%/FreeCAD/Mod/FreecadRobustMCPBridge/\`
 
           ## Usage
 

@@ -717,7 +717,7 @@ project-root/
 │   │   └── test.yaml             # Unit/integration tests
 │   └── dependabot.yaml       # Dependency updates
 ├── addon/                    # FreeCAD addon (workbench)
-│   └── FreecadRobustMCP/     # Robust MCP Bridge workbench
+│   └── FreecadRobustMCPBridge/     # Robust MCP Bridge workbench
 │       ├── freecad_mcp_bridge/   # Bridge Python package
 │       ├── Init.py           # FreeCAD workbench init
 │       ├── InitGui.py        # FreeCAD GUI init
