@@ -1,1 +1,1 @@
-"""Unit tests for FreeCAD Robust MCP Server."""
+"""Unit tests for FreeCAD Robust MCP Suite."""

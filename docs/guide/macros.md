@@ -155,13 +155,13 @@ create_macro_from_template(
 
 **Available templates:**
 
-| Template    | Description                 |
-| ----------- | --------------------------- |
-| `basic`     | Minimal macro with imports  |
-| `part`      | Part workbench operations   |
-| `sketch`    | Sketcher operations         |
-| `gui`       | GUI/dialog template         |
-| `selection` | Selection handling template |
+| Template    | Description                       |
+| ----------- | --------------------------------- |
+| `basic`     | Minimal macro with imports        |
+| `part`      | Part workbench operations         |
+| `sketch`    | Sketcher operations               |
+| `gui`       | GUI/dialog template               |
+| `selection` | Selection handling template       |
 
 **Example prompt:**
 

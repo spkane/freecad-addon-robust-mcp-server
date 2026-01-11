@@ -1,4 +1,4 @@
-"""Tests for MCP resources module."""
+"""Tests for FreeCAD Robust MCP resources."""
 
 import json
 from collections.abc import Callable

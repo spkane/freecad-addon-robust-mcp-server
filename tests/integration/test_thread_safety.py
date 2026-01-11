@@ -11,6 +11,7 @@ was True, causing the bridge to use a background thread even in GUI mode.
 
 from __future__ import annotations
 
+import uuid
 import xmlrpc.client
 from typing import Any
 
@@ -113,17 +114,13 @@ _result_ = {
         assert thread_info["gui_up"], "FreeCAD should be in GUI mode for this test"
 
         # CRITICAL: Code must execute on main thread in GUI mode
+        # The is_main_thread check is the authoritative test - thread names can vary
+        # by Python version and platform, but main thread identity is reliable.
         assert thread_info["is_main_thread"], (
             f"CRITICAL BUG: In GUI mode, code is executing on background thread "
             f"'{thread_info['thread_name']}' instead of main thread!\n"
             f"This will cause crashes when doing Qt operations.\n"
             f"Check that Init.py waits for FreeCAD.GuiUp before starting the bridge."
-        )
-
-        # Thread name should be MainThread, not MCP-QueueProcessor
-        assert thread_info["thread_name"] != "MCP-QueueProcessor", (
-            "Code is executing on MCP-QueueProcessor thread instead of MainThread. "
-            "This indicates the bridge started in headless mode even though GUI is available."
         )
 
     @requires_gui
@@ -133,20 +130,27 @@ _result_ = {
         Document creation involves Qt operations internally. If the bridge
         is executing on a background thread, this will crash FreeCAD.
         """
-        code = """
+        # Use unique document name to avoid collisions with parallel tests
+        doc_name = f"TestThreadSafety_{uuid.uuid4().hex[:8]}"
+        code = f"""
 import FreeCAD
 
-# Create a temporary document
-doc_name = "TestThreadSafetyDoc"
-doc = FreeCAD.newDocument(doc_name)
+doc_name = {doc_name!r}
+doc = None
+created = False
 
-# Verify it was created
-created = doc is not None and doc.Name == doc_name
+try:
+    # Create a temporary document
+    doc = FreeCAD.newDocument(doc_name)
 
-# Clean up
-FreeCAD.closeDocument(doc_name)
+    # Verify it was created
+    created = doc is not None and doc.Name == doc_name
+finally:
+    # Clean up - always close document if it exists
+    if doc_name in [d.Name for d in FreeCAD.listDocuments().values()]:
+        FreeCAD.closeDocument(doc_name)
 
-_result_ = {"success": created, "doc_name": doc_name}
+_result_ = {{"success": created, "doc_name": doc_name}}
 """
         result: dict[str, Any] = xmlrpc_proxy.execute(code)
 
@@ -194,31 +198,39 @@ _result_ = {
 
         View operations require the GUI and must be on the main thread.
         """
-        code = """
+        # Use unique document name to avoid collisions with parallel tests
+        doc_name = f"TestViewOps_{uuid.uuid4().hex[:8]}"
+        code = f"""
 import FreeCAD
 import FreeCADGui
 
-# Create a document
-doc = FreeCAD.newDocument("TestViewOps")
+doc_name = {doc_name!r}
+has_view = False
+visible = None
 
-# Create an object
-box = doc.addObject("Part::Box", "TestBox")
-doc.recompute()
+try:
+    # Create a document
+    doc = FreeCAD.newDocument(doc_name)
 
-# Try to access view properties (will fail on background thread)
-view_obj = box.ViewObject
-has_view = view_obj is not None
+    # Create an object
+    box = doc.addObject("Part::Box", "TestBox")
+    doc.recompute()
 
-# Check visibility
-visible = view_obj.Visibility if has_view else None
+    # Try to access view properties (will fail on background thread)
+    view_obj = box.ViewObject
+    has_view = view_obj is not None
 
-# Clean up
-FreeCAD.closeDocument("TestViewOps")
+    # Check visibility
+    visible = view_obj.Visibility if has_view else None
+finally:
+    # Clean up - always close document if it exists
+    if doc_name in [d.Name for d in FreeCAD.listDocuments().values()]:
+        FreeCAD.closeDocument(doc_name)
 
-_result_ = {
+_result_ = {{
     "has_view_object": has_view,
     "visibility": visible,
-}
+}}
 """
         result: dict[str, Any] = xmlrpc_proxy.execute(code)
 

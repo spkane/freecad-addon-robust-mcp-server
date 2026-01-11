@@ -414,7 +414,7 @@ class TestStdioProtocolCleanliness:
             except subprocess.TimeoutExpired:
                 proc.kill()
 
-    def test_instance_id_on_stderr_not_stdout(self):
+    def test_instance_id_on_stderr_not_stdout(self) -> None:
         """Verify FREECAD_MCP_INSTANCE_ID is printed to stderr, not stdout.
 
         The instance ID must go to stderr because stdout is reserved for
@@ -446,29 +446,36 @@ class TestStdioProtocolCleanliness:
             assert proc.stdout is not None
             assert proc.stderr is not None
 
-            # Wait for server to start and output instance ID
-            time.sleep(0.5)
-
             # Set pipes to non-blocking mode
             os.set_blocking(proc.stdout.fileno(), False)
             os.set_blocking(proc.stderr.fileno(), False)
 
-            # Read stderr (should contain instance ID)
+            # Poll for stderr content with timeout (CI systems can be slower)
             stderr_data = b""
-            try:
-                while True:
+            max_wait = 5.0  # 5 second timeout
+            poll_interval = 0.1
+            elapsed = 0.0
+
+            while elapsed < max_wait:
+                try:
                     chunk = proc.stderr.read(4096)
-                    if not chunk:
-                        break
-                    stderr_data += chunk
-            except (BlockingIOError, TypeError):
-                pass  # No more data available
+                    if chunk:
+                        stderr_data += chunk
+                        # Check if we got the instance ID
+                        if b"FREECAD_MCP_INSTANCE_ID=" in stderr_data:
+                            break
+                except (BlockingIOError, TypeError):
+                    pass  # No data available yet
+
+                time.sleep(poll_interval)
+                elapsed += poll_interval
 
             stderr_text = stderr_data.decode("utf-8", errors="replace")
 
             # Instance ID should be in stderr
             assert "FREECAD_MCP_INSTANCE_ID=" in stderr_text, (
-                f"Instance ID not found in stderr.\nstderr: {stderr_text[:500]}"
+                f"Instance ID not found in stderr after {max_wait}s.\n"
+                f"stderr: {stderr_text[:500]}"
             )
 
             # Read stdout (should NOT contain instance ID)

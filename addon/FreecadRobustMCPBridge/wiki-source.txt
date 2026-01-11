@@ -23,7 +23,7 @@
 The '''Robust MCP Bridge Workbench''' provides the server-side connection point that provides a bridge to the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server], which enables external applications to control FreeCAD through the [https://modelcontextprotocol.io/ Model Context Protocol (MCP)]. The workbench runs inside FreeCAD and exposes XML-RPC and JSON-RPC interfaces that external MCP clients can connect to.
 
 <!--T:4-->
-This workbench is designed to work with the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server] (available on PyPI), which allows AI assistants like [https://claude.ai Claude] to interact with FreeCAD through natural language. The full documentation and source code can be found at [https://github.com/spkane/freecad-robust-mcp-and-more github/spkane/freecad-robust-mcp-and-more], where you will find the MCP Server, Bridge and some MFreeCAD acros used for various things, not necessary related to AI or the MCP work.
+This workbench is designed to work with the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server] (available on PyPI), which allows AI assistants like [https://claude.ai Claude] to interact with FreeCAD through natural language. The full documentation and source code can be found at [https://github.com/spkane/freecad-robust-mcp-and-more github/spkane/freecad-robust-mcp-and-more], where you will find the MCP Server, Bridge and some FreeCAD Macros used for various things, not necessarily related to AI or the MCP work.
 
 <!--T:5-->
 '''Key Features:'''

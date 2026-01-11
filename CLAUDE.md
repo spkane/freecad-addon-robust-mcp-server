@@ -484,7 +484,7 @@ To avoid conflicts with Python dict literals in code blocks, this project uses c
 Variables are defined in `docs/variables.yaml`:
 
 ```yaml
-project_name: FreeCAD Robust MCP Server
+project_name: FreeCAD Robust MCP Suite
 xmlrpc_port: 9875
 socket_port: 9876
 ```
@@ -1027,6 +1027,12 @@ elif QtCore is not None:
     _auto_start_timer.timeout.connect(_wait_for_gui_and_start)
     _auto_start_timer.start(100)  # Check every 100ms
 ```
+
+**Note:** This QTimer wait pattern is **only for GUI startup scenarios**. In headless mode (`freecadcmd`), the bridge starts directly without waiting because there is no Qt event loop to wait for. The three startup paths are:
+
+1. **GUI already up** (`FreeCAD.GuiUp = True`): Start bridge immediately
+2. **GUI starting** (Qt available, `GuiUp = False`): Use QTimer to wait for GUI
+3. **Headless** (no Qt): Start bridge immediately with background thread
 
 **Testing:**
 

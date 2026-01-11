@@ -1,4 +1,4 @@
-# FreeCAD Robust MCP Server - Development Workflow Commands
+# FreeCAD Robust MCP Suite - Development Workflow Commands
 # https://just.systems/
 #
 # Commands are organized into modules. Run `just` to see top-level commands,

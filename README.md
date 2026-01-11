@@ -1,4 +1,4 @@
-# FreeCAD Tools and Robust MCP Server
+# FreeCAD Robust MCP Suite
 
 [![CI Tests](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/test.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/test.yaml)
 [![Integration Tests](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/macro-test.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/macro-test.yaml)
@@ -19,7 +19,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 <!--TOC-->
 
-- [FreeCAD Tools and Robust MCP Server](#freecad-tools-and-robust-mcp-server)
+- [FreeCAD Robust MCP Suite](#freecad-robust-mcp-suite)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Requirements](#requirements)

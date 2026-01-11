@@ -236,11 +236,11 @@ class FreecadMCPPlugin:
 
         self._running = True
 
-        # Print instance ID to stdout for test automation to capture
-        # This is printed before logging to ensure it's easily parseable
+        # Print instance ID to stderr for test automation to capture.
+        # Stdout may be reserved for JSON-RPC when running in stdio mode.
         print(
             f"FREECAD_MCP_BRIDGE_INSTANCE_ID={self._instance_id}",
-            file=sys.stdout,
+            file=sys.stderr,
             flush=True,
         )
 

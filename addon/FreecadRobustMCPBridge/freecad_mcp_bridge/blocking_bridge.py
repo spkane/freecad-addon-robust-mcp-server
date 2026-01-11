@@ -12,14 +12,17 @@ For interactive GUI sessions, use startup_bridge.py instead (non-blocking).
 
 Usage:
     # Headless mode (no GUI features):
-    freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/\
+        freecad_mcp_bridge/blocking_bridge.py
 
     # GUI mode (full features including screenshots):
-    freecad ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    freecad ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/\
+        freecad_mcp_bridge/blocking_bridge.py
 
     # On macOS:
     /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-        ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+        ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/\
+        freecad_mcp_bridge/blocking_bridge.py
 
 Note: In headless mode (freecadcmd), GUI features like screenshots are not available.
 For full functionality, run with the freecad GUI executable.

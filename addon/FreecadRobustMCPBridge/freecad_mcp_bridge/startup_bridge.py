@@ -26,6 +26,7 @@ import contextlib
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 # Add the script's directory to sys.path so we can import the server module
 script_dir = str(Path(__file__).resolve().parent)
@@ -46,14 +47,14 @@ except ImportError:
     sys.exit(1)
 
 # Global reference to timers to prevent garbage collection
-_startup_timer = None
-_deferred_start_timer = None
+_startup_timer: Any | None = None
+_deferred_start_timer: Any | None = None
 
 # Counter for GUI wait retries
-_gui_wait_retries = 0
+_gui_wait_retries: int = 0
 # Increase timeout to 60 seconds (600 retries * 100ms) - FreeCAD GUI can take
 # 10-30 seconds to fully initialize on macOS, especially on first launch
-_GUI_WAIT_MAX_RETRIES = 600
+_GUI_WAIT_MAX_RETRIES: int = 600
 
 
 def _start_bridge() -> None:
