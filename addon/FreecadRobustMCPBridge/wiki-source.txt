@@ -1,14 +1,17 @@
 <languages/>
 <translate>
 
+<!--T:172-->
+[[Image:FreecadRobustMCPBridge.svg|thumb|128px|Robust MCP Bridge workbench icon]]
+
 <!--T:1-->
 {{Workbench
 |Name=Robust MCP Bridge Workbench
 |Icon=FreecadRobustMCPBridge.svg
 |Description=Bridge workbench designed to provide an interface between FreeCAD and the Robust MCP Server to enabling AI assistants (like Claude) to control FreeCAD via the Model Context Protocol (MCP). Provides XML-RPC and JSON-RPC interfaces for external automation.
 |Author=Sean P. Kane
-|Version=0.0.0
-|Date=2026-01-10
+|Version=0.5.0-beta
+|Date=2026-01-05
 |FCVersion=0.21+
 |Download=[https://github.com/spkane/freecad-robust-mcp-and-more/releases Latest Release]
 |SeeAlso=[[Macros|Macros]], [[External_workbenches|External Workbenches]]
@@ -17,10 +20,10 @@
 ==Description== <!--T:2-->
 
 <!--T:3-->
-The '''Robust MCP Bridge Workbench''' provides the server-side connection point that enables external applications to control FreeCAD through the [https://modelcontextprotocol.io/ Model Context Protocol (MCP)]. The workbench runs inside FreeCAD and exposes XML-RPC and JSON-RPC interfaces that external MCP clients can connect to.
+The '''Robust MCP Bridge Workbench''' provides the server-side connection point that provides a bridge to the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server], which enables external applications to control FreeCAD through the [https://modelcontextprotocol.io/ Model Context Protocol (MCP)]. The workbench runs inside FreeCAD and exposes XML-RPC and JSON-RPC interfaces that external MCP clients can connect to.
 
 <!--T:4-->
-This workbench is designed to work with the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server] (available on PyPI), which allows AI assistants like [https://claude.ai Claude] to interact with FreeCAD through natural language.
+This workbench is designed to work with the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server] (available on PyPI), which allows AI assistants like [https://claude.ai Claude] to interact with FreeCAD through natural language. The full documentation and source code can be found at [https://github.com/spkane/freecad-robust-mcp-and-more github/spkane/freecad-robust-mcp-and-more], where you will find the MCP Server, Bridge and some MFreeCAD acros used for various things, not necessary related to AI or the MCP work.
 
 <!--T:5-->
 '''Key Features:'''
@@ -57,6 +60,9 @@ Download the latest release from [https://github.com/spkane/freecad-robust-mcp-a
 
 ===GUI Mode=== <!--T:13-->
 
+<!--T:173-->
+[[Image:Addon_RobustMCPBridge_toolbar.png|Robust MCP Bridge workbench toolbar]]
+
 <!--T:14-->
 # Switch to the '''Robust MCP Bridge''' workbench using the workbench selector
 # Click {{Button|Start Bridge}} in the toolbar
@@ -65,6 +71,9 @@ Download the latest release from [https://github.com/spkane/freecad-robust-mcp-a
 
 <!--T:15-->
 To stop the bridge, click {{Button|Stop Bridge}} in the toolbar.
+
+<!--T:174-->
+[[Image:Addon_RobustMCPBridge_statusbar.png|Robust MCP Bridge workbench statusbar]]
 
 ===Headless Mode=== <!--T:16-->
 
@@ -105,27 +114,29 @@ Access preferences via {{MenuCommand|Edit → Preferences → Robust MCP Bridge}
 | Socket Port || Port for JSON-RPC socket connections || 9876
 |}
 
+[[Image:Addon RobustMCPBridge preferences.png|800px|Robust MCP Bridge workbench preference pane]]
+
 ==Features by Mode== <!--T:24-->
 
 <!--T:25-->
 {| class="wikitable"
 ! Feature !! GUI Mode !! Headless Mode
 |-
-| Object creation || {{CheckMark|15}} || {{CheckMark|15}}
+| Object creation || Yes || Yes
 |-
-| Boolean operations || {{CheckMark|15}} || {{CheckMark|15}}
+| Boolean operations || Yes || Yes
 |-
-| Export (STEP, STL, 3MF) || {{CheckMark|15}} || {{CheckMark|15}}
+| Export (STEP, STL, 3MF) || Yes || Yes
 |-
-| Macro execution || {{CheckMark|15}} || {{CheckMark|15}}
+| Macro execution || Yes || Yes
 |-
-| Document management || {{CheckMark|15}} || {{CheckMark|15}}
+| Document management || Yes || Yes
 |-
-| Screenshots || {{CheckMark|15}} || {{X mark|15}}
+| Screenshots || Yes || No
 |-
-| Object colors/visibility || {{CheckMark|15}} || {{X mark|15}}
+| Object colors/visibility || Yes || No
 |-
-| Camera/view control || {{CheckMark|15}} || {{X mark|15}}
+| Camera/view control || Yes || No
 |}
 
 ==Connecting MCP Clients== <!--T:26-->
