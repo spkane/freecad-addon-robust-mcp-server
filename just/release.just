@@ -363,6 +363,22 @@ _tag-macro macro_dir macro_name macro_file_basename tag_prefix bump_command tag_
         echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
         exit 1
     fi
+    echo "✓ $MACRO_FILE: $MACRO_VERSION"
+
+    # Check wiki-source.txt
+    WIKI_FILE="$MACRO_DIR/wiki-source.txt"
+    if [ -f "$WIKI_FILE" ]; then
+        WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
+        if [ "$WIKI_VERSION" != "$VERSION" ]; then
+            echo "ERROR: Version mismatch in $WIKI_FILE"
+            echo "  Expected: $VERSION"
+            echo "  Found:    $WIKI_VERSION"
+            echo ""
+            echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
+            exit 1
+        fi
+        echo "✓ $WIKI_FILE: $WIKI_VERSION"
+    fi
 
     # Check package.xml
     PACKAGE_XML="{{project_root}}/package.xml"

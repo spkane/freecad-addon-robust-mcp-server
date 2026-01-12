@@ -142,7 +142,6 @@ This image shows a vase object in its original form, and after being cut multipl
 <!--T:22-->
 The full source code is hosted on GitHub:
 * [https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro CutObjectForMagnets.FCMacro on GitHub]
-* [https://github.com/spkane/freecad-robust-mcp-and-more GitHub Repository (freecad-robust-mcp-and-more)]
 
 ==Script== <!--T:23-->
 

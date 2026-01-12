@@ -76,7 +76,6 @@ This macro provides a convenient way to export selected FreeCAD objects to multi
 <!--T:13-->
 The full source code is hosted on GitHub:
 * [https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Multi_Export/MultiExport.FCMacro MultiExport.FCMacro on GitHub]
-* [https://github.com/spkane/freecad-robust-mcp-and-more GitHub Repository (freecad-robust-mcp-and-more)]
 
 ==Script== <!--T:14-->
 
