@@ -92,34 +92,66 @@ clean-all:
     @echo "Docker images and build cache cleaned."
 
 # Scan Docker image for vulnerabilities (warn on all severities)
+# Uses .trivyignore file to skip CVEs without available fixes
 scan:
     #!/usr/bin/env bash
     set -euo pipefail
+    IGNOREFILE="{{project_root}}/.trivyignore"
+    IGNORE_FLAG=""
+    if [ -f "$IGNOREFILE" ]; then
+        IGNORE_FLAG="--ignorefile $IGNOREFILE"
+        echo "Using ignore file: $IGNOREFILE"
+    fi
     echo "Scanning {{image_name}} for vulnerabilities..."
     echo ""
-    trivy image --severity HIGH,CRITICAL {{image_name}}
+    trivy image --severity HIGH,CRITICAL $IGNORE_FLAG {{image_name}}
     echo ""
     echo "Scanning for MEDIUM/LOW (informational)..."
-    trivy image --severity MEDIUM,LOW {{image_name}} || true
+    trivy image --severity MEDIUM,LOW $IGNORE_FLAG {{image_name}} || true
 
 # Scan Docker image with strict settings (fail on HIGH or CRITICAL)
+# Uses .trivyignore file to skip CVEs without available fixes
 scan-strict:
     #!/usr/bin/env bash
     set -euo pipefail
+    IGNOREFILE="{{project_root}}/.trivyignore"
+    IGNORE_FLAG=""
+    if [ -f "$IGNOREFILE" ]; then
+        IGNORE_FLAG="--ignorefile $IGNOREFILE"
+        echo "Using ignore file: $IGNOREFILE"
+    fi
     echo "Scanning {{image_name}} for HIGH/CRITICAL vulnerabilities..."
     echo "(Build will fail if any HIGH or CRITICAL CVEs are found)"
     echo ""
-    trivy image --severity HIGH,CRITICAL --exit-code 1 {{image_name}}
+    trivy image --severity HIGH,CRITICAL --exit-code 1 $IGNORE_FLAG {{image_name}}
     echo ""
     echo "✓ No HIGH or CRITICAL vulnerabilities found!"
     echo ""
     echo "Scanning for MEDIUM/LOW (informational only)..."
-    trivy image --severity MEDIUM,LOW --exit-code 0 {{image_name}} || true
+    trivy image --severity MEDIUM,LOW --exit-code 0 $IGNORE_FLAG {{image_name}} || true
+
+# Scan Docker image WITHOUT ignore file (shows all CVEs including unfixable)
+scan-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Scanning {{image_name}} for ALL vulnerabilities (ignoring .trivyignore)..."
+    echo ""
+    trivy image --severity HIGH,CRITICAL {{image_name}}
+    echo ""
+    echo "Scanning for MEDIUM/LOW..."
+    trivy image --severity MEDIUM,LOW {{image_name}} || true
 
 # Scan Docker image and output SARIF report
 scan-sarif output="trivy-results.sarif":
-    trivy image --format sarif --output {{project_root}}/{{output}} {{image_name}}
-    @echo "SARIF report written to {{project_root}}/{{output}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    IGNOREFILE="{{project_root}}/.trivyignore"
+    IGNORE_FLAG=""
+    if [ -f "$IGNOREFILE" ]; then
+        IGNORE_FLAG="--ignorefile $IGNOREFILE"
+    fi
+    trivy image --format sarif --output {{project_root}}/{{output}} $IGNORE_FLAG {{image_name}}
+    echo "SARIF report written to {{project_root}}/{{output}}"
 
 # Create and configure buildx builder for multi-arch builds
 setup-buildx:

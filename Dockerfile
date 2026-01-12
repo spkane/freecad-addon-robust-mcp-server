@@ -68,6 +68,11 @@ LABEL org.opencontainers.image.title="FreeCAD Robust MCP Server" \
       org.opencontainers.image.authors="Sean P. Kane <spkane@gmail.com>" \
       org.opencontainers.image.base.name="python:3.11-alpine"
 
+# Upgrade all Alpine packages to fix CVEs in base image (zlib, busybox, etc.)
+# This ensures we get security patches even if the base image is slightly stale
+# hadolint ignore=DL3018
+RUN apk upgrade --no-cache
+
 # Create non-root user for security (Alpine uses addgroup/adduser)
 RUN addgroup -g 1000 mcpuser && \
     adduser -u 1000 -G mcpuser -s /bin/sh -D mcpuser

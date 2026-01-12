@@ -1,0 +1,44 @@
+# Trivy Vulnerability Ignore File
+# ================================
+# This file tells trivy to skip specific CVEs during image scanning.
+# Use this for vulnerabilities that:
+#   - Have no fix available yet (check Alpine security tracker)
+#   - Are false positives for our use case
+#   - Are accepted risks with documented justification
+#
+# Format: One CVE ID per line, optionally with comment
+# Docs: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+#
+# Before adding a CVE here:
+#   1. Verify no fix is available: https://security.alpinelinux.org/
+#   2. Document the reason and expected fix date if known
+#   3. Set a reminder to revisit when fixes become available
+#
+# To check if fixes are now available, run:
+#   just docker::scan
+#
+# =============================================================================
+# IGNORED VULNERABILITIES
+# =============================================================================
+
+# --- Alpine Base Image CVEs (No Fix Available) ---
+# These are in the python:3.11-alpine base image's system packages.
+# We run `apk upgrade --no-cache` in the Dockerfile to get the latest patches,
+# but some CVEs may not have fixes yet.
+
+# CVE-2026-22184 - zlib vulnerability (alpine/zlib 1.3.1-r2)
+# Status: No fix available as of 2025-01-12
+# Tracker: https://security.alpinelinux.org/
+# CVE-2026-22184
+
+# CVE-2025-60876 - busybox vulnerability (alpine/busybox 1.37.0-r30)
+# Status: No fix available as of 2025-01-12
+# Tracker: https://security.alpinelinux.org/
+# CVE-2025-60876
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# - Uncomment CVE lines above ONLY if you've verified no fix is available
+# - Review this file monthly to remove CVEs that now have fixes
+# - The `apk upgrade` in Dockerfile should auto-fix most CVEs when rebuilding

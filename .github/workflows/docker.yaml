@@ -133,6 +133,7 @@ jobs:
           exit-code: "1"
           format: "table"
           cache-dir: .trivy-cache
+          trivyignores: ".trivyignore"
 
       - name: Scan for MEDIUM/LOW vulnerabilities (warning only)
         uses: aquasecurity/trivy-action@0.33.1
@@ -142,6 +143,7 @@ jobs:
           exit-code: "0"
           format: "table"
           cache-dir: .trivy-cache
+          trivyignores: ".trivyignore"
         continue-on-error: true
 
       - name: Generate SARIF report for GitHub Security
@@ -152,6 +154,7 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
           cache-dir: .trivy-cache
+          trivyignores: ".trivyignore"
         continue-on-error: true
 
       - name: Upload Trivy scan results

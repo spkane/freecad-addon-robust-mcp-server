@@ -782,67 +782,101 @@ rollback-release tag:
     echo "Git/GitHub Rollback complete!"
     echo "=========================================="
 
-    # MCP Server: Offer to yank from PyPI and provide Docker cleanup info
+    # MCP Server: Provide PyPI and Docker cleanup instructions
     if [ "$COMPONENT" = "mcp-server" ]; then
         echo ""
         echo "--- PyPI Cleanup ---"
         echo ""
-        echo "Would you like to yank version $VERSION from PyPI?"
-        echo "  - Yanking hides the version from 'pip install freecad-robust-mcp'"
-        echo "  - Users who pin to this version can still install it"
-        echo "  - This can be undone later with 'twine yank --undo'"
+        echo "To yank version $VERSION from PyPI (hides from 'pip install'):"
         echo ""
-        read -p "Yank from PyPI? [y/N] " -n 1 -r
+        echo "  1. Go to: https://pypi.org/manage/project/freecad-robust-mcp/releases/"
+        echo "  2. Click 'Options' → 'Yank'"
+        echo "  3. Enter a reason (e.g., 'Released from wrong branch')"
+        echo "  4. Confirm"
+        echo ""
+        echo "Note: Yanking hides the version from default pip install, but users"
+        echo "      who pin to this exact version can still install it."
+        echo "      Yanking can be undone from the same page."
+        echo ""
+        read -p "Open PyPI release page in browser? [y/N] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo ""
-            echo "Attempting to yank from PyPI..."
-            echo "(This requires PyPI authentication - you may be prompted to login)"
-            echo ""
-            if command -v twine &> /dev/null || uv run twine --version &>/dev/null; then
-                if uv run twine yank freecad-robust-mcp "$VERSION" 2>&1; then
-                    echo "  ✓ Version $VERSION yanked from PyPI."
-                else
-                    echo ""
-                    echo "  Yank failed. You can try manually:"
-                    echo "    uv run twine yank freecad-robust-mcp $VERSION"
-                    echo ""
-                    echo "  Or use the PyPI web interface:"
-                    echo "    https://pypi.org/manage/project/freecad-robust-mcp/release/$VERSION/"
-                fi
+            PYPI_URL="https://pypi.org/manage/project/freecad-robust-mcp/releases/"
+            if command -v open &> /dev/null; then
+                open "$PYPI_URL"
+            elif command -v xdg-open &> /dev/null; then
+                xdg-open "$PYPI_URL"
             else
-                echo "  twine not available. Install with: uv add twine"
-                echo ""
-                echo "  Or use the PyPI web interface:"
-                echo "    https://pypi.org/manage/project/freecad-robust-mcp/release/$VERSION/"
+                echo "Could not open browser. Visit: $PYPI_URL"
             fi
-        else
-            echo ""
-            echo "Skipped PyPI yank. You can do this later with:"
-            echo "  uv run twine yank freecad-robust-mcp $VERSION"
-            echo ""
-            echo "Or via web interface:"
-            echo "  https://pypi.org/manage/project/freecad-robust-mcp/release/$VERSION/"
         fi
 
         echo ""
         echo "--- Docker Hub Cleanup ---"
         echo ""
-        echo "Docker Hub tags must be deleted manually."
-        echo "Tags to delete: $VERSION, latest (if this was the latest release)"
+        echo "To delete Docker Hub tags:"
         echo ""
-        echo "Web interface:"
-        echo "  https://hub.docker.com/r/spkane/freecad-robust-mcp/tags"
+        echo "  1. Go to: https://hub.docker.com/repository/docker/spkane/freecad-robust-mcp/tags"
+        echo "  2. Find tag: $VERSION"
+        echo "  3. Click the checkbox and 'Delete'"
+        echo "  4. Also delete 'latest' tag if this was the latest release"
         echo ""
-        echo "Or via API (requires DOCKER_HUB_TOKEN):"
-        echo "  curl -X DELETE -H \"Authorization: Bearer \$DOCKER_HUB_TOKEN\" \\"
-        echo "    https://hub.docker.com/v2/repositories/spkane/freecad-robust-mcp/tags/$VERSION/"
+        read -p "Open Docker Hub tags page in browser? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            DOCKER_URL="https://hub.docker.com/repository/docker/spkane/freecad-robust-mcp/tags"
+            if command -v open &> /dev/null; then
+                open "$DOCKER_URL"
+            elif command -v xdg-open &> /dev/null; then
+                xdg-open "$DOCKER_URL"
+            else
+                echo "Could not open browser. Visit: $DOCKER_URL"
+            fi
+        fi
     fi
 
     echo ""
     echo "=========================================="
-    echo "Rollback process complete!"
+    echo "ROLLBACK SUMMARY"
     echo "=========================================="
+    echo ""
+
+    # Show what was done and what remains
+    case "$COMPONENT" in
+        mcp-server)
+            echo "COMPLETED (automated):"
+            echo "  ✓ GitHub Release deleted"
+            echo "  ✓ Git tag deleted (local and remote)"
+            echo ""
+            echo "MANUAL STEPS REQUIRED:"
+            echo "  □ PyPI: Yank version $VERSION"
+            echo "    URL: https://pypi.org/manage/project/freecad-robust-mcp/releases/"
+            echo ""
+            echo "  □ Docker Hub: Delete tag $VERSION"
+            echo "    URL: https://hub.docker.com/repository/docker/spkane/freecad-robust-mcp/tags"
+            echo ""
+            echo "  □ Docker Hub: Delete 'latest' tag (if this was the latest release)"
+            echo "    URL: https://hub.docker.com/repository/docker/spkane/freecad-robust-mcp/tags"
+            ;;
+        workbench|macro-magnets|macro-export)
+            echo "COMPLETED (automated):"
+            echo "  ✓ GitHub Release deleted"
+            echo "  ✓ Git tag deleted (local and remote)"
+            echo ""
+            echo "MANUAL STEPS REQUIRED:"
+            echo "  (none - rollback is complete!)"
+            ;;
+        *)
+            echo "COMPLETED (automated):"
+            echo "  ✓ GitHub Release deleted (if existed)"
+            echo "  ✓ Git tag deleted (local and remote)"
+            echo ""
+            echo "MANUAL STEPS REQUIRED:"
+            echo "  (unknown component - verify no additional cleanup needed)"
+            ;;
+    esac
+
+    echo ""
 
 # Delete only the GitHub Release (keep tag)
 delete-github-release tag:
