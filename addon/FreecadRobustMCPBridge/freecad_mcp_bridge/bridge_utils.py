@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import ModuleType
 
     from server import FreecadMCPPlugin
 
@@ -73,23 +74,28 @@ class GuiWaiter:
         self.max_retries = max_retries
         self.timeout_error_extra = timeout_error_extra
 
+        # Timer references use Any since they could be from PySide2 or PySide6
         self._check_timer: Any | None = None
         self._defer_timer: Any | None = None
         self._retry_count: int = 0
+        self._qtcore: ModuleType | None = None
 
     def start(self) -> None:
         """Start waiting for GUI to be ready.
 
         This method sets up a repeating timer that checks FreeCAD.GuiUp.
         The timer reference is stored to prevent garbage collection.
+        The QtCore module is resolved once and stored for later use.
         """
         import FreeCAD
 
+        # Resolve QtCore once and store for later use
         try:
             from PySide2 import QtCore  # type: ignore[import]
         except ImportError:
             from PySide6 import QtCore  # type: ignore[import]
 
+        self._qtcore = QtCore
         self._check_timer = QtCore.QTimer()
         self._check_timer.setSingleShot(False)  # Repeating timer
         self._check_timer.timeout.connect(self._check_gui)
@@ -139,12 +145,14 @@ class GuiWaiter:
         # Even though GuiUp is True, FreeCAD may still be initializing internally.
         # Use a single-shot timer to defer the actual start to a later, more stable
         # point in the event loop.
-        try:
-            from PySide2 import QtCore as DeferQtCore  # type: ignore[import]
-        except ImportError:
-            from PySide6 import QtCore as DeferQtCore  # type: ignore[import]
-
-        self._defer_timer = DeferQtCore.QTimer()
+        # Note: self._qtcore was resolved in start() so we don't need to re-import
+        if self._qtcore is None:
+            # This should never happen if start() was called, but handle gracefully
+            FreeCAD.Console.PrintError(
+                f"{self.log_prefix}: QtCore not initialized - start() was not called\n"
+            )
+            return
+        self._defer_timer = self._qtcore.QTimer()
         self._defer_timer.setSingleShot(True)
         self._defer_timer.timeout.connect(self.callback)
         self._defer_timer.start(self.defer_ms)

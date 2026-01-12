@@ -25,6 +25,7 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -51,7 +52,28 @@ _gui_waiter: Any | None = None
 
 
 def _start_bridge() -> None:
-    """Start the MCP bridge if not already running."""
+    """Start the MCP bridge if not already running.
+
+    This function checks if a bridge is already running (via get_running_plugin)
+    and only starts a new bridge if none exists. It reads port configuration from
+    environment variables and registers the plugin with the workbench commands
+    module for visibility to other components.
+
+    Environment Variables:
+        FREECAD_XMLRPC_PORT: XML-RPC port (default: 9875)
+        FREECAD_SOCKET_PORT: JSON-RPC socket port (default: 9876)
+
+    Raises:
+        ValueError: If FREECAD_XMLRPC_PORT or FREECAD_SOCKET_PORT contain
+            non-integer values. The exception is re-raised after logging.
+        Exception: Any exception from FreecadMCPPlugin initialization or start()
+            is caught, logged to FreeCAD.Console, and suppressed.
+
+    Side Effects:
+        - Creates and starts a FreecadMCPPlugin instance
+        - Registers the plugin with the workbench commands module
+        - Prints status messages to FreeCAD.Console
+    """
     # Check if bridge is already running (from auto-start in Init.py)
     from bridge_utils import get_running_plugin
 
@@ -100,8 +122,6 @@ def _start_bridge() -> None:
         FreeCAD.Console.PrintMessage("=" * 50 + "\n\n")
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
-        import traceback
-
         FreeCAD.Console.PrintError(traceback.format_exc())
 
 

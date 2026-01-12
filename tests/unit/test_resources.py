@@ -468,3 +468,12 @@ class TestFreecadResources:
             f"Resources registered but not in capabilities: {missing_resources}. "
             f"Update resource_capabilities() in src/freecad_mcp/resources/freecad.py"
         )
+
+        # Reverse check: capabilities should not list stale/phantom resources
+        # that are no longer registered (excluding capabilities itself)
+        stale_resources = capability_uris - registered_uris - {"freecad://capabilities"}
+        assert not stale_resources, (
+            f"Stale resources in capabilities (not registered): {stale_resources}. "
+            f"Remove these from resource_capabilities() in "
+            f"src/freecad_mcp/resources/freecad.py"
+        )

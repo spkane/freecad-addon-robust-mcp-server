@@ -11,13 +11,21 @@ Note: Status bar updates are handled by InitGui.py since Qt operations
 must run on the main thread.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from freecad_mcp_bridge.bridge_utils import GuiWaiter
+
 import FreeCAD
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
 
 # Global reference to GuiWaiter and auto-start timer to prevent garbage collection
-_auto_start_timer = None
-_gui_waiter = None
+# Type annotations use Any for timer since it could be QTimer from PySide2 or PySide6
+_auto_start_timer: Any | None = None
+_gui_waiter: GuiWaiter | None = None
 
 
 def _auto_start_bridge() -> None:
