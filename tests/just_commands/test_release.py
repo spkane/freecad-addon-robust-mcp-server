@@ -170,13 +170,17 @@ class TestReleaseBumpCommands:
         """Backup files before bump tests and restore after."""
         # Files that bump commands modify
         files_to_backup = [
+            # Workbench files
             PROJECT_ROOT
             / "addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py",
+            PROJECT_ROOT / "addon/FreecadRobustMCPBridge/wiki-source.txt",
             PROJECT_ROOT / "package.xml",
+            # Cut Object for Magnets macro files
             PROJECT_ROOT / "macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro",
             PROJECT_ROOT
             / "macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md",
             PROJECT_ROOT / "macros/Cut_Object_for_Magnets/wiki-source.txt",
+            # Multi Export macro files
             PROJECT_ROOT / "macros/Multi_Export/MultiExport.FCMacro",
             PROJECT_ROOT / "macros/Multi_Export/README-MultiExport.md",
             PROJECT_ROOT / "macros/Multi_Export/wiki-source.txt",

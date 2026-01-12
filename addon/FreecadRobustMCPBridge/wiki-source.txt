@@ -10,7 +10,7 @@
 |Icon=FreecadRobustMCPBridge.svg
 |Description=Bridge workbench designed to provide an interface between FreeCAD and the Robust MCP Server to enable AI assistants (like Claude) to control FreeCAD via the Model Context Protocol (MCP). It provides XML-RPC and JSON-RPC interfaces for external automation.
 |Author=Sean P. Kane
-|Version=99.99.99-test
+|Version=0.6.1
 |Date=2026-01-12
 |FCVersion=0.21+
 |Download=[https://github.com/spkane/freecad-robust-mcp-and-more/releases Latest Release]
