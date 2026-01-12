@@ -186,12 +186,12 @@ test:
     echo ""
 
     # Check if FreeCAD bridge is already running
-    echo "Step 2: Checking for FreeCAD MCP bridge..."
+    echo "Step 2: Checking for FreeCAD Robust MCP Bridge..."
     if check_xmlrpc; then
-        echo "✓ FreeCAD MCP bridge is already running on port 9875"
+        echo "✓ FreeCAD Robust MCP Bridge is already running on port 9875"
         STARTED_FREECAD=false
     else
-        echo "FreeCAD MCP bridge not detected. Starting FreeCAD headless..."
+        echo "FreeCAD Robust MCP Bridge not detected. Starting FreeCAD headless..."
         echo "  (This may take 30-60 seconds for FreeCAD to initialize...)"
 
         # Start FreeCAD headless in background, capturing output
@@ -205,7 +205,7 @@ test:
         while ! check_xmlrpc; do
             RETRY_COUNT=$((RETRY_COUNT + 1))
             if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-                echo "✗ ERROR: FreeCAD MCP bridge did not start within ${MAX_RETRIES}s"
+                echo "✗ ERROR: FreeCAD Robust MCP Bridge did not start within ${MAX_RETRIES}s"
                 echo ""
                 echo "FreeCAD log output:"
                 tail -30 "$FREECAD_LOG"
@@ -219,7 +219,7 @@ test:
         done
         rm -f "$FREECAD_LOG"
         FREECAD_LOG=""  # Clear so cleanup doesn't try to delete again
-        echo "✓ FreeCAD MCP bridge started (took ${RETRY_COUNT}s)"
+        echo "✓ FreeCAD Robust MCP Bridge started (took ${RETRY_COUNT}s)"
         STARTED_FREECAD=true
     fi
     echo ""

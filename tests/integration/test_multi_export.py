@@ -6,7 +6,7 @@ These tests verify the MultiExporter class functionality including:
 - Exporting to multiple formats simultaneously
 - Handling mesh tolerance settings
 
-Note: These tests require a running FreeCAD MCP bridge.
+Note: These tests require a running FreeCAD Robust MCP Bridge.
       Start it with: just freecad::run-gui or just freecad::run-headless
 
 To run these tests:

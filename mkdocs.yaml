@@ -1,5 +1,5 @@
-site_name: FreeCAD Robust MCP Server
-site_description: Robust MCP Server for FreeCAD integration with AI assistants
+site_name: FreeCAD Robust MCP Suite
+site_description: FreeCAD Robust MCP Suite - MCP Server, Bridge Workbench, and Macros for AI assistant integration
 site_url: https://github.com/spkane/freecad-robust-mcp-and-more
 repo_url: https://github.com/spkane/freecad-robust-mcp-and-more
 repo_name: spkane/freecad-robust-mcp-and-more
@@ -106,6 +106,10 @@ plugins:
       j2_block_end_string: "@%}"
 
 extra:
+  # Version selector for mike-managed versioned docs
+  version:
+    provider: mike
+    default: latest
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/spkane/freecad-robust-mcp-and-more

@@ -115,7 +115,7 @@ Embedded mode is tested in the CI pipeline with unit tests that mock FreeCAD. Ho
 
 ```mermaid
 graph TD
-    A[Need FreeCAD MCP?] --> B{Platform?}
+    A[Need FreeCAD Robust MCP?] --> B{Platform?}
     B -->|macOS/Windows| C[Use xmlrpc or socket]
     B -->|Linux| D{Need GUI features?}
     D -->|Yes| C

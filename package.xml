@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
 
-    <name>FreeCAD MCP and More</name>
-    <description>A collection of FreeCAD macros including an MCP (Model Context Protocol) bridge for AI assistant integration, multi-format export utilities, and a tool for cutting objects with aligned magnet holes for 3D printing.</description>
-    <icon>addon/FreecadRobustMCP/FreecadRobustMCP.svg</icon>
+    <name>FreeCAD Robust MCP Suite</name>
+    <description>A collection of FreeCAD macros plus a robust MCP (Model Context Protocol) bridge workbench for AI assistant integration.</description>
+    <icon>addon/FreecadRobustMCPBridge/FreecadRobustMCPBridge.svg</icon>
 
     <!-- Note: Each component has its own version below. This top-level date is for reference only. -->
     <date>2026-01-07</date>
@@ -37,19 +37,19 @@
 
         <workbench>
             <name>Robust MCP Bridge</name>
-            <version>0.5.0-beta</version>
-            <date>2026-01-07</date>
+            <version>0.6.0</version>
+            <date>2026-01-12</date>
             <description>Robust MCP Bridge workbench for AI assistant integration with FreeCAD. Uses the Model Context Protocol (MCP) to connect AI assistants like Claude Code and Cursor to FreeCAD. Works in both GUI mode (with full visual features including screenshots, colors, and camera control) and headless mode (for automation and CI/CD). Provides toolbar commands to start, stop, and monitor the MCP bridge server. Supports XML-RPC and JSON-RPC protocols with 82+ CAD tools.</description>
-            <classname>FreecadRobustMCPWorkbench</classname>
-            <subdirectory>./addon/FreecadRobustMCP/</subdirectory>
-            <icon>FreecadRobustMCP.svg</icon>
+            <classname>FreecadRobustMCPBridgeWorkbench</classname>
+            <subdirectory>./addon/FreecadRobustMCPBridge/</subdirectory>
+            <icon>FreecadRobustMCPBridge.svg</icon>
             <freecadmin>0.21</freecadmin>
         </workbench>
 
         <macro>
             <name>Multi Export</name>
-            <version>0.5.0-beta</version>
-            <date>2026-01-07</date>
+            <version>0.6.0</version>
+            <date>2026-01-12</date>
             <description>Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously with configurable mesh options.</description>
             <subdirectory>./macros/Multi_Export/</subdirectory>
             <file>MultiExport.FCMacro</file>
@@ -58,8 +58,8 @@
 
         <macro>
             <name>Cut Object for Magnets</name>
-            <version>0.5.0-beta</version>
-            <date>2026-01-07</date>
+            <version>0.6.0</version>
+            <date>2026-01-12</date>
             <description>Cut an object along a plane and add aligned magnet holes with surface collision detection. Perfect for creating 3D printed parts that snap together with embedded magnets.</description>
             <subdirectory>./macros/Cut_Object_for_Magnets/</subdirectory>
             <file>CutObjectForMagnets.FCMacro</file>

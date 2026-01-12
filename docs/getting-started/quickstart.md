@@ -27,7 +27,7 @@ Before starting, ensure you have:
 
 ```bash
 # If installed via Addon Manager (Linux)
-FreeCADCmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py
+FreeCADCmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 
 # If working from source
 just freecad::run-headless

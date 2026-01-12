@@ -4,7 +4,7 @@ This bridge connects to a FreeCAD instance running an XML-RPC server,
 allowing remote control while FreeCAD has its GUI open.
 
 Compatible with neka-nat/freecad-mcp XML-RPC protocol, providing
-interoperability with existing FreeCAD MCP addons.
+interoperability with existing FreeCAD Robust MCP addons.
 
 Design inspired by neka-nat/freecad-mcp (MIT License):
 - Uses neka-nat's proven XML-RPC protocol (port 9875)
@@ -114,7 +114,7 @@ class XmlRpcBridge(FreecadBridge):
 ================================================================================
 CONNECTION REFUSED: Cannot connect to FreeCAD at {self._server_url}
 
-The FreeCAD MCP bridge server is not running. To fix this:
+The FreeCAD Robust MCP Bridge server is not running. To fix this:
 
 1. Start FreeCAD (the GUI application)
 

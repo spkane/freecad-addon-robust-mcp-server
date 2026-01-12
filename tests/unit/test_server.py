@@ -246,9 +246,17 @@ class TestMain:
 
             server_module.main()
 
-            # Check that instance ID was printed
+            # Check that instance ID was printed to stderr (not stdout, to avoid
+            # corrupting JSON-RPC in stdio mode)
             print_calls = [str(call) for call in mock_print.call_args_list]
             assert any("FREECAD_MCP_INSTANCE_ID=" in call for call in print_calls)
+            # Verify it was printed to stderr
+            instance_id_call = next(
+                call
+                for call in mock_print.call_args_list
+                if "FREECAD_MCP_INSTANCE_ID=" in str(call)
+            )
+            assert instance_id_call.kwargs.get("file") == sys.stderr
 
     def test_main_http_transport(self):
         """Main should start HTTP transport when configured."""
@@ -295,3 +303,203 @@ class TestMain:
 
             # Should call run without transport arguments (stdio is default)
             mock_run.assert_called_once_with()
+
+
+class TestStdioProtocolCleanliness:
+    """Tests to ensure stdio mode produces clean JSON-RPC output.
+
+    These tests verify that stdout contains ONLY valid JSON-RPC messages,
+    with no debug output, print statements, or other text that would corrupt
+    the MCP protocol. This is critical for compatibility with MCP clients
+    like Claude Desktop.
+
+    The bug this catches: Any print() to stdout (instead of stderr) will
+    cause MCP clients to fail with JSON parse errors like:
+        "Unexpected token 'F', "FREECAD_MC"... is not valid JSON"
+    """
+
+    def test_no_stdout_before_jsonrpc(self):
+        """Verify no stray output appears on stdout before JSON-RPC messages.
+
+        This test spawns the MCP server as a subprocess and validates that
+        ALL stdout output is valid JSON-RPC. Any non-JSON output on stdout
+        will corrupt the MCP protocol.
+        """
+        import json
+        import os
+        import subprocess
+        import time
+
+        # Start the MCP server process
+        # Use a non-existent FreeCAD host so it won't actually connect
+        proc = subprocess.Popen(  # noqa: S603
+            [
+                sys.executable,
+                "-m",
+                "freecad_mcp.server",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={
+                **dict(os.environ),
+                "FREECAD_MODE": "xmlrpc",
+                "FREECAD_XMLRPC_PORT": "59999",  # Non-existent port
+                "FREECAD_SOCKET_HOST": "localhost",
+            },
+        )
+
+        try:
+            # Ensure pipes are available
+            assert proc.stdin is not None
+            assert proc.stdout is not None
+
+            # Send a minimal MCP initialize request
+            init_request = {
+                "jsonrpc": "2.0",
+                "id": 0,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1.0.0"},
+                },
+            }
+            request_bytes = json.dumps(init_request).encode() + b"\n"
+            proc.stdin.write(request_bytes)
+            proc.stdin.flush()
+
+            # Give the server a moment to respond
+            time.sleep(0.5)
+
+            # Set stdout to non-blocking mode
+            os.set_blocking(proc.stdout.fileno(), False)
+
+            # Read any available stdout
+            stdout_data = b""
+            try:
+                while True:
+                    chunk = proc.stdout.read(4096)
+                    if not chunk:
+                        break
+                    stdout_data += chunk
+            except (BlockingIOError, TypeError):
+                pass  # No more data available
+
+            # Validate that ALL stdout is valid JSON-RPC
+            # Each line should be a valid JSON object
+            stdout_text = stdout_data.decode("utf-8", errors="replace")
+            lines = [line.strip() for line in stdout_text.split("\n") if line.strip()]
+
+            for line in lines:
+                try:
+                    parsed = json.loads(line)
+                    # Should be a JSON-RPC message (has jsonrpc field)
+                    assert "jsonrpc" in parsed, (
+                        f"stdout contains JSON but not JSON-RPC: {line[:100]}"
+                    )
+                except json.JSONDecodeError as e:
+                    pytest.fail(
+                        f"stdout contains non-JSON output which corrupts MCP protocol!\n"
+                        f"Invalid line: {line[:200]!r}\n"
+                        f"JSON error: {e}\n\n"
+                        f"All stdout lines:\n{stdout_text[:1000]}"
+                    )
+
+        finally:
+            # Clean up the process
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+    def test_instance_id_on_stderr_not_stdout(self) -> None:
+        """Verify FREECAD_MCP_INSTANCE_ID is printed to stderr, not stdout.
+
+        The instance ID must go to stderr because stdout is reserved for
+        JSON-RPC messages in stdio mode.
+        """
+        import os
+        import subprocess
+        import time
+
+        proc = subprocess.Popen(  # noqa: S603
+            [
+                sys.executable,
+                "-m",
+                "freecad_mcp.server",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={
+                **dict(os.environ),
+                "FREECAD_MODE": "xmlrpc",
+                "FREECAD_XMLRPC_PORT": "59999",
+                "FREECAD_SOCKET_HOST": "localhost",
+            },
+        )
+
+        try:
+            # Ensure pipes are available
+            assert proc.stdout is not None
+            assert proc.stderr is not None
+
+            # Set pipes to non-blocking mode
+            os.set_blocking(proc.stdout.fileno(), False)
+            os.set_blocking(proc.stderr.fileno(), False)
+
+            # Poll for stderr content with timeout (CI systems can be slower)
+            stderr_data = b""
+            max_wait = 5.0  # 5 second timeout
+            poll_interval = 0.1
+            elapsed = 0.0
+
+            while elapsed < max_wait:
+                try:
+                    chunk = proc.stderr.read(4096)
+                    if chunk:
+                        stderr_data += chunk
+                        # Check if we got the instance ID
+                        if b"FREECAD_MCP_INSTANCE_ID=" in stderr_data:
+                            break
+                except (BlockingIOError, TypeError):
+                    pass  # No data available yet
+
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+
+            stderr_text = stderr_data.decode("utf-8", errors="replace")
+
+            # Instance ID should be in stderr
+            assert "FREECAD_MCP_INSTANCE_ID=" in stderr_text, (
+                f"Instance ID not found in stderr after {max_wait}s.\n"
+                f"stderr: {stderr_text[:500]}"
+            )
+
+            # Read stdout (should NOT contain instance ID)
+            stdout_data = b""
+            try:
+                while True:
+                    chunk = proc.stdout.read(4096)
+                    if not chunk:
+                        break
+                    stdout_data += chunk
+            except (BlockingIOError, TypeError):
+                pass  # No more data available
+
+            stdout_text = stdout_data.decode("utf-8", errors="replace")
+
+            # Instance ID should NOT be in stdout
+            assert "FREECAD_MCP_INSTANCE_ID=" not in stdout_text, (
+                f"Instance ID incorrectly appears in stdout, corrupting MCP protocol!\n"
+                f"stdout: {stdout_text[:500]}"
+            )
+
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()

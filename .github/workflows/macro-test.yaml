@@ -7,7 +7,7 @@ on:
       - "src/freecad_mcp/**/*.py"
       - "macros/**/*.FCMacro"
       - "macros/**/*.py"
-      - "addon/FreecadRobustMCP/**/*.py"
+      - "addon/FreecadRobustMCPBridge/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
       - ".github/actions/setup-freecad/**"
@@ -17,7 +17,7 @@ on:
       - "src/freecad_mcp/**/*.py"
       - "macros/**/*.FCMacro"
       - "macros/**/*.py"
-      - "addon/FreecadRobustMCP/**/*.py"
+      - "addon/FreecadRobustMCPBridge/**/*.py"
       - "tests/integration/**/*.py"
       - ".github/workflows/macro-test.yaml"
       - ".github/actions/setup-freecad/**"
@@ -73,7 +73,7 @@ jobs:
           # Start FreeCAD headless with MCP bridge in background
           # Uses the workbench addon's blocking bridge script
           # Use setsid to create a new process group for reliable cleanup
-          setsid freecadcmd addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
+          setsid freecadcmd addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 
@@ -288,7 +288,7 @@ jobs:
           # Uses blocking_bridge.py which blocks with run_forever() to keep process alive
           # GUI features are available since we're using 'freecad' not 'freecadcmd'
           # Use setsid to create a new process group for reliable cleanup
-          setsid freecad addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_gui.log 2>&1 &
+          setsid freecad addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_gui.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 

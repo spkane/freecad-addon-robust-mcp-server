@@ -1,4 +1,4 @@
-# FreeCAD MCP Server Architecture
+# FreeCAD Robust MCP Server Architecture
 
 ## Executive Summary
 
@@ -10,11 +10,11 @@ This document describes the architecture for a Model Context Protocol (MCP) serv
 
 <!--TOC-->
 
-- [FreeCAD MCP Server Architecture](#freecad-mcp-server-architecture)
+- [FreeCAD Robust MCP Server Architecture](#freecad-robust-mcp-server-architecture)
   - [Executive Summary](#executive-summary)
   - [Table of Contents](#table-of-contents)
   - [Competitive Analysis](#competitive-analysis)
-    - [Existing FreeCAD MCP Servers](#existing-freecad-mcp-servers)
+    - [Existing FreeCAD Robust MCP Servers](#existing-freecad-robust-mcp-servers)
     - [Our Differentiators](#our-differentiators)
     - [Key Learnings Applied](#key-learnings-applied)
   - [System Overview](#system-overview)
@@ -89,7 +89,7 @@ This document describes the architecture for a Model Context Protocol (MCP) serv
 
 See [COMPARISON.md](../COMPARISON.md) for detailed analysis of existing implementations.
 
-### Existing FreeCAD MCP Servers
+### Existing FreeCAD Robust MCP Servers
 
 | Project                                                                             | Stars | Approach       | Strengths                                         |
 | ----------------------------------------------------------------------------------- | ----- | -------------- | ------------------------------------------------- |
@@ -157,7 +157,7 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is a standa
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      FreeCAD MCP Server                                  │
+│                      FreeCAD Robust MCP Server                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
 │  │    Tools     │  │  Resources   │  │   Prompts    │                   │
 │  │ - execute_py │  │ - documents  │  │ - modeling   │                   │
@@ -293,7 +293,7 @@ freecad_mcp/
 The main entry point using FastMCP from the official MCP Python SDK.
 
 ```python
-"""FreeCAD MCP Server - Main entry point."""
+"""FreeCAD Robust MCP Server - Main entry point."""
 
 from mcp.server.fastmcp import FastMCP
 

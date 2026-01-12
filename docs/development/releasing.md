@@ -244,7 +244,7 @@ just release::tag-workbench 1.0.0
 
 **Files updated by `bump-workbench`:**
 
-- `addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py` (`__version__`)
+- `addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py` (`__version__`)
 - `package.xml` (workbench section: `<version>` and `<date>`)
 
 **What happens automatically:**

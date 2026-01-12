@@ -7,8 +7,8 @@
 |Icon=Macro_Cut_Object_For_Magnets.png
 |Description=Cut an object along a plane and add aligned magnet holes with surface collision detection. Creates two parts with perfectly aligned holes for embedding magnets that allow the parts to snap together.
 |Author=Sean P. Kane
-|Version=0.5.0-beta
-|Date=2026-01-05
+|Version=0.6.0
+|Date=2026-01-12
 |FCVersion=0.19+
 |Download=[https://wiki.freecad.org/images/thumb/e/e3/Macro_Cut_Object_For_Magnets.png/48px-Macro_Cut_Object_For_Magnets.png ToolBar Icon]
 |SeeAlso=[[Part_Slice|Part Slice]], [[PartDesign_Hole|PartDesign Hole]]
@@ -142,7 +142,6 @@ This image shows a vase object in its original form, and after being cut multipl
 <!--T:22-->
 The full source code is hosted on GitHub:
 * [https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro CutObjectForMagnets.FCMacro on GitHub]
-* [https://github.com/spkane/freecad-robust-mcp-and-more GitHub Repository (freecad-robust-mcp-and-more)]
 
 ==Script== <!--T:23-->
 
@@ -158,6 +157,8 @@ ToolBar Icon [[Image:Macro_Cut_Object_For_Magnets.png]]
 ==Links== <!--T:25-->
 
 <!--T:26-->
+* [https://spkane.github.io/freecad-robust-mcp-and-more/ Full Documentation] - Complete guides and tutorials
+* [https://github.com/spkane/freecad-robust-mcp-and-more GitHub Repository] - Source code and issue tracker
 * [[Part_Slice|Part Slice]] - FreeCAD's built-in slice tool
 * [[PartDesign_Hole|PartDesign Hole]] - Parametric hole feature documentation
 * [[PartDesign_Body|PartDesign Body]] - Body container documentation

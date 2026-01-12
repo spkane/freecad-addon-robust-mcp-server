@@ -1,28 +1,31 @@
 #!/usr/bin/env python3
-r"""Blocking FreeCAD MCP Bridge Server.
+r"""Blocking FreeCAD Robust MCP Bridge Server.
 
 SPDX-License-Identifier: MIT
 Copyright (c) 2025 Sean P. Kane (GitHub: spkane)
 
 This script starts the MCP bridge server and blocks with run_forever().
-It works with both FreeCAD GUI and FreeCADCmd (headless) modes.
+It works with both freecad (GUI) and freecadcmd (headless) modes.
 
 Use this script when you need FreeCAD to keep running (CI, background servers).
 For interactive GUI sessions, use startup_bridge.py instead (non-blocking).
 
 Usage:
     # Headless mode (no GUI features):
-    FreeCADCmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py
+    freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/\
+        freecad_mcp_bridge/blocking_bridge.py
 
     # GUI mode (full features including screenshots):
-    freecad ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py
+    freecad ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/\
+        freecad_mcp_bridge/blocking_bridge.py
 
     # On macOS:
     /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-        ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py
+        ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/\
+        freecad_mcp_bridge/blocking_bridge.py
 
-Note: In headless mode (FreeCADCmd), GUI features like screenshots are not available.
-For full functionality, run with FreeCAD GUI executable.
+Note: In headless mode (freecadcmd), GUI features like screenshots are not available.
+For full functionality, run with the freecad GUI executable.
 """
 
 from __future__ import annotations
@@ -37,23 +40,23 @@ try:
 
     print(f"FreeCAD version: {FreeCAD.Version()[0]}.{FreeCAD.Version()[1]}")
 except ImportError:
-    print("ERROR: This script must be run with FreeCAD or FreeCADCmd.")
+    print("ERROR: This script must be run with freecad or freecadcmd.")
     print("")
     print("Usage:")
     print(
-        "  FreeCADCmd /path/to/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py"
+        "  freecadcmd /path/to/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py"
     )
     print("")
     print("On macOS (if workbench installed):")
     print("  /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \\")
     print(
-        "    ~/Library/Application\\ Support/FreeCAD/Mod/FreecadRobustMCP/"
+        "    ~/Library/Application\\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/"
         "freecad_mcp_bridge/blocking_bridge.py"
     )
     print("")
     print("On Linux (if workbench installed):")
     print(
-        "  freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCP/"
+        "  freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/"
         "freecad_mcp_bridge/blocking_bridge.py"
     )
     sys.exit(1)

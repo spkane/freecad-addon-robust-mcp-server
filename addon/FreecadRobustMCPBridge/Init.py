@@ -11,12 +11,21 @@ Note: Status bar updates are handled by InitGui.py since Qt operations
 must run on the main thread.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from freecad_mcp_bridge.bridge_utils import GuiWaiter
+
 import FreeCAD
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
 
-# Global reference to timer to prevent garbage collection
-_auto_start_timer = None
+# Global reference to GuiWaiter and auto-start timer to prevent garbage collection
+# Type annotations use Any for timer since it could be QTimer from PySide2 or PySide6
+_auto_start_timer: Any | None = None
+_gui_waiter: GuiWaiter | None = None
 
 
 def _auto_start_bridge() -> None:
@@ -43,26 +52,24 @@ def _auto_start_bridge() -> None:
         )
 
         # Import and start the bridge directly
-        import commands
         from freecad_mcp_bridge.server import FreecadMCPPlugin
         from preferences import get_socket_port, get_xmlrpc_port
 
         xmlrpc_port = get_xmlrpc_port()
         socket_port = get_socket_port()
 
-        commands._mcp_plugin = FreecadMCPPlugin(
+        plugin = FreecadMCPPlugin(
             host="localhost",
             port=socket_port,
             xmlrpc_port=xmlrpc_port,
             enable_xmlrpc=True,
         )
-        commands._mcp_plugin.start()
+        plugin.start()
 
-        # Track running configuration for restart detection
-        commands._running_config = {
-            "xmlrpc_port": xmlrpc_port,
-            "socket_port": socket_port,
-        }
+        # Register plugin with commands module for restart detection
+        from freecad_mcp_bridge.bridge_utils import register_mcp_plugin
+
+        register_mcp_plugin(plugin, xmlrpc_port, socket_port)
 
         FreeCAD.Console.PrintMessage("\n")
         FreeCAD.Console.PrintMessage("=" * 50 + "\n")
@@ -81,9 +88,15 @@ def _auto_start_bridge() -> None:
 # Schedule auto-start after FreeCAD finishes loading
 # Strategy:
 # - If FreeCAD.GuiUp is True: Qt event loop is running, use timer for deferred start
-# - If FreeCAD.GuiUp is False but Qt is available: Start bridge directly
-#   (GUI mode starting up - InitGui.py will handle status bar later)
+# - If FreeCAD.GuiUp is False but Qt is available: FreeCAD GUI is initializing.
+#   Use GuiWaiter to wait for GuiUp to become True before starting.
+#   This ensures the bridge uses Qt timer (not background thread) for queue processing.
 # - If Qt is not available: Pure headless mode, start bridge directly
+#
+# CRITICAL: We must wait for FreeCAD.GuiUp to be True before starting the bridge
+# in GUI mode. If we start when GuiUp is False, the bridge's _start_queue_processor()
+# will see GuiUp=False and use a background thread. Later, code executed on that
+# thread will try to do Qt operations, causing crashes (SIGABRT in QCocoaWindow).
 try:
     from preferences import get_auto_start
 
@@ -110,8 +123,18 @@ try:
                 _auto_start_bridge()
         elif QtCore is not None:
             # GUI not ready yet, but Qt is available (FreeCAD starting in GUI mode)
-            # Start bridge directly - InitGui.py will handle status bar update
-            _auto_start_bridge()
+            # Use GuiWaiter to wait for GuiUp to become True before starting
+            from freecad_mcp_bridge.bridge_utils import GuiWaiter
+
+            _gui_waiter = GuiWaiter(
+                callback=_auto_start_bridge,
+                log_prefix="Robust MCP Bridge",
+                timeout_error_extra=(
+                    "\nTo start the bridge manually, select the Robust MCP Bridge "
+                    "workbench\nand click 'Start MCP Bridge'.\n\n"
+                ),
+            )
+            _gui_waiter.start()
         else:
             # True headless mode - no Qt, no GUI
             _auto_start_bridge()

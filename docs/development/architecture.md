@@ -1,6 +1,6 @@
 # Architecture
 
-This document provides a technical overview of the FreeCAD MCP Server architecture.
+This document provides a technical overview of the FreeCAD Robust MCP Server architecture.
 
 For the full architecture document with design decisions and rationale, see [Detailed Architecture](architecture-detailed.md).
 
@@ -8,7 +8,7 @@ For the full architecture document with design decisions and rationale, see [Det
 
 ## Overview
 
-The FreeCAD MCP Server follows a **Bridge with Adapter** pattern:
+The FreeCAD Robust MCP Server follows a **Bridge with Adapter** pattern:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -125,10 +125,10 @@ class FreecadBridge(ABC):
 The workbench addon runs inside FreeCAD:
 
 ```text
-addon/FreecadRobustMCP/
+addon/FreecadRobustMCPBridge/
 ├── Init.py                # Module initialization
 ├── InitGui.py             # GUI initialization (workbench)
-├── FreecadRobustMCP.svg   # Workbench icon
+├── FreecadRobustMCPBridge.svg   # Workbench icon
 └── freecad_mcp_bridge/    # Bridge plugin
     ├── __init__.py
     ├── server.py          # XML-RPC/JSON-RPC server

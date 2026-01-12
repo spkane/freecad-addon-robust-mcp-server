@@ -204,6 +204,8 @@ just testing::all          # Run all tests including integration
 # Documentation commands
 just documentation::build  # Build documentation
 just documentation::serve  # Serve documentation locally
+just documentation::serve-versioned  # Serve versioned docs (from gh-pages)
+just documentation::list-versions    # List deployed doc versions
 
 # Docker commands
 just docker::build         # Build Docker image for local architecture
@@ -251,7 +253,7 @@ just all-with-integration  # Run all checks and integration tests
 | `quality`       | Code quality and linting              | `check`, `lint`, `format`, `scan`                   |
 | `testing`       | Test execution                        | `unit`, `cov`, `integration-freecad-auto`, `watch`  |
 | `docker`        | Docker build and run commands         | `build`, `build-multi`, `run`, `clean-all`          |
-| `documentation` | Documentation building                | `build`, `serve`, `open`                            |
+| `documentation` | Documentation building and deployment | `build`, `serve`, `serve-versioned`, `list-versions`|
 | `dev`           | Development utilities                 | `install-deps`, `update-deps`, `clean`              |
 | `release`       | Release and tagging                   | `status`, `tag-mcp-server`, `delete-tag`            |
 | `coderabbit`    | AI code reviews (local)               | `install`, `login`, `review`, `review-fix`          |
@@ -484,12 +486,40 @@ To avoid conflicts with Python dict literals in code blocks, this project uses c
 Variables are defined in `docs/variables.yaml`:
 
 ```yaml
-project_name: FreeCAD MCP Server
+project_name: FreeCAD Robust MCP Suite
 xmlrpc_port: 9875
 socket_port: 9876
 ```
 
 **Reference**: See `docs/development/mkdocs-guide.md` for complete documentation on available extensions (admonitions, tabs, code annotations, mermaid diagrams, etc.).
+
+### Documentation Deployment (GitHub Pages)
+
+Documentation is deployed to GitHub Pages with versioning via **mike**:
+
+- **Automatic deployment**: The `docs.yaml` workflow deploys docs automatically
+- **Version selector**: Users can switch between versions in the docs UI
+- **"latest" version**: Always reflects the current `main` branch (default landing page)
+- **Versioned releases**: Created when MCP server tags (`robust-mcp-server-vX.Y.Z`) are pushed
+
+**Deployment triggers**:
+
+| Trigger                      | Version Deployed | Sets Default?  |
+| ---------------------------- | ---------------- | -------------- |
+| Push to `main`               | `latest`         | Yes            |
+| Tag `robust-mcp-server-v1.0` | `1.0.0`          | No             |
+| Manual workflow dispatch     | User-specified   | User choice    |
+
+**Local testing commands**:
+
+```bash
+just documentation::serve-versioned  # Serve versioned docs locally
+just documentation::list-versions    # List deployed versions
+just documentation::deploy-dev       # Deploy "dev" version locally
+just documentation::deploy-latest 1.0.0  # Deploy version and set as latest
+```
+
+**Note**: Local `deploy-*` commands modify the `gh-pages` branch locally. The GitHub Actions workflow handles actual deployment to GitHub Pages.
 
 ---
 
@@ -717,7 +747,7 @@ project-root/
 │   │   └── test.yaml             # Unit/integration tests
 │   └── dependabot.yaml       # Dependency updates
 ├── addon/                    # FreeCAD addon (workbench)
-│   └── FreecadRobustMCP/     # Robust MCP Bridge workbench
+│   └── FreecadRobustMCPBridge/     # Robust MCP Bridge workbench
 │       ├── freecad_mcp_bridge/   # Bridge Python package
 │       ├── Init.py           # FreeCAD workbench init
 │       ├── InitGui.py        # FreeCAD GUI init
@@ -990,6 +1020,60 @@ else:
     pass
 ```
 
+### MCP Bridge Startup Race Condition (Critical Bug Pattern)
+
+**CRITICAL BUG PATTERN**: The MCP bridge must wait for `FreeCAD.GuiUp` to be `True` before starting in GUI mode. Starting the bridge while `FreeCAD.GuiUp` is `False` causes a race condition that leads to crashes.
+
+**The Problem:**
+
+When FreeCAD starts in GUI mode, there's a timing window where:
+
+1. `Init.py` runs when `FreeCAD.GuiUp = False` (GUI not yet initialized)
+2. Qt/PySide is available (can import successfully)
+3. The bridge starts, sees `GuiUp = False`, and starts a background thread for queue processing
+4. FreeCAD GUI finishes initializing (`GuiUp` becomes `True`)
+5. Code execution still happens on the background thread
+6. Qt operations from the background thread cause SIGABRT crashes
+
+**Symptoms:**
+
+- FreeCAD crashes with `SIGABRT` in `QCocoaWindow::createNSWindow` (macOS)
+- Integration tests pass initial connection, then crash on first document operation
+- Thread check shows `is_main_thread: False` with `thread_name: 'MCP-QueueProcessor'` even when `gui_up: True`
+
+**The Fix (in `Init.py`):**
+
+When Qt is available but `FreeCAD.GuiUp` is `False`, use a repeating timer to wait for `GuiUp` to become `True` before starting the bridge:
+
+```python
+# WRONG - starts bridge immediately, will use background thread
+elif QtCore is not None:
+    _auto_start_bridge()
+
+# CORRECT - wait for GUI to be ready
+elif QtCore is not None:
+    _auto_start_timer = QtCore.QTimer()
+    _auto_start_timer.setSingleShot(False)  # Repeating
+    _auto_start_timer.timeout.connect(_wait_for_gui_and_start)
+    _auto_start_timer.start(100)  # Check every 100ms
+```
+
+**Note:** This QTimer wait pattern is **only for GUI startup scenarios**. In headless mode (`freecadcmd`), the bridge starts directly without waiting because there is no Qt event loop to wait for. The three startup paths are:
+
+1. **GUI already up** (`FreeCAD.GuiUp = True`): Start bridge immediately
+2. **GUI starting** (Qt available, `GuiUp = False`): Use QTimer to wait for GUI
+3. **Headless** (no Qt): Start bridge immediately with background thread
+
+**Testing:**
+
+An integration test in `tests/integration/test_thread_safety.py` verifies that:
+
+- In GUI mode, code executes on the main thread (not `MCP-QueueProcessor`)
+- The queue processor mode matches `FreeCAD.GuiUp` state
+- Document creation works without crashing
+
+**Key Lesson:** Never assume Qt availability means GUI is ready. Always check `FreeCAD.GuiUp` before doing operations that depend on the Qt event loop running on the main thread.
+
 ### Why NOT to Check for PySide/Qt
 
 **WRONG** - Do not use Qt availability to detect GUI mode:
@@ -1236,13 +1320,14 @@ This project uses component-specific release workflows along with CI/CD pipeline
 
 ### CI Workflows
 
-| Workflow           | Trigger              | Purpose                                                    |
-| ------------------ | -------------------- | ---------------------------------------------------------- |
-| `test.yaml`        | Push, PR             | Runs unit tests and integration tests on Ubuntu and macOS  |
-| `pre-commit.yaml`  | Push, PR             | Runs all pre-commit hooks for code quality                 |
-| `docker.yaml`      | Push, PR             | Builds Docker image to verify Dockerfile works             |
-| `macro-test.yaml`  | Push, PR             | Tests FreeCAD macros in headless Docker environment        |
-| `codeql.yaml`      | Push, PR, scheduled  | GitHub CodeQL security analysis                            |
+| Workflow           | Trigger                        | Purpose                                                   |
+| ------------------ | ------------------------------ | --------------------------------------------------------- |
+| `test.yaml`        | Push, PR                       | Runs unit tests and integration tests on Ubuntu and macOS |
+| `pre-commit.yaml`  | Push, PR                       | Runs all pre-commit hooks for code quality                |
+| `docker.yaml`      | Push, PR                       | Builds Docker image to verify Dockerfile works            |
+| `macro-test.yaml`  | Push, PR                       | Tests FreeCAD macros in headless Docker environment       |
+| `codeql.yaml`      | Push, PR, scheduled            | GitHub CodeQL security analysis                           |
+| `docs.yaml`        | Push to main, MCP server tags  | Deploys versioned documentation to GitHub Pages           |
 
 ### Release Workflows
 
@@ -1411,9 +1496,9 @@ Each component can have a different version, and the release workflows automatic
 
 ---
 
-## FreeCAD MCP Tools Reference
+## FreeCAD Robust MCP Tools Reference
 
-When Claude Code is connected to the FreeCAD MCP server, the following tools are available for interacting with FreeCAD. Use these tools to control FreeCAD, create/modify objects, and debug issues.
+When Claude Code is connected to the FreeCAD Robust MCP server, the following tools are available for interacting with FreeCAD. Use these tools to control FreeCAD, create/modify objects, and debug issues.
 
 ### Discovering Capabilities at Runtime
 

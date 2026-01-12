@@ -1,8 +1,8 @@
-# FreeCAD Robust MCP Server
+# FreeCAD Robust MCP Suite
 
-Welcome to the FreeCAD Robust MCP Server documentation.
+Welcome to the FreeCAD Robust MCP Suite documentation.
 
-This project provides an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that enables integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches.
+This project provides an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, FreeCAD workbench, and standalone macros that enable integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches.
 
 ---
 
@@ -23,9 +23,10 @@ This project provides an [MCP (Model Context Protocol)](https://modelcontextprot
 pip install freecad-robust-mcp
 
 # Install the workbench via FreeCAD Addon Manager
-# (search for "FreeCAD MCP and More")
+# (search for "Robust MCP" - the package is "FreeCAD Robust MCP Suite")
 
-# Start FreeCAD and click "Start Bridge" in the Robust MCP Bridge workbench
+# Start FreeCAD and switch to the "Robust MCP Bridge" workbench
+# Click "Start Bridge" in the toolbar
 
 # Configure your MCP client and start building!
 ```
@@ -79,13 +80,17 @@ This project includes standalone FreeCAD macros:
 | [Tools Reference](MCP_TOOLS_REFERENCE.md)          | Complete API reference for all 82+ MCP tools      |
 | [API Reference](api/server.md)                     | Python API documentation                          |
 | [Development](development/contributing.md)         | Contributing, architecture, and development setup |
-| [Comparison](COMPARISON.md)                        | Analysis of other FreeCAD MCP implementations     |
+| [Comparison](COMPARISON.md)                        | Compare with other FreeCAD MCP implementations    |
 
 ---
 
 ## Links
 
-- [GitHub Repository](https://github.com/spkane/freecad-robust-mcp-and-more)
-- [PyPI Package](https://pypi.org/project/freecad-robust-mcp/)
-- [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp)
-- [Issue Tracker](https://github.com/spkane/freecad-robust-mcp-and-more/issues)
+- [GitHub Repository](https://github.com/spkane/freecad-robust-mcp-and-more) - Source code and issue tracker
+- [PyPI Package](https://pypi.org/project/freecad-robust-mcp/) - Python package for pip installation
+- [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp) - Pre-built Docker images
+
+---
+
+!!! tip "Share This Documentation"
+    Direct link: **[https://spkane.github.io/freecad-robust-mcp-and-more/](https://spkane.github.io/freecad-robust-mcp-and-more/)**

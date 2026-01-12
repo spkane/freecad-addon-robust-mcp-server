@@ -62,7 +62,7 @@ The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection 
 
 1. Open FreeCAD
 1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD MCP and More" or "Robust MCP Bridge"
+1. Search for "FreeCAD Robust MCP Suite" or "Robust MCP Bridge"
 1. Click **Install**
 1. Restart FreeCAD
 

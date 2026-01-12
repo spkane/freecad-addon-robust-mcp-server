@@ -36,11 +36,21 @@ except Exception as e:
     )
 
 
-class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
-    """FreeCAD Robust MCP Workbench.
+class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
+    """Robust MCP Bridge workbench for FreeCAD.
 
-    Provides toolbar and menu commands to start, stop, and monitor
-    the MCP bridge server for AI assistant integration.
+    Provides toolbar and menu commands to start, stop, and monitor the MCP
+    bridge server for AI assistant integration.
+
+    Attributes:
+        MenuText: Workbench display name in FreeCAD.
+        ToolTip: Short description shown by FreeCAD.
+        Icon: Icon path used by FreeCAD.
+
+    Example:
+        The workbench is registered at import time by FreeCAD::
+
+            FreeCADGui.addWorkbench(FreecadRobustMCPBridgeWorkbench())
     """
 
     MenuText = "Robust MCP Bridge"
@@ -136,7 +146,7 @@ class FreecadRobustMCPWorkbench(FreeCADGui.Workbench):
 
 
 # Register the workbench
-FreeCADGui.addWorkbench(FreecadRobustMCPWorkbench())
+FreeCADGui.addWorkbench(FreecadRobustMCPBridgeWorkbench())
 
 # Schedule status bar sync after a short delay to allow GUI to finish initializing
 # This runs on the main thread (InitGui.py is executed on main thread)

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- White background -->
+  <rect width="64" height="64" fill="#ffffff"/>
+
+  <!-- Bold Stop Squares in TOP corners (not overlapping bridge) -->
+  <rect x="2" y="2" width="14" height="14" rx="2" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+  <rect x="48" y="2" width="14" height="14" rx="2" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+
+  <!-- DRAWBRIDGE OPEN - No robot -->
+  <!-- Left bridge section (raised) -->
+  <g transform="rotate(-35, 4, 40)">
+    <rect x="4" y="40" width="26" height="5" rx="1" fill="#8b7355" stroke="#6b5344" stroke-width="1"/>
+    <rect x="4" y="37" width="26" height="2" rx="0.5" fill="#a08060"/>
+  </g>
+
+  <!-- Right bridge section (raised) -->
+  <g transform="rotate(35, 60, 40)">
+    <rect x="34" y="40" width="26" height="5" rx="1" fill="#8b7355" stroke="#6b5344" stroke-width="1"/>
+    <rect x="34" y="37" width="26" height="2" rx="0.5" fill="#a08060"/>
+  </g>
+
+  <!-- Bridge supports/pillars -->
+  <rect x="8" y="45" width="6" height="8" fill="#6b5344"/>
+  <rect x="50" y="45" width="6" height="8" fill="#6b5344"/>
+
+  <!-- Bridge arch underneath (broken/gap) -->
+  <path d="M 14 53 Q 20 49 26 50" fill="none" stroke="#6b5344" stroke-width="2"/>
+  <path d="M 38 50 Q 44 49 50 53" fill="none" stroke="#6b5344" stroke-width="2"/>
+
+  <!-- Red Data Flow (river under bridge - stopped) -->
+  <!-- Data stream background -->
+  <path d="M 0 60 Q 32 55 64 60" fill="none" stroke="#e74c3c" stroke-width="4" opacity="0.3"/>
+  <!-- Left arrow (blocked) -->
+  <path d="M 6 59 L 16 59" stroke="#e74c3c" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="6,59 11,56 11,62" fill="#e74c3c"/>
+  <!-- Right arrow (blocked) -->
+  <path d="M 48 59 L 58 59" stroke="#e74c3c" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="58,59 53,56 53,62" fill="#e74c3c"/>
+  <!-- Center X (flow blocked) -->
+  <line x1="28" y1="55" x2="36" y2="61" stroke="#e74c3c" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="36" y1="55" x2="28" y2="61" stroke="#e74c3c" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

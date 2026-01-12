@@ -1,4 +1,4 @@
-"""Integration tests for FreeCAD MCP GUI mode.
+"""Integration tests for FreeCAD Robust MCP GUI mode.
 
 These tests verify that the MCP bridge works correctly when FreeCAD is running
 in GUI mode (with full graphical interface). They test GUI-specific features

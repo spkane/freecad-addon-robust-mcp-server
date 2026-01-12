@@ -1,4 +1,4 @@
-# FreeCAD MCP User Guide
+# FreeCAD Robust MCP User Guide
 
 This guide explains how to use AI assistants with FreeCAD via the MCP (Model Context Protocol) server to create and manipulate 3D CAD models.
 

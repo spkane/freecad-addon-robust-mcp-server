@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- White background -->
+  <rect width="64" height="64" fill="#ffffff"/>
+
+  <!-- Bridge Structure -->
+  <!-- Bridge deck -->
+  <rect x="4" y="40" width="56" height="5" rx="1" fill="#8b7355" stroke="#6b5344" stroke-width="1"/>
+  <!-- Bridge railings -->
+  <rect x="4" y="37" width="56" height="2" rx="0.5" fill="#a08060"/>
+  <!-- Bridge supports/pillars -->
+  <rect x="8" y="45" width="6" height="8" fill="#6b5344"/>
+  <rect x="50" y="45" width="6" height="8" fill="#6b5344"/>
+  <!-- Bridge arch underneath -->
+  <path d="M 14 53 Q 32 47 50 53" fill="none" stroke="#6b5344" stroke-width="2"/>
+
+  <!-- Robot SITTING on bridge edge, feet dangling -->
+  <!-- Robot body (sitting position - shorter/compressed) -->
+  <rect x="24" y="24" width="16" height="10" rx="2" fill="#4a90d9" stroke="#2c5aa0" stroke-width="1.5"/>
+  <!-- Robot head -->
+  <rect x="26" y="14" width="12" height="10" rx="2" fill="#4a90d9" stroke="#2c5aa0" stroke-width="1.5"/>
+  <!-- Robot face plate -->
+  <rect x="28" y="16" width="8" height="6" rx="1" fill="#e8f4fc"/>
+  <!-- Robot eyes -->
+  <circle cx="30" cy="19" r="1.5" fill="#2c5aa0"/>
+  <circle cx="34" cy="19" r="1.5" fill="#2c5aa0"/>
+  <!-- Robot antenna with GRAY ball (matches gear color) -->
+  <line x1="32" y1="14" x2="32" y2="9" stroke="#2c5aa0" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="32" cy="8" r="3" fill="#95a5a6"/>
+  <!-- Robot arms (resting on bridge) -->
+  <rect x="18" y="28" width="6" height="4" rx="1.5" fill="#3a7bc8"/>
+  <rect x="40" y="28" width="6" height="4" rx="1.5" fill="#3a7bc8"/>
+  <!-- Robot legs (dangling over edge) -->
+  <rect x="26" y="34" width="4" height="12" rx="1" fill="#3a7bc8"/>
+  <rect x="34" y="34" width="4" height="12" rx="1" fill="#3a7bc8"/>
+  <!-- Robot feet -->
+  <rect x="25" y="45" width="6" height="3" rx="1" fill="#2c5aa0"/>
+  <rect x="33" y="45" width="6" height="3" rx="1" fill="#2c5aa0"/>
+
+  <!-- Better Gear symbols in TOP corners (more teeth, more obvious) -->
+  <!-- Left gear -->
+  <circle cx="10" cy="10" r="6" fill="#95a5a6" stroke="#7f8c8d" stroke-width="1"/>
+  <!-- Gear teeth (8 teeth around the gear) -->
+  <rect x="8" y="2" width="4" height="3" fill="#95a5a6"/>
+  <rect x="8" y="15" width="4" height="3" fill="#95a5a6"/>
+  <rect x="2" y="8" width="3" height="4" fill="#95a5a6"/>
+  <rect x="15" y="8" width="3" height="4" fill="#95a5a6"/>
+  <!-- Diagonal teeth -->
+  <rect x="3" y="3" width="3" height="3" fill="#95a5a6" transform="rotate(45, 4.5, 4.5)"/>
+  <rect x="14" y="3" width="3" height="3" fill="#95a5a6" transform="rotate(-45, 15.5, 4.5)"/>
+  <rect x="3" y="14" width="3" height="3" fill="#95a5a6" transform="rotate(-45, 4.5, 15.5)"/>
+  <rect x="14" y="14" width="3" height="3" fill="#95a5a6" transform="rotate(45, 15.5, 15.5)"/>
+  <!-- Gear center hole -->
+  <circle cx="10" cy="10" r="2.5" fill="#6b5344"/>
+
+  <!-- Right gear -->
+  <circle cx="54" cy="10" r="6" fill="#95a5a6" stroke="#7f8c8d" stroke-width="1"/>
+  <!-- Gear teeth (8 teeth around the gear) -->
+  <rect x="52" y="2" width="4" height="3" fill="#95a5a6"/>
+  <rect x="52" y="15" width="4" height="3" fill="#95a5a6"/>
+  <rect x="46" y="8" width="3" height="4" fill="#95a5a6"/>
+  <rect x="59" y="8" width="3" height="4" fill="#95a5a6"/>
+  <!-- Diagonal teeth -->
+  <rect x="47" y="3" width="3" height="3" fill="#95a5a6" transform="rotate(45, 48.5, 4.5)"/>
+  <rect x="58" y="3" width="3" height="3" fill="#95a5a6" transform="rotate(-45, 59.5, 4.5)"/>
+  <rect x="47" y="14" width="3" height="3" fill="#95a5a6" transform="rotate(-45, 48.5, 15.5)"/>
+  <rect x="58" y="14" width="3" height="3" fill="#95a5a6" transform="rotate(45, 59.5, 15.5)"/>
+  <!-- Gear center hole -->
+  <circle cx="54" cy="10" r="2.5" fill="#6b5344"/>
+
+  <!-- Gray Data Flow (river under bridge - settings) -->
+  <!-- Data stream background -->
+  <path d="M 0 60 Q 32 55 64 60" fill="none" stroke="#95a5a6" stroke-width="4" opacity="0.3"/>
+  <!-- Left arrow -->
+  <path d="M 6 59 L 16 59" stroke="#95a5a6" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="6,59 11,56 11,62" fill="#95a5a6"/>
+  <!-- Right arrow -->
+  <path d="M 48 59 L 58 59" stroke="#95a5a6" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="58,59 53,56 53,62" fill="#95a5a6"/>
+  <!-- Center data dots -->
+  <circle cx="26" cy="57" r="2" fill="#95a5a6"/>
+  <circle cx="32" cy="56" r="2" fill="#95a5a6"/>
+  <circle cx="38" cy="57" r="2" fill="#95a5a6"/>
+</svg>

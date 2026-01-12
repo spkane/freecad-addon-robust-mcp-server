@@ -58,7 +58,7 @@ See [MultiExport documentation](https://github.com/spkane/freecad-robust-mcp-and
 
 ### Via FreeCAD Addon Manager
 
-When you install the "FreeCAD MCP and More" addon, the macros are installed automatically.
+When you install the "FreeCAD Robust MCP Suite" addon, the macros are installed automatically.
 
 ### Manual Installation
 
@@ -155,13 +155,13 @@ create_macro_from_template(
 
 **Available templates:**
 
-| Template    | Description                 |
-| ----------- | --------------------------- |
-| `basic`     | Minimal macro with imports  |
-| `part`      | Part workbench operations   |
-| `sketch`    | Sketcher operations         |
-| `gui`       | GUI/dialog template         |
-| `selection` | Selection handling template |
+| Template    | Description                       |
+| ----------- | --------------------------------- |
+| `basic`     | Minimal macro with imports        |
+| `part`      | Part workbench operations         |
+| `sketch`    | Sketcher operations               |
+| `gui`       | GUI/dialog template               |
+| `selection` | Selection handling template       |
 
 **Example prompt:**
 

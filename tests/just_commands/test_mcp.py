@@ -41,7 +41,7 @@ class TestMCPSyntax:
 class TestMCPRuntime:
     """Runtime tests for MCP commands.
 
-    Note: Most MCP commands require FreeCAD MCP bridge to be running.
+    Note: Most MCP commands require FreeCAD Robust MCP Bridge to be running.
     The check command can run without FreeCAD and will fail gracefully.
     """
 

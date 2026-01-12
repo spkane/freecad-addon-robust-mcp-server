@@ -133,7 +133,7 @@ mcp-bridge-workbench:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    ADDON_NAME="FreecadRobustMCP"
+    ADDON_NAME="FreecadRobustMCPBridge"
 
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
@@ -239,7 +239,7 @@ mcp-bridge-workbench:
             u = ET.SubElement(standalone, 'url', type='readme')
             u.text = readme_url.text
 
-        icon_text = wb_icon.text if wb_icon is not None else 'FreecadRobustMCP.svg'
+        icon_text = wb_icon.text if wb_icon is not None else 'FreecadRobustMCPBridge.svg'
         ET.SubElement(standalone, 'icon').text = icon_text
         fcmin_text = wb_freecadmin.text if wb_freecadmin is not None else '0.21'
         ET.SubElement(standalone, 'freecadmin').text = fcmin_text
@@ -247,7 +247,7 @@ mcp-bridge-workbench:
         # Add content/workbench section
         content = ET.SubElement(standalone, 'content')
         wb_el = ET.SubElement(content, 'workbench')
-        cls_text = wb_classname.text if wb_classname is not None else 'FreecadRobustMCPWorkbench'
+        cls_text = wb_classname.text if wb_classname is not None else 'FreecadRobustMCPBridgeWorkbench'
         ET.SubElement(wb_el, 'classname').text = cls_text
         ET.SubElement(wb_el, 'subdirectory').text = './'
 
@@ -306,7 +306,7 @@ mcp-bridge-workbench:
 uninstall-mcp-bridge-workbench:
     #!/usr/bin/env bash
     set -euo pipefail
-    ADDON_NAME="FreecadRobustMCP"
+    ADDON_NAME="FreecadRobustMCPBridge"
 
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
@@ -506,19 +506,19 @@ status:
     extract_package_version() {
         local package_file="$1"
         PACKAGE_FILE="$package_file" python3 -c '
-import os
-import xml.etree.ElementTree as ET
-try:
-    package_file = os.environ.get("PACKAGE_FILE", "")
-    tree = ET.parse(package_file)
-    root = tree.getroot()
-    ns = {"pkg": "https://wiki.freecad.org/Package_Metadata"}
-    # Try with namespace first, then without
-    ver = root.find("pkg:version", ns) or root.find("version")
-    print(ver.text if ver is not None else "unknown")
-except Exception:
-    print("unknown")
-' 2>/dev/null || echo "unknown"
+    import os
+    import xml.etree.ElementTree as ET
+    try:
+        package_file = os.environ.get("PACKAGE_FILE", "")
+        tree = ET.parse(package_file)
+        root = tree.getroot()
+        ns = {"pkg": "https://wiki.freecad.org/Package_Metadata"}
+        # Try with namespace first, then without
+        ver = root.find("pkg:version", ns) or root.find("version")
+        print(ver.text if ver is not None else "unknown")
+    except Exception:
+        print("unknown")
+    ' 2>/dev/null || echo "unknown"
     }
 
     # Helper function to extract __Version__ from macro files (handles single/double quotes)
@@ -526,29 +526,29 @@ except Exception:
     extract_macro_version() {
         local file="$1"
         MACRO_FILE="$file" python3 -c '
-import os
-import re
-try:
-    macro_file = os.environ.get("MACRO_FILE", "")
-    content = open(macro_file).read()
-    match = re.search(r"__Version__\s*=\s*[\"'"'"']([^\"'"'"']+)[\"'"'"']", content)
-    print(match.group(1) if match else "unknown")
-except Exception:
-    print("unknown")
-' 2>/dev/null || echo "unknown"
+    import os
+    import re
+    try:
+        macro_file = os.environ.get("MACRO_FILE", "")
+        content = open(macro_file).read()
+        match = re.search(r"__Version__\s*=\s*[\"'"'"']([^\"'"'"']+)[\"'"'"']", content)
+        print(match.group(1) if match else "unknown")
+    except Exception:
+        print("unknown")
+    ' 2>/dev/null || echo "unknown"
     }
 
     # Check workbench
-    if [[ -d "$MOD_DIR/FreecadRobustMCP" ]]; then
+    if [[ -d "$MOD_DIR/FreecadRobustMCPBridge" ]]; then
         WB_VERSION="unknown"
-        if [[ -f "$MOD_DIR/FreecadRobustMCP/package.xml" ]]; then
-            WB_VERSION=$(extract_package_version "$MOD_DIR/FreecadRobustMCP/package.xml")
+        if [[ -f "$MOD_DIR/FreecadRobustMCPBridge/package.xml" ]]; then
+            WB_VERSION=$(extract_package_version "$MOD_DIR/FreecadRobustMCPBridge/package.xml")
         fi
-        WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCP/InitGui.py")
+        WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCPBridge/InitGui.py")
         echo "✓ Robust MCP Bridge Workbench: INSTALLED"
         echo "  Version: $WB_VERSION"
         echo "  Updated: $WB_MOD_TIME"
-        echo "  Path: $MOD_DIR/FreecadRobustMCP"
+        echo "  Path: $MOD_DIR/FreecadRobustMCPBridge"
     else
         echo "✗ Robust MCP Bridge Workbench: NOT INSTALLED"
         echo "  Install: just install::mcp-bridge-workbench"

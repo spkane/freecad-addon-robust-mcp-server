@@ -50,7 +50,7 @@ bump-workbench version:
     echo ""
 
     # Update __version__ in the bridge module's __init__.py
-    INIT_FILE="{{project_root}}/addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py"
+    INIT_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
     if [ -f "$INIT_FILE" ]; then
         sed 's/^__version__ = "[^"]*"/__version__ = "'"$VERSION"'"/' "$INIT_FILE" > "$INIT_FILE.tmp" && mv "$INIT_FILE.tmp" "$INIT_FILE"
         echo "Updated $INIT_FILE:"
@@ -58,6 +58,18 @@ bump-workbench version:
     else
         echo "ERROR: File not found: $INIT_FILE"
         exit 1
+    fi
+
+    # Update wiki-source.txt version and date
+    WIKI_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+    if [ -f "$WIKI_FILE" ]; then
+        sed "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
+        sed "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
+        echo ""
+        echo "Updated $WIKI_FILE:"
+        grep -E "^\|Version=|\|Date=" "$WIKI_FILE"
+    else
+        echo "WARNING: File not found: $WIKI_FILE"
     fi
 
     # Update the workbench version in package.xml
@@ -252,7 +264,7 @@ tag-workbench version:
     echo "Verifying version in source files..."
 
     # Check __init__.py
-    INIT_FILE="{{project_root}}/addon/FreecadRobustMCP/freecad_mcp_bridge/__init__.py"
+    INIT_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
     INIT_VERSION=$(grep -o '__version__ = "[^"]*"' "$INIT_FILE" | cut -d'"' -f2)
     if [ "$INIT_VERSION" != "$VERSION" ]; then
         echo "ERROR: Version mismatch in $INIT_FILE"
@@ -261,6 +273,22 @@ tag-workbench version:
         echo ""
         echo "Run 'just release::bump-workbench $VERSION' first, then commit the changes."
         exit 1
+    fi
+    echo "✓ $INIT_FILE: $INIT_VERSION"
+
+    # Check wiki-source.txt
+    WIKI_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+    if [ -f "$WIKI_FILE" ]; then
+        WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
+        if [ "$WIKI_VERSION" != "$VERSION" ]; then
+            echo "ERROR: Version mismatch in $WIKI_FILE"
+            echo "  Expected: $VERSION"
+            echo "  Found:    $WIKI_VERSION"
+            echo ""
+            echo "Run 'just release::bump-workbench $VERSION' first, then commit the changes."
+            exit 1
+        fi
+        echo "✓ $WIKI_FILE: $WIKI_VERSION"
     fi
 
     # Check package.xml
@@ -274,7 +302,9 @@ tag-workbench version:
         echo "Run 'just release::bump-workbench $VERSION' first, then commit the changes."
         exit 1
     fi
+    echo "✓ $PACKAGE_XML (workbench): $PKG_VERSION"
 
+    echo ""
     echo "Version verification passed!"
     echo ""
     echo "Creating tag: $TAG"
@@ -333,6 +363,22 @@ _tag-macro macro_dir macro_name macro_file_basename tag_prefix bump_command tag_
         echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
         exit 1
     fi
+    echo "✓ $MACRO_FILE: $MACRO_VERSION"
+
+    # Check wiki-source.txt
+    WIKI_FILE="$MACRO_DIR/wiki-source.txt"
+    if [ -f "$WIKI_FILE" ]; then
+        WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
+        if [ "$WIKI_VERSION" != "$VERSION" ]; then
+            echo "ERROR: Version mismatch in $WIKI_FILE"
+            echo "  Expected: $VERSION"
+            echo "  Found:    $WIKI_VERSION"
+            echo ""
+            echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
+            exit 1
+        fi
+        echo "✓ $WIKI_FILE: $WIKI_VERSION"
+    fi
 
     # Check package.xml
     PACKAGE_XML="{{project_root}}/package.xml"
@@ -389,7 +435,7 @@ list-tags:
     echo "=== Robust MCP Server Releases ==="
     git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -10
     echo ""
-    echo "=== MCP Workbench Releases ==="
+    echo "=== Robust MCP Bridge Workbench Releases ==="
     git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -10
     echo ""
     echo "=== Cut Object for Magnets Macro Releases ==="
@@ -408,7 +454,7 @@ latest-versions:
     MAGNETS_TAG=$(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -n1)
     EXPORT_TAG=$(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -n1)
     echo "  Robust MCP Server:      ${SERVER_TAG:-none}"
-    echo "  Robust MCP Workbench:   ${WORKBENCH_TAG:-none}"
+    echo "  MCP Bridge Workbench:   ${WORKBENCH_TAG:-none}"
     echo "  Macro Magnets:   ${MAGNETS_TAG:-none}"
     echo "  Macro Export:    ${EXPORT_TAG:-none}"
 
@@ -424,7 +470,7 @@ changes-since component:
             ;;
         workbench)
             PREFIX="robust-mcp-workbench-v"
-            PATHS="addon/FreecadRobustMCP"
+            PATHS="addon/FreecadRobustMCPBridge"
             ;;
         macro-magnets|magnets)
             PREFIX="macro-cut-object-for-magnets-v"
@@ -531,7 +577,7 @@ status:
     echo ""
 
     # Robust MCP Bridge Workbench
-    WORKBENCH_CHANGES=$(count_changes "robust-mcp-workbench-v" "addon/FreecadRobustMCP")
+    WORKBENCH_CHANGES=$(count_changes "robust-mcp-workbench-v" "addon/FreecadRobustMCPBridge")
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -1)
     if [ "$WORKBENCH_CHANGES" -gt 0 ]; then
         echo "Robust MCP Bridge Workbench: $WORKBENCH_CHANGES unreleased commit(s)"
@@ -584,7 +630,7 @@ draft-notes component:
             ;;
         workbench)
             PREFIX="robust-mcp-workbench-v"
-            PATHS="addon/FreecadRobustMCP"
+            PATHS="addon/FreecadRobustMCPBridge"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
         macro-magnets|magnets)
@@ -735,25 +781,30 @@ dry-run-tag component version:
 # FreeCAD Wiki Update Helpers
 # =============================================================================
 
-# Helper to update FreeCAD wiki for a macro (copies content to clipboard and opens edit page)
-wiki-update macro:
+# Helper to update FreeCAD wiki for a component (copies content to clipboard and opens edit page)
+wiki-update component:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    case "{{macro}}" in
+    case "{{component}}" in
+        workbench|bridge)
+            WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+            WIKI_PAGE="Robust_MCP_Bridge_Workbench"
+            COMPONENT_NAME="Robust MCP Bridge Workbench"
+            ;;
         macro-magnets|magnets|cut)
             WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
             WIKI_PAGE="Macro_Cut_Object_for_Magnets"
-            MACRO_NAME="Cut Object for Magnets"
+            COMPONENT_NAME="Cut Object for Magnets"
             ;;
         macro-export|export|multi)
             WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
             WIKI_PAGE="Macro_Multi_Export"
-            MACRO_NAME="Multi Export"
+            COMPONENT_NAME="Multi Export"
             ;;
         *)
-            echo "Unknown macro: {{macro}}"
-            echo "Valid options: macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            echo "Unknown component: {{component}}"
+            echo "Valid options: workbench (or bridge), macro-magnets (or magnets, cut), macro-export (or export, multi)"
             exit 1
             ;;
     esac
@@ -764,7 +815,7 @@ wiki-update macro:
     echo "FreeCAD Wiki Update Helper"
     echo "=========================================="
     echo ""
-    echo "Macro: $MACRO_NAME"
+    echo "Component: $COMPONENT_NAME"
     echo "Wiki Page: https://wiki.freecad.org/${WIKI_PAGE}"
     echo ""
 
@@ -859,29 +910,33 @@ wiki-update macro:
         echo "The wiki content is in your clipboard - ready to paste!"
     fi
 
-# Show the wiki source content for a macro (for review)
-wiki-show macro:
+# Show the wiki source content for a component (for review)
+wiki-show component:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    case "{{macro}}" in
+    case "{{component}}" in
+        workbench|bridge)
+            WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+            COMPONENT_NAME="Robust MCP Bridge Workbench"
+            ;;
         macro-magnets|magnets|cut)
             WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
-            MACRO_NAME="Cut Object for Magnets"
+            COMPONENT_NAME="Cut Object for Magnets"
             ;;
         macro-export|export|multi)
             WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
-            MACRO_NAME="Multi Export"
+            COMPONENT_NAME="Multi Export"
             ;;
         *)
-            echo "Unknown macro: {{macro}}"
-            echo "Valid options: macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            echo "Unknown component: {{component}}"
+            echo "Valid options: workbench (or bridge), macro-magnets (or magnets, cut), macro-export (or export, multi)"
             exit 1
             ;;
     esac
 
     echo "=========================================="
-    echo "Wiki Source: $MACRO_NAME"
+    echo "Wiki Source: $COMPONENT_NAME"
     echo "=========================================="
     echo "File: $WIKI_SOURCE"
     echo ""
@@ -898,31 +953,36 @@ wiki-show macro:
     cat "$WIKI_SOURCE"
 
 # Diff the local wiki source against the current wiki page (requires curl)
-wiki-diff macro:
+wiki-diff component:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    case "{{macro}}" in
+    case "{{component}}" in
+        workbench|bridge)
+            WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+            WIKI_PAGE="Robust_MCP_Bridge_Workbench"
+            COMPONENT_NAME="Robust MCP Bridge Workbench"
+            ;;
         macro-magnets|magnets|cut)
             WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
             WIKI_PAGE="Macro_Cut_Object_for_Magnets"
-            MACRO_NAME="Cut Object for Magnets"
+            COMPONENT_NAME="Cut Object for Magnets"
             ;;
         macro-export|export|multi)
             WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
             WIKI_PAGE="Macro_Multi_Export"
-            MACRO_NAME="Multi Export"
+            COMPONENT_NAME="Multi Export"
             ;;
         *)
-            echo "Unknown macro: {{macro}}"
-            echo "Valid options: macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            echo "Unknown component: {{component}}"
+            echo "Valid options: workbench (or bridge), macro-magnets (or magnets, cut), macro-export (or export, multi)"
             exit 1
             ;;
     esac
 
     WIKI_RAW_URL="https://wiki.freecad.org/index.php?title=${WIKI_PAGE}&action=raw"
 
-    echo "Fetching current wiki content for $MACRO_NAME..."
+    echo "Fetching current wiki content for $COMPONENT_NAME..."
     echo ""
 
     # Create temp file for wiki content
@@ -945,7 +1005,7 @@ wiki-diff macro:
         echo "=========================================="
         head -20 "$WIKI_SOURCE"
         echo "..."
-        echo "(truncated - run 'just release::wiki-show {{macro}}' to see full content)"
+        echo "(truncated - run 'just release::wiki-show {{component}}' to see full content)"
         exit 0
     fi
 
@@ -959,5 +1019,5 @@ wiki-diff macro:
         echo ""
         echo "=========================================="
         echo "Differences found (above)"
-        echo "Run 'just release::wiki-update {{macro}}' to update the wiki"
+        echo "Run 'just release::wiki-update {{component}}' to update the wiki"
     fi

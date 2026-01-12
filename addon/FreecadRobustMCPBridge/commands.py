@@ -133,7 +133,7 @@ class StartMCPBridgeCommand:
             _running_config = None
             FreeCAD.Console.PrintError(f"Failed to import MCP Bridge module: {e}\n")
             FreeCAD.Console.PrintError(
-                "Ensure the FreecadRobustMCP addon is properly installed.\n"
+                "Ensure the FreecadRobustMCPBridge addon is properly installed.\n"
             )
             try:
                 from preferences import get_status_bar_enabled
@@ -333,7 +333,7 @@ class MCPBridgePreferencesCommand:
     def GetResources(self) -> dict[str, str]:
         """Return the command resources (icon, menu text, tooltip)."""
         return {
-            "Pixmap": get_icon_path("icons/mcp_preferences.svg"),
+            "Pixmap": get_icon_path("icons/preferences-robust_mcp_bridge.svg"),
             "MenuText": "MCP Bridge Preferences...",
             "ToolTip": "Configure MCP Bridge settings (ports, auto-start, etc.)",
         }
@@ -344,6 +344,11 @@ class MCPBridgePreferencesCommand:
 
     def Activated(self) -> None:
         """Execute the command to show preferences dialog."""
+        if not FreeCAD.GuiUp:
+            FreeCAD.Console.PrintError(
+                "MCP Bridge Preferences requires FreeCAD GUI mode.\n"
+            )
+            return
         # Import here to avoid issues during module loading
         import FreeCADGui
         from preferences import (

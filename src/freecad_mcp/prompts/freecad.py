@@ -1,4 +1,4 @@
-"""FreeCAD MCP prompts for common CAD tasks.
+"""FreeCAD Robust MCP prompts for common CAD tasks.
 
 This module provides reusable prompt templates that help Claude
 understand FreeCAD concepts and guide users through complex tasks.
@@ -655,12 +655,12 @@ p.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 45)
 
     @mcp.prompt()
     async def troubleshooting() -> str:
-        """General troubleshooting guide for FreeCAD MCP.
+        """General troubleshooting guide for FreeCAD Robust MCP.
 
         Returns:
             Troubleshooting guidance.
         """
-        return """# FreeCAD MCP Troubleshooting Guide
+        return """# FreeCAD Robust MCP Troubleshooting Guide
 
 ## Connection Issues
 

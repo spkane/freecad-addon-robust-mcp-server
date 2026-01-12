@@ -318,7 +318,7 @@ Examples:
   FREECAD_SOCKET_HOST=192.168.1.100 freecad-mcp
 
 Prerequisites:
-  The FreeCAD MCP Bridge must be running before starting this server.
+  The FreeCAD Robust MCP Bridge must be running before starting this server.
   Start it via:
     - FreeCAD GUI: Install Robust MCP Bridge workbench, enable auto-start
     - Headless: just freecad::run-headless
@@ -411,9 +411,9 @@ def main() -> None:
     # Set up logging
     logging.getLogger().setLevel(config.log_level)
 
-    # Print instance ID to stdout for test automation to capture
-    # This is printed before logging to ensure it's easily parseable
-    print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stdout, flush=True)
+    # Print instance ID to stderr for test automation to capture
+    # Must use stderr because stdout is reserved for JSON-RPC in stdio mode
+    print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stderr, flush=True)
 
     logger.info("Starting FreeCAD Robust MCP Server")
     logger.info("Instance ID: %s", INSTANCE_ID)

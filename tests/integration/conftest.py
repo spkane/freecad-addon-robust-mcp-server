@@ -1,11 +1,11 @@
 """Pytest configuration for integration tests.
 
 This module handles connection checking and provides hard error behavior
-when the FreeCAD MCP bridge is not available. Connection failures are
+when the FreeCAD Robust MCP Bridge is not available. Connection failures are
 treated as test errors, not skips.
 
 Instance ID Verification:
-    The FreeCAD MCP bridge generates a unique instance ID at startup which is
+    The FreeCAD Robust MCP Bridge generates a unique instance ID at startup which is
     printed to stdout. Tests can capture this ID and verify they're connected
     to the expected instance using the `bridge_instance_id` fixture or by
     calling proxy.get_instance_id().
@@ -28,7 +28,7 @@ _connection_checked: bool = False
 
 
 def _check_bridge_connection() -> tuple[bool, str | None, str | None]:
-    """Check if the FreeCAD MCP bridge is available and get its instance ID.
+    """Check if the FreeCAD Robust MCP Bridge is available and get its instance ID.
 
     Returns:
         Tuple of (is_available, error_message, instance_id)
@@ -65,17 +65,17 @@ _result_ = {"gui_up": bool(FreeCAD.GuiUp)}
                 _gui_available = False
         else:
             _bridge_available = False
-            _bridge_error = "FreeCAD MCP bridge not responding to ping"
+            _bridge_error = "FreeCAD Robust MCP Bridge not responding to ping"
             _bridge_instance_id = None
             _gui_available = None
     except ConnectionRefusedError:
         _bridge_available = False
-        _bridge_error = "Connection refused - FreeCAD MCP bridge not running"
+        _bridge_error = "Connection refused - FreeCAD Robust MCP Bridge not running"
         _bridge_instance_id = None
         _gui_available = None
     except Exception as e:
         _bridge_available = False
-        _bridge_error = f"Cannot connect to FreeCAD MCP bridge: {e}"
+        _bridge_error = f"Cannot connect to FreeCAD Robust MCP Bridge: {e}"
         _bridge_instance_id = None
         _gui_available = None
 
@@ -182,7 +182,7 @@ def pytest_collection_modifyitems(
         _connection_checked = True
         pytest.fail(
             f"\n\n{'=' * 60}\n"
-            f"INTEGRATION TEST ERROR: FreeCAD MCP bridge not available\n"
+            f"INTEGRATION TEST ERROR: FreeCAD Robust MCP Bridge not available\n"
             f"{'=' * 60}\n\n"
             f"Error: {error}\n\n"
             f"To run integration tests, start FreeCAD with the MCP bridge:\n"
@@ -209,7 +209,7 @@ def pytest_terminal_summary(
         return
 
     # Build the summary message
-    terminalreporter.write_sep("=", "FreeCAD MCP Bridge Status")
+    terminalreporter.write_sep("=", "FreeCAD Robust MCP Bridge Status")
 
     if _bridge_available:
         mode = "GUI" if _gui_available else "Headless"
@@ -227,21 +227,21 @@ def pytest_terminal_summary(
 
 @pytest.fixture(scope="module")
 def xmlrpc_proxy() -> xmlrpc.client.ServerProxy:
-    """Create XML-RPC proxy to FreeCAD MCP bridge.
+    """Create XML-RPC proxy to FreeCAD Robust MCP Bridge.
 
     This fixture is shared across all integration test modules.
     The connection check has already been performed during collection.
     """
     is_available, error, _ = _check_bridge_connection()
     if not is_available:
-        pytest.skip(error or "FreeCAD MCP bridge not available")
+        pytest.skip(error or "FreeCAD Robust MCP Bridge not available")
 
     return xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
 
 
 @pytest.fixture(scope="module")
 def bridge_instance_id() -> str | None:
-    """Get the instance ID of the connected FreeCAD MCP bridge.
+    """Get the instance ID of the connected FreeCAD Robust MCP Bridge.
 
     This fixture returns the unique instance ID that was generated when
     the bridge started. Use this to verify you're connected to the expected

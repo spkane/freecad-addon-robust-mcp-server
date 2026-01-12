@@ -28,6 +28,13 @@ class TestTestingSyntax:
         "testing::all",
         "testing::watch",
         "testing::integration-freecad-auto",
+        "testing::just-syntax",
+        "testing::just-runtime",
+        "testing::just-all",
+        "testing::just-release",
+        "testing::release-test",
+        "testing::integration-headless-release",
+        "testing::integration-gui-release",
         "testing::kill-bridge",
     ]
 

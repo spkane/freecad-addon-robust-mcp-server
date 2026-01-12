@@ -1,4 +1,4 @@
-"""Integration tests for FreeCAD MCP bridge functionality.
+"""Integration tests for FreeCAD Robust MCP Bridge functionality.
 
 These tests verify that the MCP bridge works correctly with FreeCAD, including
 object creation, manipulation, and export functionality. Most tests work in

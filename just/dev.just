@@ -62,7 +62,7 @@ clean:
 
 # Open Python REPL with project modules available
 repl:
-    cd {{project_root}} && uv run python -c "import freecad_mcp; print('FreeCAD MCP loaded')" && uv run python
+    cd {{project_root}} && uv run python -c "import freecad_mcp; print('FreeCAD Robust MCP loaded')" && uv run python
 
 # Show project structure (tree view, requires 'tree' command)
 tree:

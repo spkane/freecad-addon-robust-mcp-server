@@ -223,10 +223,10 @@ ls -la /tmp/screenshot.png /tmp/gui_test.FCStd 2>/dev/null || echo "Files not cr
 
 echo ""
 echo "=== Test 5: Start FreeCAD GUI with MCP bridge ==="
-if [ -f "/workspace/addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py" ]; then
+if [ -f "/workspace/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py" ]; then
     echo "Starting FreeCAD with MCP bridge..."
 
-    freecad /workspace/addon/FreecadRobustMCP/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
+    freecad /workspace/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
     FREECAD_PID=$!
     echo "FreeCAD PID: $FREECAD_PID"
 

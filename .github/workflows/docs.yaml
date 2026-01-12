@@ -1,0 +1,125 @@
+# Documentation deployment workflow
+# Deploys MkDocs documentation to GitHub Pages with versioning via mike
+#
+# Deployment strategy:
+# - Push to main: Deploys as "latest" (always the current main branch docs)
+# - MCP server release tag: Deploys versioned docs (e.g., "1.0.0") as permanent snapshots
+#
+# The "latest" alias always points to the main branch documentation.
+# Tagged releases get permanent versioned documentation (e.g., "1.0.0", "1.1.0").
+# Users can switch between versions using the version selector in the docs.
+
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yaml"
+      - "src/**"
+      - ".github/workflows/docs.yaml"
+    tags:
+      # Deploy versioned docs when MCP server is released
+      - "robust-mcp-server-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to deploy (e.g., 1.0.0, dev)"
+        required: false
+        default: "dev"
+      set_latest:
+        description: "Set this version as 'latest' alias"
+        required: false
+        default: false
+        type: boolean
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: write
+  pages: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git-revision-date plugin
+
+      - name: Configure Git for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --all-extras --frozen
+
+      - name: Determine version to deploy
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual dispatch - use provided version
+            VERSION="${{ github.event.inputs.version }}"
+            SET_LATEST="${{ github.event.inputs.set_latest }}"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # Tag push - extract version from tag
+            # robust-mcp-server-v1.0.0 -> 1.0.0
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#robust-mcp-server-v}"
+            # Tagged releases never set latest (main branch is always latest)
+            SET_LATEST="false"
+          else
+            # Push to main - deploy as "latest"
+            VERSION="latest"
+            SET_LATEST="true"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "set_latest=${SET_LATEST}" >> "$GITHUB_OUTPUT"
+          echo "Deploying version: ${VERSION} (set_latest: ${SET_LATEST})"
+
+      - name: Deploy latest documentation (main branch)
+        if: steps.version.outputs.version == 'latest'
+        run: |
+          # Deploy main branch docs as "latest" and set as default
+          # Run deploy without --push, then set-default with --push for single git push
+          uv run mike deploy --update-aliases latest
+          uv run mike set-default --push latest
+
+      - name: Deploy versioned documentation (tagged release)
+        if: steps.version.outputs.version != 'latest'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SET_LATEST="${{ steps.version.outputs.set_latest }}"
+
+          if [[ "$SET_LATEST" == "true" ]]; then
+            # Manual dispatch requested setting as latest
+            # Run deploy without --push, then set-default with --push for single git push
+            uv run mike deploy --update-aliases "$VERSION" latest
+            uv run mike set-default --push latest
+          else
+            # Deploy version only (tagged releases don't update latest)
+            uv run mike deploy --push "$VERSION"
+          fi
+
+      - name: List deployed versions
+        run: uv run mike list

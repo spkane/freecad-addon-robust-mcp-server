@@ -3,7 +3,7 @@
 #
 # This configuration extends the default rules with project-specific settings.
 
-title = "FreeCAD MCP Gitleaks Configuration"
+title = "FreeCAD Robust MCP Gitleaks Configuration"
 
 [extend]
 # Extend the default gitleaks configuration

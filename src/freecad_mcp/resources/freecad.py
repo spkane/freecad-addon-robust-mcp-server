@@ -1,4 +1,4 @@
-"""FreeCAD MCP resources for exposing FreeCAD state.
+"""FreeCAD Robust MCP resources for exposing FreeCAD state.
 
 This module provides MCP resources that expose FreeCAD's current state
 as read-only data. Resources are URI-addressable data that Claude can
@@ -836,7 +836,7 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
             "prompts": [
                 {
                     "name": "freecad-help",
-                    "description": "Get help on FreeCAD MCP capabilities",
+                    "description": "Get help on FreeCAD Robust MCP capabilities",
                 },
                 {
                     "name": "create-parametric-part",

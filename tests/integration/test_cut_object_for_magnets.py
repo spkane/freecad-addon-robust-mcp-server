@@ -12,7 +12,7 @@ Test Organization:
 - TestBooleanHoleFallback: Tests for the boolean hole creation method
 - TestEdgeCases: Edge case tests (single hole, many holes)
 
-Note: These tests require a running FreeCAD MCP bridge.
+Note: These tests require a running FreeCAD Robust MCP Bridge.
       Start it with: just freecad::run-gui or just freecad::run-headless
 
 Note: PartDesign::Hole has a CADKernelError bug in some FreeCAD headless

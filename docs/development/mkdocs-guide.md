@@ -338,7 +338,7 @@ Variables are defined in `docs/variables.yaml`:
 
 ```yaml
 # docs/variables.yaml
-project_name: FreeCAD Robust MCP Server
+project_name: FreeCAD Robust MCP Suite
 package_name: freecad-robust-mcp
 xmlrpc_port: 9875
 socket_port: 9876
@@ -355,7 +355,7 @@ Install with: `pip install {{@ package_name @}}`
 
 | Variable               | Value                     | Description         |
 | ---------------------- | ------------------------- | ------------------- |
-| `project_name`         | FreeCAD Robust MCP Server | Display name        |
+| `project_name`         | FreeCAD Robust MCP Suite  | Display name        |
 | `package_name`         | freecad-robust-mcp        | PyPI package name   |
 | `docker_image`         | spkane/freecad-robust-mcp | Docker image        |
 | `xmlrpc_port`          | 9875                      | XML-RPC server port |

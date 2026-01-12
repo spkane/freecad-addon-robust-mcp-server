@@ -26,6 +26,13 @@ This is a multi-component project. Each component has its own versioning and rel
 
 ### Robust MCP Bridge Workbench
 
+#### Fixed
+
+- Fixed GUI crashes during auto-start by deferring bridge initialization 2 seconds after `FreeCAD.GuiUp` becomes True
+- Increased GUI wait timeout from 3 seconds to 60 seconds to accommodate slow FreeCAD startups on macOS
+- Bridge no longer attempts to start on timeout (prevents crash from background thread usage)
+- `startup_bridge.py` now has same defensive GUI wait logic as `Init.py`
+
 ### Cut Object for Magnets Macro
 
 ### Multi Export Macro
