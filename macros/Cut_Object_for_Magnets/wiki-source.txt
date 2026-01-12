@@ -7,7 +7,7 @@
 |Icon=Macro_Cut_Object_For_Magnets.png
 |Description=Cut an object along a plane and add aligned magnet holes with surface collision detection. Creates two parts with perfectly aligned holes for embedding magnets that allow the parts to snap together.
 |Author=Sean P. Kane
-|Version=0.6.0
+|Version=0.6.1
 |Date=2026-01-12
 |FCVersion=0.19+
 |Download=[https://wiki.freecad.org/images/thumb/e/e3/Macro_Cut_Object_For_Magnets.png/48px-Macro_Cut_Object_For_Magnets.png ToolBar Icon]
