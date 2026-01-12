@@ -7,7 +7,7 @@
 |Icon=Macro_Multi_Export.png
 |Description=Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously with a user-friendly dialog for format selection and output configuration.
 |Author=Sean P. Kane
-|Version=0.6.0
+|Version=0.6.1
 |Date=2026-01-12
 |FCVersion=0.21+
 |Download=[https://wiki.freecad.org/images/thumb/1/19/Macro_Multi_Export.png/48px-Macro_Multi_Export.png ToolBar Icon]

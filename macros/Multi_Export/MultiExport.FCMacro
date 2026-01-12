@@ -22,7 +22,7 @@ Usage:
 __Name__ = "Multi Export"
 __Comment__ = "Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously"
 __Author__ = "Sean P. Kane"
-__Version__ = "0.6.0"
+__Version__ = "0.6.1"
 __Date__ = "2026-01-12"
 __License__ = "MIT"
 __Web__ = "https://github.com/spkane/freecad-robust-mcp-and-more"

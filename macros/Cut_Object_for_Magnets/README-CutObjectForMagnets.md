@@ -2,7 +2,7 @@
 
 ![Macro Icon](CutObjectForMagnets.svg)
 
-**Version:** 0.6.0
+**Version:** 0.6.1
 **FreeCAD Version:** 0.19 or later
 **License:** MIT
 
