@@ -208,19 +208,14 @@ bump-macro-export version: (_bump-macro "Multi_Export" "Multi Export" "MultiExpo
 tag-mcp-server version:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    # Source shared release helper functions
+    . "{{project_root}}/scripts/release-helpers.sh"
+
     TAG="robust-mcp-server-v{{version}}"
 
-    # Validate version format
-    if [[ ! "{{version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        echo "ERROR: Version '{{version}}' is not valid semver (X.Y.Z or X.Y.Z-prerelease)"
-        exit 1
-    fi
-
-    # Check for uncommitted changes
-    if ! git diff --quiet HEAD; then
-        echo "ERROR: You have uncommitted changes. Please commit or stash them first."
-        exit 1
-    fi
+    # Run all pre-release checks (version format, main branch, up-to-date, clean tree)
+    pre_release_checks "{{version}}" || exit 1
 
     echo "Creating tag: $TAG"
     echo ""
@@ -246,19 +241,15 @@ tag-mcp-server version:
 tag-workbench version:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    # Source shared release helper functions
+    . "{{project_root}}/scripts/release-helpers.sh"
+
     TAG="robust-mcp-workbench-v{{version}}"
     VERSION="{{version}}"
 
-    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        echo "ERROR: Version '$VERSION' is not valid semver"
-        exit 1
-    fi
-
-    # Check for uncommitted changes
-    if ! git diff --quiet HEAD; then
-        echo "ERROR: You have uncommitted changes. Please commit or stash them first."
-        exit 1
-    fi
+    # Run all pre-release checks (version format, main branch, up-to-date, clean tree)
+    pre_release_checks "$VERSION" || exit 1
 
     # Verify version in source files matches tag version
     echo "Verifying version in source files..."
@@ -332,22 +323,16 @@ _tag-macro macro_dir macro_name macro_file_basename tag_prefix bump_command tag_
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Source shared release helper functions
+    . "{{project_root}}/scripts/release-helpers.sh"
+
     VERSION="{{version}}"
     TAG="{{tag_prefix}}v{{version}}"
     MACRO_DIR="{{project_root}}/macros/{{macro_dir}}"
     MACRO_NAME="{{macro_name}}"
 
-    # Validate version format (SemVer 2.0)
-    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        echo "ERROR: Version '$VERSION' is not valid semver"
-        exit 1
-    fi
-
-    # Check for uncommitted changes
-    if ! git diff --quiet HEAD; then
-        echo "ERROR: You have uncommitted changes. Please commit or stash them first."
-        exit 1
-    fi
+    # Run all pre-release checks (version format, main branch, up-to-date, clean tree)
+    pre_release_checks "$VERSION" || exit 1
 
     # Verify version in source files matches tag version
     echo "Verifying version in source files..."
@@ -535,6 +520,365 @@ delete-tag tag:
 
     echo ""
     echo "Tag '{{tag}}' deleted."
+
+# Show information about a release (useful before rollback)
+show-release-info tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    TAG="{{tag}}"
+
+    echo "=========================================="
+    echo "Release Information: $TAG"
+    echo "=========================================="
+    echo ""
+
+    # Check if tag exists locally
+    if git tag -l "$TAG" | grep -qF "$TAG"; then
+        echo "Local tag: EXISTS"
+        COMMIT=$(git rev-parse "$TAG" 2>/dev/null)
+        echo "  Commit: $COMMIT"
+        echo "  Date:   $(git log -1 --format=%ai "$TAG")"
+        echo "  Author: $(git log -1 --format='%an <%ae>' "$TAG")"
+    else
+        echo "Local tag: NOT FOUND"
+    fi
+
+    # Check if tag exists on remote
+    if git ls-remote --tags origin | grep -qF "refs/tags/$TAG"; then
+        echo "Remote tag: EXISTS"
+    else
+        echo "Remote tag: NOT FOUND"
+    fi
+
+    echo ""
+
+    # Check which branches contain the tag
+    echo "Branches containing this tag:"
+    BRANCHES=$(git branch -a --contains "$TAG" 2>/dev/null || true)
+    if [ -n "$BRANCHES" ]; then
+        echo "$BRANCHES" | sed 's/^/  /'
+    else
+        echo "  (none or tag not found)"
+    fi
+
+    echo ""
+
+    # Check if GitHub Release exists
+    echo "GitHub Release:"
+    if command -v gh &> /dev/null; then
+        if gh release view "$TAG" --json tagName,name,isDraft,isPrerelease,createdAt &>/dev/null; then
+            gh release view "$TAG" --json tagName,name,isDraft,isPrerelease,createdAt | \
+                jq -r '"  Name: \(.name)\n  Draft: \(.isDraft)\n  Prerelease: \(.isPrerelease)\n  Created: \(.createdAt)"'
+            echo ""
+            echo "  Assets:"
+            gh release view "$TAG" --json assets | jq -r '.assets[].name' | sed 's/^/    - /'
+        else
+            echo "  NOT FOUND (no GitHub Release for this tag)"
+        fi
+    else
+        echo "  (gh CLI not installed - cannot check)"
+    fi
+
+    echo ""
+
+    # Determine component type and show additional info
+    case "$TAG" in
+        robust-mcp-server-v*)
+            VERSION="${TAG#robust-mcp-server-v}"
+            echo "Component: Robust MCP Server"
+            echo "Version:   $VERSION"
+            echo ""
+            echo "Published to:"
+            echo "  - PyPI: https://pypi.org/project/freecad-robust-mcp/$VERSION/"
+            echo "  - Docker Hub: spkane/freecad-robust-mcp:$VERSION"
+            echo ""
+            echo "NOTE: PyPI packages cannot be fully deleted, only yanked."
+            echo "      Docker tags can be deleted from Docker Hub."
+            ;;
+        robust-mcp-workbench-v*)
+            VERSION="${TAG#robust-mcp-workbench-v}"
+            echo "Component: Robust MCP Bridge Workbench"
+            echo "Version:   $VERSION"
+            ;;
+        macro-cut-object-for-magnets-v*)
+            VERSION="${TAG#macro-cut-object-for-magnets-v}"
+            echo "Component: Cut Object for Magnets Macro"
+            echo "Version:   $VERSION"
+            ;;
+        macro-multi-export-v*)
+            VERSION="${TAG#macro-multi-export-v}"
+            echo "Component: Multi Export Macro"
+            echo "Version:   $VERSION"
+            ;;
+        *)
+            echo "Component: Unknown (not a recognized release tag format)"
+            ;;
+    esac
+
+# Rollback a release (delete tag and GitHub Release)
+rollback-release tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    TAG="{{tag}}"
+
+    echo "=========================================="
+    echo "ROLLBACK RELEASE: $TAG"
+    echo "=========================================="
+    echo ""
+
+    # Determine component type and version
+    COMPONENT=""
+    VERSION=""
+    case "$TAG" in
+        robust-mcp-server-v*)
+            COMPONENT="mcp-server"
+            VERSION="${TAG#robust-mcp-server-v}"
+            ;;
+        robust-mcp-workbench-v*)
+            COMPONENT="workbench"
+            VERSION="${TAG#robust-mcp-workbench-v}"
+            ;;
+        macro-cut-object-for-magnets-v*)
+            COMPONENT="macro-magnets"
+            VERSION="${TAG#macro-cut-object-for-magnets-v}"
+            ;;
+        macro-multi-export-v*)
+            COMPONENT="macro-export"
+            VERSION="${TAG#macro-multi-export-v}"
+            ;;
+        *)
+            COMPONENT="unknown"
+            ;;
+    esac
+
+    # Show what will be affected
+    echo "This will:"
+    echo "  1. Delete the GitHub Release (if exists)"
+    echo "  2. Delete the git tag (local and remote)"
+    if [ "$COMPONENT" = "mcp-server" ]; then
+        echo "  3. Optionally yank from PyPI"
+        echo "  4. Provide Docker Hub cleanup instructions"
+    fi
+    echo ""
+
+    # Check what exists
+    LOCAL_TAG_EXISTS=false
+    REMOTE_TAG_EXISTS=false
+    GH_RELEASE_EXISTS=false
+
+    if git tag -l "$TAG" | grep -qF "$TAG"; then
+        LOCAL_TAG_EXISTS=true
+        echo "  Local tag:      WILL BE DELETED"
+    else
+        echo "  Local tag:      not found (already deleted?)"
+    fi
+
+    if git ls-remote --tags origin | grep -qF "refs/tags/$TAG"; then
+        REMOTE_TAG_EXISTS=true
+        echo "  Remote tag:     WILL BE DELETED"
+    else
+        echo "  Remote tag:     not found (already deleted?)"
+    fi
+
+    if command -v gh &> /dev/null; then
+        if gh release view "$TAG" &>/dev/null; then
+            GH_RELEASE_EXISTS=true
+            echo "  GitHub Release: WILL BE DELETED"
+        else
+            echo "  GitHub Release: not found (already deleted?)"
+        fi
+    else
+        echo "  GitHub Release: (gh CLI not installed - cannot check/delete)"
+    fi
+
+    echo ""
+
+    # Component-specific info
+    case "$COMPONENT" in
+        mcp-server)
+            echo "Component: Robust MCP Server v$VERSION"
+            echo ""
+            echo "IMPORTANT: MCP Server releases publish to multiple registries:"
+            echo "  - PyPI: Package cannot be deleted, only yanked (hidden from pip install)"
+            echo "  - Docker Hub: Tags can be deleted via web UI or API"
+            echo ""
+            ;;
+        workbench)
+            echo "Component: Robust MCP Bridge Workbench v$VERSION"
+            echo ""
+            echo "This release only creates a GitHub Release with archive files."
+            echo "Rollback will fully clean up this release."
+            echo ""
+            ;;
+        macro-magnets)
+            echo "Component: Cut Object for Magnets Macro v$VERSION"
+            echo ""
+            echo "This release only creates a GitHub Release with archive files."
+            echo "Rollback will fully clean up this release."
+            echo ""
+            ;;
+        macro-export)
+            echo "Component: Multi Export Macro v$VERSION"
+            echo ""
+            echo "This release only creates a GitHub Release with archive files."
+            echo "Rollback will fully clean up this release."
+            echo ""
+            ;;
+        *)
+            echo "WARNING: Unrecognized tag format. Proceeding with generic rollback."
+            echo ""
+            ;;
+    esac
+
+    # Nothing to do?
+    if [ "$LOCAL_TAG_EXISTS" = false ] && [ "$REMOTE_TAG_EXISTS" = false ] && [ "$GH_RELEASE_EXISTS" = false ]; then
+        echo "Nothing to rollback - tag and release not found."
+        exit 0
+    fi
+
+    read -p "Proceed with rollback? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    echo ""
+
+    # Delete GitHub Release first (before tag, since release references tag)
+    if [ "$GH_RELEASE_EXISTS" = true ]; then
+        echo "Deleting GitHub Release..."
+        if gh release delete "$TAG" --yes; then
+            echo "  ✓ GitHub Release deleted."
+        else
+            echo "  WARNING: Failed to delete GitHub Release."
+        fi
+    fi
+
+    # Delete remote tag
+    if [ "$REMOTE_TAG_EXISTS" = true ]; then
+        echo "Deleting remote tag..."
+        if git push origin --delete "$TAG"; then
+            echo "  ✓ Remote tag deleted."
+        else
+            echo "  WARNING: Failed to delete remote tag."
+        fi
+    fi
+
+    # Delete local tag
+    if [ "$LOCAL_TAG_EXISTS" = true ]; then
+        echo "Deleting local tag..."
+        if git tag -d "$TAG"; then
+            echo "  ✓ Local tag deleted."
+        else
+            echo "  WARNING: Failed to delete local tag."
+        fi
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "Git/GitHub Rollback complete!"
+    echo "=========================================="
+
+    # MCP Server: Offer to yank from PyPI and provide Docker cleanup info
+    if [ "$COMPONENT" = "mcp-server" ]; then
+        echo ""
+        echo "--- PyPI Cleanup ---"
+        echo ""
+        echo "Would you like to yank version $VERSION from PyPI?"
+        echo "  - Yanking hides the version from 'pip install freecad-robust-mcp'"
+        echo "  - Users who pin to this version can still install it"
+        echo "  - This can be undone later with 'twine yank --undo'"
+        echo ""
+        read -p "Yank from PyPI? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo ""
+            echo "Attempting to yank from PyPI..."
+            echo "(This requires PyPI authentication - you may be prompted to login)"
+            echo ""
+            if command -v twine &> /dev/null || uv run twine --version &>/dev/null; then
+                if uv run twine yank freecad-robust-mcp "$VERSION" 2>&1; then
+                    echo "  ✓ Version $VERSION yanked from PyPI."
+                else
+                    echo ""
+                    echo "  Yank failed. You can try manually:"
+                    echo "    uv run twine yank freecad-robust-mcp $VERSION"
+                    echo ""
+                    echo "  Or use the PyPI web interface:"
+                    echo "    https://pypi.org/manage/project/freecad-robust-mcp/release/$VERSION/"
+                fi
+            else
+                echo "  twine not available. Install with: uv add twine"
+                echo ""
+                echo "  Or use the PyPI web interface:"
+                echo "    https://pypi.org/manage/project/freecad-robust-mcp/release/$VERSION/"
+            fi
+        else
+            echo ""
+            echo "Skipped PyPI yank. You can do this later with:"
+            echo "  uv run twine yank freecad-robust-mcp $VERSION"
+            echo ""
+            echo "Or via web interface:"
+            echo "  https://pypi.org/manage/project/freecad-robust-mcp/release/$VERSION/"
+        fi
+
+        echo ""
+        echo "--- Docker Hub Cleanup ---"
+        echo ""
+        echo "Docker Hub tags must be deleted manually."
+        echo "Tags to delete: $VERSION, latest (if this was the latest release)"
+        echo ""
+        echo "Web interface:"
+        echo "  https://hub.docker.com/r/spkane/freecad-robust-mcp/tags"
+        echo ""
+        echo "Or via API (requires DOCKER_HUB_TOKEN):"
+        echo "  curl -X DELETE -H \"Authorization: Bearer \$DOCKER_HUB_TOKEN\" \\"
+        echo "    https://hub.docker.com/v2/repositories/spkane/freecad-robust-mcp/tags/$VERSION/"
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "Rollback process complete!"
+    echo "=========================================="
+
+# Delete only the GitHub Release (keep tag)
+delete-github-release tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    TAG="{{tag}}"
+
+    if ! command -v gh &> /dev/null; then
+        echo "ERROR: gh CLI is required but not installed."
+        echo "Install: https://cli.github.com/"
+        exit 1
+    fi
+
+    if ! gh release view "$TAG" &>/dev/null; then
+        echo "No GitHub Release found for tag: $TAG"
+        exit 0
+    fi
+
+    echo "This will delete the GitHub Release for: $TAG"
+    echo "(The git tag will be preserved)"
+    echo ""
+
+    gh release view "$TAG" --json name,createdAt,assets | \
+        jq -r '"Release: \(.name)\nCreated: \(.createdAt)\nAssets: \(.assets | length)"'
+
+    echo ""
+    read -p "Delete this release? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    gh release delete "$TAG" --yes
+    echo "GitHub Release deleted. Tag '$TAG' preserved."
 
 # =============================================================================
 # Release Status
