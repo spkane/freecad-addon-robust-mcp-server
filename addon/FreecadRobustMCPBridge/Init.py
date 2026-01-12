@@ -52,7 +52,6 @@ def _auto_start_bridge() -> None:
         )
 
         # Import and start the bridge directly
-        import commands
         from freecad_mcp_bridge.server import FreecadMCPPlugin
         from preferences import get_socket_port, get_xmlrpc_port
 
@@ -71,9 +70,6 @@ def _auto_start_bridge() -> None:
         from freecad_mcp_bridge.bridge_utils import register_mcp_plugin
 
         register_mcp_plugin(plugin, xmlrpc_port, socket_port)
-
-        # Also set on commands directly for backward compatibility
-        commands._mcp_plugin = plugin
 
         FreeCAD.Console.PrintMessage("\n")
         FreeCAD.Console.PrintMessage("=" * 50 + "\n")
