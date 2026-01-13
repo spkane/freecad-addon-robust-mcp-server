@@ -227,6 +227,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup FreeCAD for integration test
+        uses: ./.github/actions/setup-freecad
+
+      - name: Install uv for bridge startup
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Install project dependencies
+        run: |
+          uv python install 3.11
+          uv sync --all-extras
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -267,15 +280,55 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Test pushed image
+      - name: Start FreeCAD headless with MCP bridge
         run: |
+          # Start FreeCAD headless with MCP bridge in background
+          setsid freecadcmd addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
+          FREECAD_PID=$!
+          echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
+
+          # Wait for bridge to be ready
+          echo "Waiting for FreeCAD MCP bridge to start..."
+          MAX_RETRIES=60
+          for i in $(seq 1 $MAX_RETRIES); do
+              if curl -s --connect-timeout 1 http://localhost:9875 > /dev/null 2>&1; then
+                  # Try to ping the bridge
+                  if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+                      echo "FreeCAD MCP bridge is ready!"
+                      break
+                  fi
+              fi
+              if [ "$i" -eq "$MAX_RETRIES" ]; then
+                  echo "ERROR: FreeCAD MCP bridge did not start"
+                  cat /tmp/freecad_bridge.log || true
+                  kill "$FREECAD_PID" 2>/dev/null || true
+                  exit 1
+              fi
+              sleep 1
+          done
+
+      - name: Test pushed image with MCP communication
+        run: |
+          # Pull the image to verify it was pushed successfully
           docker pull ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }}
+
+          # Test MCP communication with actual FreeCAD backend
+          # Use --network=host so container can reach localhost:9875 where FreeCAD bridge is running
           echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \
             timeout 30 docker run --rm -i \
+              --network=host \
               -e FREECAD_MODE=xmlrpc \
+              -e FREECAD_SOCKET_HOST=localhost \
               ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }} 2>&1 | \
             grep -q '"result"'
-          echo "Container test passed"
+          echo "Container MCP communication test passed"
+
+      - name: Stop FreeCAD
+        if: always()
+        run: |
+          if [ -n "$FREECAD_PID" ]; then
+              kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
+          fi
 
   create-github-release:
     name: Create GitHub Release
