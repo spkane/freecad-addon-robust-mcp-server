@@ -102,7 +102,7 @@ Homepage = "https://github.com/spkane/freecad-robust-mcp-and-more"
 Documentation = "https://github.com/spkane/freecad-robust-mcp-and-more#readme"
 Repository = "https://github.com/spkane/freecad-robust-mcp-and-more.git"
 Issues = "https://github.com/spkane/freecad-robust-mcp-and-more/issues"
-Changelog = "https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/CHANGELOG.md"
+"Release Notes" = "https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/src/freecad_mcp/RELEASE_NOTES.md"
 "Docker Hub" = "https://hub.docker.com/r/spkane/freecad-robust-mcp"
 
 [tool.hatch.version]

@@ -222,7 +222,7 @@ jobs:
           echo "Created archives:"
           ls -la "${ARCHIVE_NAME}-${VERSION}."*
 
-      - name: Extract changelog section
+      - name: Extract release notes section
         id: changelog
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -233,19 +233,18 @@ jobs:
           README_FILE: ${{ inputs.readme_file }}
           WIKI_URL: ${{ inputs.wiki_url }}
         run: |
-          # Match header exactly as it appears in CHANGELOG.md
-          HEADER="### ${MACRO_NAME} Macro v${VERSION}"
+          RELEASE_NOTES="macros/${MACRO_DIR}/RELEASE_NOTES.md"
 
-          # Extract section between this version header and the next component header or separator
-          # Only exit on: "---" separator OR "### " followed by component name (capital letter)
-          # This allows #### Added, #### Changed, etc. to be included
-          CHANGELOG_CONTENT=$(awk -v header="$HEADER" '
+          # Extract section for this version from RELEASE_NOTES.md
+          # Format: ## Version X.Y.Z (date)
+          CHANGELOG_CONTENT=$(awk -v version="$VERSION" '
               BEGIN { found=0 }
-              $0 == header || $0 == header " " { found=1; next }
-              found && /^---$/ { exit }
-              found && /^### [A-Z]/ { exit }
+              /^## Version / {
+                  if (found) exit
+                  if (index($0, version) > 0) { found=1; next }
+              }
               found { print }
-          ' CHANGELOG.md)
+          ' "$RELEASE_NOTES" 2>/dev/null || echo "")
 
           # Build release body
           cat > release_body.md << EOF

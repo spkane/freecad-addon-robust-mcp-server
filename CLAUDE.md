@@ -800,7 +800,6 @@ project-root/
 ├── .pre-commit-config.yaml   # Pre-commit hook configuration
 ├── .safety-policy.yml        # Safety CLI scan policy
 ├── .secrets.baseline         # detect-secrets baseline
-├── CHANGELOG.md              # Project changelog
 ├── CLAUDE.md                 # This file (AI assistant guidelines)
 ├── Dockerfile                # Docker image definition
 ├── justfile                  # Main task runner (imports modules)
@@ -1375,11 +1374,20 @@ This project uses **component-specific versioning**. Each component has its own 
 
 *Stable releases (`X.Y.Z`) publish to PyPI; non-stable releases (alpha, beta, rc) publish to TestPyPI only.
 
-### Changelog Management
+### Release Notes Management
 
-The project uses a single `CHANGELOG.md` with sections for each component. Before releasing:
+Each component has its own `RELEASE_NOTES.md` file. Release workflows automatically extract the relevant section for GitHub Releases.
 
-1. **Draft release notes** from conventional commits:
+| Component                    | Release Notes File                                    |
+| ---------------------------- | ----------------------------------------------------- |
+| MCP Server                   | `src/freecad_mcp/RELEASE_NOTES.md`                    |
+| Robust MCP Bridge Workbench  | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md`       |
+| Cut Object for Magnets Macro | `macros/Cut_Object_for_Magnets/RELEASE_NOTES.md`      |
+| Multi Export Macro           | `macros/Multi_Export/RELEASE_NOTES.md`                |
+
+**Before releasing a component:**
+
+1. **Draft release notes** from git commits since the last release:
 
    ```bash
    just release::draft-notes mcp-server
@@ -1388,36 +1396,61 @@ The project uses a single `CHANGELOG.md` with sections for each component. Befor
    just release::draft-notes macro-export
    ```
 
-2. **Update CHANGELOG.md** with entries under the appropriate component header:
+2. **Edit the component's RELEASE_NOTES.md** file, adding a new version section at the top:
 
    ```markdown
-   ## YYYY-MM-DD
+   ## Version X.Y.Z (YYYY-MM-DD)
 
-   ### MCP Server vX.Y.Z
+   Release notes for changes between vA.B.C and vX.Y.Z.
 
-   #### Added
-   - New feature
+   ### Added
 
-   ---
+   - New feature description
 
-   ### Robust MCP Bridge Workbench vX.Y.Z
-   ...
+   ### Changed
+
+   - Change description
+
+   ### Fixed
+
+   - Bug fix description
    ```
 
-3. The release workflow automatically extracts the changelog section for GitHub Releases.
+3. The release workflow automatically extracts the version section for GitHub Releases.
 
 ### Creating a Release
 
-Use the `just release::` commands to create and push release tags:
+**Step 1: Run release tests** to ensure everything passes:
 
 ```bash
-# Check what has unreleased changes
-just release::status
+just testing::release-test
+```
 
-# Preview changes since last release
-just release::changes-since mcp-server
-just release::changes-since workbench
+This runs unit tests, integration tests (headless + GUI), Docker tests, and just command tests. All must pass before proceeding.
 
+**Step 2: Update release notes** for each component you're releasing:
+
+```bash
+# Generate draft notes from git commits
+just release::draft-notes mcp-server
+
+# Edit the RELEASE_NOTES.md file (add version section at top)
+# See "Release Notes Management" above for format
+```
+
+**Step 3: Bump versions** (for workbench/macros only - MCP server auto-bumps from tag):
+
+```bash
+just release::bump-workbench 1.0.0
+just release::bump-macro-magnets 1.0.0
+just release::bump-macro-export 1.0.0
+```
+
+**Step 4: Commit and push** your RELEASE_NOTES.md and version bump changes.
+
+**Step 5: Create release tags** (this triggers the release workflows):
+
+```bash
 # Release the MCP server (triggers PyPI, Docker, GitHub release)
 just release::tag-mcp-server 1.0.0
 
@@ -1427,10 +1460,23 @@ just release::tag-workbench 1.0.0
 # Release macros
 just release::tag-macro-magnets 1.0.0
 just release::tag-macro-export 1.0.0
+```
+
+**Utility commands:**
+
+```bash
+# Check what has unreleased changes
+just release::status
+
+# Preview changes since last release
+just release::changes-since mcp-server
 
 # View release tags
 just release::list-tags
 just release::latest-versions
+
+# Extract changelog for a version (for testing)
+just release::extract-changelog mcp-server 1.0.0
 ```
 
 ### Version Format
@@ -1485,14 +1531,24 @@ Each component can have a different version, and the release workflows automatic
 
 ---
 
-## Changelog Maintenance
+## Release Notes Maintenance
 
-**IMPORTANT**: Update `CHANGELOG.md` at the end of any session where files in the repository are modified.
+Each component has its own `RELEASE_NOTES.md` file that is updated before releases. Release workflows automatically extract the relevant version section for GitHub Releases.
 
-- Follow [Keep a Changelog](https://keepachangelog.com/) format
-- Group changes under: Added, Changed, Deprecated, Removed, Fixed, Security
-- Include date for each release version
-- Document all significant changes, not just code changes
+**When preparing a release:**
+
+1. Use `just release::draft-notes <component>` to generate draft notes from commits
+2. Edit the component's `RELEASE_NOTES.md` file, adding a new version section at the top
+3. Follow the format: `## Version X.Y.Z (YYYY-MM-DD)` with `### Added`, `### Changed`, `### Fixed` sections
+
+**Release notes files:**
+
+| Component                    | File                                             |
+| ---------------------------- | ------------------------------------------------ |
+| MCP Server                   | `src/freecad_mcp/RELEASE_NOTES.md`               |
+| Robust MCP Bridge Workbench  | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md`  |
+| Cut Object for Magnets Macro | `macros/Cut_Object_for_Magnets/RELEASE_NOTES.md` |
+| Multi Export Macro           | `macros/Multi_Export/RELEASE_NOTES.md`           |
 
 ---
 
@@ -1707,4 +1763,4 @@ When working on this project, ALWAYS:
 - [ ] Run `just all` before finishing - everything must pass
 - [ ] Use latest stable library versions
 - [ ] Follow security best practices
-- [ ] Update `CHANGELOG.md` with session changes
+- [ ] Update component `RELEASE_NOTES.md` files before releases

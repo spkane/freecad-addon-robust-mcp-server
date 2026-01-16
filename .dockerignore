@@ -95,5 +95,5 @@ justfile
 .codespell-ignore-words.txt
 mkdocs.yml
 ARCHITECTURE-MCP.md
-CHANGELOG.md
 CLAUDE.md
+**/RELEASE_NOTES.md

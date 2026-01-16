@@ -347,23 +347,23 @@ jobs:
           name: python-package-distributions
           path: dist/
 
-      - name: Extract changelog section
+      - name: Extract release notes section
         id: changelog
         run: |
           VERSION="${{ needs.validate-tag.outputs.version }}"
-          # Match header exactly as it appears in CHANGELOG.md
-          HEADER="### Robust MCP Server v${VERSION}"
+          RELEASE_NOTES="src/freecad_mcp/RELEASE_NOTES.md"
 
-          # Extract section between this version header and the next component header or separator
-          # Only exit on: "---" separator OR "### " followed by component name (capital letter)
-          # This allows #### Added, #### Changed, etc. to be included
-          CHANGELOG_CONTENT=$(awk -v header="$HEADER" '
+          # Extract section for this version from RELEASE_NOTES.md
+          # Format: ## Version X.Y.Z (date)
+          # Extract everything between this version header and the next ## Version header
+          CHANGELOG_CONTENT=$(awk -v version="$VERSION" '
               BEGIN { found=0 }
-              $0 == header || $0 == header " " { found=1; next }
-              found && /^---$/ { exit }
-              found && /^### [A-Z]/ { exit }
+              /^## Version / {
+                  if (found) exit
+                  if (index($0, version) > 0) { found=1; next }
+              }
               found { print }
-          ' CHANGELOG.md)
+          ' "$RELEASE_NOTES")
 
           # Write to file for the release body (handles multiline)
           echo "$CHANGELOG_CONTENT" > changelog_section.md
@@ -371,10 +371,10 @@ jobs:
           # Check if we got content
           if [ -n "$CHANGELOG_CONTENT" ]; then
               echo "found=true" >> "$GITHUB_OUTPUT"
-              echo "Extracted changelog section for $HEADER"
+              echo "Extracted release notes for version $VERSION"
           else
               echo "found=false" >> "$GITHUB_OUTPUT"
-              echo "No changelog section found for $HEADER"
+              echo "No release notes found for version $VERSION (will use auto-generated notes)"
           fi
 
       - name: Create GitHub Release

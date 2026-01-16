@@ -12,9 +12,9 @@ just release::status                        # Check which components have unrele
 just release::changes-since mcp-server      # View specific changes (or workbench, macro-magnets, macro-export)
 just all                                    # Run all quality checks (must pass)
 
-# 2. Update changelog
+# 2. Update release notes
 just release::draft-notes mcp-server        # Generate draft notes from commits
-# Then manually edit CHANGELOG.md with appropriate section header
+# Then edit the component's RELEASE_NOTES.md file (see "Release Notes Files" below)
 
 # 3. Version bump (workbench & macros only - MCP Server uses setuptools-scm)
 just release::bump-workbench 1.0.0          # or bump-macro-magnets, bump-macro-export
@@ -130,9 +130,18 @@ For a more thorough check including integration tests:
 just all-with-integration
 ```
 
-### 4. Update CHANGELOG.md
+### 4. Update Release Notes
 
-The changelog uses a multi-component structure. Each release date section contains entries for each component that was released.
+Each component has its own `RELEASE_NOTES.md` file. Release workflows automatically extract the relevant section for GitHub Releases.
+
+#### Release Notes Files
+
+| Component                    | Release Notes File                                    |
+| ---------------------------- | ----------------------------------------------------- |
+| MCP Server                   | `src/freecad_mcp/RELEASE_NOTES.md`                    |
+| Robust MCP Bridge Workbench  | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md`       |
+| Cut Object for Magnets Macro | `macros/Cut_Object_for_Magnets/RELEASE_NOTES.md`      |
+| Multi Export Macro           | `macros/Multi_Export/RELEASE_NOTES.md`                |
 
 #### Draft Release Notes
 
@@ -146,43 +155,36 @@ just release::draft-notes macro-magnets
 just release::draft-notes macro-export
 ```
 
-This categorizes commits by type (feat, fix, refactor, etc.) to help you write the changelog entry.
+This categorizes commits by type (feat, fix, refactor, etc.) to help you write the release notes.
 
-#### Changelog Structure
+#### Release Notes Format
 
-Add entries under the appropriate component section in `CHANGELOG.md`:
+Add a new version section **at the top** of the component's `RELEASE_NOTES.md`:
 
 ```markdown
-## YYYY-MM-DD - Release Title (optional)
+## Version X.Y.Z (YYYY-MM-DD)
 
-### MCP Server vX.Y.Z
+Release notes for changes between vA.B.C and vX.Y.Z.
 
-Brief description of the release.
+### Added
 
-#### Added
 - New feature description
 
-#### Changed
+### Changed
+
 - Changed behavior description
 
-#### Fixed
+### Fixed
+
 - Bug fix description
-
----
-
-### Robust MCP Bridge Workbench vX.Y.Z
-
-...
 ```
 
-**Important:** The changelog section header format must match exactly for the GitHub Release workflow to extract it:
+**Important:** The version header format must match exactly for the GitHub Release workflow to extract it:
 
-- MCP Server: `### MCP Server vX.Y.Z`
-- Workbench: `### Robust MCP Bridge Workbench vX.Y.Z`
-- Magnets Macro: `### Cut Object for Magnets Macro vX.Y.Z`
-- Export Macro: `### Multi Export Macro vX.Y.Z`
+- Format: `## Version X.Y.Z (YYYY-MM-DD)`
+- Example: `## Version 1.0.0 (2026-01-15)`
 
-The release workflows automatically extract the changelog section and include it in the GitHub Release body.
+The release workflows automatically extract the version section and include it in the GitHub Release body.
 
 ## Releasing Each Component
 
@@ -194,9 +196,9 @@ The MCP Server is the main Python package. It uses `setuptools-scm` to derive ve
 # 1. Ensure all changes are committed
 git status  # Should show clean working tree
 
-# 2. Update CHANGELOG.md and commit
-git add CHANGELOG.md
-git commit -m "docs: update changelog for MCP Server v1.0.0"
+# 2. Update src/freecad_mcp/RELEASE_NOTES.md and commit
+git add src/freecad_mcp/RELEASE_NOTES.md
+git commit -m "docs: update release notes for MCP Server v1.0.0"
 
 # 3. Create and push the release tag
 just release::tag-mcp-server 1.0.0
@@ -474,7 +476,7 @@ just release::status
 # View changes for a component
 just release::changes-since mcp-server
 
-# Draft changelog entries from commits
+# Draft release notes from commits
 just release::draft-notes mcp-server
 just release::draft-notes workbench
 just release::draft-notes macro-magnets

@@ -181,12 +181,13 @@ _result_ = {{"success": True}}
 
 Releases are automated via GitHub Actions:
 
-1. Update `CHANGELOG.md`
-1. Create a GitHub Release with a version tag
+1. Update the component's `RELEASE_NOTES.md` file (see [Releasing](releasing.md) for details)
+1. Bump versions for workbench/macros (MCP Server auto-bumps from tag)
+1. Commit and push changes
+1. Create release tag with `just release::tag-<component> X.Y.Z`
 1. CI builds and publishes:
-   - PyPI package
-   - Docker images
-   - Macro release archives
+   - PyPI package and Docker images (MCP Server)
+   - GitHub Release archives (workbench and macros)
 
 ---
 

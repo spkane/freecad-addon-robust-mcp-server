@@ -1075,24 +1075,25 @@ draft-notes component:
     echo ""
     git log --oneline "$REV_RANGE" -- $PATHS 2>/dev/null | sed -E 's/^[a-f0-9]+ /- /' || echo "(no commits)"
 
-# Extract changelog section for a specific component version (for GitHub Release body)
+# Extract release notes section for a specific component version (for GitHub Release body)
+# Reads from component-specific RELEASE_NOTES.md files
 extract-changelog component version:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Match header exactly as it appears in CHANGELOG.md
+    # Map component to RELEASE_NOTES.md path
     case "{{component}}" in
         mcp-server|server)
-            HEADER="### Robust MCP Server v{{version}}"
+            RELEASE_NOTES="{{project_root}}/src/freecad_mcp/RELEASE_NOTES.md"
             ;;
         workbench)
-            HEADER="### Robust MCP Bridge Workbench v{{version}}"
+            RELEASE_NOTES="{{project_root}}/addon/FreecadRobustMCPBridge/RELEASE_NOTES.md"
             ;;
         macro-magnets|magnets)
-            HEADER="### Cut Object for Magnets Macro v{{version}}"
+            RELEASE_NOTES="{{project_root}}/macros/Cut_Object_for_Magnets/RELEASE_NOTES.md"
             ;;
         macro-export|export)
-            HEADER="### Multi Export Macro v{{version}}"
+            RELEASE_NOTES="{{project_root}}/macros/Multi_Export/RELEASE_NOTES.md"
             ;;
         *)
             echo "Unknown component: {{component}}"
@@ -1100,18 +1101,21 @@ extract-changelog component version:
             ;;
     esac
 
-    CHANGELOG="{{project_root}}/CHANGELOG.md"
+    if [ ! -f "$RELEASE_NOTES" ]; then
+        echo "No RELEASE_NOTES.md found at: $RELEASE_NOTES"
+        exit 0
+    fi
 
-    # Extract section between this version header and the next component header or separator
-    # Only exit on: "---" separator OR "### " followed by component name (capital letter)
-    # This allows #### Added, #### Changed, etc. to be included
-    awk -v header="$HEADER" '
+    # Extract section for this version
+    # Format: ## Version X.Y.Z (date)
+    awk -v version="{{version}}" '
         BEGIN { found=0 }
-        $0 == header || $0 == header " " { found=1; next }
-        found && /^---$/ { exit }
-        found && /^### [A-Z]/ { exit }
+        /^## Version / {
+            if (found) exit
+            if (index($0, version) > 0) { found=1; next }
+        }
         found { print }
-    ' "$CHANGELOG"
+    ' "$RELEASE_NOTES"
 
 # =============================================================================
 # Dry Run Commands (preview without pushing)
