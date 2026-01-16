@@ -108,8 +108,8 @@ jobs:
 
       - name: Test Docker image
         run: |
-          # Build for current platform only for testing
-          docker build --build-arg VERSION=${{ steps.version.outputs.VERSION }} -t ${{ env.IMAGE_NAME }}:test .
+          # Build for current platform only for testing (--no-cache ensures fresh build)
+          docker build --no-cache --build-arg VERSION=${{ steps.version.outputs.VERSION }} -t ${{ env.IMAGE_NAME }}:test .
 
           # Test that the container starts and responds to MCP initialize
           echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \
@@ -131,6 +131,7 @@ jobs:
         uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.IMAGE_NAME }}:test
+          version: "v0.68.2"
           severity: "HIGH,CRITICAL"
           exit-code: "1"
           format: "table"
@@ -141,6 +142,7 @@ jobs:
         uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.IMAGE_NAME }}:test
+          version: "v0.68.2"
           severity: "MEDIUM,LOW"
           exit-code: "0"
           format: "table"
@@ -153,6 +155,7 @@ jobs:
         uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.IMAGE_NAME }}:test
+          version: "v0.68.2"
           format: "sarif"
           output: "trivy-results.sarif"
           cache-dir: .trivy-cache
