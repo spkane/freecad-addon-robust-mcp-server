@@ -78,12 +78,17 @@ RUN apk upgrade --no-cache
 RUN addgroup -g 1000 mcpuser && \
     adduser -u 1000 -G mcpuser -s /bin/sh -D mcpuser
 
-# Upgrade system pip to fix CVE-2025-8869 (defense-in-depth)
-# Note: Although PATH prefers /opt/venv/bin, we upgrade the system pip at
-# /usr/local/bin/pip intentionally. This ensures no vulnerable pip exists
-# in the image, even if the venv is bypassed or pip is invoked directly.
+# Remove pip, setuptools, and wheel from system Python to fix CVEs
+# - The base image has pip with CVE-2025-8869
+# - setuptools vendors jaraco.context 5.3.0 with GHSA-58pv-8j8x-9vj2
+# Since we use a pre-built venv, we don't need these in system Python at runtime.
+# This eliminates the vulnerabilities without affecting functionality.
 # hadolint ignore=DL3013
-RUN pip install --no-cache-dir --upgrade "pip>=25.3"
+RUN pip uninstall -y pip setuptools wheel 2>/dev/null || true && \
+    rm -rf /usr/local/lib/python3.11/site-packages/pip* \
+           /usr/local/lib/python3.11/site-packages/setuptools* \
+           /usr/local/lib/python3.11/site-packages/wheel* \
+           /usr/local/lib/python3.11/site-packages/pkg_resources*
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
