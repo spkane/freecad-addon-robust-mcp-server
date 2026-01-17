@@ -259,6 +259,89 @@ Embedded mode receives **minimal testing**:
 
 ---
 
+## Future Considerations
+
+### Bundled vs. Separate Server Architecture
+
+The current architecture keeps the MCP server separate from the FreeCAD addon/workbench. This section documents the trade-offs and potential future directions.
+
+#### Current Approach: Separate Components
+
+```text
+┌─────────────────┐     XML-RPC/Socket      ┌─────────────────┐
+│   MCP Server    │◄──────────────────────►│    FreeCAD      │
+│ (separate venv) │                         │  (+ Workbench)  │
+└─────────────────┘                         └─────────────────┘
+```
+
+**Advantages:**
+
+- Server runs in its own Python environment with full control over dependencies
+- Allows remote server scenarios (AI/server on powerful machine, FreeCAD on workstation)
+- Server can be updated independently of the addon
+- No dependency conflicts with FreeCAD's embedded Python
+- Easier testing and development
+
+**Disadvantages:**
+
+- Users must install two components separately
+- More complex setup process
+- Need to manage version compatibility between server and workbench
+
+#### Potential Future: Bundled Server in Addon
+
+```text
+┌─────────────────────────────────────────┐
+│              FreeCAD Addon              │
+│  ┌─────────────┐    ┌─────────────────┐ │
+│  │  Workbench  │◄──►│  Bundled Server │ │
+│  │   (GUI)     │    │  (subprocess)   │ │
+│  └─────────────┘    └─────────────────┘ │
+└─────────────────────────────────────────┘
+```
+
+A bundled approach could:
+
+- Provide single-install experience from FreeCAD Addon Manager
+- Auto-start server when workbench loads
+- Still support "Remote Server" mode for advanced users via preferences
+
+**Implementation considerations:**
+
+1. **Dependency management**: Server requires `fastmcp`, `httpx`, `uvicorn`, etc. These may conflict with FreeCAD's Python. Options:
+   - Bundle dependencies in addon (vendor them)
+   - Use subprocess with bundled `requirements.txt` and pip install on first run
+   - Create a minimal server that uses only stdlib
+
+2. **Startup modes**:
+
+   ```python
+   if preferences.use_remote_server:
+       connect_to(preferences.server_url)
+   else:
+       # Start bundled server in subprocess
+       subprocess.Popen([sys.executable, "-m", "robust_mcp_server"])
+   ```
+
+3. **Hybrid approach**: Default to bundled local server, but expose preferences for remote server URL (host:port) for advanced deployments.
+
+#### Decision
+
+Currently maintaining separate components because:
+
+- Cleaner separation of concerns
+- Proven reliability across platforms
+- Easier to develop and test independently
+- Remote server use case, while less common, is valuable for some workflows
+
+May revisit bundling in a future major version when:
+
+- Dependency requirements stabilize
+- User feedback indicates strong preference for single-install
+- A clean subprocess-based bundling approach is validated
+
+---
+
 ## Next Steps
 
 - [Contributing](contributing.md) - How to contribute

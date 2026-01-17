@@ -1,26 +1,23 @@
-# FreeCAD Robust MCP Suite
+# FreeCAD Robust MCP Server
 
-[![CI Tests](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/test.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/test.yaml)
-[![Integration Tests](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/macro-test.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/macro-test.yaml)
-[![Docker Build](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/docker.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/docker.yaml)
-[![Pre-commit](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/pre-commit.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/pre-commit.yaml)
-[![CodeQL](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/codeql.yaml/badge.svg)](https://github.com/spkane/freecad-robust-mcp-and-more/actions/workflows/codeql.yaml)
+[![CI Tests](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/test.yaml/badge.svg)](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/test.yaml)
+[![Docker Build](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/docker.yaml/badge.svg)](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/docker.yaml)
+[![Pre-commit](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/pre-commit.yaml/badge.svg)](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/pre-commit.yaml)
+[![CodeQL](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/codeql.yaml/badge.svg)](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/workflows/codeql.yaml)
 [![PyPI Version](https://img.shields.io/pypi/v/freecad-robust-mcp)](https://pypi.org/project/freecad-robust-mcp/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/freecad-robust-mcp)](https://pypi.org/project/freecad-robust-mcp/)
 
 [![Docker Image Version](https://img.shields.io/docker/v/spkane/freecad-robust-mcp?sort=semver&label=docker)](https://hub.docker.com/r/spkane/freecad-robust-mcp)
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://spkane.github.io/freecad-robust-mcp-and-more/)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://spkane.github.io/freecad-addon-robust-mcp-server/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that enables integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches.
-
-> Also includes standalone FreeCAD macros for common tasks.
 
 ## Table of Contents
 
 <!--TOC-->
 
-- [FreeCAD Robust MCP Suite](#freecad-robust-mcp-suite)
+- [FreeCAD Robust MCP Server](#freecad-robust-mcp-server)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Requirements](#requirements)
@@ -59,10 +56,6 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
       - [Export/Import (7 tools)](#exportimport-7-tools)
       - [Macro Management (6 tools)](#macro-management-6-tools)
       - [Parts Library (2 tools)](#parts-library-2-tools)
-  - [FreeCAD Macros](#freecad-macros)
-    - [Downloading Macros](#downloading-macros)
-    - [CutObjectForMagnets](#cutobjectformagnets)
-    - [MultiExport](#multiexport)
   - [For Developers](#for-developers)
   - [Robust MCP Server Development](#robust-mcp-server-development)
     - [Prerequisites](#prerequisites)
@@ -74,9 +67,6 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
       - [Headless Mode (for automation/CI)](#headless-mode-for-automationci)
     - [Running Tests](#running-tests)
     - [Code Quality](#code-quality)
-  - [Macro Development](#macro-development)
-    - [CutObjectForMagnets Macro](#cutobjectformagnets-macro)
-    - [MultiExport Macro](#multiexport-macro)
   - [Architecture](#architecture)
   - [Acknowledgements](#acknowledgements)
     - [Related Projects](#related-projects)
@@ -90,7 +80,6 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **Multiple Connection Modes**: XML-RPC (recommended), JSON-RPC socket, or embedded
 - **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development**: Create, edit, run, and template FreeCAD macros via MCP
-- **Standalone Macros**: Useful FreeCAD macros that work independently of the Robust MCP Server
 
 ## Requirements
 
@@ -101,20 +90,20 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 ## For Users
 
-This section covers installation and usage for end users who want to use the Robust MCP Server with AI assistants or the standalone FreeCAD macros.
+This section covers installation and usage for end users who want to use the Robust MCP Server with AI assistants.
 
 ### Quick Links
 
-| Resource                                                                          | Description                                                  |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [**Documentation**](https://spkane.github.io/freecad-robust-mcp-and-more/)        | Full documentation, guides, and API reference                |
-| [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp)                  | Pre-built Docker images for easy deployment                  |
-| [PyPI](https://pypi.org/project/freecad-robust-mcp/)                              | Python package for pip installation                          |
-| [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases) | Release archives, changelogs, and standalone macro downloads |
+| Resource | Description |
+| -------- | ----------- |
+| [**Documentation**](https://spkane.github.io/freecad-addon-robust-mcp-server/) | Full documentation, guides, and API reference |
+| [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp) | Pre-built Docker images for easy deployment |
+| [PyPI](https://pypi.org/project/freecad-robust-mcp/) | Python package for pip installation |
+| [GitHub Releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases) | Release archives and changelogs |
 
 ## Robust MCP Server
 
-> **Note**: Since this repository has more than just the Robust MCP Server in it, the Linux container and PyPi projects releases are both simply named `freecad-robust-mcp` which differs from the name of this git repository.
+> **Note**: The Linux container and PyPI package are both named `freecad-robust-mcp` which differs slightly from this git repository name.
 
 ### Installation
 
@@ -127,8 +116,8 @@ pip install freecad-robust-mcp
 #### Using mise and just (from source)
 
 ```bash
-git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
-cd freecad-robust-mcp-and-more
+git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
+cd freecad-addon-robust-mcp-server
 
 # Install mise via the Official mise installer script (if not already installed)
 curl https://mise.run | sh
@@ -147,8 +136,8 @@ Run the Robust MCP Server in a container. This is useful for isolated environmen
 docker pull spkane/freecad-robust-mcp
 
 # Or build locally
-git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
-cd freecad-robust-mcp-and-more
+git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
+cd freecad-addon-robust-mcp-server
 docker build -t freecad-robust-mcp .
 
 # Or use just commands (if you have mise/just installed)
@@ -205,7 +194,7 @@ If installed from source with mise/uv:
   "mcpServers": {
     "freecad": {
       "command": "/path/to/mise/shims/uv",
-      "args": ["run", "--project", "/path/to/freecad-robust-mcp-and-more", "freecad-mcp"],
+      "args": ["run", "--project", "/path/to/freecad-addon-robust-mcp-server", "freecad-mcp"],
       "env": {
         "FREECAD_MODE": "xmlrpc"
       }
@@ -491,132 +480,6 @@ The Robust MCP Server provides **83 tools** organized into categories. Tools mar
 
 ---
 
-## FreeCAD Macros
-
-This project includes standalone FreeCAD macros that can be used independently of the Robust MCP Server. These are useful for FreeCAD users who want the macros without setting up the full MCP integration.
-
-### Downloading Macros
-
-Pre-packaged macro archives are available with each release:
-
-1. Go to the [Releases page](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
-1. Download the macro archive for your platform:
-   - `freecad-macros-X.Y.Z.tar.gz` (Linux/macOS)
-   - `freecad-macros-X.Y.Z.zip` (Windows)
-1. Extract and copy the `.FCMacro` files to your FreeCAD macro directory:
-   - **macOS**: `~/Library/Application Support/FreeCAD/Macro/`
-   - **Linux**: `~/.local/share/FreeCAD/Macro/`
-   - **Windows**: `%APPDATA%/FreeCAD/Macro/`
-1. **(Optional)** Copy the `.svg` icon files to the same directory for custom icons in FreeCAD's macro menu
-
-### CutObjectForMagnets
-
-Intelligently cuts 3D objects along a plane and automatically places magnet holes with built-in surface penetration detection. Perfect for creating multi-part prints that snap together with magnets.
-
-**Features:**
-
-- Smart surface detection - skips holes that would penetrate outer surfaces
-- Supports preset planes (XY, XZ, YZ) or custom datum planes for angled cuts
-- Count-based hole placement with even distribution
-- Dual-part validation ensures alignment
-- Non-destructive (original object is hidden, not deleted)
-
-**Installation:**
-
-```bash
-# If you have the source:
-just install-cut-macro
-
-# Or manually copy CutObjectForMagnets.FCMacro from macros/Cut_Object_for_Magnets/
-# to your FreeCAD macro directory:
-#   macOS: ~/Library/Application Support/FreeCAD/Macro/
-#   Linux: ~/.local/share/FreeCAD/Macro/
-#   Windows: %APPDATA%/FreeCAD/Macro/
-```
-
-**Usage:**
-
-1. Open your model in FreeCAD
-1. Select the object to cut
-1. Go to **Macro -> Macros... -> CutObjectForMagnets -> Execute**
-1. Configure the cut plane and magnet hole parameters
-1. Click **Execute Cut**
-
-**Parameters:**
-
-- **Plane:** XY, XZ, YZ, or a model datum plane
-- **Offset:** Distance from origin (for preset planes)
-- **Hole diameter:** Size of magnet holes (e.g., 6.2mm for 6mm magnets)
-- **Hole depth:** How deep holes go into each piece
-- **Number of holes:** Total holes to create (evenly distributed)
-- **Edge clearance:** Distance from hole edge to outer surface
-
-See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md) for detailed documentation.
-
-**Uninstall:**
-
-```bash
-just uninstall-cut-macro
-```
-
-### MultiExport
-
-Export selected FreeCAD objects to multiple file formats simultaneously. Supports 8 formats with a convenient checkbox dialog and smart defaults.
-
-**Features:**
-
-- Export to 8 formats: STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF
-- Smart defaults: STL, STEP, and 3MF pre-selected
-- Intelligent path defaults based on document location
-- Configurable mesh quality (tolerance and deflection)
-- Real-time file preview before export
-- Multi-object batch export support
-
-**Installation:**
-
-```bash
-# If you have the source:
-just install::macro-export
-
-# Or manually copy MultiExport.FCMacro from macros/Multi_Export/
-# to your FreeCAD macro directory:
-#   macOS: ~/Library/Application Support/FreeCAD/Macro/
-#   Linux: ~/.local/share/FreeCAD/Macro/
-#   Windows: %APPDATA%/FreeCAD/Macro/
-```
-
-**Usage:**
-
-1. Select one or more objects in FreeCAD (Ctrl+click for multiple)
-1. Go to **Macro -> Macros... -> MultiExport -> Execute**
-1. Choose export formats (checkboxes)
-1. Set output directory and base filename
-1. Adjust mesh quality if needed
-1. Click **Export**
-
-**Supported Formats:**
-
-| Format | Extension | Default | Description                          |
-| ------ | --------- | ------- | ------------------------------------ |
-| STL    | `.stl`    | Yes     | Standard 3D printing format          |
-| STEP   | `.step`   | Yes     | CAD interchange (preserves geometry) |
-| 3MF    | `.3mf`    | Yes     | Modern 3D printing with metadata     |
-| OBJ    | `.obj`    | No      | 3D graphics and game engines         |
-| IGES   | `.iges`   | No      | Legacy CAD interchange               |
-| BREP   | `.brep`   | No      | OpenCASCADE native format            |
-| PLY    | `.ply`    | No      | Polygon file for 3D scanning         |
-| AMF    | `.amf`    | No      | Additive manufacturing format        |
-
-See [macros/Multi_Export/README-MultiExport.md](macros/Multi_Export/README-MultiExport.md) for detailed documentation.
-
-**Uninstall:**
-
-```bash
-just freecad::uninstall-export-macro
-```
-
----
-
 ## For Developers
 
 This section covers development setup, contributing, and working with the codebase.
@@ -632,8 +495,8 @@ This section covers development setup, contributing, and working with the codeba
 
 ```bash
 # Clone the repository
-git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
-cd freecad-robust-mcp-and-more
+git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
+cd freecad-addon-robust-mcp-server
 
 # Install mise via the Official mise installer script (if not already installed)
 curl https://mise.run | sh
@@ -662,7 +525,7 @@ Create a `.mcp.json` file in the project directory:
   "mcpServers": {
     "freecad": {
       "command": "/path/to/mise/shims/uv",
-      "args": ["run", "--project", "/path/to/freecad-robust-mcp-and-more", "freecad-mcp"],
+      "args": ["run", "--project", "/path/to/freecad-addon-robust-mcp-server", "freecad-mcp"],
       "env": {
         "FREECAD_MODE": "xmlrpc",
         "FREECAD_SOCKET_HOST": "localhost",
@@ -676,11 +539,11 @@ Create a `.mcp.json` file in the project directory:
 
 **Replace the paths with your actual paths:**
 
-| Placeholder                            | Description                    | Example                                    |
-| -------------------------------------- | ------------------------------ | ------------------------------------------ |
-| `/path/to/mise/shims/uv`               | Full path to uv via mise shims | `~/.local/share/mise/shims/uv`             |
-| `/path/to/freecad-robust-mcp-and-more` | Project directory              | `/home/me/dev/freecad-robust-mcp-and-more` |
-| `/path/to/mise/shims`                  | mise shims directory for PATH  | `~/.local/share/mise/shims`                |
+| Placeholder | Description | Example |
+| --- | --- | --- |
+| `/path/to/mise/shims/uv` | Full path to uv via mise shims | `~/.local/share/mise/shims/uv` |
+| `/path/to/freecad-addon-robust-mcp-server` | Project directory | `/home/me/dev/freecad-addon-robust-mcp-server` |
+| `/path/to/mise/shims` | mise shims directory for PATH | `~/.local/share/mise/shims` |
 
 **Finding your mise shims path:**
 
@@ -786,46 +649,6 @@ just quality::check
 just quality::security
 just quality::secrets
 ```
-
----
-
-## Macro Development
-
-### CutObjectForMagnets Macro
-
-**Location:** `macros/Cut_Object_for_Magnets/`
-
-**Installation for development:**
-
-```bash
-just install::macro-cut
-```
-
-**Uninstall:**
-
-```bash
-just install::uninstall-macro-cut
-```
-
-See [macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md](macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md) for detailed documentation on the macro's internals.
-
-### MultiExport Macro
-
-**Location:** `macros/Multi_Export/`
-
-**Installation for development:**
-
-```bash
-just install::macro-export
-```
-
-**Uninstall:**
-
-```bash
-just install::uninstall-macro-export
-```
-
-See [macros/Multi_Export/README-MultiExport.md](macros/Multi_Export/README-MultiExport.md) for detailed documentation on the macro's internals.
 
 ---
 

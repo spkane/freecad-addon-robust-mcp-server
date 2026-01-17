@@ -4,7 +4,6 @@
 # This module installs components for end users:
 # - Robust MCP Server (as a uv tool, available system-wide)
 # - Robust MCP Bridge Workbench (FreeCAD addon)
-# - FreeCAD Macros (CutObjectForMagnets, MultiExport)
 #
 # For developer setup (Python dependencies in virtualenv), use: just dev::install-deps
 
@@ -321,132 +320,6 @@ uninstall-mcp-bridge-workbench:
     fi
 
 # =============================================================================
-# Macro Installation
-# =============================================================================
-
-# Install the CutObjectForMagnets macro to FreeCAD's macro directory
-macro-cut:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PROJECT_DIR="{{project_root}}"
-
-    # Set FreeCAD directories
-    eval "$(just install::_freecad-dirs)"
-
-    # Verify source exists before copying
-    MACRO_SRC="${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro"
-    if [[ ! -f "$MACRO_SRC" ]]; then
-        echo "Error: Macro source file not found: $MACRO_SRC" >&2
-        exit 1
-    fi
-
-    mkdir -p "$MACRO_DIR"
-
-    # Remove existing installation if present (clean install)
-    if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then
-        echo "Removing existing CutObjectForMagnets macro..."
-        rm -f "$MACRO_DIR/CutObjectForMagnets.FCMacro"
-        rm -f "$MACRO_DIR/CutObjectForMagnets.svg"
-    fi
-
-    # Copy the macro file
-    cp "$MACRO_SRC" "$MACRO_DIR/"
-
-    # Optionally copy the icon if it exists
-    ICON_SRC="${PROJECT_DIR}/macros/Cut_Object_for_Magnets/CutObjectForMagnets.svg"
-    if [[ -f "$ICON_SRC" ]]; then
-        cp "$ICON_SRC" "$MACRO_DIR/"
-    fi
-
-    echo "CutObjectForMagnets macro installed to: $MACRO_DIR"
-    echo ""
-    echo "To use:"
-    echo "  1. Start FreeCAD"
-    echo "  2. Select an object to cut"
-    echo "  3. Go to: Macro → Macros → CutObjectForMagnets → Execute"
-    echo ""
-    echo "For angled cuts:"
-    echo "  1. Create a datum plane at your desired angle (Part Design → Create datum plane)"
-    echo "  2. Select 'Model Plane' in the macro dialog"
-    echo "  3. Choose your datum plane from the dropdown"
-
-# Uninstall the CutObjectForMagnets macro
-uninstall-macro-cut:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # Set FreeCAD directories
-    eval "$(just install::_freecad-dirs)"
-
-    rm -f "$MACRO_DIR/CutObjectForMagnets.FCMacro"
-    rm -f "$MACRO_DIR/CutObjectForMagnets.svg"
-    echo "CutObjectForMagnets macro uninstalled"
-
-# Install the MultiExport macro to FreeCAD's macro directory
-macro-export:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PROJECT_DIR="{{project_root}}"
-
-    # Set FreeCAD directories
-    eval "$(just install::_freecad-dirs)"
-
-    # Verify source exists before copying
-    MACRO_SRC="${PROJECT_DIR}/macros/Multi_Export/MultiExport.FCMacro"
-    if [[ ! -f "$MACRO_SRC" ]]; then
-        echo "Error: Macro source file not found: $MACRO_SRC" >&2
-        exit 1
-    fi
-
-    mkdir -p "$MACRO_DIR"
-
-    # Remove existing installation if present (clean install)
-    if [[ -f "$MACRO_DIR/MultiExport.FCMacro" ]]; then
-        echo "Removing existing MultiExport macro..."
-        rm -f "$MACRO_DIR/MultiExport.FCMacro"
-        rm -f "$MACRO_DIR/MultiExport.svg"
-    fi
-
-    # Copy the macro file
-    cp "$MACRO_SRC" "$MACRO_DIR/"
-
-    # Optionally copy the icon if it exists
-    ICON_SRC="${PROJECT_DIR}/macros/Multi_Export/MultiExport.svg"
-    if [[ -f "$ICON_SRC" ]]; then
-        cp "$ICON_SRC" "$MACRO_DIR/"
-    fi
-
-    echo "MultiExport macro installed to: $MACRO_DIR"
-    echo ""
-    echo "To use:"
-    echo "  1. Start FreeCAD"
-    echo "  2. Select one or more objects to export"
-    echo "  3. Go to: Macro → Macros → MultiExport → Execute"
-    echo "  4. Choose export formats (STL, STEP, 3MF selected by default)"
-    echo "  5. Set output directory and filename"
-    echo "  6. Click Export"
-
-# Uninstall the MultiExport macro
-uninstall-macro-export:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # Set FreeCAD directories
-    eval "$(just install::_freecad-dirs)"
-
-    rm -f "$MACRO_DIR/MultiExport.FCMacro"
-    rm -f "$MACRO_DIR/MultiExport.svg"
-    echo "MultiExport macro uninstalled"
-
-# Install all macros to FreeCAD's macro directory
-macro-all: macro-cut macro-export
-    @echo "All macros installed successfully!"
-
-# Uninstall all macros from FreeCAD's macro directory
-uninstall-macro-all: uninstall-macro-cut uninstall-macro-export
-    @echo "All macros uninstalled successfully!"
-
-# =============================================================================
 # Status Check
 # =============================================================================
 
@@ -521,23 +394,6 @@ status:
     ' 2>/dev/null || echo "unknown"
     }
 
-    # Helper function to extract __Version__ from macro files (handles single/double quotes)
-    # Uses environment variable to pass file path safely to Python (avoids shell interpolation)
-    extract_macro_version() {
-        local file="$1"
-        MACRO_FILE="$file" python3 -c '
-    import os
-    import re
-    try:
-        macro_file = os.environ.get("MACRO_FILE", "")
-        content = open(macro_file).read()
-        match = re.search(r"__Version__\s*=\s*[\"'"'"']([^\"'"'"']+)[\"'"'"']", content)
-        print(match.group(1) if match else "unknown")
-    except Exception:
-        print("unknown")
-    ' 2>/dev/null || echo "unknown"
-    }
-
     # Check workbench
     if [[ -d "$MOD_DIR/FreecadRobustMCPBridge" ]]; then
         WB_VERSION="unknown"
@@ -552,32 +408,6 @@ status:
     else
         echo "✗ Robust MCP Bridge Workbench: NOT INSTALLED"
         echo "  Install: just install::mcp-bridge-workbench"
-    fi
-    echo ""
-
-    # Check macros
-
-    echo "Macros:"
-    if [[ -f "$MACRO_DIR/CutObjectForMagnets.FCMacro" ]]; then
-        CUT_VERSION=$(extract_macro_version "$MACRO_DIR/CutObjectForMagnets.FCMacro")
-        CUT_MOD_TIME=$(get_mod_time "$MACRO_DIR/CutObjectForMagnets.FCMacro")
-        echo "  ✓ CutObjectForMagnets: INSTALLED"
-        echo "    Version: $CUT_VERSION"
-        echo "    Updated: $CUT_MOD_TIME"
-    else
-        echo "  ✗ CutObjectForMagnets: NOT INSTALLED"
-        echo "    Install: just install::macro-cut"
-    fi
-
-    if [[ -f "$MACRO_DIR/MultiExport.FCMacro" ]]; then
-        EXPORT_VERSION=$(extract_macro_version "$MACRO_DIR/MultiExport.FCMacro")
-        EXPORT_MOD_TIME=$(get_mod_time "$MACRO_DIR/MultiExport.FCMacro")
-        echo "  ✓ MultiExport: INSTALLED"
-        echo "    Version: $EXPORT_VERSION"
-        echo "    Updated: $EXPORT_MOD_TIME"
-    else
-        echo "  ✗ MultiExport: NOT INSTALLED"
-        echo "    Install: just install::macro-export"
     fi
     echo ""
 

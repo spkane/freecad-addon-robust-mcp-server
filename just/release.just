@@ -13,8 +13,6 @@
 # This project uses component-specific git tags for releases:
 #   - robust-mcp-server-vX.Y.Z      (triggers PyPI, Docker, GitHub release)
 #   - robust-mcp-workbench-vX.Y.Z   (triggers workbench archive release)
-#   - macro-cut-object-for-magnets-vX.Y.Z
-#   - macro-multi-export-vX.Y.Z
 #
 # Version Format (SemVer 2.0):
 #   - X.Y.Z           - Stable release
@@ -103,102 +101,6 @@ bump-workbench version:
     echo "  2. Commit: git add -A && git commit -m 'chore: bump workbench to $VERSION'"
     echo "  3. Tag and release: just release::tag-workbench $VERSION"
 
-# Private helper recipe for bumping macro versions
-# Parameters: macro_dir, macro_name, macro_file_basename, readme_basename, tag_command, version
-[private]
-_bump-macro macro_dir macro_name macro_file_basename readme_basename tag_command version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    VERSION="{{version}}"
-    TODAY=$(date +%Y-%m-%d)
-    MACRO_DIR="{{project_root}}/macros/{{macro_dir}}"
-    MACRO_NAME="{{macro_name}}"
-
-    # Validate version format (SemVer 2.0)
-    if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        echo "ERROR: Version '$VERSION' is not valid semver (X.Y.Z or X.Y.Z-prerelease)"
-        echo "Examples: 1.0.0, 1.0.0-alpha, 1.0.0-beta.1, 1.0.0-rc.1"
-        exit 1
-    fi
-
-    echo "Bumping $MACRO_NAME Macro to version: $VERSION (date: $TODAY)"
-    echo ""
-
-    # Update __Version__ and __Date__ in .FCMacro file
-    MACRO_FILE="$MACRO_DIR/{{macro_file_basename}}"
-    if [ -f "$MACRO_FILE" ]; then
-        sed "s/^__Version__ = [\"'].*[\"']/__Version__ = \"${VERSION}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
-        sed "s/^__Date__ = [\"'].*[\"']/__Date__ = \"${TODAY}\"/" "$MACRO_FILE" > "$MACRO_FILE.tmp" && mv "$MACRO_FILE.tmp" "$MACRO_FILE"
-        echo "Updated $MACRO_FILE:"
-        grep -E "^__(Version|Date)__" "$MACRO_FILE"
-    else
-        echo "ERROR: File not found: $MACRO_FILE"
-        exit 1
-    fi
-
-    # Update README version line
-    README_FILE="$MACRO_DIR/{{readme_basename}}"
-    if [ -f "$README_FILE" ]; then
-        sed "s/^\*\*Version:\*\* .*/\*\*Version:\*\* ${VERSION}/" "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
-        echo ""
-        echo "Updated $README_FILE:"
-        grep "Version:" "$README_FILE" | head -1
-    else
-        echo "WARNING: File not found: $README_FILE"
-    fi
-
-    # Update wiki-source.txt version and date
-    WIKI_FILE="$MACRO_DIR/wiki-source.txt"
-    if [ -f "$WIKI_FILE" ]; then
-        sed "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
-        sed "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
-        echo ""
-        echo "Updated $WIKI_FILE:"
-        grep -E "^\|Version=|\|Date=" "$WIKI_FILE"
-    else
-        echo "WARNING: File not found: $WIKI_FILE"
-    fi
-
-    # Update package.xml macro version
-    PACKAGE_XML="{{project_root}}/package.xml"
-    if [ -f "$PACKAGE_XML" ]; then
-        awk -v name="$MACRO_NAME" -v version="$VERSION" -v date="$TODAY" '
-            /<macro>/ { in_macro=1 }
-            /<\/macro>/ { in_macro=0; found_name=0 }
-            in_macro && /<name>.*<\/name>/ {
-                if (index($0, name) > 0) found_name=1
-            }
-            in_macro && found_name && /<version>/ {
-                gsub(/<version>[^<]*<\/version>/, "<version>" version "</version>")
-            }
-            in_macro && found_name && /<date>/ {
-                gsub(/<date>[^<]*<\/date>/, "<date>" date "</date>")
-            }
-            { print }
-        ' "$PACKAGE_XML" > "$PACKAGE_XML.tmp" && mv "$PACKAGE_XML.tmp" "$PACKAGE_XML"
-        echo ""
-        echo "Updated $PACKAGE_XML ($MACRO_NAME section):"
-        grep -A4 ">$MACRO_NAME<" "$PACKAGE_XML"
-    else
-        echo "ERROR: File not found: $PACKAGE_XML"
-        exit 1
-    fi
-
-    echo ""
-    echo "Version bump complete!"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Review changes: git diff"
-    echo "  2. Commit: git add -A && git commit -m 'chore: bump $MACRO_NAME macro to $VERSION'"
-    echo "  3. Tag and release: just release::{{tag_command}} $VERSION"
-
-# Bump the Cut Object for Magnets macro version in all source files
-bump-macro-magnets version: (_bump-macro "Cut_Object_for_Magnets" "Cut Object for Magnets" "CutObjectForMagnets.FCMacro" "README-CutObjectForMagnets.md" "tag-macro-magnets" version)
-
-# Bump the Multi Export macro version in all source files
-bump-macro-export version: (_bump-macro "Multi_Export" "Multi Export" "MultiExport.FCMacro" "README-MultiExport.md" "tag-macro-export" version)
-
 # =============================================================================
 # Tag Creation Commands
 # =============================================================================
@@ -235,7 +137,7 @@ tag-mcp-server version:
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
-    echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
+    echo "Watch the release at: https://github.com/spkane/freecad-addon-robust-mcp-server/actions"
 
 # Create and push a release tag for the Robust MCP Bridge workbench
 tag-workbench version:
@@ -314,101 +216,7 @@ tag-workbench version:
     git push origin "$TAG"
     echo ""
     echo "Tag $TAG created and pushed!"
-    echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
-
-# Private helper recipe for tagging macro releases
-# Parameters: macro_dir, macro_name, macro_file_basename, tag_prefix, bump_command, tag_message, version
-[private]
-_tag-macro macro_dir macro_name macro_file_basename tag_prefix bump_command tag_message version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # Source shared release helper functions
-    . "{{project_root}}/scripts/release-helpers.sh"
-
-    VERSION="{{version}}"
-    TAG="{{tag_prefix}}v{{version}}"
-    MACRO_DIR="{{project_root}}/macros/{{macro_dir}}"
-    MACRO_NAME="{{macro_name}}"
-
-    # Run all pre-release checks (version format, main branch, up-to-date, clean tree)
-    pre_release_checks "$VERSION" || exit 1
-
-    # Verify version in source files matches tag version
-    echo "Verifying version in source files..."
-
-    # Check .FCMacro file
-    MACRO_FILE="$MACRO_DIR/{{macro_file_basename}}"
-    MACRO_VERSION=$(grep -o '__Version__ = "[^"]*"' "$MACRO_FILE" | cut -d'"' -f2)
-    if [ "$MACRO_VERSION" != "$VERSION" ]; then
-        echo "ERROR: Version mismatch in $MACRO_FILE"
-        echo "  Expected: $VERSION"
-        echo "  Found:    $MACRO_VERSION"
-        echo ""
-        echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
-        exit 1
-    fi
-    echo "✓ $MACRO_FILE: $MACRO_VERSION"
-
-    # Check wiki-source.txt
-    WIKI_FILE="$MACRO_DIR/wiki-source.txt"
-    if [ -f "$WIKI_FILE" ]; then
-        WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
-        if [ "$WIKI_VERSION" != "$VERSION" ]; then
-            echo "ERROR: Version mismatch in $WIKI_FILE"
-            echo "  Expected: $VERSION"
-            echo "  Found:    $WIKI_VERSION"
-            echo ""
-            echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
-            exit 1
-        fi
-        echo "✓ $WIKI_FILE: $WIKI_VERSION"
-    fi
-
-    # Check package.xml
-    PACKAGE_XML="{{project_root}}/package.xml"
-    PKG_VERSION=$(awk -v name="$MACRO_NAME" '
-        /<macro>/ { in_macro=1 }
-        /<\/macro>/ { in_macro=0; found_name=0 }
-        in_macro && index($0, name) > 0 { found_name=1 }
-        in_macro && found_name && /<version>/ {
-            gsub(/.*<version>/, ""); gsub(/<\/version>.*/, ""); print; exit
-        }
-    ' "$PACKAGE_XML")
-    if [ "$PKG_VERSION" != "$VERSION" ]; then
-        echo "ERROR: Version mismatch in $PACKAGE_XML ($MACRO_NAME section)"
-        echo "  Expected: $VERSION"
-        echo "  Found:    $PKG_VERSION"
-        echo ""
-        echo "Run 'just release::{{bump_command}} $VERSION' first, then commit the changes."
-        exit 1
-    fi
-
-    echo "Version verification passed!"
-    echo ""
-    echo "Creating tag: $TAG"
-    echo ""
-    echo "This will trigger:"
-    echo "  - GitHub release with macro archive"
-    echo ""
-    read -p "Continue? [y/N] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Aborted."
-        exit 1
-    fi
-
-    git tag -a "$TAG" -m "{{tag_message}} v{{version}}"
-    git push origin "$TAG"
-    echo ""
-    echo "Tag $TAG created and pushed!"
-    echo "Watch the release at: https://github.com/spkane/freecad-robust-mcp-and-more/actions"
-
-# Create and push a release tag for the Cut Object for Magnets macro
-tag-macro-magnets version: (_tag-macro "Cut_Object_for_Magnets" "Cut Object for Magnets" "CutObjectForMagnets.FCMacro" "macro-cut-object-for-magnets-" "bump-macro-magnets" "Release Cut Object for Magnets Macro" version)
-
-# Create and push a release tag for the Multi Export macro
-tag-macro-export version: (_tag-macro "Multi_Export" "Multi Export" "MultiExport.FCMacro" "macro-multi-export-" "bump-macro-export" "Release Multi Export Macro" version)
+    echo "Watch the release at: https://github.com/spkane/freecad-addon-robust-mcp-server/actions"
 
 # =============================================================================
 # Tag Information Commands
@@ -422,12 +230,6 @@ list-tags:
     echo ""
     echo "=== Robust MCP Bridge Workbench Releases ==="
     git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -10
-    echo ""
-    echo "=== Cut Object for Magnets Macro Releases ==="
-    git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -10
-    echo ""
-    echo "=== Multi Export Macro Releases ==="
-    git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -10
 
 # Show the latest version of each component
 latest-versions:
@@ -436,12 +238,8 @@ latest-versions:
     echo ""
     SERVER_TAG=$(git tag -l 'robust-mcp-server-v*' --sort=-v:refname | head -n1)
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -n1)
-    MAGNETS_TAG=$(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -n1)
-    EXPORT_TAG=$(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -n1)
     echo "  Robust MCP Server:      ${SERVER_TAG:-none}"
     echo "  MCP Bridge Workbench:   ${WORKBENCH_TAG:-none}"
-    echo "  Macro Magnets:   ${MAGNETS_TAG:-none}"
-    echo "  Macro Export:    ${EXPORT_TAG:-none}"
 
 # Show commits since the last release of a component
 changes-since component:
@@ -457,17 +255,9 @@ changes-since component:
             PREFIX="robust-mcp-workbench-v"
             PATHS="addon/FreecadRobustMCPBridge"
             ;;
-        macro-magnets|magnets)
-            PREFIX="macro-cut-object-for-magnets-v"
-            PATHS="macros/Cut_Object_for_Magnets"
-            ;;
-        macro-export|export)
-            PREFIX="macro-multi-export-v"
-            PATHS="macros/Multi_Export"
-            ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench, macro-magnets, macro-export"
+            echo "Valid: mcp-server, workbench"
             exit 1
             ;;
     esac
@@ -640,14 +430,6 @@ rollback-release tag:
             COMPONENT="workbench"
             VERSION="${TAG#robust-mcp-workbench-v}"
             ;;
-        macro-cut-object-for-magnets-v*)
-            COMPONENT="macro-magnets"
-            VERSION="${TAG#macro-cut-object-for-magnets-v}"
-            ;;
-        macro-multi-export-v*)
-            COMPONENT="macro-export"
-            VERSION="${TAG#macro-multi-export-v}"
-            ;;
         *)
             COMPONENT="unknown"
             ;;
@@ -707,20 +489,6 @@ rollback-release tag:
             ;;
         workbench)
             echo "Component: Robust MCP Bridge Workbench v$VERSION"
-            echo ""
-            echo "This release only creates a GitHub Release with archive files."
-            echo "Rollback will fully clean up this release."
-            echo ""
-            ;;
-        macro-magnets)
-            echo "Component: Cut Object for Magnets Macro v$VERSION"
-            echo ""
-            echo "This release only creates a GitHub Release with archive files."
-            echo "Rollback will fully clean up this release."
-            echo ""
-            ;;
-        macro-export)
-            echo "Component: Multi Export Macro v$VERSION"
             echo ""
             echo "This release only creates a GitHub Release with archive files."
             echo "Rollback will fully clean up this release."
@@ -858,7 +626,7 @@ rollback-release tag:
             echo "  □ Docker Hub: Delete 'latest' tag (if this was the latest release)"
             echo "    URL: https://hub.docker.com/repository/docker/spkane/freecad-robust-mcp/tags"
             ;;
-        workbench|macro-magnets|macro-export)
+        workbench)
             echo "COMPLETED (automated):"
             echo "  ✓ GitHub Release deleted"
             echo "  ✓ Git tag deleted (local and remote)"
@@ -965,30 +733,6 @@ status:
         echo "Robust MCP Bridge Workbench: up to date (${WORKBENCH_TAG:-no releases})"
     fi
     echo ""
-
-    # Macro Magnets
-    MAGNETS_CHANGES=$(count_changes "macro-cut-object-for-magnets-v" "macros/Cut_Object_for_Magnets")
-    MAGNETS_TAG=$(git tag -l 'macro-cut-object-for-magnets-v*' --sort=-v:refname | head -1)
-    if [ "$MAGNETS_CHANGES" -gt 0 ]; then
-        echo "Macro (Cut Object for Magnets): $MAGNETS_CHANGES unreleased commit(s)"
-        echo "  Latest: ${MAGNETS_TAG:-none}"
-        echo "  View:   just release::changes-since macro-magnets"
-    else
-        echo "Macro (Cut Object for Magnets): up to date (${MAGNETS_TAG:-no releases})"
-    fi
-    echo ""
-
-    # Macro Export
-    EXPORT_CHANGES=$(count_changes "macro-multi-export-v" "macros/Multi_Export")
-    EXPORT_TAG=$(git tag -l 'macro-multi-export-v*' --sort=-v:refname | head -1)
-    if [ "$EXPORT_CHANGES" -gt 0 ]; then
-        echo "Macro (Multi Export): $EXPORT_CHANGES unreleased commit(s)"
-        echo "  Latest: ${EXPORT_TAG:-none}"
-        echo "  View:   just release::changes-since macro-export"
-    else
-        echo "Macro (Multi Export): up to date (${EXPORT_TAG:-no releases})"
-    fi
-    echo ""
     echo "=========================================="
 
 # =============================================================================
@@ -1011,19 +755,9 @@ draft-notes component:
             PATHS="addon/FreecadRobustMCPBridge"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
-        macro-magnets|magnets)
-            PREFIX="macro-cut-object-for-magnets-v"
-            PATHS="macros/Cut_Object_for_Magnets"
-            COMPONENT_NAME="Cut Object for Magnets Macro"
-            ;;
-        macro-export|export)
-            PREFIX="macro-multi-export-v"
-            PATHS="macros/Multi_Export"
-            COMPONENT_NAME="Multi Export Macro"
-            ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench, macro-magnets, macro-export"
+            echo "Valid: mcp-server, workbench"
             exit 1
             ;;
     esac
@@ -1089,14 +823,9 @@ extract-changelog component version:
         workbench)
             RELEASE_NOTES="{{project_root}}/addon/FreecadRobustMCPBridge/RELEASE_NOTES.md"
             ;;
-        macro-magnets|magnets)
-            RELEASE_NOTES="{{project_root}}/macros/Cut_Object_for_Magnets/RELEASE_NOTES.md"
-            ;;
-        macro-export|export)
-            RELEASE_NOTES="{{project_root}}/macros/Multi_Export/RELEASE_NOTES.md"
-            ;;
         *)
             echo "Unknown component: {{component}}"
+            echo "Valid: mcp-server, workbench"
             exit 1
             ;;
     esac
@@ -1142,19 +871,9 @@ dry-run-tag component version:
             echo "Would create tag: $TAG"
             echo "Triggers: GitHub Release with workbench archive"
             ;;
-        macro-magnets|magnets)
-            TAG="macro-cut-object-for-magnets-v{{version}}"
-            echo "Would create tag: $TAG"
-            echo "Triggers: GitHub Release with macro archive"
-            ;;
-        macro-export|export)
-            TAG="macro-multi-export-v{{version}}"
-            echo "Would create tag: $TAG"
-            echo "Triggers: GitHub Release with macro archive"
-            ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench, macro-magnets, macro-export"
+            echo "Valid: mcp-server, workbench"
             exit 1
             ;;
     esac
@@ -1174,19 +893,9 @@ wiki-update component:
             WIKI_PAGE="Robust_MCP_Bridge_Workbench"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
-        macro-magnets|magnets|cut)
-            WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
-            WIKI_PAGE="Macro_Cut_Object_for_Magnets"
-            COMPONENT_NAME="Cut Object for Magnets"
-            ;;
-        macro-export|export|multi)
-            WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
-            WIKI_PAGE="Macro_Multi_Export"
-            COMPONENT_NAME="Multi Export"
-            ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid options: workbench (or bridge), macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            echo "Valid options: workbench (or bridge)"
             exit 1
             ;;
     esac
@@ -1302,17 +1011,9 @@ wiki-show component:
             WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
-        macro-magnets|magnets|cut)
-            WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
-            COMPONENT_NAME="Cut Object for Magnets"
-            ;;
-        macro-export|export|multi)
-            WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
-            COMPONENT_NAME="Multi Export"
-            ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid options: workbench (or bridge), macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            echo "Valid options: workbench (or bridge)"
             exit 1
             ;;
     esac
@@ -1345,19 +1046,9 @@ wiki-diff component:
             WIKI_PAGE="Robust_MCP_Bridge_Workbench"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
-        macro-magnets|magnets|cut)
-            WIKI_SOURCE="{{project_root}}/macros/Cut_Object_for_Magnets/wiki-source.txt"
-            WIKI_PAGE="Macro_Cut_Object_for_Magnets"
-            COMPONENT_NAME="Cut Object for Magnets"
-            ;;
-        macro-export|export|multi)
-            WIKI_SOURCE="{{project_root}}/macros/Multi_Export/wiki-source.txt"
-            WIKI_PAGE="Macro_Multi_Export"
-            COMPONENT_NAME="Multi Export"
-            ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid options: workbench (or bridge), macro-magnets (or magnets, cut), macro-export (or export, multi)"
+            echo "Valid options: workbench (or bridge)"
             exit 1
             ;;
     esac

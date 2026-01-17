@@ -127,7 +127,7 @@ nav:
   - User Guide:
       - Connection Modes: guide/connection-modes.md
       - Robust MCP Bridge Workbench: guide/workbench.md
-      - FreeCAD Macros: guide/macros.md
+      - MCP Macro Tools: guide/macros.md
       - Tools Overview: guide/tools.md
       - MCP Resources: guide/resources.md
       - Detailed User Guide: USER_GUIDE.md

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
 
-    <name>FreeCAD Robust MCP Suite</name>
-    <description>A collection of FreeCAD macros plus a robust MCP (Model Context Protocol) bridge workbench for AI assistant integration.</description>
+    <name>FreeCAD Robust MCP Bridge</name>
+    <description>A robust MCP (Model Context Protocol) bridge workbench for AI assistant integration with FreeCAD.</description>
     <icon>addon/FreecadRobustMCPBridge/FreecadRobustMCPBridge.svg</icon>
 
     <!-- Note: Each component has its own version below. This top-level date is for reference only. -->
@@ -15,16 +15,12 @@
 
     <freecadmin>0.21</freecadmin>
 
-    <url type="repository" branch="main">https://github.com/spkane/freecad-robust-mcp-and-more</url>
-    <url type="bugtracker">https://github.com/spkane/freecad-robust-mcp-and-more/issues</url>
-    <url type="readme">https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/README.md</url>
-    <url type="documentation">https://github.com/spkane/freecad-robust-mcp-and-more#readme</url>
+    <url type="repository" branch="main">https://github.com/spkane/freecad-addon-robust-mcp-server</url>
+    <url type="bugtracker">https://github.com/spkane/freecad-addon-robust-mcp-server/issues</url>
+    <url type="readme">https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/README.md</url>
+    <url type="documentation">https://github.com/spkane/freecad-addon-robust-mcp-server#readme</url>
 
     <tag>workbench</tag>
-    <tag>macro</tag>
-    <tag>export</tag>
-    <tag>3D printing</tag>
-    <tag>magnets</tag>
     <tag>MCP</tag>
     <tag>AI</tag>
     <tag>automation</tag>
@@ -45,26 +41,6 @@
             <icon>FreecadRobustMCPBridge.svg</icon>
             <freecadmin>0.21</freecadmin>
         </workbench>
-
-        <macro>
-            <name>Multi Export</name>
-            <version>0.6.1</version>
-            <date>2026-01-12</date>
-            <description>Export selected bodies to multiple file formats (STL, STEP, 3MF, OBJ, IGES, BREP, PLY, AMF) simultaneously with configurable mesh options.</description>
-            <subdirectory>./macros/Multi_Export/</subdirectory>
-            <file>MultiExport.FCMacro</file>
-            <icon>MultiExport.svg</icon>
-        </macro>
-
-        <macro>
-            <name>Cut Object for Magnets</name>
-            <version>0.6.1</version>
-            <date>2026-01-12</date>
-            <description>Cut an object along a plane and add aligned magnet holes with surface collision detection. Perfect for creating 3D printed parts that snap together with embedded magnets.</description>
-            <subdirectory>./macros/Cut_Object_for_Magnets/</subdirectory>
-            <file>CutObjectForMagnets.FCMacro</file>
-            <icon>CutObjectForMagnets.svg</icon>
-        </macro>
 
     </content>
 

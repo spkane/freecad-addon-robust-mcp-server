@@ -1,78 +1,10 @@
-# FreeCAD Macros
+# MCP Macro Tools
 
-This project includes standalone FreeCAD macros that work independently of the MCP server, plus MCP tools for creating and managing macros programmatically.
-
----
-
-## Included Macros
-
-### CutObjectForMagnets
-
-Cut an object along a plane and add aligned magnet holes with surface collision detection. Perfect for creating 3D printed parts that snap together with embedded magnets.
-
-**Features:**
-
-- Interactive plane selection via GUI
-- Automatic magnet hole placement with configurable grid
-- Surface collision detection to avoid invalid hole positions
-- Configurable magnet dimensions and tolerances
-
-**Usage:**
-
-1. Select an object in FreeCAD
-1. Run the macro
-1. Define the cutting plane interactively
-1. Configure magnet parameters
-1. The macro creates two halves with aligned magnet holes
-
-See [CutObjectForMagnets documentation](https://github.com/spkane/freecad-robust-mcp-and-more/tree/main/macros/Cut_Object_for_Magnets) for detailed usage.
-
-### MultiExport
-
-Export selected bodies to multiple file formats simultaneously with configurable mesh options.
-
-**Supported Formats:**
-
-- STL (ASCII and Binary)
-- STEP
-- 3MF
-- OBJ
-- IGES
-- BREP
-- PLY
-- AMF
-
-**Usage:**
-
-1. Select one or more bodies/parts
-1. Run the macro
-1. Select output formats and configure mesh options
-1. Choose output directory
-1. All exports are created with consistent naming
-
-See [MultiExport documentation](https://github.com/spkane/freecad-robust-mcp-and-more/tree/main/macros/Multi_Export) for detailed usage.
-
----
-
-## Installing Macros
-
-### Via FreeCAD Addon Manager
-
-When you install the "FreeCAD Robust MCP Suite" addon, the macros are installed automatically.
-
-### Manual Installation
-
-1. Download macros from [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
-1. Copy `.FCMacro` files to your macro directory:
-   - **Linux:** `~/.local/share/FreeCAD/Macro/`
-   - **macOS:** `~/Library/Application Support/FreeCAD/Macro/`
-   - **Windows:** `%APPDATA%\FreeCAD\Macro\`
+The MCP server provides tools for working with FreeCAD macros programmatically.
 
 ---
 
 ## MCP Macro Tools
-
-The MCP server provides tools for working with macros programmatically:
 
 ### list_macros
 
@@ -130,7 +62,7 @@ read_macro(macro_name: str) -> dict
 **Example prompt:**
 
 ```text
-"Show me the code for the MultiExport macro"
+"Show me the code for my custom macro"
 ```
 
 ### delete_macro
