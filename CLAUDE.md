@@ -192,7 +192,7 @@ just quality::scan         # Run all secrets scanners
 # Testing commands
 just testing::unit         # Run unit tests
 just testing::cov          # Run tests with coverage
-just testing::fast         # Run tests without slow markers
+just testing::quick         # Run tests without slow markers
 just testing::integration  # Run integration tests
 just testing::integration-freecad-auto # Integration tests with auto FreeCAD startup
 just testing::watch        # Run tests in watch mode
@@ -602,7 +602,7 @@ class TestCalculateTotal:
 ```bash
 just testing::unit              # Run unit tests
 just testing::cov               # Run tests with coverage report
-just testing::fast              # Run tests without slow markers
+just testing::quick              # Run tests without slow markers
 just testing::all               # Run all tests including integration
 uv run pytest tests/unit/       # Run specific test directory
 uv run pytest -k "test_name"    # Run specific test by name
@@ -1365,10 +1365,10 @@ This project uses component-specific release workflows along with CI/CD pipeline
 
 This project uses **component-specific versioning**. Each component has its own git tag and release workflow:
 
-| Component                   | Tag Format                    | Releases To                                |
-| --------------------------- | ----------------------------- | ------------------------------------------ |
-| MCP Server                  | `robust-mcp-server-vX.Y.Z`    | PyPI/TestPyPI*, Docker Hub, GitHub Release |
-| Robust MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive)                   |
+| Component         | Tag Format                    | Releases To                                |
+| ----------------- | ----------------------------- | ------------------------------------------ |
+| MCP Server        | `robust-mcp-server-vX.Y.Z`    | PyPI/TestPyPI*, Docker Hub, GitHub Release |
+| Robust MCP Bridge | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive)                   |
 
 *Stable releases (`X.Y.Z`) publish to PyPI; non-stable releases (alpha, beta, rc) publish to TestPyPI only.
 
@@ -1376,10 +1376,10 @@ This project uses **component-specific versioning**. Each component has its own 
 
 Each component has its own `RELEASE_NOTES.md` file. Release workflows automatically extract the relevant section for GitHub Releases.
 
-| Component                   | Release Notes File                              |
-| --------------------------- | ----------------------------------------------- |
-| MCP Server                  | `src/freecad_mcp/RELEASE_NOTES.md`              |
-| Robust MCP Bridge Workbench | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
+| Component         | Release Notes File                              |
+| ----------------- | ----------------------------------------------- |
+| MCP Server        | `src/freecad_mcp/RELEASE_NOTES.md`              |
+| Robust MCP Bridge | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
 
 **Before releasing a component:**
 
@@ -1526,10 +1526,10 @@ Each component has its own `RELEASE_NOTES.md` file that is updated before releas
 
 **Release notes files:**
 
-| Component                   | File                                            |
-| --------------------------- | ----------------------------------------------- |
-| MCP Server                  | `src/freecad_mcp/RELEASE_NOTES.md`              |
-| Robust MCP Bridge Workbench | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
+| Component         | File                                            |
+| ----------------- | ----------------------------------------------- |
+| MCP Server        | `src/freecad_mcp/RELEASE_NOTES.md`              |
+| Robust MCP Bridge | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
 
 ---
 
