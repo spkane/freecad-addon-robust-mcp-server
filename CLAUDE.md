@@ -769,7 +769,6 @@ project-root/
 │   ├── development/          # Developer guides
 │   ├── getting-started/      # Installation, quickstart
 │   ├── guide/                # User guides
-│   ├── macros/               # Macro documentation
 │   ├── reference/            # API reference
 │   ├── variables.yaml        # MkDocs macro variables
 │   └── index.md              # Documentation home
@@ -939,7 +938,7 @@ EOF
 4. **Variable expansion**: `${VAR}` works inside heredocs for bash variables
 5. **Use `\\n` for newlines**: In heredoc strings that need literal `\n`, use `\\n`
 
-See the recipes in `just/freecad.just` (e.g., `run-gui`, `run-headless`, `install-cut-macro`) for working examples.
+See the recipes in `just/freecad.just` (e.g., `run-gui`, `run-headless`) for working examples.
 
 ---
 

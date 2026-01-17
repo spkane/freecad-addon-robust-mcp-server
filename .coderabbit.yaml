@@ -69,10 +69,6 @@ reviews:
         This code runs inside FreeCAD's Python environment as a workbench addon.
         It cannot import packages from the project's virtualenv (mcp, pydantic).
         Watch for accidental imports of project dependencies.
-    - path: "macros/**/*.FCMacro"
-      instructions: >
-        FreeCAD macro files. These are standalone Python scripts.
-        They run in FreeCAD's environment with access to FreeCAD, Part, etc.
     - path: "tests/**/*.py"
       instructions: >
         Test files. Ensure good test coverage and clear assertions.

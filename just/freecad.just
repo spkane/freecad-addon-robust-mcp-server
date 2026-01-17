@@ -196,8 +196,5 @@ run-gui-custom freecad_path:
 # =============================================================================
 # These are kept for backwards compatibility but will be removed in a future version.
 # Use the new install:: module commands instead:
-#   just install::macro-cut           (was: just freecad::install-cut-macro)
-#   just install::macro-export        (was: just freecad::install-export-macro)
-#   just install::macro-all           (was: just freecad::install-all-macros)
 #   just install::mcp-bridge-workbench (was: just freecad::install-workbench)
 #   just install::status              (was: just freecad::mcp-status)

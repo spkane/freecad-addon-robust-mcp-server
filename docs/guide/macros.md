@@ -4,7 +4,7 @@ The MCP server provides tools for working with FreeCAD macros programmatically.
 
 ---
 
-## MCP Macro Tools
+## Available Tools
 
 ### list_macros
 

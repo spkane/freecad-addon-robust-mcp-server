@@ -257,7 +257,7 @@ changes-since component:
             ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench"
+            echo "Valid: mcp-server, server, workbench"
             exit 1
             ;;
     esac
@@ -747,7 +747,7 @@ draft-notes component:
             ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench"
+            echo "Valid: mcp-server, server, workbench"
             exit 1
             ;;
     esac
@@ -815,7 +815,7 @@ extract-changelog component version:
             ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench"
+            echo "Valid: mcp-server, server, workbench"
             exit 1
             ;;
     esac
@@ -863,7 +863,7 @@ dry-run-tag component version:
             ;;
         *)
             echo "Unknown component: {{component}}"
-            echo "Valid: mcp-server, workbench"
+            echo "Valid: mcp-server, server, workbench"
             exit 1
             ;;
     esac

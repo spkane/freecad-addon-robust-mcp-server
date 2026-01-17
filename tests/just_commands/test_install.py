@@ -73,3 +73,23 @@ class TestInstallRuntime:
         assert uninstall_result.success, (
             f"MCP server uninstall failed: {uninstall_result.stderr}"
         )
+
+    @pytest.mark.just_runtime
+    def test_uninstall_runs(self, just: JustRunner) -> None:
+        """Uninstall command should run without error.
+
+        This command uninstalls all components. It may complete with warnings
+        if nothing is installed, but should not error.
+        """
+        result = just.run("install::uninstall", timeout=120)
+        # Command should succeed even if nothing was installed
+        assert result.success, f"Uninstall failed: {result.stderr}"
+
+    @pytest.mark.just_runtime
+    def test_cleanup_runs(self, just: JustRunner) -> None:
+        """Cleanup command should run without error.
+
+        This command cleans up caches and temporary files.
+        """
+        result = just.run("install::cleanup", timeout=60)
+        assert result.success, f"Cleanup failed: {result.stderr}"

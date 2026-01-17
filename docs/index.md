@@ -2,7 +2,7 @@
 
 Welcome to the FreeCAD Robust MCP Suite documentation.
 
-This project provides an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, FreeCAD workbench, and standalone macros that enable integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches.
+This project provides an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server and FreeCAD workbench that enable integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches.
 
 ---
 
@@ -12,7 +12,6 @@ This project provides an [MCP (Model Context Protocol)](https://modelcontextprot
 - **Multiple Connection Modes** - XML-RPC (recommended), JSON-RPC socket, or embedded (Linux only)
 - **GUI & Headless Support** - Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development** - Create, edit, run, and template FreeCAD macros via MCP
-- **Standalone Macros** - Useful FreeCAD macros that work independently of the Robust MCP Server
 
 ---
 

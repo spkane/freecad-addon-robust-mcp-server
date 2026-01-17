@@ -158,11 +158,11 @@ integration-freecad-auto:
 # Test Setup
 # =============================================================================
 
-# Check if test dependencies are installed
+# Check if test dependencies are installed (fails if any are missing)
 check-deps:
-    @uv run python -c "import pytest" 2>/dev/null && echo "✓ pytest installed" || echo "✗ pytest not installed"
-    @uv run python -c "import pytest_cov" 2>/dev/null && echo "✓ pytest-cov installed" || echo "✗ pytest-cov not installed"
-    @uv run python -c "import pytest_asyncio" 2>/dev/null && echo "✓ pytest-asyncio installed" || echo "✗ pytest-asyncio not installed"
+    @uv run python -c "import pytest" 2>/dev/null && echo "✓ pytest installed" || { echo "✗ pytest not installed"; exit 1; }
+    @uv run python -c "import pytest_cov" 2>/dev/null && echo "✓ pytest-cov installed" || { echo "✗ pytest-cov not installed"; exit 1; }
+    @uv run python -c "import pytest_asyncio" 2>/dev/null && echo "✓ pytest-asyncio installed" || { echo "✗ pytest-asyncio not installed"; exit 1; }
 
 # =============================================================================
 # Just Command Tests

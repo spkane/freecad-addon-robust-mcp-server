@@ -94,12 +94,12 @@ This section covers installation and usage for end users who want to use the Rob
 
 ### Quick Links
 
-| Resource | Description |
-| -------- | ----------- |
-| [**Documentation**](https://spkane.github.io/freecad-addon-robust-mcp-server/) | Full documentation, guides, and API reference |
-| [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp) | Pre-built Docker images for easy deployment |
-| [PyPI](https://pypi.org/project/freecad-robust-mcp/) | Python package for pip installation |
-| [GitHub Releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases) | Release archives and changelogs |
+| Resource                                                                              | Description                                   |
+| ------------------------------------------------------------------------------------- | --------------------------------------------- |
+| [**Documentation**](https://spkane.github.io/freecad-addon-robust-mcp-server/)        | Full documentation, guides, and API reference |
+| [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp)                      | Pre-built Docker images for easy deployment   |
+| [PyPI](https://pypi.org/project/freecad-robust-mcp/)                                  | Python package for pip installation           |
+| [GitHub Releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases) | Release archives and changelogs               |
 
 ## Robust MCP Server
 
@@ -539,11 +539,11 @@ Create a `.mcp.json` file in the project directory:
 
 **Replace the paths with your actual paths:**
 
-| Placeholder | Description | Example |
-| --- | --- | --- |
-| `/path/to/mise/shims/uv` | Full path to uv via mise shims | `~/.local/share/mise/shims/uv` |
-| `/path/to/freecad-addon-robust-mcp-server` | Project directory | `/home/me/dev/freecad-addon-robust-mcp-server` |
-| `/path/to/mise/shims` | mise shims directory for PATH | `~/.local/share/mise/shims` |
+| Placeholder                                 | Description                     | Example                                        |
+| ------------------------------------------- | ------------------------------- | ---------------------------------------------- |
+| `/path/to/mise/shims/uv`                    | Full path to uv via mise shims  | `~/.local/share/mise/shims/uv`                 |
+| `/path/to/freecad-addon-robust-mcp-server`  | Project directory               | `/home/me/dev/freecad-addon-robust-mcp-server` |
+| `/path/to/mise/shims`                       | mise shims directory for PATH   | `~/.local/share/mise/shims`                    |
 
 **Finding your mise shims path:**
 
