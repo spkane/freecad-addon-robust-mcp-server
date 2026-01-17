@@ -17,7 +17,7 @@ cov:
     uv run pytest tests/unit --cov=freecad_mcp --cov-report=term-missing --cov-report=html:htmlcov
 
 # Run tests without slow markers (excludes integration tests)
-fast:
+quick:
     uv run pytest {{project_root}}/tests/unit -m "not slow"
 
 # Run only integration tests (requires running FreeCAD Robust MCP Bridge)
@@ -153,6 +153,16 @@ integration-freecad-auto:
 
     # Cleanup is handled by trap
     exit $TEST_EXIT_CODE
+
+# =============================================================================
+# Test Setup
+# =============================================================================
+
+# Check if test dependencies are installed
+check-deps:
+    @uv run python -c "import pytest" 2>/dev/null && echo "✓ pytest installed" || echo "✗ pytest not installed"
+    @uv run python -c "import pytest_cov" 2>/dev/null && echo "✓ pytest-cov installed" || echo "✗ pytest-cov not installed"
+    @uv run python -c "import pytest_asyncio" 2>/dev/null && echo "✓ pytest-asyncio installed" || echo "✗ pytest-asyncio not installed"
 
 # =============================================================================
 # Just Command Tests
@@ -314,8 +324,6 @@ release-test:
         echo "   Edit the RELEASE_NOTES.md file for each component:"
         echo "     - MCP Server:  src/freecad_mcp/RELEASE_NOTES.md"
         echo "     - Workbench:   addon/FreecadRobustMCPBridge/RELEASE_NOTES.md"
-        echo "     - Cut Macro:   macros/Cut_Object_for_Magnets/RELEASE_NOTES.md"
-        echo "     - Export Macro: macros/Multi_Export/RELEASE_NOTES.md"
         echo ""
         echo "   Add a new version section at the top:"
         echo "     ## Version X.Y.Z (YYYY-MM-DD)"
@@ -329,11 +337,9 @@ release-test:
         echo "   Tip: Use 'just release::draft-notes <component>' to generate draft notes"
         echo "   from git commits since the last release."
         echo ""
-        echo "2. BUMP VERSIONS (for workbench/macros only - MCP server auto-bumps from tag):"
+        echo "2. BUMP VERSIONS (for workbench only - MCP server auto-bumps from tag):"
         echo ""
         echo "   just release::bump-workbench <version>"
-        echo "   just release::bump-macro-magnets <version>"
-        echo "   just release::bump-macro-export <version>"
         echo ""
         echo "3. COMMIT AND PUSH your RELEASE_NOTES.md and version bump changes"
         echo ""
@@ -341,8 +347,6 @@ release-test:
         echo ""
         echo "   just release::tag-mcp-server <version>"
         echo "   just release::tag-workbench <version>"
-        echo "   just release::tag-macro-magnets <version>"
-        echo "   just release::tag-macro-export <version>"
         echo ""
         echo "NOTE: The MCP server version is determined by the git tag, so no bump needed."
         echo "NOTE: Release workflows extract notes from each component's RELEASE_NOTES.md."

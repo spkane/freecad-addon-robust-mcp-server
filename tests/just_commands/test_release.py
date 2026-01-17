@@ -44,13 +44,9 @@ class TestReleaseSyntax:
     RELEASE_COMMANDS: ClassVar[list[tuple[str, list[str]]]] = [
         # Version bump commands
         ("bump-workbench", ["0.0.1-test"]),
-        ("bump-macro-magnets", ["0.0.1-test"]),
-        ("bump-macro-export", ["0.0.1-test"]),
         # Tag commands (require version argument)
         ("tag-mcp-server", ["0.0.1-test"]),
         ("tag-workbench", ["0.0.1-test"]),
-        ("tag-macro-magnets", ["0.0.1-test"]),
-        ("tag-macro-export", ["0.0.1-test"]),
         # Info commands
         ("list-tags", []),
         ("latest-versions", []),
@@ -63,9 +59,9 @@ class TestReleaseSyntax:
         # Tag management
         ("delete-tag", ["test-tag-v0.0.1"]),
         # Wiki commands
-        ("wiki-update", ["magnets"]),
-        ("wiki-show", ["magnets"]),
-        ("wiki-diff", ["magnets"]),
+        ("wiki-update", ["workbench"]),
+        ("wiki-show", ["workbench"]),
+        ("wiki-diff", ["workbench"]),
     ]
 
     @pytest.mark.just_syntax
@@ -106,7 +102,7 @@ class TestReleaseReadOnly:
     @pytest.mark.just_runtime
     @pytest.mark.parametrize(
         "component",
-        ["mcp-server", "workbench", "macro-magnets", "macro-export"],
+        ["mcp-server", "workbench"],
     )
     def test_changes_since_works(self, just: JustRunner, component: str) -> None:
         """changes-since should work for each component."""
@@ -121,7 +117,7 @@ class TestReleaseReadOnly:
     @pytest.mark.just_runtime
     @pytest.mark.parametrize(
         "component",
-        ["mcp-server", "workbench", "macro-magnets", "macro-export"],
+        ["mcp-server", "workbench"],
     )
     def test_draft_notes_works(self, just: JustRunner, component: str) -> None:
         """draft-notes should work for each component."""
@@ -135,8 +131,6 @@ class TestReleaseReadOnly:
         [
             ("mcp-server", "1.0.0"),
             ("workbench", "1.0.0"),
-            ("macro-magnets", "1.0.0"),
-            ("macro-export", "1.0.0"),
         ],
     )
     def test_dry_run_tag_shows_info(
@@ -148,10 +142,9 @@ class TestReleaseReadOnly:
         assert "Would create tag" in result.stdout
 
     @pytest.mark.just_runtime
-    @pytest.mark.parametrize("macro", ["magnets", "export"])
-    def test_wiki_show_works(self, just: JustRunner, macro: str) -> None:
+    def test_wiki_show_works(self, just: JustRunner) -> None:
         """wiki-show should display wiki source content."""
-        result = just.run("release::wiki-show", macro, timeout=10)
+        result = just.run("release::wiki-show", "workbench", timeout=10)
         assert result.success, f"wiki-show failed: {result.stderr}"
         assert "Wiki Source" in result.stdout
 
@@ -175,15 +168,6 @@ class TestReleaseBumpCommands:
             / "addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py",
             PROJECT_ROOT / "addon/FreecadRobustMCPBridge/wiki-source.txt",
             PROJECT_ROOT / "package.xml",
-            # Cut Object for Magnets macro files
-            PROJECT_ROOT / "macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro",
-            PROJECT_ROOT
-            / "macros/Cut_Object_for_Magnets/README-CutObjectForMagnets.md",
-            PROJECT_ROOT / "macros/Cut_Object_for_Magnets/wiki-source.txt",
-            # Multi Export macro files
-            PROJECT_ROOT / "macros/Multi_Export/MultiExport.FCMacro",
-            PROJECT_ROOT / "macros/Multi_Export/README-MultiExport.md",
-            PROJECT_ROOT / "macros/Multi_Export/wiki-source.txt",
         ]
 
         backups: dict[Path, str] = {}
@@ -212,38 +196,6 @@ class TestReleaseBumpCommands:
             PROJECT_ROOT / "addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
         )
         content = init_file.read_text()
-        assert "99.99.99-test" in content
-
-    @pytest.mark.just_runtime
-    @pytest.mark.just_release
-    def test_bump_macro_magnets_modifies_files(
-        self, just: JustRunner, backup_and_restore_files: None
-    ) -> None:
-        """bump-macro-magnets should modify version files."""
-        result = just.run("release::bump-macro-magnets", "99.99.99-test", timeout=30)
-        assert result.success, f"bump-macro-magnets failed: {result.stderr}"
-        assert "Version bump complete" in result.stdout
-
-        # Verify version was updated
-        macro_file = (
-            PROJECT_ROOT / "macros/Cut_Object_for_Magnets/CutObjectForMagnets.FCMacro"
-        )
-        content = macro_file.read_text()
-        assert "99.99.99-test" in content
-
-    @pytest.mark.just_runtime
-    @pytest.mark.just_release
-    def test_bump_macro_export_modifies_files(
-        self, just: JustRunner, backup_and_restore_files: None
-    ) -> None:
-        """bump-macro-export should modify version files."""
-        result = just.run("release::bump-macro-export", "99.99.99-test", timeout=30)
-        assert result.success, f"bump-macro-export failed: {result.stderr}"
-        assert "Version bump complete" in result.stdout
-
-        # Verify version was updated
-        macro_file = PROJECT_ROOT / "macros/Multi_Export/MultiExport.FCMacro"
-        content = macro_file.read_text()
         assert "99.99.99-test" in content
 
 
@@ -347,10 +299,6 @@ class TestReleaseValidation:
             "mcp-server",
             "server",
             "workbench",
-            "macro-magnets",
-            "magnets",
-            "macro-export",
-            "export",
         ],
     )
     def test_changes_since_component_aliases(

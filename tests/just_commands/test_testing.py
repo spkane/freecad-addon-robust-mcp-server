@@ -22,11 +22,12 @@ class TestTestingSyntax:
     TESTING_COMMANDS: ClassVar[list[str]] = [
         "testing::unit",
         "testing::cov",
-        "testing::fast",
+        "testing::quick",
         "testing::integration",
         "testing::verbose",
         "testing::all",
         "testing::watch",
+        "testing::check-deps",
         "testing::integration-freecad-auto",
         "testing::just-syntax",
         "testing::just-runtime",
@@ -73,11 +74,11 @@ class TestTestingRuntime:
         assert_command_executed(result, "testing::unit")
 
     @pytest.mark.just_runtime
-    def test_fast_command_recognizes_markers(self, just: JustRunner) -> None:
-        """Fast test command should recognize the 'not slow' marker."""
+    def test_quick_command_recognizes_markers(self, just: JustRunner) -> None:
+        """Quick test command should recognize the 'not slow' marker."""
         result = just.run(
-            "testing::fast",
+            "testing::quick",
             timeout=60,
             env={"PYTEST_ADDOPTS": "--collect-only -q"},
         )
-        assert_command_executed(result, "testing::fast")
+        assert_command_executed(result, "testing::quick")

@@ -335,7 +335,5 @@ major_version_zero = true
 # Note: This project uses component-specific tags for releases:
 #   - robust-mcp-server-vX.Y.Z      (MCP server: PyPI, Docker, GitHub release)
 #   - robust-mcp-workbench-vX.Y.Z   (FreeCAD workbench)
-#   - macro-cut-object-for-magnets-vX.Y.Z
-#   - macro-multi-export-vX.Y.Z
 # Use `just release::tag-<component> <version>` to create release tags.
 # Commitizen is used for commit message validation and changelog generation.

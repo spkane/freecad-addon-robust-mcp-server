@@ -64,10 +64,13 @@ The Robust MCP Server works with FreeCAD in both GUI and headless mode:
 
 ## FreeCAD Macros
 
-This project includes standalone FreeCAD macros:
+The MCP server provides tools for working with FreeCAD macros:
 
-- **[CutObjectForMagnets](guide/macros.md#cutobjectformagnets)** - Cuts objects along planes with automatic magnet hole placement
-- **[MultiExport](guide/macros.md#multiexport)** - Export objects to multiple formats simultaneously
+- **List macros** - Discover available macros in your FreeCAD installation
+- **Run macros** - Execute macros with parameter passing
+- **Create macros** - Generate new macros from templates or custom code
+
+See [Macros Guide](guide/macros.md) for details on using macros with the MCP server.
 
 ---
 

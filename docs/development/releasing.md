@@ -1,6 +1,6 @@
 # Release Process
 
-This project uses **component-specific versioning**. Each component (MCP Server, Workbench, Macros) has its own version and release cycle, allowing independent updates without affecting other components.
+This project uses **component-specific versioning**. Each component (MCP Server, Workbench) has its own version and release cycle, allowing independent updates without affecting other components.
 
 ## Quick Start
 
@@ -9,46 +9,39 @@ The complete release workflow in order:
 ```bash
 # 1. Pre-release checks
 just release::status                        # Check which components have unreleased changes
-just release::changes-since mcp-server      # View specific changes (or workbench, macro-magnets, macro-export)
+just release::changes-since mcp-server      # View specific changes (or workbench)
 just all                                    # Run all quality checks (must pass)
 
 # 2. Update release notes
 just release::draft-notes mcp-server        # Generate draft notes from commits
 # Then edit the component's RELEASE_NOTES.md file (see "Release Notes Files" below)
 
-# 3. Version bump (workbench & macros only - MCP Server uses setuptools-scm)
-just release::bump-workbench 1.0.0          # or bump-macro-magnets, bump-macro-export
+# 3. Version bump (workbench only - MCP Server uses setuptools-scm)
+just release::bump-workbench 1.0.0
 
 # 4. Commit changes
 git add -A
 git commit -m "chore: bump workbench to 1.0.0"  # or appropriate component/message
 
 # 5. Create & push tag (triggers CI/CD automatically)
-just release::tag-workbench 1.0.0           # or tag-mcp-server, tag-macro-magnets, tag-macro-export
+just release::tag-workbench 1.0.0           # or tag-mcp-server
 
 # 6. Monitor release at GitHub Actions, then verify
 just release::list-tags
 just release::latest-versions
-
-# 7. Update FreeCAD wiki (macros only)
-just release::wiki-update macro-magnets     # Copies content to clipboard & opens wiki edit page
 ```
 
-| Component     | Bump Command                             | Tag Command                             |
-| ------------- | ---------------------------------------- | --------------------------------------- |
-| MCP Server    | *(none - uses setuptools-scm)*           | `just release::tag-mcp-server X.Y.Z`    |
-| Workbench     | `just release::bump-workbench X.Y.Z`     | `just release::tag-workbench X.Y.Z`     |
-| Magnets Macro | `just release::bump-macro-magnets X.Y.Z` | `just release::tag-macro-magnets X.Y.Z` |
-| Export Macro  | `just release::bump-macro-export X.Y.Z`  | `just release::tag-macro-export X.Y.Z`  |
+| Component  | Bump Command                         | Tag Command                          |
+| ---------- | ------------------------------------ | ------------------------------------ |
+| MCP Server | *(none - uses setuptools-scm)*       | `just release::tag-mcp-server X.Y.Z` |
+| Workbench  | `just release::bump-workbench X.Y.Z` | `just release::tag-workbench X.Y.Z`  |
 
 ## Components and Their Release Targets
 
-| Component                    | Tag Format                            | Releases To                                |
-| ---------------------------- | ------------------------------------- | ------------------------------------------ |
-| MCP Server                   | `robust-mcp-server-vX.Y.Z`            | PyPI/TestPyPI*, Docker Hub, GitHub Release |
-| Robust MCP Bridge Workbench  | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release (archive)                   |
-| Cut Object for Magnets Macro | `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive)                   |
-| Multi Export Macro           | `macro-multi-export-vX.Y.Z`           | GitHub Release (archive)                   |
+| Component                   | Tag Format                    | Releases To                                |
+| --------------------------- | ----------------------------- | ------------------------------------------ |
+| MCP Server                  | `robust-mcp-server-vX.Y.Z`    | PyPI/TestPyPI*, Docker Hub, GitHub Release |
+| Robust MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive)                   |
 
 *Stable releases (`X.Y.Z`) publish to PyPI; non-stable releases (alpha, beta, rc) publish to TestPyPI only.
 
@@ -110,10 +103,6 @@ just release::changes-since mcp-server
 
 # For Workbench
 just release::changes-since workbench
-
-# For Macros
-just release::changes-since macro-magnets
-just release::changes-since macro-export
 ```
 
 ### 3. Run All Quality Checks
@@ -136,12 +125,10 @@ Each component has its own `RELEASE_NOTES.md` file. Release workflows automatica
 
 #### Release Notes Files
 
-| Component                    | Release Notes File                                    |
-| ---------------------------- | ----------------------------------------------------- |
-| MCP Server                   | `src/freecad_mcp/RELEASE_NOTES.md`                    |
-| Robust MCP Bridge Workbench  | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md`       |
-| Cut Object for Magnets Macro | `macros/Cut_Object_for_Magnets/RELEASE_NOTES.md`      |
-| Multi Export Macro           | `macros/Multi_Export/RELEASE_NOTES.md`                |
+| Component                   | Release Notes File                              |
+| --------------------------- | ----------------------------------------------- |
+| MCP Server                  | `src/freecad_mcp/RELEASE_NOTES.md`              |
+| Robust MCP Bridge Workbench | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
 
 #### Draft Release Notes
 
@@ -151,8 +138,6 @@ Use the `draft-notes` command to generate a starting point from conventional com
 # Generate draft notes for a component
 just release::draft-notes mcp-server
 just release::draft-notes workbench
-just release::draft-notes macro-magnets
-just release::draft-notes macro-export
 ```
 
 This categorizes commits by type (feat, fix, refactor, etc.) to help you write the release notes.
@@ -256,61 +241,13 @@ just release::tag-workbench 1.0.0
 3. Creates archive (tar.gz and zip)
 4. Creates GitHub Release with the archives
 
-### Macro Releases
-
-Each macro can be released independently.
-
-**Cut Object for Magnets Macro:**
-
-```bash
-# 1. Bump version in source files
-just release::bump-macro-magnets 1.0.0
-
-# 2. Review and commit the changes
-git diff  # Review changes
-git add -A
-git commit -m "chore: bump Cut Object for Magnets macro to 1.0.0"
-
-# 3. Create and push the release tag
-just release::tag-macro-magnets 1.0.0
-```
-
-**Multi Export Macro:**
-
-```bash
-# 1. Bump version in source files
-just release::bump-macro-export 1.0.0
-
-# 2. Review and commit the changes
-git diff  # Review changes
-git add -A
-git commit -m "chore: bump Multi Export macro to 1.0.0"
-
-# 3. Create and push the release tag
-just release::tag-macro-export 1.0.0
-```
-
-**Files updated by macro bump commands:**
-
-- `macros/<MacroDir>/<Macro>.FCMacro` (`__Version__` and `__Date__`)
-- `macros/<MacroDir>/README-<Macro>.md` (`**Version:**`)
-- `macros/<MacroDir>/wiki-source.txt` (`|Version=` and `|Date=`)
-- `package.xml` (macro section: `<version>` and `<date>`)
-
-**What happens automatically:**
-
-1. GitHub Actions validates the tag format
-2. Verifies version in source files matches tag
-3. Creates archive (tar.gz and zip)
-4. Creates GitHub Release with the archives
-
 ## Verifying a Release
 
 ### Check GitHub Actions
 
 After pushing a tag, monitor the release workflow:
 
-1. Go to [GitHub Actions](https://github.com/spkane/freecad-robust-mcp-and-more/actions)
+1. Go to [GitHub Actions](https://github.com/spkane/freecad-addon-robust-mcp-server/actions)
 2. Find the workflow run triggered by your tag
 3. Verify all steps complete successfully
 
@@ -326,7 +263,7 @@ pip index versions freecad-robust-mcp
 docker pull spkane/freecad-robust-mcp:1.0.0
 ```
 
-**For Workbench/Macros:**
+**For Workbench:**
 
 - Check the GitHub Releases page for the archive downloads
 - Verify the `package.xml` version was updated
@@ -361,7 +298,6 @@ To see what a release tag would look like without creating it:
 ```bash
 just release::dry-run-tag mcp-server 1.0.0
 just release::dry-run-tag workbench 1.0.0
-just release::dry-run-tag macro-magnets 1.0.0
 ```
 
 ## Troubleshooting
@@ -416,56 +352,6 @@ just release::tag-mcp-server 1.0.0
 
 - **MCP Server**: Release when there are significant new features or important bug fixes
 - **Workbench**: Release in sync with server changes that affect the bridge protocol
-- **Macros**: Release independently when macro functionality changes
-
-## Updating the FreeCAD Wiki
-
-After releasing a macro, you should update its FreeCAD wiki page. The `wiki-source.txt` files are automatically updated by the `bump-macro-*` commands with the new version and date.
-
-### Wiki Update Commands
-
-```bash
-# Check differences between local and live wiki
-just release::wiki-diff macro-magnets
-just release::wiki-diff macro-export
-
-# View the wiki source content locally
-just release::wiki-show macro-magnets
-just release::wiki-show macro-export
-
-# Update the wiki (copies to clipboard and opens edit page)
-just release::wiki-update macro-magnets
-just release::wiki-update macro-export
-```
-
-### Wiki Update Workflow
-
-The `wiki-update` command provides a safe, assisted workflow:
-
-1. Copies the updated wiki-source.txt content to your clipboard
-2. Opens the FreeCAD wiki edit page in your browser
-3. Displays step-by-step instructions
-
-**Manual steps after running the command:**
-
-1. Log in to your FreeCAD wiki account if prompted
-2. Select all content in the edit box (Ctrl+A / Cmd+A)
-3. Paste the new content (Ctrl+V / Cmd+V)
-4. Add an edit summary like "Update to version X.Y.Z"
-5. Click "Show preview" to verify changes
-6. Click "Save changes" when satisfied
-
-!!! note "Wiki Account Required"
-    You need a FreeCAD wiki account to edit pages. Register at [wiki.freecad.org](https://wiki.freecad.org) if you don't have one.
-
-### Macro Shortcuts
-
-The wiki commands accept multiple aliases for convenience:
-
-| Macro                    | Aliases                          |
-| ------------------------ | -------------------------------- |
-| Cut Object for Magnets   | `macro-magnets`, `magnets`, `cut`|
-| Multi Export             | `macro-export`, `export`, `multi`|
 
 ## Quick Reference
 
@@ -479,13 +365,9 @@ just release::changes-since mcp-server
 # Draft release notes from commits
 just release::draft-notes mcp-server
 just release::draft-notes workbench
-just release::draft-notes macro-magnets
-just release::draft-notes macro-export
 
-# Bump versions (for workbench and macros)
+# Bump versions (for workbench only)
 just release::bump-workbench 1.0.0
-just release::bump-macro-magnets 1.0.0
-just release::bump-macro-export 1.0.0
 
 # Commit version changes
 git add -A && git commit -m "chore: bump <component> to X.Y.Z"
@@ -493,8 +375,6 @@ git add -A && git commit -m "chore: bump <component> to X.Y.Z"
 # Create releases (verifies versions, creates and pushes tag)
 just release::tag-mcp-server 1.0.0
 just release::tag-workbench 1.0.0
-just release::tag-macro-magnets 1.0.0
-just release::tag-macro-export 1.0.0
 
 # List existing releases
 just release::list-tags
@@ -502,11 +382,6 @@ just release::latest-versions
 
 # Extract changelog for a version (used by CI)
 just release::extract-changelog mcp-server 1.0.0
-
-# Update FreeCAD wiki for macros (after release)
-just release::wiki-diff macro-magnets   # Check differences
-just release::wiki-update macro-magnets # Copy to clipboard & open edit page
-just release::wiki-update macro-export
 
 # Delete a tag if needed
 just release::delete-tag <full-tag-name>

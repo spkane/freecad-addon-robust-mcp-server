@@ -30,7 +30,7 @@ run_macro(
 **Example prompt:**
 
 ```text
-"Run the MultiExport macro"
+"Run the ExportSTL macro"
 ```
 
 ### create_macro

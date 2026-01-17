@@ -179,9 +179,6 @@ just freecad::run-headless # Run FreeCAD headless with MCP bridge
 # Installation commands (for end users)
 just install::mcp-server           # Install MCP server system-wide (via uv tool)
 just install::mcp-bridge-workbench # Install FreeCAD workbench addon
-just install::macro-all            # Install all macros
-just install::macro-cut            # Install CutObjectForMagnets macro
-just install::macro-export         # Install MultiExport macro
 just install::status               # Check installation status
 
 # Quality commands
@@ -231,8 +228,6 @@ just coderabbit::review-fix # Review with auto-fix suggestions
 just release::status                  # Show unreleased changes across all components
 just release::tag-mcp-server 1.0.0    # Release MCP server (PyPI + Docker)
 just release::tag-workbench 1.0.0     # Release Robust MCP Bridge workbench
-just release::tag-macro-magnets 1.0.0 # Release Cut Object for Magnets macro
-just release::tag-macro-export 1.0.0  # Release Multi Export macro
 just release::list-tags               # List all release tags
 just release::latest-versions         # Show latest version of each component
 just release::delete-tag <tag>        # Delete a release tag (local and remote)
@@ -249,7 +244,7 @@ just all-with-integration  # Run all checks and integration tests
 | --------------- | ------------------------------------- | --------------------------------------------------- |
 | `mcp`           | MCP server commands                   | `run`, `run-debug`, `run-http`                      |
 | `freecad`       | FreeCAD running commands              | `run-gui`, `run-headless`, `run-gui-custom`         |
-| `install`       | User installation commands            | `mcp-server`, `mcp-bridge-workbench`, `macro-all`   |
+| `install`       | User installation commands            | `mcp-server`, `mcp-bridge-workbench`, `status`      |
 | `quality`       | Code quality and linting              | `check`, `lint`, `format`, `scan`                   |
 | `testing`       | Test execution                        | `unit`, `cov`, `integration-freecad-auto`, `watch`  |
 | `docker`        | Docker build and run commands         | `build`, `build-multi`, `run`, `clean-all`          |
@@ -521,6 +516,26 @@ just documentation::deploy-latest 1.0.0  # Deploy version and set as latest
 
 **Note**: Local `deploy-*` commands modify the `gh-pages` branch locally. The GitHub Actions workflow handles actual deployment to GitHub Pages.
 
+**Initial GitHub Pages Setup**:
+
+This repo uses **mike** for versioned documentation, which requires a `gh-pages` branch:
+
+1. **Create the gh-pages branch** (if it doesn't exist):
+
+   ```bash
+   git checkout --orphan gh-pages
+   git reset --hard
+   git commit --allow-empty -m "Initialize gh-pages branch"
+   git push origin gh-pages
+   git checkout main
+   ```
+
+2. **Configure GitHub Pages** in repo Settings → Pages:
+   - Source: **Deploy from a branch**
+   - Branch: `gh-pages` / `/ (root)`
+
+3. **First deployment**: Push to `main` or manually trigger the `docs.yaml` workflow
+
 ---
 
 ## Testing Requirements
@@ -737,10 +752,7 @@ project-root/
 │   ├── workflows/            # GitHub Actions workflows
 │   │   ├── codeql.yaml           # Security analysis
 │   │   ├── docker.yaml           # Docker build (CI)
-│   │   ├── macro-cut-magnets-release.yaml  # Macro release
-│   │   ├── macro-multi-export-release.yaml # Macro release
-│   │   ├── macro-release-reusable.yaml     # Shared macro release logic
-│   │   ├── macro-test.yaml       # Macro testing
+│   │   ├── docs.yaml             # Documentation deployment
 │   │   ├── mcp-server-release.yaml         # MCP server → PyPI/Docker
 │   │   ├── mcp-workbench-release.yaml      # Workbench → GitHub Release
 │   │   ├── pre-commit.yaml       # Pre-commit checks
@@ -772,13 +784,6 @@ project-root/
 │   ├── quality.just          # Code quality commands
 │   ├── release.just          # Release/tagging commands
 │   └── testing.just          # Test commands
-├── macros/                   # FreeCAD macro source
-│   ├── Cut_Object_for_Magnets/
-│   │   ├── CutObjectForMagnets.FCMacro
-│   │   └── README-CutObjectForMagnets.md
-│   └── Multi_Export/
-│       ├── MultiExport.FCMacro
-│       └── README-MultiExport.md
 ├── src/
 │   └── freecad_mcp/          # Main MCP server package
 │       ├── bridge/           # FreeCAD connection bridges
@@ -1319,24 +1324,20 @@ This project uses component-specific release workflows along with CI/CD pipeline
 
 ### CI Workflows
 
-| Workflow           | Trigger                        | Purpose                                                   |
-| ------------------ | ------------------------------ | --------------------------------------------------------- |
-| `test.yaml`        | Push, PR                       | Runs unit tests and integration tests on Ubuntu and macOS |
-| `pre-commit.yaml`  | Push, PR                       | Runs all pre-commit hooks for code quality                |
-| `docker.yaml`      | Push, PR                       | Builds Docker image to verify Dockerfile works            |
-| `macro-test.yaml`  | Push, PR                       | Tests FreeCAD macros in headless Docker environment       |
-| `codeql.yaml`      | Push, PR, scheduled            | GitHub CodeQL security analysis                           |
-| `docs.yaml`        | Push to main, MCP server tags  | Deploys versioned documentation to GitHub Pages           |
+| Workflow          | Trigger                       | Purpose                                                   |
+| ----------------- | ----------------------------- | --------------------------------------------------------- |
+| `test.yaml`       | Push, PR                      | Runs unit tests and integration tests on Ubuntu and macOS |
+| `pre-commit.yaml` | Push, PR                      | Runs all pre-commit hooks for code quality                |
+| `docker.yaml`     | Push, PR                      | Builds Docker image to verify Dockerfile works            |
+| `codeql.yaml`     | Push, PR, scheduled           | GitHub CodeQL security analysis                           |
+| `docs.yaml`       | Push to main, MCP server tags | Deploys versioned documentation to GitHub Pages           |
 
 ### Release Workflows
 
-| Workflow                          | Trigger                                  | Purpose                                                |
-| --------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| `mcp-server-release.yaml`         | Tag: `robust-mcp-server-v*`              | Builds and publishes MCP server to PyPI and Docker Hub |
-| `mcp-workbench-release.yaml`      | Tag: `robust-mcp-workbench-v*`           | Creates GitHub Release with workbench addon archive    |
-| `macro-cut-magnets-release.yaml`  | Tag: `macro-cut-object-for-magnets-v*`   | Creates GitHub Release with macro archive              |
-| `macro-multi-export-release.yaml` | Tag: `macro-multi-export-v*`             | Creates GitHub Release with macro archive              |
-| `macro-release-reusable.yaml`     | Called by macro release workflows        | Shared logic for macro releases (DRY)                  |
+| Workflow                     | Trigger                        | Purpose                                                |
+| ---------------------------- | ------------------------------ | ------------------------------------------------------ |
+| `mcp-server-release.yaml`    | Tag: `robust-mcp-server-v*`    | Builds and publishes MCP server to PyPI and Docker Hub |
+| `mcp-workbench-release.yaml` | Tag: `robust-mcp-workbench-v*` | Creates GitHub Release with workbench addon archive    |
 
 ### Release Workflow Features
 
@@ -1365,12 +1366,10 @@ This project uses component-specific release workflows along with CI/CD pipeline
 
 This project uses **component-specific versioning**. Each component has its own git tag and release workflow:
 
-| Component                    | Tag Format                            | Releases To                                |
-| ---------------------------- | ------------------------------------- | ------------------------------------------ |
-| MCP Server                   | `robust-mcp-server-vX.Y.Z`            | PyPI/TestPyPI*, Docker Hub, GitHub Release |
-| Robust MCP Bridge Workbench  | `robust-mcp-workbench-vX.Y.Z`         | GitHub Release (archive)                   |
-| Cut Object for Magnets Macro | `macro-cut-object-for-magnets-vX.Y.Z` | GitHub Release (archive)                   |
-| Multi Export Macro           | `macro-multi-export-vX.Y.Z`           | GitHub Release (archive)                   |
+| Component                   | Tag Format                    | Releases To                                |
+| --------------------------- | ----------------------------- | ------------------------------------------ |
+| MCP Server                  | `robust-mcp-server-vX.Y.Z`    | PyPI/TestPyPI*, Docker Hub, GitHub Release |
+| Robust MCP Bridge Workbench | `robust-mcp-workbench-vX.Y.Z` | GitHub Release (archive)                   |
 
 *Stable releases (`X.Y.Z`) publish to PyPI; non-stable releases (alpha, beta, rc) publish to TestPyPI only.
 
@@ -1378,12 +1377,10 @@ This project uses **component-specific versioning**. Each component has its own 
 
 Each component has its own `RELEASE_NOTES.md` file. Release workflows automatically extract the relevant section for GitHub Releases.
 
-| Component                    | Release Notes File                                    |
-| ---------------------------- | ----------------------------------------------------- |
-| MCP Server                   | `src/freecad_mcp/RELEASE_NOTES.md`                    |
-| Robust MCP Bridge Workbench  | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md`       |
-| Cut Object for Magnets Macro | `macros/Cut_Object_for_Magnets/RELEASE_NOTES.md`      |
-| Multi Export Macro           | `macros/Multi_Export/RELEASE_NOTES.md`                |
+| Component                   | Release Notes File                              |
+| --------------------------- | ----------------------------------------------- |
+| MCP Server                  | `src/freecad_mcp/RELEASE_NOTES.md`              |
+| Robust MCP Bridge Workbench | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
 
 **Before releasing a component:**
 
@@ -1392,8 +1389,6 @@ Each component has its own `RELEASE_NOTES.md` file. Release workflows automatica
    ```bash
    just release::draft-notes mcp-server
    just release::draft-notes workbench
-   just release::draft-notes macro-magnets
-   just release::draft-notes macro-export
    ```
 
 2. **Edit the component's RELEASE_NOTES.md** file, adding a new version section at the top:
@@ -1438,12 +1433,10 @@ just release::draft-notes mcp-server
 # See "Release Notes Management" above for format
 ```
 
-**Step 3: Bump versions** (for workbench/macros only - MCP server auto-bumps from tag):
+**Step 3: Bump versions** (for workbench only - MCP server auto-bumps from tag):
 
 ```bash
 just release::bump-workbench 1.0.0
-just release::bump-macro-magnets 1.0.0
-just release::bump-macro-export 1.0.0
 ```
 
 **Step 4: Commit and push** your RELEASE_NOTES.md and version bump changes.
@@ -1456,10 +1449,6 @@ just release::tag-mcp-server 1.0.0
 
 # Release the Robust MCP Bridge workbench
 just release::tag-workbench 1.0.0
-
-# Release macros
-just release::tag-macro-magnets 1.0.0
-just release::tag-macro-export 1.0.0
 ```
 
 **Utility commands:**
@@ -1508,26 +1497,21 @@ All versions follow SemVer 2.0:
 4. Creates archive (tar.gz + zip)
 5. Creates GitHub release with archives
 
-### Package.xml Per-Component Versioning
+### Package.xml Versioning
 
-The `package.xml` file uses per-content versioning as supported by FreeCAD:
+The `package.xml` file contains metadata for the FreeCAD addon:
 
 ```xml
 <content>
     <workbench>
-        <name>MCP Bridge</name>
+        <name>Robust MCP Bridge</name>
         <version>1.0.0</version>
         ...
     </workbench>
-    <macro>
-        <name>Multi Export</name>
-        <version>0.8.0</version>
-        ...
-    </macro>
 </content>
 ```
 
-Each component can have a different version, and the release workflows automatically update these when a component is released.
+The release workflow automatically updates the version when the workbench is released.
 
 ---
 
@@ -1543,12 +1527,10 @@ Each component has its own `RELEASE_NOTES.md` file that is updated before releas
 
 **Release notes files:**
 
-| Component                    | File                                             |
-| ---------------------------- | ------------------------------------------------ |
-| MCP Server                   | `src/freecad_mcp/RELEASE_NOTES.md`               |
-| Robust MCP Bridge Workbench  | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md`  |
-| Cut Object for Magnets Macro | `macros/Cut_Object_for_Magnets/RELEASE_NOTES.md` |
-| Multi Export Macro           | `macros/Multi_Export/RELEASE_NOTES.md`           |
+| Component                   | File                                            |
+| --------------------------- | ----------------------------------------------- |
+| MCP Server                  | `src/freecad_mcp/RELEASE_NOTES.md`              |
+| Robust MCP Bridge Workbench | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
 
 ---
 

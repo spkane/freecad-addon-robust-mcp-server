@@ -432,3 +432,51 @@ status:
     fi
 
     echo "=========================================="
+
+# =============================================================================
+# Convenience Commands
+# =============================================================================
+
+# Uninstall all components (MCP server and workbench)
+uninstall:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Uninstalling all Robust MCP components..."
+    echo ""
+    just install::uninstall-mcp-server
+    echo ""
+    just install::uninstall-mcp-bridge-workbench
+    echo ""
+    echo "All components uninstalled."
+
+# Clean up everything (uninstall all + remove legacy installations)
+cleanup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Set FreeCAD directories
+    eval "$(just install::_freecad-dirs)"
+
+    echo "Cleaning up all Robust MCP installations..."
+    echo ""
+
+    # Uninstall current components
+    just install::uninstall
+
+    echo ""
+    echo "Removing legacy installations..."
+
+    # Remove legacy MCPBridge if present
+    if [[ -d "$MOD_DIR/MCPBridge" ]]; then
+        rm -rf "$MOD_DIR/MCPBridge"
+        echo "  Removed: $MOD_DIR/MCPBridge"
+    fi
+
+    # Remove legacy macro if present
+    if [[ -f "$MACRO_DIR/StartMCPBridge.FCMacro" ]]; then
+        rm "$MACRO_DIR/StartMCPBridge.FCMacro"
+        echo "  Removed: $MACRO_DIR/StartMCPBridge.FCMacro"
+    fi
+
+    echo ""
+    echo "Cleanup complete."

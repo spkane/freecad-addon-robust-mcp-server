@@ -58,9 +58,9 @@ class TestMacroTools:
         """list_macros should return macro info."""
         mock_macros = [
             MacroInfo(
-                name="MultiExport",
-                path="/home/user/.FreeCAD/Macro/MultiExport.FCMacro",
-                description="Export to multiple formats",
+                name="ExportSTL",
+                path="/home/user/.FreeCAD/Macro/ExportSTL.FCMacro",
+                description="Export objects to STL",
                 is_system=False,
             ),
             MacroInfo(
@@ -76,7 +76,7 @@ class TestMacroTools:
         result = await list_macros()
 
         assert len(result) == 2
-        assert result[0]["name"] == "MultiExport"
+        assert result[0]["name"] == "ExportSTL"
         assert result[0]["is_system"] is False
         assert result[1]["name"] == "SystemMacro"
         assert result[1]["is_system"] is True
@@ -96,11 +96,11 @@ class TestMacroTools:
         )
 
         run_macro = register_tools["run_macro"]
-        result = await run_macro(macro_name="MultiExport")
+        result = await run_macro(macro_name="ExportSTL")
 
         assert result["success"] is True
         assert result["stdout"] == "Exported 3 objects\n"
-        mock_bridge.run_macro.assert_called_once_with("MultiExport", None)
+        mock_bridge.run_macro.assert_called_once_with("ExportSTL", None)
 
     @pytest.mark.asyncio
     async def test_run_macro_with_args(self, register_tools, mock_bridge):

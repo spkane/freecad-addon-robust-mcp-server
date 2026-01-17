@@ -23,13 +23,9 @@ class TestInstallSyntax:
         "install::uninstall-mcp-server",
         "install::mcp-bridge-workbench",
         "install::uninstall-mcp-bridge-workbench",
-        "install::macro-cut",
-        "install::uninstall-macro-cut",
-        "install::macro-export",
-        "install::uninstall-macro-export",
-        "install::macro-all",
-        "install::uninstall-macro-all",
         "install::status",
+        "install::uninstall",
+        "install::cleanup",
     ]
 
     @pytest.mark.just_syntax

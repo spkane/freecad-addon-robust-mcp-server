@@ -255,11 +255,6 @@ The workbench uses a **queue-based thread safety system** to ensure FreeCAD oper
 
 ---
 
-## Included Macros
+## Macro Tools
 
-The addon bundle also includes standalone FreeCAD macros:
-
-- **MultiExport** - Export objects to multiple formats simultaneously
-- **CutObjectForMagnets** - Cut objects with aligned magnet holes for 3D printing
-
-See [Macros](macros.md) for details.
+The MCP server provides tools for working with FreeCAD macros. See [Macros](macros.md) for details on using macro tools.

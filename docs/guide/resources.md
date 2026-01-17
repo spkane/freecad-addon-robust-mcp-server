@@ -237,9 +237,9 @@ Gets list of available FreeCAD macros.
 ```json
 [
   {
-    "name": "MultiExport",
-    "path": "/home/user/.local/share/FreeCAD/Macro/MultiExport.FCMacro",
-    "description": "Export objects to multiple formats",
+    "name": "ExportSTL",
+    "path": "/home/user/.local/share/FreeCAD/Macro/ExportSTL.FCMacro",
+    "description": "Export selected objects to STL",
     "is_system": false
   }
 ]

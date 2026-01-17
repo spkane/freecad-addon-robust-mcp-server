@@ -373,9 +373,9 @@ class TestFreecadResources:
         """freecad://macros should return macro list."""
         mock_macros = [
             MacroInfo(
-                name="MultiExport",
-                path="/home/user/.local/share/FreeCAD/Macro/MultiExport.FCMacro",
-                description="Export to multiple formats",
+                name="ExportSTL",
+                path="/home/user/.local/share/FreeCAD/Macro/ExportSTL.FCMacro",
+                description="Export objects to STL",
                 is_system=False,
             ),
             MacroInfo(
@@ -392,7 +392,7 @@ class TestFreecadResources:
         data = json.loads(result)
 
         assert len(data) == 2
-        assert data[0]["name"] == "MultiExport"
+        assert data[0]["name"] == "ExportSTL"
         assert data[0]["is_system"] is False
         assert data[1]["is_system"] is True
 

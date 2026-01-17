@@ -63,11 +63,17 @@ class TestModulesExist:
     # Map of modules to their expected commands (subset for validation)
     EXPECTED_COMMANDS: ClassVar[dict[str, list[str]]] = {
         "quality": ["check", "format", "lint", "typecheck", "security"],
-        "testing": ["unit", "cov", "fast", "integration"],
+        "testing": ["unit", "cov", "quick", "integration"],
         "dev": ["install-deps", "install-pre-commit", "clean"],
         "docker": ["build", "run", "clean"],
         "documentation": ["build", "serve", "open"],
-        "install": ["mcp-server", "mcp-bridge-workbench", "status"],
+        "install": [
+            "mcp-server",
+            "mcp-bridge-workbench",
+            "status",
+            "uninstall",
+            "cleanup",
+        ],
         "mcp": ["run", "check"],
         "freecad": ["run-gui", "run-headless"],
         "release": ["status", "list-tags", "latest-versions"],
@@ -110,7 +116,7 @@ class TestSyntaxValidation:
         # Testing commands
         "testing::unit",
         "testing::cov",
-        "testing::fast",
+        "testing::quick",
         "testing::verbose",
         # Dev commands
         "dev::install-deps",
@@ -131,8 +137,6 @@ class TestSyntaxValidation:
         # Install commands
         "install::mcp-server",
         "install::mcp-bridge-workbench",
-        "install::macro-cut",
-        "install::macro-export",
         "install::status",
         # MCP commands
         "mcp::check",

@@ -391,16 +391,6 @@ show-release-info tag:
             echo "Component: Robust MCP Bridge Workbench"
             echo "Version:   $VERSION"
             ;;
-        macro-cut-object-for-magnets-v*)
-            VERSION="${TAG#macro-cut-object-for-magnets-v}"
-            echo "Component: Cut Object for Magnets Macro"
-            echo "Version:   $VERSION"
-            ;;
-        macro-multi-export-v*)
-            VERSION="${TAG#macro-multi-export-v}"
-            echo "Component: Multi Export Macro"
-            echo "Version:   $VERSION"
-            ;;
         *)
             echo "Component: Unknown (not a recognized release tag format)"
             ;;
