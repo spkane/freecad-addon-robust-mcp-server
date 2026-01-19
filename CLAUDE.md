@@ -1009,6 +1009,43 @@ FreeCAD can run in two modes:
 1. **GUI mode**: Full graphical interface with 3D view, accessed via `FreeCAD.app` or `freecad`
 1. **Headless mode**: Console-only, no GUI, accessed via `FreeCADCmd` or `freecadcmd`
 
+### FreeCAD Workbench Addon Loading (Critical)
+
+**CRITICAL**: For FreeCAD **workbench addons**, `Init.py` does **NOT** run at FreeCAD startup. Only `InitGui.py` module-level code runs when FreeCAD GUI starts.
+
+| File         | When It Runs                                       | Use Case                                 |
+| ------------ | -------------------------------------------------- | ---------------------------------------- |
+| `Init.py`    | Only when workbench is **selected** by user        | Workbench-specific initialization        |
+| `InitGui.py` | **Module-level code** runs at FreeCAD GUI startup  | Auto-start features, status bar setup    |
+| `InitGui.py` | `Initialize()` method runs when workbench selected | Toolbar/menu setup, command registration |
+
+**Why this matters for auto-start:**
+
+If you put auto-start logic in `Init.py`, it will only run when the user manually selects the workbench - NOT when FreeCAD starts. To auto-start the MCP bridge at FreeCAD startup:
+
+1. Put auto-start code in `InitGui.py` **module-level code** (outside any class/method)
+2. Use `QTimer.singleShot()` to defer execution until GUI is fully ready
+3. The `Initialize()` method is too late - it only runs when workbench is selected
+
+**Example pattern in InitGui.py:**
+
+```python
+# Module-level code - runs at FreeCAD GUI startup
+try:
+    from PySide2 import QtCore
+except ImportError:
+    from PySide6 import QtCore
+
+def _deferred_auto_start() -> None:
+    """Auto-start bridge after GUI is fully ready."""
+    # ... auto-start logic here ...
+
+# Schedule auto-start after GUI initializes (3 second delay)
+QtCore.QTimer.singleShot(3000, _deferred_auto_start)
+```
+
+**This is different from regular Python packages** where `__init__.py` runs on import. FreeCAD workbenches have special loading behavior.
+
 ### Detecting GUI Availability
 
 **CRITICAL**: Always use `FreeCAD.GuiUp` to check if the GUI is available. **Never** check for Qt/PySide availability as a proxy for GUI mode.
@@ -1031,7 +1068,7 @@ else:
 
 When FreeCAD starts in GUI mode, there's a timing window where:
 
-1. `Init.py` runs when `FreeCAD.GuiUp = False` (GUI not yet initialized)
+1. `InitGui.py` module-level code runs when `FreeCAD.GuiUp = False` (GUI not yet initialized)
 2. Qt/PySide is available (can import successfully)
 3. The bridge starts, sees `GuiUp = False`, and starts a background thread for queue processing
 4. FreeCAD GUI finishes initializing (`GuiUp` becomes `True`)
@@ -1044,28 +1081,59 @@ When FreeCAD starts in GUI mode, there's a timing window where:
 - Integration tests pass initial connection, then crash on first document operation
 - Thread check shows `is_main_thread: False` with `thread_name: 'MCP-QueueProcessor'` even when `gui_up: True`
 
-**The Fix (in `Init.py`):**
+**The Fix (in `InitGui.py` or `startup_bridge.py`):**
 
-When Qt is available but `FreeCAD.GuiUp` is `False`, use a repeating timer to wait for `GuiUp` to become `True` before starting the bridge:
+Use `QTimer.singleShot()` to defer bridge startup until after GUI is ready:
 
 ```python
-# WRONG - starts bridge immediately, will use background thread
-elif QtCore is not None:
-    _auto_start_bridge()
+# WRONG - starts bridge immediately, GUI may not be ready
+_auto_start_bridge()
 
-# CORRECT - wait for GUI to be ready
-elif QtCore is not None:
-    _auto_start_timer = QtCore.QTimer()
-    _auto_start_timer.setSingleShot(False)  # Repeating
-    _auto_start_timer.timeout.connect(_wait_for_gui_and_start)
-    _auto_start_timer.start(100)  # Check every 100ms
+# CORRECT - wait for GUI to be ready (use sufficient delay)
+QtCore.QTimer.singleShot(3000, _deferred_auto_start)
 ```
 
-**Note:** This QTimer wait pattern is **only for GUI startup scenarios**. In headless mode (`freecadcmd`), the bridge starts directly without waiting because there is no Qt event loop to wait for. The three startup paths are:
+For `startup_bridge.py`, use `GuiWaiter` to poll for `FreeCAD.GuiUp`:
 
-1. **GUI already up** (`FreeCAD.GuiUp = True`): Start bridge immediately
-2. **GUI starting** (Qt available, `GuiUp = False`): Use QTimer to wait for GUI
-3. **Headless** (no Qt): Start bridge immediately with background thread
+```python
+# Wait for GuiUp to become True before starting
+from bridge_utils import GuiWaiter
+_gui_waiter = GuiWaiter(callback=_start_bridge, log_prefix="Startup Bridge")
+_gui_waiter.start()
+```
+
+**Note:** This QTimer wait pattern is **only for GUI startup scenarios**. In headless mode (`freecadcmd`), the bridge starts directly without waiting because there is no Qt event loop to wait for. The four startup paths are:
+
+1. **GUI already up** (`FreeCAD.GuiUp = True`): Start bridge immediately with Qt timer
+2. **True headless** (`QCoreApplication` exists but is NOT a `QApplication`): Start directly with background thread
+3. **GUI starting** (Qt available but no app yet, or `QApplication` initializing): Use GuiWaiter to wait for GUI
+4. **No Qt available** (unusual state): Start directly
+
+**IMPORTANT - Detecting True Headless vs Early GUI Startup:**
+
+Simply checking `QApplication.instance() is None` is NOT sufficient because:
+
+- In true headless mode (`freecadcmd`): `QCoreApplication` exists but NOT `QApplication`
+- In early GUI startup: No application exists yet, but GUI will be available soon
+
+The correct detection uses `isinstance` to distinguish these cases:
+
+```python
+# Check for QApplication first
+qapp = QtWidgets.QApplication.instance()
+if qapp is not None:
+    # QApplication exists - GUI is available or starting
+    _has_qapp = True
+else:
+    # No QApplication - check if QCoreApplication exists
+    qcore_app = QtCore.QCoreApplication.instance()
+    if qcore_app is not None and not isinstance(qcore_app, QtWidgets.QApplication):
+        # QCoreApplication exists but is NOT a QApplication = true headless
+        _is_true_headless = True
+    # If no app at all, assume early GUI startup (will use GuiWaiter)
+```
+
+This logic is implemented in both `Init.py` and `startup_bridge.py` and MUST be kept in sync.
 
 **Testing:**
 
@@ -1076,6 +1144,43 @@ An integration test in `tests/integration/test_thread_safety.py` verifies that:
 - Document creation works without crashing
 
 **Key Lesson:** Never assume Qt availability means GUI is ready. Always check `FreeCAD.GuiUp` before doing operations that depend on the Qt event loop running on the main thread.
+
+### Keeping Startup Scripts in Sync (Critical)
+
+**CRITICAL**: The MCP bridge can be started from THREE different entry points. They must use compatible detection logic:
+
+| File                                             | Purpose                                          |
+| ------------------------------------------------ | ------------------------------------------------ |
+| `addon/FreecadRobustMCPBridge/InitGui.py`        | Auto-start at FreeCAD GUI startup (if enabled)   |
+| `addon/FreecadRobustMCPBridge/Init.py`           | Fallback auto-start when workbench selected      |
+| `addon/.../freecad_mcp_bridge/startup_bridge.py` | Manual start via `just freecad::run-gui`         |
+
+**When modifying startup logic in one file, you MUST update the others to match.**
+
+All files must have compatible logic for:
+
+1. **QApplication detection** - Use `QApplication.instance()` to detect GUI vs headless
+2. **GuiWaiter usage** - Wait for `GuiUp` before starting in GUI mode
+3. **Headless detection** - Start directly when no QApplication exists
+4. **Diagnostic logging** - Log `GuiUp`, `QtCore`, and `QApp` state
+5. **Already running check** - Skip start if bridge already running
+
+**Why these files exist:**
+
+- `InitGui.py` module-level code runs at FreeCAD GUI startup (primary auto-start location)
+- `Init.py` runs when workbench is selected (fallback if InitGui didn't auto-start)
+- `startup_bridge.py` is passed as a command-line argument for `just freecad::run-gui`
+- All check if a bridge is already running to avoid conflicts
+
+**Test command to verify both work:**
+
+```bash
+# Test headless mode (uses blocking_bridge.py)
+just testing::integration-headless-release
+
+# Test GUI mode (uses startup_bridge.py, InitGui.py auto-start may also be active)
+just testing::integration-gui-release
+```
 
 ### Why NOT to Check for PySide/Qt
 

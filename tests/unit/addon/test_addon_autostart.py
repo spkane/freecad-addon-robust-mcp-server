@@ -99,11 +99,13 @@ class TestAutoStartInitLogic:
         assert "GuiWaiter" in init_code
 
     def test_handles_headless_path(self, init_code: str) -> None:
-        """Init.py should handle headless mode (no QApplication)."""
-        # Should detect and handle headless mode
-        assert "Headless mode" in init_code
-        # Should mention QApplication since that's how we detect headless
-        assert "QApplication" in init_code
+        """Init.py should handle true headless mode (QCoreApplication only)."""
+        # Should detect and handle true headless mode
+        assert "True headless mode" in init_code or "headless" in init_code.lower()
+        # Should check QCoreApplication to detect true headless
+        assert "QCoreApplication" in init_code
+        # Should use isinstance to distinguish QCoreApplication from QApplication
+        assert "isinstance" in init_code
 
     def test_imports_gui_waiter(self, init_code: str) -> None:
         """Init.py should import GuiWaiter for waiting on GUI."""
@@ -264,28 +266,31 @@ class TestAutoStartCodePaths:
         """Load Init.py content."""
         return (ADDON_DIR / "Init.py").read_text()
 
-    def test_three_startup_scenarios_documented(self, init_code: str) -> None:
-        """Init.py should document the three startup scenarios.
+    def test_four_startup_scenarios_documented(self, init_code: str) -> None:
+        """Init.py should document the four startup scenarios.
 
         1. GUI already up - use timer for deferred start
-        2. GUI not ready but QApplication exists - use GuiWaiter
-        3. Headless mode (no QApplication) - start directly
+        2. True headless (QCoreApplication only) - start directly with background thread
+        3. GUI not ready but Qt available - use GuiWaiter
+        4. No Qt available - start directly (unusual state)
         """
         # Check for documentation of scenarios
         assert "GuiUp is True" in init_code or "GUI is already up" in init_code
-        assert "QApplication exists" in init_code or "GUI not ready" in init_code
-        assert "no QApplication" in init_code or "headless" in init_code.lower()
+        assert "QCoreApplication" in init_code  # True headless detection
+        assert "GUI not ready" in init_code
+        assert "No Qt available" in init_code or "headless" in init_code.lower()
 
     def test_all_paths_have_logging(self, init_code: str) -> None:
         """Each code path should have diagnostic logging."""
         # Count distinct log messages for different paths
         log_patterns = [
             "GUI already up",
+            "True headless mode",
             "GUI not ready",
-            "Headless mode",
+            "No Qt available",
         ]
         found = sum(1 for pattern in log_patterns if pattern in init_code)
-        assert found >= 3, f"Expected 3 code paths with logging, found {found}"
+        assert found >= 4, f"Expected 4 code paths with logging, found {found}"
 
     def test_pyside_fallback_from_2_to_6(self, init_code: str) -> None:
         """Should try PySide2 first, then fall back to PySide6."""
@@ -296,3 +301,20 @@ class TestAutoStartCodePaths:
         pyside2_pos = init_code.find("PySide2")
         pyside6_pos = init_code.find("PySide6")
         assert pyside2_pos < pyside6_pos, "Should try PySide2 before PySide6"
+
+    def test_true_headless_detection_via_isinstance(self, init_code: str) -> None:
+        """Should use isinstance to detect true headless mode.
+
+        True headless mode is when QCoreApplication exists but is NOT a
+        QApplication. This happens with freecadcmd (headless FreeCAD).
+
+        In GUI mode during early startup, there may be no application yet,
+        or a QApplication that's being initialized. We need to wait for
+        FreeCAD.GuiUp in those cases.
+        """
+        # Should check QCoreApplication.instance()
+        assert "QCoreApplication.instance()" in init_code
+        # Should use isinstance to check if it's a QApplication
+        assert "isinstance" in init_code
+        # Should have a variable tracking true headless state
+        assert "_is_true_headless" in init_code
