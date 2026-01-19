@@ -17,7 +17,7 @@ This release fixes some auto-start issues and improves the overall startup exper
 
 - **Auto-start not working at FreeCAD startup**: Fixed bug where auto-start only worked when manually selecting the workbench. For FreeCAD workbench addons, `Init.py` does NOT run at startup - only `InitGui.py` module-level code runs. Auto-start logic has been moved to `InitGui.py`.
 - **Status bar not appearing after auto-start**: The status bar widget now syncs immediately after the bridge starts, instead of on a timer that ran before the bridge was ready.
-- **Integration test crashes**: Fixed race condition where the bridge could start before `FreeCAD.GuiUp` was `True`, causing Qt operations to run on a background thread and crash FreeCAD.
+- **Integration test crashes**: Fixed race condition where the bridge could start before `FreeCAD.GuiUp` was `True`, causing Qt operations to run on a background thread and crash FreeCAD. Auto-start is now deferred with `QTimer.singleShot()` to allow the GUI to stabilize.
 
 ### Note
 

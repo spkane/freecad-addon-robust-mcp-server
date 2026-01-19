@@ -278,6 +278,93 @@ class TestGuiWaiterUsage:
         assert "did not become ready" in bridge_utils_code
 
 
+class TestInitGuiAutoStart:
+    """Tests for auto-start logic in InitGui.py.
+
+    InitGui.py is the primary entry point for auto-start at FreeCAD GUI startup.
+    Init.py does NOT run at startup for workbench addons, so InitGui.py must
+    handle auto-start using QTimer.singleShot() to defer the bridge start.
+    """
+
+    @pytest.fixture
+    def initgui_code(self) -> str:
+        """Load InitGui.py content."""
+        return (ADDON_DIR / "InitGui.py").read_text()
+
+    def test_uses_single_shot_timer_for_auto_start(self, initgui_code: str) -> None:
+        """InitGui.py should use QTimer.singleShot for deferred auto-start."""
+        # Should use singleShot with a delay
+        assert "QTimer.singleShot" in initgui_code
+        assert "_auto_start_bridge" in initgui_code
+
+    def test_checks_auto_start_preference(self, initgui_code: str) -> None:
+        """InitGui.py should check auto-start preference before scheduling.
+
+        Uses AST-based analysis to verify there's an if-condition that calls
+        get_auto_start(), rather than relying on brittle string matching.
+        """
+        tree = ast.parse(initgui_code)
+
+        def is_get_auto_start_call(node: ast.AST) -> bool:
+            """Check if node is a call to get_auto_start()."""
+            if not isinstance(node, ast.Call):
+                return False
+            func = node.func
+            # Handle direct name: get_auto_start()
+            if isinstance(func, ast.Name) and func.id == "get_auto_start":
+                return True
+            # Handle attribute access: module.get_auto_start()
+            return isinstance(func, ast.Attribute) and func.attr == "get_auto_start"
+
+        def contains_get_auto_start_call(node: ast.AST) -> bool:
+            """Check if node or any children contain get_auto_start call."""
+            return any(is_get_auto_start_call(child) for child in ast.walk(node))
+
+        # Find any ast.If node whose test contains a get_auto_start call
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If) and contains_get_auto_start_call(node.test):
+                return  # Found an if-condition invoking get_auto_start()
+
+        pytest.fail(
+            "InitGui.py should have an if-condition that calls get_auto_start() "
+            "to check whether auto-start is enabled before scheduling"
+        )
+
+    def test_auto_start_bridge_function_exists(self, initgui_code: str) -> None:
+        """InitGui.py should have _auto_start_bridge callback function."""
+        assert "def _auto_start_bridge" in initgui_code
+
+    def test_auto_start_bridge_checks_if_running(self, initgui_code: str) -> None:
+        """_auto_start_bridge should check if bridge is already running."""
+        # Parse the function and check for is_bridge_running check
+        tree = ast.parse(initgui_code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_auto_start_bridge":
+                func_code = ast.unparse(node)
+                assert "is_bridge_running" in func_code
+                return
+        pytest.fail("_auto_start_bridge function not found")
+
+    def test_auto_start_syncs_status_bar(self, initgui_code: str) -> None:
+        """_auto_start_bridge should sync status bar after starting bridge."""
+        # Parse the function and check for sync_status_with_bridge call
+        tree = ast.parse(initgui_code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_auto_start_bridge":
+                func_code = ast.unparse(node)
+                assert "sync_status_with_bridge" in func_code
+                return
+        pytest.fail("_auto_start_bridge function not found")
+
+    def test_logs_auto_start_scheduled(self, initgui_code: str) -> None:
+        """InitGui.py should log when auto-start is scheduled."""
+        assert "Auto-start scheduled" in initgui_code
+
+    def test_logs_auto_start_disabled(self, initgui_code: str) -> None:
+        """InitGui.py should log when auto-start is disabled."""
+        assert "Auto-start disabled" in initgui_code
+
+
 class TestAutoStartCodePaths:
     """Tests to verify all auto-start code paths are properly handled."""
 

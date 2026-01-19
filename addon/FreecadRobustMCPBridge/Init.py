@@ -37,6 +37,27 @@ def _auto_start_bridge() -> None:
     This function is called via a deferred timer (GUI mode) or directly
     (headless mode) after FreeCAD finishes loading. It starts the bridge
     without requiring the workbench to be selected.
+
+    Args:
+        None.
+
+    Returns:
+        None. Early returns if auto-start is disabled or bridge is already running.
+
+    Raises:
+        Exception: Any exception during bridge startup is caught, logged to
+            FreeCAD.Console.PrintError with full traceback, and suppressed.
+
+    Side Effects:
+        - Imports and checks auto-start preference from preferences module
+        - Creates and starts a FreecadMCPPlugin instance if not already running
+        - Registers the plugin with the workbench commands module
+        - Prints status messages to FreeCAD.Console
+
+    Example:
+        This function is typically called via QTimer or GuiWaiter callback::
+
+            QtCore.QTimer.singleShot(1000, _auto_start_bridge)
     """
     try:
         from preferences import get_auto_start

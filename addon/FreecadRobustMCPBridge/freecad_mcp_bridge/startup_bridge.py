@@ -59,6 +59,12 @@ def _start_bridge() -> None:
     environment variables and registers the plugin with the workbench commands
     module for visibility to other components.
 
+    Args:
+        None.
+
+    Returns:
+        None. Early returns if bridge is already running.
+
     Environment Variables:
         FREECAD_XMLRPC_PORT: XML-RPC port (default: 9875)
         FREECAD_SOCKET_PORT: JSON-RPC socket port (default: 9876)
@@ -73,6 +79,12 @@ def _start_bridge() -> None:
         - Creates and starts a FreecadMCPPlugin instance
         - Registers the plugin with the workbench commands module
         - Prints status messages to FreeCAD.Console
+
+    Example:
+        This function is typically called via GuiWaiter callback or directly::
+
+            _gui_waiter = GuiWaiter(callback=_start_bridge)
+            _gui_waiter.start()
     """
     # Check if bridge is already running (from auto-start in Init.py)
     from bridge_utils import get_running_plugin
