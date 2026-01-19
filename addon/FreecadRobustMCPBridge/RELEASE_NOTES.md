@@ -1,5 +1,22 @@
 # Robust MCP Bridge Workbench Release Notes
 
+## Version 0.6.2 (2026-01-18)
+
+No changes to the workbench code itself. This release reflects the repository restructuring.
+
+### Changed
+
+- **Repository restructured**: This addon now focuses solely on the MCP Bridge Workbench. Standalone macros have been moved to dedicated repositories for independent release cycles.
+
+### Note
+
+The standalone macros (Cut Object for Magnets and Multi Export) are now maintained in separate repositories:
+
+- [freecad-macro-cut-for-magnets](https://github.com/spkane/freecad-macro-cut-for-magnets)
+- [freecad-macro-3d-print-multi-export](https://github.com/spkane/freecad-macro-3d-print-multi-export)
+
+Each macro can now be installed independently via the FreeCAD Addon Manager.
+
 ## Version 0.6.1 (2026-01-12)
 
 Release notes for changes between v0.5.0-beta and v0.6.1.

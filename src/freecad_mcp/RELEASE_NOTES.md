@@ -1,5 +1,27 @@
 # Robust MCP Server Release Notes
 
+## Version 0.6.2 (2026-01-18)
+
+No changes to the MCP server code itself. This release includes Docker image security improvements and repository restructuring.
+
+### Changed
+
+- **Repository restructured**: The standalone macros (Cut Object for Magnets, Multi Export) have been moved to dedicated repositories for independent release cycles and FreeCAD Addon Manager submission.
+- **Docker image**: Now uses `uv.lock` for reproducible builds with locked dependency versions
+
+### Fixed
+
+- **Docker security (CVE-2025-8869)**: Removed pip from runtime image (was vulnerable)
+- **Docker security (GHSA-58pv-8j8x-9vj2)**: Removed setuptools from runtime image (jaraco.context vulnerability)
+
+### Removed
+
+- **Standalone macros**: `macros/Cut_Object_for_Magnets/` and `macros/Multi_Export/` moved to:
+  - [freecad-macro-cut-for-magnets](https://github.com/spkane/freecad-macro-cut-for-magnets)
+  - [freecad-macro-3d-print-multi-export](https://github.com/spkane/freecad-macro-3d-print-multi-export)
+
+---
+
 ## Version 0.6.1 (2026-01-12)
 
 Release notes for changes between v0.5.0-beta and v0.6.1.
