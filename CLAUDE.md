@@ -1027,6 +1027,12 @@ If you put auto-start logic in `Init.py`, it will only run when the user manuall
 2. Use `QTimer.singleShot()` to defer execution until GUI is fully ready
 3. The `Initialize()` method is too late - it only runs when workbench is selected
 
+**Note on GuiWaiter vs QTimer.singleShot:**
+
+- `GuiWaiter` works well when called from `Init.py` (workbench selection) or `startup_bridge.py`
+- However, `GuiWaiter` has timing issues when used from `InitGui.py` module-level code
+- For `InitGui.py`, use `QTimer.singleShot()` with a sufficient delay (e.g., 3 seconds)
+
 **Example pattern in InitGui.py:**
 
 ```python
@@ -1036,12 +1042,14 @@ try:
 except ImportError:
     from PySide6 import QtCore
 
-def _deferred_auto_start() -> None:
+def _auto_start_bridge() -> None:
     """Auto-start bridge after GUI is fully ready."""
     # ... auto-start logic here ...
 
 # Schedule auto-start after GUI initializes (3 second delay)
-QtCore.QTimer.singleShot(3000, _deferred_auto_start)
+from preferences import get_auto_start
+if get_auto_start():
+    QtCore.QTimer.singleShot(3000, _auto_start_bridge)
 ```
 
 **This is different from regular Python packages** where `__init__.py` runs on import. FreeCAD workbenches have special loading behavior.
@@ -1081,28 +1089,32 @@ When FreeCAD starts in GUI mode, there's a timing window where:
 - Integration tests pass initial connection, then crash on first document operation
 - Thread check shows `is_main_thread: False` with `thread_name: 'MCP-QueueProcessor'` even when `gui_up: True`
 
-**The Fix (in `InitGui.py` or `startup_bridge.py`):**
+**The Fix:**
 
-Use `QTimer.singleShot()` to defer bridge startup until after GUI is ready:
+The approach depends on where the code runs:
+
+**For `InitGui.py` module-level code:** Use `QTimer.singleShot()` with a delay:
 
 ```python
 # WRONG - starts bridge immediately, GUI may not be ready
 _auto_start_bridge()
 
-# CORRECT - wait for GUI to be ready (use sufficient delay)
-QtCore.QTimer.singleShot(3000, _deferred_auto_start)
+# CORRECT - defer with sufficient delay for GUI to stabilize
+QtCore.QTimer.singleShot(3000, _auto_start_bridge)
 ```
 
-For `startup_bridge.py`, use `GuiWaiter` to poll for `FreeCAD.GuiUp`:
+**For `startup_bridge.py` or `Init.py`:** Use `GuiWaiter` to poll for `FreeCAD.GuiUp`:
 
 ```python
-# Wait for GuiUp to become True before starting
-from bridge_utils import GuiWaiter
+# CORRECT - poll for GuiUp to be True, then start
+from freecad_mcp_bridge.bridge_utils import GuiWaiter
 _gui_waiter = GuiWaiter(callback=_start_bridge, log_prefix="Startup Bridge")
 _gui_waiter.start()
 ```
 
-**Note:** This QTimer wait pattern is **only for GUI startup scenarios**. In headless mode (`freecadcmd`), the bridge starts directly without waiting because there is no Qt event loop to wait for. The four startup paths are:
+**Note:** `GuiWaiter` has timing issues when used from `InitGui.py` module-level code due to how FreeCAD loads workbenches. Use `QTimer.singleShot()` for `InitGui.py` instead.
+
+**Note:** These wait patterns are **only for GUI startup scenarios**. In headless mode (`freecadcmd`), the bridge starts directly without waiting because there is no Qt event loop to wait for. The four startup paths are:
 
 1. **GUI already up** (`FreeCAD.GuiUp = True`): Start bridge immediately with Qt timer
 2. **True headless** (`QCoreApplication` exists but is NOT a `QApplication`): Start directly with background thread

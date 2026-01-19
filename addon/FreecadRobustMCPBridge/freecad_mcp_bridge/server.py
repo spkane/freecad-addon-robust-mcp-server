@@ -269,8 +269,8 @@ class FreecadMCPPlugin:
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage(
                 f"MCP Bridge started (Instance ID: {self._instance_id}):\n"
-                f"  - JSON-RPC: {self._host}:{self._port}\n"
             )
+            FreeCAD.Console.PrintMessage(f"  - JSON-RPC: {self._host}:{self._port}\n")
             if self._enable_xmlrpc:
                 FreeCAD.Console.PrintMessage(
                     f"  - XML-RPC: {self._host}:{self._xmlrpc_port}\n"
