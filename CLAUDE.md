@@ -1608,7 +1608,7 @@ All versions follow SemVer 2.0:
 **Workbench/Macro Release:**
 
 1. Validates tag format
-2. Updates version in source files (.FCMacro, README, wiki-source.txt)
+2. Updates version in source files
 3. Updates version in package.xml
 4. Creates archive (tar.gz + zip)
 5. Creates GitHub release with archives

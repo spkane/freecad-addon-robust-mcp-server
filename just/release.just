@@ -58,18 +58,6 @@ bump-workbench version:
         exit 1
     fi
 
-    # Update wiki-source.txt version and date
-    WIKI_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
-    if [ -f "$WIKI_FILE" ]; then
-        sed "s/|Version=.*/|Version=${VERSION}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
-        sed "s/|Date=.*/|Date=${TODAY}/" "$WIKI_FILE" > "$WIKI_FILE.tmp" && mv "$WIKI_FILE.tmp" "$WIKI_FILE"
-        echo ""
-        echo "Updated $WIKI_FILE:"
-        grep -E "^\|Version=|\|Date=" "$WIKI_FILE"
-    else
-        echo "WARNING: File not found: $WIKI_FILE"
-    fi
-
     # Update the workbench version in package.xml
     PACKAGE_XML="{{project_root}}/package.xml"
     if [ -f "$PACKAGE_XML" ]; then
@@ -168,21 +156,6 @@ tag-workbench version:
         exit 1
     fi
     echo "✓ $INIT_FILE: $INIT_VERSION"
-
-    # Check wiki-source.txt
-    WIKI_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
-    if [ -f "$WIKI_FILE" ]; then
-        WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
-        if [ "$WIKI_VERSION" != "$VERSION" ]; then
-            echo "ERROR: Version mismatch in $WIKI_FILE"
-            echo "  Expected: $VERSION"
-            echo "  Found:    $WIKI_VERSION"
-            echo ""
-            echo "Run 'just release::bump-workbench $VERSION' first, then commit the changes."
-            exit 1
-        fi
-        echo "✓ $WIKI_FILE: $WIKI_VERSION"
-    fi
 
     # Check package.xml
     PACKAGE_XML="{{project_root}}/package.xml"
@@ -906,15 +879,6 @@ wiki-update component:
         exit 1
     fi
 
-    # Extract current version from wiki-source.txt
-    CURRENT_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
-    CURRENT_DATE=$(grep -o '|Date=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
-
-    echo "Current version in wiki-source.txt:"
-    echo "  Version: $CURRENT_VERSION"
-    echo "  Date:    $CURRENT_DATE"
-    echo ""
-
     # Try to copy to clipboard (platform-specific)
     COPIED=false
     if command -v pbcopy &> /dev/null; then
@@ -951,7 +915,7 @@ wiki-update component:
     echo "2. Log in to your FreeCAD wiki account if prompted"
     echo "3. Select ALL content in the edit box (Ctrl+A / Cmd+A)"
     echo "4. Paste the new content (Ctrl+V / Cmd+V)"
-    echo "5. Add an edit summary like: 'Update to version $CURRENT_VERSION'"
+    echo "5. Add an edit summary describing your changes"
     echo "6. Click 'Show preview' to verify changes"
     echo "7. Click 'Save changes' when satisfied"
     echo ""
@@ -1012,14 +976,6 @@ wiki-show component:
     echo "Wiki Source: $COMPONENT_NAME"
     echo "=========================================="
     echo "File: $WIKI_SOURCE"
-    echo ""
-
-    # Show version info
-    CURRENT_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
-    CURRENT_DATE=$(grep -o '|Date=[^|]*' "$WIKI_SOURCE" | cut -d= -f2 | tr -d '\n')
-    echo "Version: $CURRENT_VERSION"
-    echo "Date:    $CURRENT_DATE"
-    echo ""
     echo "=========================================="
     echo ""
 

@@ -1,21 +1,12 @@
 <languages/>
 <translate>
 
-<!--T:172-->
-[[Image:FreecadRobustMCPBridge.svg|thumb|128px|Robust MCP Bridge workbench icon]]
-
 <!--T:1-->
-{{Workbench
-|Name=Robust MCP Bridge Workbench
-|Icon=FreecadRobustMCPBridge.svg
-|Description=Bridge workbench designed to provide an interface between FreeCAD and the Robust MCP Server to enable AI assistants (like Claude) to control FreeCAD via the Model Context Protocol (MCP). It provides XML-RPC and JSON-RPC interfaces for external automation.
-|Author=Sean P. Kane
-|Version=0.6.2
-|Date=2026-01-18
-|FCVersion=0.21+
-|Download=[https://github.com/spkane/freecad-robust-mcp-and-more/releases Latest Release]
-|SeeAlso=[[Macros|Macros]], [[External_workbenches|External Workbenches]]
-}}
+[[Image:FreecadRobustMCPBridge.svg|thumb|128px|Robust MCP Bridge Workbench icon]]
+
+</translate>
+{{TOCright}}
+<translate>
 
 ==Description== <!--T:2-->
 
@@ -27,17 +18,17 @@ This workbench is designed to work with the [https://pypi.org/project/freecad-ro
 
 <!--T:5-->
 '''Key Features:'''
-* Toolbar controls for starting/stopping the MCP bridge
-* Status indicator showing connection state (green=running, red=stopped)
-* XML-RPC server on configurable port (default: 9875)
-* JSON-RPC socket server on configurable port (default: 9876)
-* Headless mode support for automation and CI/CD pipelines
-* Thread-safe queue system ensuring safe FreeCAD operations
-* Configurable auto-start on FreeCAD launch
+* Toolbar controls for starting/stopping the MCP bridge.
+* Status indicator showing connection state (green=running, red=stopped).
+* XML-RPC server on configurable port (default: 9875).
+* JSON-RPC socket server on configurable port (default: 9876).
+* Headless mode support for automation and CI/CD pipelines.
+* Thread-safe queue system ensuring safe FreeCAD operations.
+* Configurable auto-start on FreeCAD launch.
 
 ==Installation== <!--T:6-->
 
-===Via Addon Manager (Recommended)=== <!--T:7-->
+===Via Addon Manager (recommended)=== <!--T:7-->
 
 <!--T:8-->
 # Open FreeCAD
@@ -46,62 +37,68 @@ This workbench is designed to work with the [https://pypi.org/project/freecad-ro
 # Click {{Button|Install}}
 # Restart FreeCAD
 
-===Manual Installation=== <!--T:9-->
+===Manual installation=== <!--T:9-->
 
 <!--T:10-->
 Download the latest release from [https://github.com/spkane/freecad-robust-mcp-and-more/releases GitHub Releases] and extract to your FreeCAD Mod directory:
 
-<!--T:11-->
+</translate>
 * '''Linux''': {{FileName|~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/}}
 * '''macOS''': {{FileName|~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCPBridge/}}
 * '''Windows''': {{FileName|%APPDATA%/FreeCAD/Mod/FreecadRobustMCPBridge/}}
+<translate>
 
 ==Usage== <!--T:12-->
 
-===GUI Mode=== <!--T:13-->
-
-<!--T:173-->
-[[Image:Addon_RobustMCPBridge_toolbar.png|Robust MCP Bridge workbench toolbar]]
+===GUI mode=== <!--T:13-->
 
 <!--T:14-->
+[[Image:Addon_RobustMCPBridge_toolbar.png|Robust MCP Bridge workbench toolbar]]
+
+<!--T:15-->
 # Switch to the '''Robust MCP Bridge''' workbench using the workbench selector
 # Click {{Button|Start Bridge}} in the toolbar
 # The status indicator turns green when running
 # External MCP clients can now connect to localhost:9875 (XML-RPC) or localhost:9876 (Socket)
 
-<!--T:15-->
+<!--T:16-->
 To stop the bridge, click {{Button|Stop Bridge}} in the toolbar.
 
-<!--T:174-->
+<!--T:17-->
 [[Image:Addon_RobustMCPBridge_statusbar.png|Robust MCP Bridge workbench statusbar]]
 
-===Headless Mode=== <!--T:16-->
+===Headless mode=== <!--T:18-->
 
-<!--T:17-->
+<!--T:19-->
 For automation and CI/CD pipelines, the bridge can run without the GUI:
 
-<!--T:18-->
+<!--T:20-->
 '''Linux:'''
+</translate>
 {{Code|code=
 freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 }}
+<translate>
 
 <!--T:19-->
 '''macOS:'''
+
+</translate>
 {{Code|code=
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
     ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 }}
-
-<!--T:20-->
-The bridge will start and keep FreeCAD running until you press Ctrl+C.
-
-==Configuration== <!--T:21-->
+<translate>
 
 <!--T:22-->
+The bridge will start and keep FreeCAD running until you press Ctrl+C.
+
+==Configuration== <!--T:23-->
+
+<!--T:24-->
 Access preferences via {{MenuCommand|Edit → Preferences → Robust MCP Bridge}} or {{MenuCommand|Robust MCP Bridge → MCP Bridge Preferences...}}
 
-<!--T:23-->
+<!--T:25-->
 {| class="wikitable"
 ! Setting !! Description !! Default
 |-
@@ -114,11 +111,12 @@ Access preferences via {{MenuCommand|Edit → Preferences → Robust MCP Bridge}
 | Socket Port || Port for JSON-RPC socket connections || 9876
 |}
 
+<!--T:26-->
 [[Image:Addon RobustMCPBridge preferences.png|800px|Robust MCP Bridge workbench preference pane]]
 
-==Features by Mode== <!--T:24-->
+==Features by Mode== <!--T:27-->
 
-<!--T:25-->
+<!--T:28-->
 {| class="wikitable"
 ! Feature !! GUI Mode !! Headless Mode
 |-
@@ -139,58 +137,62 @@ Access preferences via {{MenuCommand|Edit → Preferences → Robust MCP Bridge}
 | Camera/view control || Yes || No
 |}
 
-==Connecting MCP Clients== <!--T:26-->
+==Connecting MCP clients== <!--T:29-->
 
-<!--T:27-->
+<!--T:30-->
 This workbench provides the server that MCP clients connect to. To use with AI assistants like Claude, you need an MCP client such as the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server]:
 
-<!--T:28-->
+</translate>
 {{Code|code=
 pip install freecad-robust-mcp
 }}
+<translate>
 
-<!--T:29-->
+<!--T:31-->
 Or using uv:
+
+</translate>
 {{Code|code=
 uv tool install freecad-robust-mcp
 }}
+<translate>
 
-<!--T:30-->
+<!--T:32-->
 See the [https://github.com/spkane/freecad-robust-mcp-and-more GitHub repository] for full documentation on configuring MCP clients.
 
-==Troubleshooting== <!--T:31-->
+==Troubleshooting== <!--T:33-->
 
-===Bridge Won't Start=== <!--T:32-->
-
-<!--T:33-->
-# Check the FreeCAD Python console ({{MenuCommand|View → Panels → Python console}}) for error messages
-# Ensure no other process is using ports 9875/9876
-# Try restarting FreeCAD
-
-===Connection Refused=== <!--T:34-->
+===Bridge won't start=== <!--T:34-->
 
 <!--T:35-->
-# Verify the bridge is running (green status indicator in toolbar)
-# Check that ports match between the workbench preferences and your MCP client configuration
-# If connecting from Docker, use {{incode|host.docker.internal}} instead of {{incode|localhost}}
+# Check the FreeCAD Python console ({{MenuCommand|View → Panels → Python console}}) for error messages.
+# Ensure no other process is using ports 9875/9876.
+# Try restarting FreeCAD.
 
-===Headless Mode Won't Start=== <!--T:36-->
+===Connection refused=== <!--T:36-->
 
 <!--T:37-->
-# Ensure you're using {{incode|freecadcmd}} (not {{incode|freecad}})
-# Verify the script path is correct for your installation
-# Test FreeCAD first: {{incode|freecadcmd -c "print('test')"}}
+# Verify the bridge is running (green status indicator in toolbar).
+# Check that ports match between the workbench preferences and your MCP client configuration.
+# If connecting from Docker, use {{incode|host.docker.internal}} instead of {{incode|localhost}}.
 
-==Links== <!--T:38-->
+===Headless mode won't start=== <!--T:38-->
 
 <!--T:39-->
-* [https://spkane.github.io/freecad-robust-mcp-and-more/ Full Documentation] - Complete guides, API reference, and tutorials
-* [https://github.com/spkane/freecad-robust-mcp-and-more GitHub Repository] - Source code and issue tracker
-* [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server on PyPI] - The MCP client that connects to this bridge
-* [https://modelcontextprotocol.io/ Model Context Protocol] - The protocol specification
+# Ensure you're using {{incode|freecadcmd}} (not {{incode|freecad}}).
+# Verify the script path is correct for your installation.
+# Test FreeCAD first: {{incode|freecadcmd -c "print('test')"}}.
+
+==Links== <!--T:40-->
+
+<!--T:41-->
+* [https://github.com/spkane/freecad-robust-mcp-and-more/releases Latest Release]
+* [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server on PyPI] - The MCP Server that connects to this bridge.
+* [https://spkane.github.io/freecad-robust-mcp-and-more/ Full Documentation] - Complete guides, API reference, and tutorials.
+* [https://github.com/spkane/freecad-robust-mcp-and-more GitHub Repository] - Source code and issue tracker.
+* [https://modelcontextprotocol.io/ Model Context Protocol] - The protocol specification.
+
 
 </translate>
-
-[[Category:User Documentation{{#translation:}}]]
 [[Category:Addons{{#translation:}}]]
-[[Category:External Workbenches{{#translation:}}]]
+[[Category:External_Workbenches{{#translation:}}]]
