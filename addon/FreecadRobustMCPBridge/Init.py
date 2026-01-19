@@ -88,10 +88,14 @@ def _auto_start_bridge() -> None:
 # Schedule auto-start after FreeCAD finishes loading
 # Strategy:
 # - If FreeCAD.GuiUp is True: Qt event loop is running, use timer for deferred start
-# - If FreeCAD.GuiUp is False but Qt is available: FreeCAD GUI is initializing.
+# - If FreeCAD.GuiUp is False but QApplication exists: FreeCAD GUI is initializing.
 #   Use GuiWaiter to wait for GuiUp to become True before starting.
 #   This ensures the bridge uses Qt timer (not background thread) for queue processing.
-# - If Qt is not available: Pure headless mode, start bridge directly
+# - If no QApplication: True headless mode, start bridge directly
+#
+# IMPORTANT: We check for QApplication.instance() rather than just QtCore availability
+# because FreeCAD bundles PySide even in headless mode (freecadcmd), but there's no
+# Qt event loop running. Without a QApplication, Qt timers will never fire.
 #
 # CRITICAL: We must wait for FreeCAD.GuiUp to be True before starting the bridge
 # in GUI mode. If we start when GuiUp is False, the bridge's _start_queue_processor()
@@ -100,19 +104,43 @@ def _auto_start_bridge() -> None:
 try:
     from preferences import get_auto_start
 
-    if get_auto_start():
-        # Try to import Qt
+    _auto_start_enabled = get_auto_start()
+    FreeCAD.Console.PrintMessage(
+        f"Robust MCP Bridge: Auto-start preference = {_auto_start_enabled}\n"
+    )
+
+    if _auto_start_enabled:
+        # Try to import Qt and check for running QApplication
         import contextlib
 
         QtCore = None
+        QtWidgets = None
+        _has_qapp = False
+
         try:
-            from PySide2 import QtCore  # type: ignore[assignment, no-redef]
+            from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
         except ImportError:
             with contextlib.suppress(ImportError):
-                from PySide6 import QtCore  # type: ignore[assignment, no-redef]
+                from PySide6 import (  # type: ignore[assignment, no-redef]
+                    QtCore,
+                    QtWidgets,
+                )
+
+        # Check if there's a QApplication instance (indicates GUI mode)
+        if QtWidgets is not None:
+            _has_qapp = QtWidgets.QApplication.instance() is not None
+
+        FreeCAD.Console.PrintMessage(
+            f"Robust MCP Bridge: GuiUp={FreeCAD.GuiUp}, "
+            f"QtCore={'available' if QtCore else 'unavailable'}, "
+            f"QApp={'running' if _has_qapp else 'none'}\n"
+        )
 
         if FreeCAD.GuiUp:
             # GUI is already up - use timer for deferred start
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: GUI already up, scheduling deferred start...\n"
+            )
             if QtCore is not None:
                 _auto_start_timer = QtCore.QTimer()
                 _auto_start_timer.setSingleShot(True)
@@ -121,9 +149,12 @@ try:
             else:
                 # GUI is up but Qt import failed - start directly
                 _auto_start_bridge()
-        elif QtCore is not None:
-            # GUI not ready yet, but Qt is available (FreeCAD starting in GUI mode)
+        elif _has_qapp:
+            # GUI not ready yet, but QApplication exists (FreeCAD starting in GUI mode)
             # Use GuiWaiter to wait for GuiUp to become True before starting
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: GUI not ready, using GuiWaiter...\n"
+            )
             from freecad_mcp_bridge.bridge_utils import GuiWaiter
 
             _gui_waiter = GuiWaiter(
@@ -136,7 +167,14 @@ try:
             )
             _gui_waiter.start()
         else:
-            # True headless mode - no Qt, no GUI
+            # True headless mode - no QApplication, so no Qt event loop
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: Headless mode (no QApplication), "
+                "starting directly...\n"
+            )
             _auto_start_bridge()
 except Exception as e:
     FreeCAD.Console.PrintWarning(f"Could not set up auto-start: {e}\n")
+    import traceback
+
+    FreeCAD.Console.PrintWarning(f"Traceback: {traceback.format_exc()}\n")
