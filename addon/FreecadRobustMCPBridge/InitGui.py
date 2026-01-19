@@ -178,6 +178,72 @@ try:
     FreeCAD.Console.PrintMessage(
         "Robust MCP Bridge: Status bar sync scheduled from InitGui (2s)\n"
     )
+
+    # Auto-start the MCP bridge if configured in preferences
+    # This runs at FreeCAD GUI startup (InitGui.py module-level code)
+    # Note: Init.py does NOT run at startup for workbench addons, so auto-start
+    # must be triggered from here instead.
+    def _deferred_auto_start() -> None:
+        """Auto-start bridge after GUI is fully ready."""
+        try:
+            from preferences import get_auto_start
+
+            if not get_auto_start():
+                return
+
+            # Check if bridge is already running
+            from commands import is_bridge_running
+
+            if is_bridge_running():
+                FreeCAD.Console.PrintMessage(
+                    "Robust MCP Bridge: Bridge already running, skipping auto-start\n"
+                )
+                return
+
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: Auto-starting from InitGui...\n"
+            )
+
+            # Import and start the bridge
+            from freecad_mcp_bridge.bridge_utils import register_mcp_plugin
+            from freecad_mcp_bridge.server import FreecadMCPPlugin
+            from preferences import get_socket_port, get_xmlrpc_port
+
+            xmlrpc_port = get_xmlrpc_port()
+            socket_port = get_socket_port()
+
+            plugin = FreecadMCPPlugin(
+                host="localhost",
+                port=socket_port,
+                xmlrpc_port=xmlrpc_port,
+                enable_xmlrpc=True,
+            )
+            plugin.start()
+
+            # Register plugin with commands module
+            register_mcp_plugin(plugin, xmlrpc_port, socket_port)
+
+            # Sync status bar now that bridge is running
+            try:
+                from status_widget import sync_status_with_bridge
+
+                sync_status_with_bridge()
+            except Exception as status_err:
+                FreeCAD.Console.PrintWarning(
+                    f"Could not sync status bar after auto-start: {status_err}\n"
+                )
+        except Exception as e:
+            FreeCAD.Console.PrintError(f"Robust MCP Bridge: Auto-start failed: {e}\n")
+            import traceback
+
+            FreeCAD.Console.PrintError(traceback.format_exc())
+
+    # Schedule auto-start after a short delay to ensure GUI is fully ready
+    # Use a longer delay than status bar sync to avoid race conditions
+    QtCore.QTimer.singleShot(3000, _deferred_auto_start)
+    FreeCAD.Console.PrintMessage(
+        "Robust MCP Bridge: Auto-start scheduled from InitGui (3s)\n"
+    )
 except Exception as e:
     FreeCAD.Console.PrintWarning(
         f"Robust MCP Bridge: Could not schedule status bar sync: {e}\n"

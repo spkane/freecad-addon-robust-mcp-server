@@ -13,12 +13,15 @@ must run on the main thread.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+# Import FreeCAD first so we can log early
+import FreeCAD
+
+FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init.py loaded\n")
+
+from typing import TYPE_CHECKING, Any  # noqa: E402
 
 if TYPE_CHECKING:
     from freecad_mcp_bridge.bridge_utils import GuiWaiter
-
-import FreeCAD
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
 
@@ -83,15 +86,22 @@ def _auto_start_bridge() -> None:
 
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to auto-start MCP Bridge: {e}\n")
+        import traceback
+
+        FreeCAD.Console.PrintError(f"Traceback: {traceback.format_exc()}\n")
 
 
 # Schedule auto-start after FreeCAD finishes loading
 # Strategy:
 # - If FreeCAD.GuiUp is True: Qt event loop is running, use timer for deferred start
-# - If FreeCAD.GuiUp is False but Qt is available: FreeCAD GUI is initializing.
+# - If FreeCAD.GuiUp is False but QApplication exists: FreeCAD GUI is initializing.
 #   Use GuiWaiter to wait for GuiUp to become True before starting.
 #   This ensures the bridge uses Qt timer (not background thread) for queue processing.
-# - If Qt is not available: Pure headless mode, start bridge directly
+# - If no QApplication: True headless mode, start bridge directly
+#
+# IMPORTANT: We check for QApplication.instance() rather than just QtCore availability
+# because FreeCAD bundles PySide even in headless mode (freecadcmd), but there's no
+# Qt event loop running. Without a QApplication, Qt timers will never fire.
 #
 # CRITICAL: We must wait for FreeCAD.GuiUp to be True before starting the bridge
 # in GUI mode. If we start when GuiUp is False, the bridge's _start_queue_processor()
@@ -100,19 +110,59 @@ def _auto_start_bridge() -> None:
 try:
     from preferences import get_auto_start
 
-    if get_auto_start():
-        # Try to import Qt
+    _auto_start_enabled = get_auto_start()
+    FreeCAD.Console.PrintMessage(
+        f"Robust MCP Bridge: Auto-start preference = {_auto_start_enabled}\n"
+    )
+
+    if _auto_start_enabled:
+        # Try to import Qt and check for running QApplication
         import contextlib
 
         QtCore = None
+        QtWidgets = None
+        _has_qapp = False
+        _is_true_headless = False
+
         try:
-            from PySide2 import QtCore  # type: ignore[assignment, no-redef]
+            from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
         except ImportError:
             with contextlib.suppress(ImportError):
-                from PySide6 import QtCore  # type: ignore[assignment, no-redef]
+                from PySide6 import (  # type: ignore[assignment, no-redef]
+                    QtCore,
+                    QtWidgets,
+                )
+
+        # Detect GUI mode vs true headless mode
+        # - True headless (freecadcmd): QCoreApplication exists but NOT QApplication
+        # - GUI mode early startup: No app yet, or QApplication being initialized
+        # - GUI mode ready: FreeCAD.GuiUp is True
+        if QtWidgets is not None and QtCore is not None:
+            qapp = QtWidgets.QApplication.instance()
+            if qapp is not None:
+                _has_qapp = True
+            else:
+                # No QApplication - check if QCoreApplication exists
+                # If QCoreApplication exists but is NOT a QApplication, it's true headless
+                qcore_app = QtCore.QCoreApplication.instance()
+                if qcore_app is not None and not isinstance(
+                    qcore_app, QtWidgets.QApplication
+                ):
+                    _is_true_headless = True
+                # If no app at all, assume early GUI startup (will use GuiWaiter)
+
+        FreeCAD.Console.PrintMessage(
+            f"Robust MCP Bridge: GuiUp={FreeCAD.GuiUp}, "
+            f"QtCore={'available' if QtCore else 'unavailable'}, "
+            f"QApp={'running' if _has_qapp else 'none'}, "
+            f"headless={_is_true_headless}\n"
+        )
 
         if FreeCAD.GuiUp:
             # GUI is already up - use timer for deferred start
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: GUI already up, scheduling deferred start...\n"
+            )
             if QtCore is not None:
                 _auto_start_timer = QtCore.QTimer()
                 _auto_start_timer.setSingleShot(True)
@@ -121,9 +171,21 @@ try:
             else:
                 # GUI is up but Qt import failed - start directly
                 _auto_start_bridge()
+        elif _is_true_headless:
+            # True headless mode - QCoreApplication exists but not QApplication
+            # No Qt event loop for GUI, so start bridge directly with background thread
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: True headless mode (QCoreApplication only), "
+                "starting directly...\n"
+            )
+            _auto_start_bridge()
         elif QtCore is not None:
-            # GUI not ready yet, but Qt is available (FreeCAD starting in GUI mode)
+            # GUI not ready yet (either QApplication exists or no app yet)
             # Use GuiWaiter to wait for GuiUp to become True before starting
+            # This ensures the bridge uses Qt timer (not background thread) for queue
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: GUI not ready, using GuiWaiter...\n"
+            )
             from freecad_mcp_bridge.bridge_utils import GuiWaiter
 
             _gui_waiter = GuiWaiter(
@@ -136,7 +198,13 @@ try:
             )
             _gui_waiter.start()
         else:
-            # True headless mode - no Qt, no GUI
+            # No Qt available at all - unusual state, start directly
+            FreeCAD.Console.PrintMessage(
+                "Robust MCP Bridge: No Qt available, starting directly...\n"
+            )
             _auto_start_bridge()
 except Exception as e:
     FreeCAD.Console.PrintWarning(f"Could not set up auto-start: {e}\n")
+    import traceback
+
+    FreeCAD.Console.PrintWarning(f"Traceback: {traceback.format_exc()}\n")

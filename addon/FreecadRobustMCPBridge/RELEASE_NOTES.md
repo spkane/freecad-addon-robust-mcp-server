@@ -2,7 +2,7 @@
 
 ## Version 0.6.2 (2026-01-18)
 
-No changes to the workbench code itself. This release reflects the repository restructuring.
+This release fixes some auto-start issues and improves the overall startup experience across all supported modes.
 
 ### Added
 
@@ -11,10 +11,13 @@ No changes to the workbench code itself. This release reflects the repository re
 ### Changed
 
 - **Repository restructured**: This addon now focuses solely on the MCP Bridge Workbench. Standalone macros have been moved to dedicated repositories for independent release cycles.
+- **Cleaner startup messages**: Removed duplicate success messages when bridge auto-starts.
 
 ### Fixed
 
-- No bug fixes in this release.
+- **Auto-start not working at FreeCAD startup**: Fixed bug where auto-start only worked when manually selecting the workbench. For FreeCAD workbench addons, `Init.py` does NOT run at startup - only `InitGui.py` module-level code runs. Auto-start logic has been moved to `InitGui.py`.
+- **Status bar not appearing after auto-start**: The status bar widget now syncs immediately after the bridge starts, instead of on a timer that ran before the bridge was ready.
+- **Integration test crashes**: Fixed race condition where the bridge could start before `FreeCAD.GuiUp` was `True`, causing Qt operations to run on a background thread and crash FreeCAD.
 
 ### Note
 

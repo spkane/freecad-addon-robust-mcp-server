@@ -128,31 +128,76 @@ def _start_bridge() -> None:
 # Schedule bridge start after FreeCAD finishes loading
 # Strategy:
 # - If FreeCAD.GuiUp is True: Qt event loop is running, start bridge directly
-# - If FreeCAD.GuiUp is False but Qt is available: FreeCAD GUI is initializing.
+# - If FreeCAD.GuiUp is False but QApplication exists: FreeCAD GUI is initializing.
 #   Use GuiWaiter to wait for GuiUp to become True before starting.
 #   This ensures the bridge uses Qt timer (not background thread) for queue processing.
-# - If Qt is not available: Pure headless mode, start bridge directly
+# - If no QApplication: True headless mode, start bridge directly
+#
+# IMPORTANT: We check for QApplication.instance() rather than just QtCore availability
+# because FreeCAD bundles PySide even in headless mode (freecadcmd), but there's no
+# Qt event loop running. Without a QApplication, Qt timers will never fire.
 #
 # CRITICAL: We must wait for FreeCAD.GuiUp to be True before starting the bridge
 # in GUI mode. If we start when GuiUp is False, the bridge's _start_queue_processor()
 # will see GuiUp=False and use a background thread. Later, code executed on that
 # thread will try to do Qt operations, causing crashes (SIGABRT in QCocoaWindow).
 try:
-    # Try to import Qt
+    # Try to import Qt and check for running QApplication
     QtCore = None
+    QtWidgets = None
+    _has_qapp = False
+    _is_true_headless = False
+
     try:
-        from PySide2 import QtCore  # type: ignore[assignment, no-redef]
+        from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
     except ImportError:
         with contextlib.suppress(ImportError):
-            from PySide6 import QtCore  # type: ignore[assignment, no-redef]
+            from PySide6 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
+
+    # Detect GUI mode vs true headless mode
+    # - True headless (freecadcmd): QCoreApplication exists but NOT QApplication
+    # - GUI mode early startup: No app yet, or QApplication being initialized
+    # - GUI mode ready: FreeCAD.GuiUp is True
+    if QtWidgets is not None and QtCore is not None:
+        qapp = QtWidgets.QApplication.instance()
+        if qapp is not None:
+            _has_qapp = True
+        else:
+            # No QApplication - check if QCoreApplication exists
+            # If QCoreApplication exists but is NOT a QApplication, it's true headless
+            qcore_app = QtCore.QCoreApplication.instance()
+            if qcore_app is not None and not isinstance(
+                qcore_app, QtWidgets.QApplication
+            ):
+                _is_true_headless = True
+            # If no app at all, assume early GUI startup (will use GuiWaiter)
+
+    FreeCAD.Console.PrintMessage(
+        f"Startup Bridge: GuiUp={FreeCAD.GuiUp}, "
+        f"QtCore={'available' if QtCore else 'unavailable'}, "
+        f"QApp={'running' if _has_qapp else 'none'}, "
+        f"headless={_is_true_headless}\n"
+    )
 
     if FreeCAD.GuiUp:
         # GUI is already up - start bridge directly
         FreeCAD.Console.PrintMessage("Startup Bridge: GUI already up, starting...\n")
         _start_bridge()
+    elif _is_true_headless:
+        # True headless mode - QCoreApplication exists but not QApplication
+        # No Qt event loop for GUI, so start bridge directly with background thread
+        FreeCAD.Console.PrintMessage(
+            "Startup Bridge: True headless mode (QCoreApplication only), "
+            "starting directly...\n"
+        )
+        _start_bridge()
     elif QtCore is not None:
-        # GUI not ready yet, but Qt is available (FreeCAD starting in GUI mode)
+        # GUI not ready yet (either QApplication exists or no app yet)
         # Use GuiWaiter to wait for GuiUp to become True before starting
+        # This ensures the bridge uses Qt timer (not background thread) for queue
+        FreeCAD.Console.PrintMessage(
+            "Startup Bridge: GUI not ready, using GuiWaiter...\n"
+        )
         from bridge_utils import GuiWaiter
 
         _gui_waiter = GuiWaiter(
@@ -165,10 +210,11 @@ try:
         )
         _gui_waiter.start()
     else:
-        # True headless mode - no Qt, no GUI
+        # No Qt available at all - unusual state, start directly
         FreeCAD.Console.PrintMessage(
-            "Startup Bridge: Headless mode, starting directly...\n"
+            "Startup Bridge: No Qt available, starting directly...\n"
         )
         _start_bridge()
 except Exception as e:
     FreeCAD.Console.PrintError(f"Startup Bridge: Failed to initialize: {e}\n")
+    FreeCAD.Console.PrintError(traceback.format_exc())
