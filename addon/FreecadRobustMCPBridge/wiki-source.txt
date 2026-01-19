@@ -196,3 +196,4 @@ See the [https://github.com/spkane/freecad-robust-mcp-and-more GitHub repository
 </translate>
 [[Category:Addons{{#translation:}}]]
 [[Category:External_Workbenches{{#translation:}}]]
+[[Category:Addons{{#translation:}}]]
