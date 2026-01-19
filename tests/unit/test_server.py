@@ -1,5 +1,6 @@
 """Tests for the main server module."""
 
+import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -226,7 +227,7 @@ class TestMain:
     """Tests for main function."""
 
     def test_main_prints_instance_id(self):
-        """Main should print instance ID on startup."""
+        """Main should print instance ID on startup when FREECAD_MCP_TESTING is set."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
 
@@ -240,6 +241,7 @@ class TestMain:
             patch.object(server_module, "get_config", return_value=mock_config),
             patch.object(server_module.mcp, "run") as mock_run,
             patch("builtins.print") as mock_print,
+            patch.dict(os.environ, {"FREECAD_MCP_TESTING": "1"}),
         ):
             # Mock run to exit immediately
             mock_run.return_value = None
@@ -438,6 +440,7 @@ class TestStdioProtocolCleanliness:
                 "FREECAD_MODE": "xmlrpc",
                 "FREECAD_XMLRPC_PORT": "59999",
                 "FREECAD_SOCKET_HOST": "localhost",
+                "FREECAD_MCP_TESTING": "1",  # Enable stderr instance ID output
             },
         )
 

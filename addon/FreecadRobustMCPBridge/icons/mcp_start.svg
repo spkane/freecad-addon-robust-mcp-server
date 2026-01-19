@@ -1,54 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <!-- White background -->
-  <rect width="64" height="64" fill="#ffffff"/>
+  <!-- Transparent background (allows Qt pressed state to show through) -->
 
-  <!-- Bridge Structure -->
+  <!-- Bridge Structure with light outline for dark background contrast -->
   <!-- Bridge deck -->
-  <rect x="4" y="40" width="56" height="5" rx="1" fill="#8b7355" stroke="#6b5344" stroke-width="1"/>
+  <rect x="4" y="40" width="56" height="5" rx="1" fill="#8b7355" stroke="#d4c4b0" stroke-width="1.5"/>
   <!-- Bridge railings -->
-  <rect x="4" y="37" width="56" height="2" rx="0.5" fill="#a08060"/>
+  <rect x="4" y="37" width="56" height="2" rx="0.5" fill="#b89c7a" stroke="#d4c4b0" stroke-width="0.5"/>
   <!-- Bridge supports/pillars -->
-  <rect x="8" y="45" width="6" height="8" fill="#6b5344"/>
-  <rect x="50" y="45" width="6" height="8" fill="#6b5344"/>
+  <rect x="8" y="45" width="6" height="8" fill="#7a6450" stroke="#d4c4b0" stroke-width="1"/>
+  <rect x="50" y="45" width="6" height="8" fill="#7a6450" stroke="#d4c4b0" stroke-width="1"/>
   <!-- Bridge arch underneath -->
-  <path d="M 14 53 Q 32 47 50 53" fill="none" stroke="#6b5344" stroke-width="2"/>
+  <path d="M 14 53 Q 32 47 50 53" fill="none" stroke="#7a6450" stroke-width="2.5"/>
+  <path d="M 14 53 Q 32 47 50 53" fill="none" stroke="#d4c4b0" stroke-width="1" opacity="0.6"/>
 
   <!-- Robot on the bridge (facing RIGHT - same direction as play buttons) -->
-  <!-- Robot body -->
-  <rect x="24" y="18" width="16" height="14" rx="2" fill="#4a90d9" stroke="#2c5aa0" stroke-width="1.5"/>
+  <!-- Robot body with light outline -->
+  <rect x="24" y="18" width="16" height="14" rx="2" fill="#5a9ee8" stroke="#e0f0ff" stroke-width="1.5"/>
   <!-- Robot head (facing right) -->
-  <rect x="26" y="8" width="12" height="10" rx="2" fill="#4a90d9" stroke="#2c5aa0" stroke-width="1.5"/>
+  <rect x="26" y="8" width="12" height="10" rx="2" fill="#5a9ee8" stroke="#e0f0ff" stroke-width="1.5"/>
   <!-- Robot face plate (on right side) -->
-  <rect x="32" y="10" width="6" height="6" rx="1" fill="#e8f4fc"/>
+  <rect x="32" y="10" width="6" height="6" rx="1" fill="#f0f8ff" stroke="#c0e0ff" stroke-width="0.5"/>
   <!-- Robot eyes (looking right) -->
   <circle cx="36" cy="12" r="1.5" fill="#2c5aa0"/>
   <circle cx="36" cy="15" r="1.5" fill="#2c5aa0"/>
   <!-- Robot antenna -->
-  <line x1="32" y1="8" x2="32" y2="3" stroke="#2c5aa0" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="32" cy="2" r="3" fill="#27ae60"/>
+  <line x1="32" y1="8" x2="32" y2="3" stroke="#3c6ab0" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="32" cy="2" r="3" fill="#2ecc71" stroke="#e0ffe0" stroke-width="1"/>
   <!-- Robot arms (reaching forward to right) -->
-  <rect x="18" y="22" width="6" height="4" rx="1.5" fill="#3a7bc8"/>
-  <rect x="40" y="20" width="8" height="4" rx="1.5" fill="#3a7bc8"/>
+  <rect x="18" y="22" width="6" height="4" rx="1.5" fill="#4a8bd8" stroke="#c0e0ff" stroke-width="0.5"/>
+  <rect x="40" y="20" width="8" height="4" rx="1.5" fill="#4a8bd8" stroke="#c0e0ff" stroke-width="0.5"/>
   <!-- Robot legs (walking pose) -->
-  <rect x="24" y="32" width="4" height="8" rx="1" fill="#3a7bc8" transform="rotate(10, 26, 36)"/>
-  <rect x="36" y="32" width="4" height="8" rx="1" fill="#3a7bc8" transform="rotate(-10, 38, 36)"/>
+  <rect x="24" y="32" width="4" height="8" rx="1" fill="#4a8bd8" stroke="#c0e0ff" stroke-width="0.5" transform="rotate(10, 26, 36)"/>
+  <rect x="36" y="32" width="4" height="8" rx="1" fill="#4a8bd8" stroke="#c0e0ff" stroke-width="0.5" transform="rotate(-10, 38, 36)"/>
 
-  <!-- Bold Play Triangles in TOP corners -->
-  <polygon points="4,4 4,16 12,10" fill="#27ae60" stroke="#1e8449" stroke-width="1.5"/>
-  <polygon points="52,4 52,16 60,10" fill="#27ae60" stroke="#1e8449" stroke-width="1.5"/>
+  <!-- Bold Play Triangles in TOP corners with light outline -->
+  <polygon points="4,4 4,16 12,10" fill="#2ecc71" stroke="#c0ffc0" stroke-width="1.5"/>
+  <polygon points="52,4 52,16 60,10" fill="#2ecc71" stroke="#c0ffc0" stroke-width="1.5"/>
 
   <!-- Green Data Flow (river under bridge - active) -->
   <!-- Data stream background -->
-  <path d="M 0 60 Q 32 55 64 60" fill="none" stroke="#27ae60" stroke-width="4" opacity="0.3"/>
+  <path d="M 0 60 Q 32 55 64 60" fill="none" stroke="#2ecc71" stroke-width="4" opacity="0.4"/>
   <!-- Left arrow -->
-  <path d="M 6 59 L 16 59" stroke="#27ae60" stroke-width="2.5" stroke-linecap="round"/>
-  <polygon points="6,59 11,56 11,62" fill="#27ae60"/>
+  <path d="M 6 59 L 16 59" stroke="#2ecc71" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="6,59 11,56 11,62" fill="#2ecc71" stroke="#c0ffc0" stroke-width="0.5"/>
   <!-- Right arrow -->
-  <path d="M 48 59 L 58 59" stroke="#27ae60" stroke-width="2.5" stroke-linecap="round"/>
-  <polygon points="58,59 53,56 53,62" fill="#27ae60"/>
+  <path d="M 48 59 L 58 59" stroke="#2ecc71" stroke-width="2.5" stroke-linecap="round"/>
+  <polygon points="58,59 53,56 53,62" fill="#2ecc71" stroke="#c0ffc0" stroke-width="0.5"/>
   <!-- Center data dots (flowing) -->
-  <circle cx="26" cy="57" r="2" fill="#27ae60"/>
-  <circle cx="32" cy="56" r="2" fill="#27ae60"/>
-  <circle cx="38" cy="57" r="2" fill="#27ae60"/>
+  <circle cx="26" cy="57" r="2" fill="#2ecc71" stroke="#c0ffc0" stroke-width="0.5"/>
+  <circle cx="32" cy="56" r="2" fill="#2ecc71" stroke="#c0ffc0" stroke-width="0.5"/>
+  <circle cx="38" cy="57" r="2" fill="#2ecc71" stroke="#c0ffc0" stroke-width="0.5"/>
 </svg>

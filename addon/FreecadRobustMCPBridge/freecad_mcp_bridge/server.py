@@ -22,6 +22,7 @@ import contextlib
 import errno
 import io
 import json
+import os
 import queue
 import sys
 import threading
@@ -236,13 +237,14 @@ class FreecadMCPPlugin:
 
         self._running = True
 
-        # Print instance ID to stderr for test automation to capture.
-        # Stdout may be reserved for JSON-RPC when running in stdio mode.
-        print(
-            f"FREECAD_MCP_BRIDGE_INSTANCE_ID={self._instance_id}",
-            file=sys.stderr,
-            flush=True,
-        )
+        # Print instance ID to stderr only for test automation (when env var is set).
+        # This avoids red error text in FreeCAD's console during normal use.
+        if os.environ.get("FREECAD_MCP_TESTING"):
+            print(
+                f"FREECAD_MCP_BRIDGE_INSTANCE_ID={self._instance_id}",
+                file=sys.stderr,
+                flush=True,
+            )
 
         # Start the queue processing timer on the main thread
         self._start_queue_processor()
