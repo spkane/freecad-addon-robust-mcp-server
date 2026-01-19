@@ -4,9 +4,17 @@
 
 No changes to the workbench code itself. This release reflects the repository restructuring.
 
+### Added
+
+- No new features in this release.
+
 ### Changed
 
 - **Repository restructured**: This addon now focuses solely on the MCP Bridge Workbench. Standalone macros have been moved to dedicated repositories for independent release cycles.
+
+### Fixed
+
+- No bug fixes in this release.
 
 ### Note
 

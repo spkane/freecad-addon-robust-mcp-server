@@ -4,10 +4,13 @@
 
 No changes to the MCP server code itself. This release includes Docker image security improvements and repository restructuring.
 
+### Added
+
+- **Reproducible Docker builds**: Added `uv.lock` to Docker build context to ensure locked dependency versions for reproducible builds
+
 ### Changed
 
 - **Repository restructured**: The standalone macros (Cut Object for Magnets, Multi Export) have been moved to dedicated repositories for independent release cycles and FreeCAD Addon Manager submission.
-- **Docker image**: Now uses `uv.lock` for reproducible builds with locked dependency versions
 
 ### Fixed
 
