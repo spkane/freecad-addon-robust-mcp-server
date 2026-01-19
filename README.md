@@ -74,7 +74,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 <!--TOC-->
 
-> The macros that were originally in this repo under the `/macros` directory have been permanently move to two new GitHub repos:
+> The macros that were originally in this repo under the `/macros` directory have been permanently moved to two new GitHub repos:
 >
 > - [spkane/freecad-macro-cut-for-magnets](https://github.com/spkane/freecad-macro-cut-for-magnets)
 > - [spkane/freecad-macro-3d-print-multi-export](https://github.com/spkane/freecad-macro-3d-print-multi-export)
