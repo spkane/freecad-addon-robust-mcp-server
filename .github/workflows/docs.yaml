@@ -101,8 +101,8 @@ jobs:
         if: steps.version.outputs.version == 'latest'
         run: |
           # Deploy main branch docs as "latest" and set as default
-          # Run deploy without --push, then set-default with --push for single git push
-          uv run mike deploy --update-aliases latest
+          # Each command must --push its own changes; mike doesn't combine commits
+          uv run mike deploy --push --update-aliases latest
           uv run mike set-default --push latest
 
       - name: Deploy versioned documentation (tagged release)
@@ -113,8 +113,8 @@ jobs:
 
           if [[ "$SET_LATEST" == "true" ]]; then
             # Manual dispatch requested setting as latest
-            # Run deploy without --push, then set-default with --push for single git push
-            uv run mike deploy --update-aliases "$VERSION" latest
+            # Each command must --push its own changes; mike doesn't combine commits
+            uv run mike deploy --push --update-aliases "$VERSION" latest
             uv run mike set-default --push latest
           else
             # Deploy version only (tagged releases don't update latest)
