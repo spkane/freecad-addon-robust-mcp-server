@@ -86,6 +86,9 @@ def _auto_start_bridge() -> None:
 
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to auto-start MCP Bridge: {e}\n")
+        import traceback
+
+        FreeCAD.Console.PrintError(f"Traceback: {traceback.format_exc()}\n")
 
 
 # Schedule auto-start after FreeCAD finishes loading

@@ -48,8 +48,25 @@ class TestAutoStartPreferences:
         """get_auto_start should return a bool."""
         # Check for GetBool call
         assert "GetBool" in preferences_code
-        # Check return type annotation
-        assert "def get_auto_start() -> bool" in preferences_code
+        # Use AST to verify return type annotation
+        tree = ast.parse(preferences_code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "get_auto_start":
+                assert node.returns is not None, (
+                    "get_auto_start should have return annotation"
+                )
+                # Check if return annotation is 'bool'
+                if isinstance(node.returns, ast.Name):
+                    assert node.returns.id == "bool", "Return type should be bool"
+                elif isinstance(node.returns, ast.Constant):
+                    # Python 3.9+ may use Constant for some annotations
+                    assert node.returns.value == "bool", "Return type should be bool"
+                else:
+                    pytest.fail(
+                        f"Unexpected return annotation type: {type(node.returns)}"
+                    )
+                return
+        pytest.fail("get_auto_start function not found in preferences.py")
 
 
 class TestAutoStartInitLogic:
@@ -124,30 +141,25 @@ class TestAutoStartInitLogic:
         # Should log the traceback, not just the exception message
         assert "traceback" in init_code.lower()
 
-    def test_global_timer_reference_prevents_gc(self, init_code: str) -> None:
-        """Timer references should be stored globally to prevent GC."""
-        # Global variable to hold timer reference
-        assert "_auto_start_timer" in init_code
-        # Should be defined at module level
-        lines = init_code.split("\n")
-        for line in lines:
-            if line.startswith("_auto_start_timer"):
-                # Module-level definition (not indented)
-                break
-        else:
-            pytest.fail("_auto_start_timer should be defined at module level")
+    @pytest.mark.parametrize(
+        "var_name",
+        ["_auto_start_timer", "_gui_waiter"],
+        ids=["timer_reference", "gui_waiter_reference"],
+    )
+    def test_global_references_prevent_gc(self, init_code: str, var_name: str) -> None:
+        """Global references should be stored at module level to prevent GC.
 
-    def test_global_gui_waiter_reference_prevents_gc(self, init_code: str) -> None:
-        """GuiWaiter reference should be stored globally to prevent GC."""
-        assert "_gui_waiter" in init_code
-        # Should be defined at module level
+        Both _auto_start_timer and _gui_waiter must be defined at module level
+        (not indented) to prevent garbage collection of Qt timers and callbacks.
+        """
+        assert var_name in init_code, f"{var_name} should be present in Init.py"
+        # Verify module-level definition (line starts with var name, not indented)
         lines = init_code.split("\n")
         for line in lines:
-            if line.startswith("_gui_waiter"):
-                # Module-level definition (not indented)
-                break
-        else:
-            pytest.fail("_gui_waiter should be defined at module level")
+            if line.startswith(var_name):
+                # Found module-level definition (not indented)
+                return
+        pytest.fail(f"{var_name} should be defined at module level (not indented)")
 
 
 class TestAutoStartBridgeFunction:
@@ -243,7 +255,15 @@ class TestGuiWaiterUsage:
         This prevents starting the bridge too early when FreeCAD is still
         initializing, which could cause race conditions.
         """
-        assert "defer" in bridge_utils_code.lower()
+        # Check for specific defer-related patterns to avoid false positives
+        # Look for the defer timer, defer_ms parameter, or deferring log message
+        has_defer_timer = "_defer_timer" in bridge_utils_code
+        has_defer_ms = "defer_ms" in bridge_utils_code
+        has_deferring_message = "deferring" in bridge_utils_code.lower()
+        assert any([has_defer_timer, has_defer_ms, has_deferring_message]), (
+            "GuiWaiter should have defer functionality "
+            "(expected _defer_timer, defer_ms, or 'deferring' in code)"
+        )
 
     def test_gui_waiter_logs_waiting_message(self, bridge_utils_code: str) -> None:
         """GuiWaiter should log when it starts waiting."""
