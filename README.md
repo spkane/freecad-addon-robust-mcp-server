@@ -20,7 +20,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - [FreeCAD Robust MCP Server](#freecad-robust-mcp-server)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
-  - [Requirements](#requirements)
+  - [Installation Requirements / Dependencies](#installation-requirements--dependencies)
   - [For Users](#for-users)
     - [Quick Links](#quick-links)
   - [Robust MCP Server](#robust-mcp-server)
@@ -79,6 +79,8 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 > - [spkane/freecad-macro-cut-for-magnets](https://github.com/spkane/freecad-macro-cut-for-magnets)
 > - [spkane/freecad-macro-3d-print-multi-export](https://github.com/spkane/freecad-macro-3d-print-multi-export)
 
+**FreeCAD Forum:** [addon discussion post](https://forum.freecad.org/viewtopic.php?p=866012)
+
 ## Features
 
 - **82+ MCP Tools**: Comprehensive CAD operations including primitives, PartDesign, booleans, export
@@ -86,7 +88,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development**: Create, edit, run, and template FreeCAD macros via MCP
 
-## Requirements
+## Installation Requirements / Dependencies
 
 - [FreeCAD](https://www.freecadweb.org/) 0.21+ or 1.0+
 - Python 3.11 (required for FreeCAD ABI compatibility)
