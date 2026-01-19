@@ -260,6 +260,37 @@ class TestMain:
             )
             assert instance_id_call.kwargs.get("file") == sys.stderr
 
+    def test_main_no_instance_id_without_testing_env(self):
+        """Main should NOT print instance ID when FREECAD_MCP_TESTING is unset."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.STDIO
+
+        # Ensure FREECAD_MCP_TESTING is not set
+        env_without_testing = {
+            k: v for k, v in os.environ.items() if k != "FREECAD_MCP_TESTING"
+        }
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(server_module.mcp, "run") as mock_run,
+            patch("builtins.print") as mock_print,
+            patch.dict(os.environ, env_without_testing, clear=True),
+        ):
+            # Mock run to exit immediately
+            mock_run.return_value = None
+
+            server_module.main()
+
+            # Check that instance ID was NOT printed
+            print_calls = [str(call) for call in mock_print.call_args_list]
+            assert not any("FREECAD_MCP_INSTANCE_ID=" in call for call in print_calls)
+
     def test_main_http_transport(self):
         """Main should start HTTP transport when configured."""
         import freecad_mcp.server as server_module
