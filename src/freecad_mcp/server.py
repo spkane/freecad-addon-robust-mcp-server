@@ -33,6 +33,7 @@ Example:
 
 import argparse
 import logging
+import os
 import sys
 import uuid
 from collections.abc import AsyncIterator
@@ -411,9 +412,11 @@ def main() -> None:
     # Set up logging
     logging.getLogger().setLevel(config.log_level)
 
-    # Print instance ID to stderr for test automation to capture
-    # Must use stderr because stdout is reserved for JSON-RPC in stdio mode
-    print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stderr, flush=True)
+    # Print instance ID to stderr only for test automation (when env var is set).
+    # This avoids unwanted output during normal use.
+    # Must use stderr because stdout is reserved for JSON-RPC in stdio mode.
+    if os.environ.get("FREECAD_MCP_TESTING"):
+        print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stderr, flush=True)
 
     logger.info("Starting FreeCAD Robust MCP Server")
     logger.info("Instance ID: %s", INSTANCE_ID)
