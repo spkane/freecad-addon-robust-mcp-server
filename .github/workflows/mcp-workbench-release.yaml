@@ -68,21 +68,6 @@ jobs:
           fi
           echo "✓ $INIT_FILE: $INIT_VERSION"
 
-          # Check wiki-source.txt
-          WIKI_FILE="addon/FreecadRobustMCPBridge/wiki-source.txt"
-          if [ -f "$WIKI_FILE" ]; then
-              WIKI_VERSION=$(grep -o '|Version=[^|]*' "$WIKI_FILE" | cut -d= -f2 | tr -d '\n')
-              if [ "$WIKI_VERSION" != "$VERSION" ]; then
-                  echo "ERROR: Version mismatch in $WIKI_FILE"
-                  echo "  Expected: $VERSION"
-                  echo "  Found:    $WIKI_VERSION"
-                  echo ""
-                  echo "Run: just release::bump-workbench $VERSION"
-                  exit 1
-              fi
-              echo "✓ $WIKI_FILE: $WIKI_VERSION"
-          fi
-
           # Check package.xml
           PKG_VERSION=$(awk '/<workbench>/,/<\/workbench>/' package.xml | grep -o '<version>[^<]*</version>' | head -1 | sed 's/<[^>]*>//g')
           if [ "$PKG_VERSION" != "$VERSION" ]; then

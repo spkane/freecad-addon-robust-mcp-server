@@ -166,7 +166,6 @@ class TestReleaseBumpCommands:
             # Workbench files
             PROJECT_ROOT
             / "addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py",
-            PROJECT_ROOT / "addon/FreecadRobustMCPBridge/wiki-source.txt",
             PROJECT_ROOT / "package.xml",
         ]
 
