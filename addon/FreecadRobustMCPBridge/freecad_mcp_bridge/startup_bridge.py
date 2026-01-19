@@ -59,6 +59,9 @@ def _start_bridge() -> None:
     environment variables and registers the plugin with the workbench commands
     module for visibility to other components.
 
+    Args:
+        None.
+
     Returns:
         None. Early returns if bridge is already running.
 

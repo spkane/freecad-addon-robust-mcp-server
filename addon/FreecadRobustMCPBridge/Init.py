@@ -38,6 +38,9 @@ def _auto_start_bridge() -> None:
     (headless mode) after FreeCAD finishes loading. It starts the bridge
     without requiring the workbench to be selected.
 
+    Args:
+        None.
+
     Returns:
         None. Early returns if auto-start is disabled or bridge is already running.
 

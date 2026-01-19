@@ -298,10 +298,37 @@ class TestInitGuiAutoStart:
         assert "_auto_start_bridge" in initgui_code
 
     def test_checks_auto_start_preference(self, initgui_code: str) -> None:
-        """InitGui.py should check auto-start preference before scheduling."""
-        assert "get_auto_start()" in initgui_code
-        # Should only schedule timer if auto-start is enabled
-        assert "if get_auto_start():" in initgui_code
+        """InitGui.py should check auto-start preference before scheduling.
+
+        Uses AST-based analysis to verify there's an if-condition that calls
+        get_auto_start(), rather than relying on brittle string matching.
+        """
+        tree = ast.parse(initgui_code)
+
+        def is_get_auto_start_call(node: ast.AST) -> bool:
+            """Check if node is a call to get_auto_start()."""
+            if not isinstance(node, ast.Call):
+                return False
+            func = node.func
+            # Handle direct name: get_auto_start()
+            if isinstance(func, ast.Name) and func.id == "get_auto_start":
+                return True
+            # Handle attribute access: module.get_auto_start()
+            return isinstance(func, ast.Attribute) and func.attr == "get_auto_start"
+
+        def contains_get_auto_start_call(node: ast.AST) -> bool:
+            """Check if node or any children contain get_auto_start call."""
+            return any(is_get_auto_start_call(child) for child in ast.walk(node))
+
+        # Find any ast.If node whose test contains a get_auto_start call
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If) and contains_get_auto_start_call(node.test):
+                return  # Found an if-condition invoking get_auto_start()
+
+        pytest.fail(
+            "InitGui.py should have an if-condition that calls get_auto_start() "
+            "to check whether auto-start is enabled before scheduling"
+        )
 
     def test_auto_start_bridge_function_exists(self, initgui_code: str) -> None:
         """InitGui.py should have _auto_start_bridge callback function."""

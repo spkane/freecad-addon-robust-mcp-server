@@ -194,6 +194,9 @@ try:
         and a defer period has elapsed. At this point, it's safe to start
         the MCP bridge with Qt timer-based queue processing.
 
+        Args:
+            None.
+
         Returns:
             None. Early returns if auto-start disabled or bridge already running.
 
@@ -207,6 +210,15 @@ try:
             - Syncs the status bar widget with bridge state
         """
         try:
+            # Safety check: verify GUI is actually ready before starting
+            # If not ready, reschedule for another attempt
+            if not FreeCAD.GuiUp:
+                FreeCAD.Console.PrintMessage(
+                    "Robust MCP Bridge: GUI not ready, rescheduling auto-start...\n"
+                )
+                QtCore.QTimer.singleShot(500, _auto_start_bridge)
+                return
+
             from preferences import get_auto_start
 
             if not get_auto_start():
