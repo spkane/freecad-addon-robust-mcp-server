@@ -418,6 +418,50 @@ class TestFreecadResources:
         assert data["count"] == 3
 
     @pytest.mark.asyncio
+    async def test_resource_best_practices(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
+        """freecad://best-practices should return AI guidance."""
+        resource_best_practices = register_resources["freecad://best-practices"]
+        result = await resource_best_practices()
+        data = json.loads(result)
+
+        # Should have description
+        assert "description" in data
+        assert "Best Practices" in data["description"]
+
+        # Should have critical patterns section
+        assert "critical_patterns" in data
+        assert "validation_first" in data["critical_patterns"]
+        assert "partdesign_workflow" in data["critical_patterns"]
+        assert "transaction_safety" in data["critical_patterns"]
+
+        # Should have version compatibility section
+        assert "version_compatibility" in data
+        assert "critical_changes" in data["version_compatibility"]
+        assert "sketch_attachment" in data["version_compatibility"]["critical_changes"]
+
+        # Should have GUI vs headless guidance
+        assert "gui_vs_headless" in data
+        assert "gui_only_features" in data["gui_vs_headless"]
+        assert "headless_safe_features" in data["gui_vs_headless"]
+
+        # Should have common pitfalls
+        assert "common_pitfalls" in data
+        assert "standalone_features" in data["common_pitfalls"]
+
+        # Should have recommended workflows
+        assert "recommended_workflows" in data
+        assert "creating_parts" in data["recommended_workflows"]
+        assert "debugging_issues" in data["recommended_workflows"]
+
+        # Should have error recovery section
+        assert "error_recovery" in data
+
+        # Should have performance tips
+        assert "performance_tips" in data
+
+    @pytest.mark.asyncio
     async def test_resource_capabilities(
         self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
     ) -> None:

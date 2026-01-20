@@ -10,6 +10,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/test.yaml"
+      - ".github/actions/setup-freecad/**"
   pull_request:
     branches: [main, master]
     paths:
@@ -19,6 +20,7 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/test.yaml"
+      - ".github/actions/setup-freecad/**"
   workflow_dispatch:
   workflow_call:
 
@@ -28,8 +30,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Python Tests
+  unit-test:
+    name: Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -53,3 +55,71 @@ jobs:
 
       - name: Run type checking
         run: uv run mypy src/
+
+  integration-test:
+    name: Integration Tests (FreeCAD Headless)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup FreeCAD
+        uses: ./.github/actions/setup-freecad
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Cache uv dependencies
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Start FreeCAD headless with MCP bridge
+        run: |
+          # Start FreeCAD headless with MCP bridge in background
+          setsid freecadcmd addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
+          FREECAD_PID=$!
+          echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
+
+          # Wait for bridge to be ready
+          echo "Waiting for FreeCAD MCP bridge to start..."
+          MAX_RETRIES=60
+          for i in $(seq 1 $MAX_RETRIES); do
+              if curl -s --connect-timeout 1 http://localhost:9875 > /dev/null 2>&1; then
+                  # Try to ping the bridge
+                  if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+                      echo "FreeCAD MCP bridge is ready!"
+                      break
+                  fi
+              fi
+              if [ "$i" -eq "$MAX_RETRIES" ]; then
+                  echo "ERROR: FreeCAD MCP bridge did not start"
+                  echo "=== Bridge Log ==="
+                  cat /tmp/freecad_bridge.log || true
+                  kill "$FREECAD_PID" 2>/dev/null || true
+                  exit 1
+              fi
+              sleep 1
+          done
+
+      - name: Run integration tests
+        run: |
+          uv run pytest tests/integration/ -v --tb=short -x
+
+      - name: Stop FreeCAD
+        if: always()
+        run: |
+          # Clean up FreeCAD process
+          if [ -n "$FREECAD_PID" ]; then
+              kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
+          fi
+          # Show bridge log on failure for debugging
+          if [ -f /tmp/freecad_bridge.log ]; then
+              echo "=== FreeCAD Bridge Log ==="
+              cat /tmp/freecad_bridge.log
+          fi

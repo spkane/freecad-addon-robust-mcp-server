@@ -310,6 +310,238 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
             indent=2,
         )
 
+    @mcp.resource("freecad://best-practices")
+    async def resource_best_practices() -> str:
+        """Get FreeCAD best practices and AI guidance.
+
+        This resource provides comprehensive guidance for AI assistants
+        working with FreeCAD, covering API patterns, version compatibility,
+        validation workflows, and common pitfalls.
+
+        Use this resource at the start of a FreeCAD session to understand
+        best practices for reliable CAD operations.
+
+        Returns:
+            JSON string containing best practices and guidance.
+        """
+        best_practices = {
+            "description": "FreeCAD Best Practices and AI Guidance",
+            "purpose": "Reference for AI assistants working with FreeCAD MCP tools",
+            "critical_patterns": {
+                "validation_first": {
+                    "description": "Always validate objects after creation or modification",
+                    "pattern": """After any operation that creates or modifies geometry:
+1. Call validate_object(object_name) to check shape validity
+2. Check the 'is_valid' field in the response
+3. If invalid, use undo() to revert and try a different approach
+4. For complex operations, use safe_execute() which auto-validates""",
+                    "tools": ["validate_object", "validate_document", "safe_execute"],
+                },
+                "partdesign_workflow": {
+                    "description": "Proper PartDesign workflow for parametric parts",
+                    "pattern": """For parametric modeling (recommended for most parts):
+1. Create a PartDesign::Body - this is the container for all features
+2. Create sketches INSIDE the body using body.newObject() not doc.addObject()
+3. Attach sketches to planes (XY_Plane, XZ_Plane, YZ_Plane) or existing faces
+4. Use Pad/Pocket/Revolution to create features from sketches
+5. Features must be inside a body - standalone features won't work
+
+Example sequence:
+- create_document()
+- create_partdesign_body(name="Body")
+- create_sketch(body_name="Body", plane="XY_Plane")
+- add_sketch_rectangle(...)
+- pad_sketch(body_name="Body", sketch_name="...", length=10)""",
+                    "tools": [
+                        "create_partdesign_body",
+                        "create_sketch",
+                        "pad_sketch",
+                        "pocket_sketch",
+                    ],
+                },
+                "transaction_safety": {
+                    "description": "Use transactions for safe, undoable operations",
+                    "pattern": """For operations that might fail or need rollback:
+1. Use safe_execute() which wraps code in a transaction
+2. If validation fails after execution, it automatically undoes
+3. For manual control, use undo() and redo() tools
+4. Check undo_redo_status before critical operations
+
+Example using safe_execute:
+safe_execute(
+    code="... complex operation ...",
+    validate_after=True,
+    auto_undo_on_failure=True
+)""",
+                    "tools": ["safe_execute", "undo", "redo", "undo_if_invalid"],
+                },
+            },
+            "version_compatibility": {
+                "description": "FreeCAD API changes across versions",
+                "critical_changes": {
+                    "sketch_attachment": {
+                        "versions_affected": "FreeCAD 1.0+ vs earlier",
+                        "old_api": "sketch.Support = (plane_obj, [''])",
+                        "new_api": "sketch.AttachmentSupport = [(plane_obj, '')]",
+                        "safe_pattern": """Use hasattr to detect:
+if hasattr(sketch, 'AttachmentSupport'):
+    sketch.AttachmentSupport = [(plane_obj, '')]
+else:
+    sketch.Support = (plane_obj, [''])
+sketch.MapMode = 'FlatFace'""",
+                    },
+                    "body_object_creation": {
+                        "description": "Creating objects inside PartDesign bodies",
+                        "correct": "sketch = body.newObject('Sketcher::SketchObject', 'Sketch')",
+                        "incorrect": "sketch = doc.addObject('...'); body.addObject(sketch)",
+                        "reason": "body.newObject() ensures proper parent-child relationships",
+                    },
+                },
+            },
+            "gui_vs_headless": {
+                "description": "Understanding GUI mode limitations",
+                "check_gui": "Use get_freecad_version() - check 'gui_available' field",
+                "gui_only_features": [
+                    "get_screenshot() - capturing views",
+                    "set_object_visibility() - show/hide objects",
+                    "set_object_color() - color changes",
+                    "set_display_mode() - wireframe/shaded",
+                    "Camera controls (zoom, view angles)",
+                ],
+                "headless_safe_features": [
+                    "All document operations",
+                    "All object creation/modification",
+                    "All export/import operations",
+                    "Validation and inspection",
+                    "Python code execution",
+                ],
+                "graceful_degradation": """GUI tools return structured errors in headless mode:
+{
+    "success": false,
+    "error": "GUI not available - ... cannot be set in headless mode"
+}
+Check for this pattern and handle gracefully.""",
+            },
+            "common_pitfalls": {
+                "standalone_features": {
+                    "problem": "Creating PartDesign features outside a Body",
+                    "symptom": "Features fail to compute or show errors",
+                    "solution": "Always create a Body first, then features inside it",
+                },
+                "unconstrained_sketches": {
+                    "problem": "Sketches with free degrees of freedom",
+                    "symptom": "Geometry moves unexpectedly on recompute",
+                    "solution": """Add constraints or use the construction mode.
+Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
+                },
+                "invalid_booleans": {
+                    "problem": "Boolean operations on non-overlapping shapes",
+                    "symptom": "Empty or invalid result shape",
+                    "solution": """Verify shapes overlap before boolean:
+1. Check bounding boxes overlap
+2. Use validate_object() on result
+3. Have fallback strategy if boolean fails""",
+                },
+                "shape_type_mismatch": {
+                    "problem": "Operations require specific shape types",
+                    "symptom": "Error about wrong shape type",
+                    "examples": {
+                        "fillet_edges": "Requires solid shape, not mesh or compound",
+                        "export_stl": "Works with any shape but quality depends on tessellation",
+                        "boolean_operation": "Requires solid shapes, not curves or faces",
+                    },
+                },
+                "document_state": {
+                    "problem": "Operating on wrong or no active document",
+                    "symptom": "Object not found or wrong object modified",
+                    "solution": """Always:
+1. Check get_active_document() returns expected document
+2. Use explicit doc_name parameter when available
+3. Create new document if starting fresh work""",
+                },
+            },
+            "recommended_workflows": {
+                "creating_parts": {
+                    "steps": [
+                        "1. create_document(name='...')",
+                        "2. create_partdesign_body(name='Body')",
+                        "3. create_sketch(body_name='Body', plane='XY_Plane')",
+                        "4. Add geometry: add_sketch_rectangle/circle/line",
+                        "5. pad_sketch(body_name='Body', sketch_name='...', length=...)",
+                        "6. Add features: fillets, chamfers, pockets",
+                        "7. validate_document() to check health",
+                        "8. Export: export_step/stl/3mf",
+                    ],
+                },
+                "modifying_existing": {
+                    "steps": [
+                        "1. open_document(path='...')",
+                        "2. list_objects() to see what exists",
+                        "3. inspect_object(name='...') for details",
+                        "4. Use safe_execute() for modifications",
+                        "5. validate_document() after changes",
+                        "6. save_document()",
+                    ],
+                },
+                "debugging_issues": {
+                    "steps": [
+                        "1. get_console_output(lines=50) for error messages",
+                        "2. validate_document() to find invalid objects",
+                        "3. inspect_object() on problem objects",
+                        "4. Check object State - look for 'Error' entries",
+                        "5. Use undo() to revert to known good state",
+                        "6. recompute_document() to refresh all objects",
+                    ],
+                },
+                "safe_experimentation": {
+                    "description": "When trying operations that might fail",
+                    "steps": [
+                        "1. save_document() first (backup)",
+                        "2. Use safe_execute() with validate_after=True",
+                        "3. If failed, operation auto-reverts",
+                        "4. Or use get_undo_redo_status() before, undo() after",
+                    ],
+                },
+            },
+            "error_recovery": {
+                "invalid_geometry": {
+                    "detection": "validate_object() returns is_valid=false",
+                    "recovery": [
+                        "1. undo() to revert last operation",
+                        "2. Try different parameters (larger fillet radius, etc.)",
+                        "3. Simplify the operation (fewer features at once)",
+                        "4. Check source sketch is closed and valid",
+                    ],
+                },
+                "recompute_failure": {
+                    "detection": "object State contains 'Error' or 'Invalid'",
+                    "recovery": [
+                        "1. inspect_object() to see error details",
+                        "2. Check parent objects are valid",
+                        "3. May need to delete and recreate feature",
+                        "4. recompute_document() after fixes",
+                    ],
+                },
+                "sketch_errors": {
+                    "detection": "Sketch won't close or pad fails",
+                    "common_causes": [
+                        "Open contour (lines don't connect)",
+                        "Self-intersection",
+                        "Zero-length elements",
+                        "Overlapping geometry",
+                    ],
+                    "recovery": "Recreate sketch with simpler geometry",
+                },
+            },
+            "performance_tips": {
+                "minimize_recomputes": "Group multiple changes, recompute once at end",
+                "batch_operations": "Use execute_python for multiple related operations",
+                "use_validate_document": "Check all objects at once vs individual validate_object calls",
+                "incremental_building": "Build complex models step-by-step, validating each step",
+            },
+        }
+        return json.dumps(best_practices, indent=2)
+
     @mcp.resource("freecad://capabilities")
     async def resource_capabilities() -> str:
         """Get comprehensive list of all MCP capabilities.
@@ -417,6 +649,11 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                             "key_params": ["object_name", "doc_name"],
                         },
                         {
+                            "name": "create_object",
+                            "description": "Create generic FreeCAD object by type",
+                            "key_params": ["type_id", "name", "properties"],
+                        },
+                        {
                             "name": "create_box",
                             "description": "Create Part::Box primitive",
                             "key_params": ["length", "width", "height"],
@@ -442,6 +679,23 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                             "key_params": ["radius1", "radius2"],
                         },
                         {
+                            "name": "create_wedge",
+                            "description": "Create Part::Wedge primitive",
+                            "key_params": [
+                                "xmin",
+                                "xmax",
+                                "ymin",
+                                "ymax",
+                                "zmin",
+                                "zmax",
+                            ],
+                        },
+                        {
+                            "name": "create_helix",
+                            "description": "Create Part::Helix primitive",
+                            "key_params": ["pitch", "height", "radius"],
+                        },
+                        {
                             "name": "boolean_operation",
                             "description": "Union, cut, or intersection operations",
                             "key_params": ["operation", "object1", "object2"],
@@ -460,6 +714,16 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                             "name": "set_placement",
                             "description": "Set object position and rotation",
                             "key_params": ["object_name", "x", "y", "z"],
+                        },
+                        {
+                            "name": "scale_object",
+                            "description": "Scale an object by a factor",
+                            "key_params": ["object_name", "scale_factor"],
+                        },
+                        {
+                            "name": "rotate_object",
+                            "description": "Rotate object around an axis",
+                            "key_params": ["object_name", "axis", "angle"],
                         },
                         {
                             "name": "copy_object",
@@ -549,6 +813,11 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                         {
                             "name": "revolution_sketch",
                             "description": "Revolve sketch around axis",
+                            "key_params": ["body_name", "sketch_name", "axis", "angle"],
+                        },
+                        {
+                            "name": "groove_sketch",
+                            "description": "Cut by revolving sketch (subtractive revolve)",
                             "key_params": ["body_name", "sketch_name", "axis", "angle"],
                         },
                         {
@@ -644,6 +913,11 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                             "name": "zoom_out",
                             "description": "Zoom out",
                             "key_params": ["factor"],
+                        },
+                        {
+                            "name": "set_camera_position",
+                            "description": "Set exact camera position and orientation",
+                            "key_params": ["position", "direction", "up_vector"],
                         },
                         {
                             "name": "set_object_visibility",
@@ -765,6 +1039,11 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                             "description": "Delete a macro",
                             "key_params": ["macro_name"],
                         },
+                        {
+                            "name": "create_macro_from_template",
+                            "description": "Create macro from predefined template",
+                            "key_params": ["macro_name", "template_name"],
+                        },
                     ],
                 },
                 "parts_library": {
@@ -782,11 +1061,40 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
                         },
                     ],
                 },
+                "validation": {
+                    "description": "Object and document validation for error detection",
+                    "tools": [
+                        {
+                            "name": "validate_object",
+                            "description": "Check object health (shape validity, errors, state)",
+                            "key_params": ["object_name", "doc_name"],
+                        },
+                        {
+                            "name": "validate_document",
+                            "description": "Check health of all objects in document",
+                            "key_params": ["doc_name"],
+                        },
+                        {
+                            "name": "undo_if_invalid",
+                            "description": "Check last operation and undo if it created invalid geometry",
+                            "key_params": ["doc_name"],
+                        },
+                        {
+                            "name": "safe_execute",
+                            "description": "Execute Python code with automatic rollback on failure",
+                            "key_params": ["code", "doc_name"],
+                        },
+                    ],
+                },
             },
             "resources": [
                 {
                     "uri": "freecad://capabilities",
                     "description": "This resource - lists all available capabilities",
+                },
+                {
+                    "uri": "freecad://best-practices",
+                    "description": "★ RECOMMENDED: Read first - AI guidance, best practices, version compatibility, common pitfalls",
                 },
                 {
                     "uri": "freecad://version",
@@ -835,16 +1143,58 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
             ],
             "prompts": [
                 {
-                    "name": "freecad-help",
-                    "description": "Get help on FreeCAD Robust MCP capabilities",
+                    "name": "freecad-startup",
+                    "description": "★ RECOMMENDED: Auto-load on connection - Essential startup guidance and session checklist",
+                    "key_params": [],
                 },
                 {
-                    "name": "create-parametric-part",
-                    "description": "Guide for creating parametric parts",
+                    "name": "freecad-guidance",
+                    "description": "Task-specific AI guidance (general, partdesign, sketching, boolean, export, debugging, validation)",
+                    "key_params": ["task_type"],
+                },
+                {
+                    "name": "design-part",
+                    "description": "Guided workflow for designing parametric parts",
+                    "key_params": ["description", "units"],
+                },
+                {
+                    "name": "create-sketch-guide",
+                    "description": "Guide for creating 2D sketches",
+                    "key_params": ["shape_type", "plane"],
+                },
+                {
+                    "name": "boolean-operations-guide",
+                    "description": "Guide for boolean operations (fuse, cut, common)",
+                },
+                {
+                    "name": "export-guide",
+                    "description": "Guide for exporting models (STEP, STL, OBJ, IGES)",
+                    "key_params": ["target_format"],
+                },
+                {
+                    "name": "import-guide",
+                    "description": "Guide for importing files",
+                    "key_params": ["source_format"],
+                },
+                {
+                    "name": "analyze-shape",
+                    "description": "Guide for shape analysis (volume, area, etc.)",
                 },
                 {
                     "name": "debug-model",
-                    "description": "Help debug model issues",
+                    "description": "Troubleshooting guide for model issues",
+                },
+                {
+                    "name": "macro-development",
+                    "description": "Guide for developing FreeCAD macros",
+                },
+                {
+                    "name": "python-api-reference",
+                    "description": "Quick reference for FreeCAD Python API",
+                },
+                {
+                    "name": "troubleshooting",
+                    "description": "General troubleshooting for FreeCAD MCP",
                 },
             ],
             "examples": {

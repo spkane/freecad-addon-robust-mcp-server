@@ -92,14 +92,22 @@ if {body_name!r}:
     # Add sketch to body
     sketch = body.newObject("Sketcher::SketchObject", sketch_name)
 
-    # Set support plane
+    # Set support plane - FreeCAD 1.x uses AttachmentSupport, older versions use Support
+    # Check which property exists and use the appropriate one
     plane = {plane!r}
     if plane in ["XY_Plane", "XZ_Plane", "YZ_Plane"]:
-        sketch.Support = (body.Origin.getObject(plane), [""])
+        plane_obj = body.Origin.getObject(plane)
+        if hasattr(sketch, "AttachmentSupport"):
+            sketch.AttachmentSupport = [(plane_obj, "")]
+        else:
+            sketch.Support = (plane_obj, [""])
         sketch.MapMode = "FlatFace"
     elif plane.startswith("Face"):
         # Attach to face
-        sketch.Support = (body, [plane])
+        if hasattr(sketch, "AttachmentSupport"):
+            sketch.AttachmentSupport = [(body, plane)]
+        else:
+            sketch.Support = (body, [plane])
         sketch.MapMode = "FlatFace"
 else:
     # Standalone sketch
@@ -119,7 +127,7 @@ _result_ = {{
     "name": sketch.Name,
     "label": sketch.Label,
     "type_id": sketch.TypeId,
-    "support": str(sketch.Support) if hasattr(sketch, "Support") else None,
+    "support": str(sketch.AttachmentSupport) if hasattr(sketch, "AttachmentSupport") else (str(sketch.Support) if hasattr(sketch, "Support") else None),
 }}
 """
         result = await bridge.execute_python(code)

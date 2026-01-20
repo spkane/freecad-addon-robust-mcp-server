@@ -1771,6 +1771,15 @@ The MCP server provides a `freecad://capabilities` resource that returns a compl
 | `redo`                 | Redo an undone operation.           |
 | `get_undo_redo_status` | Get available undo/redo operations. |
 
+### Validation Tools
+
+| Tool                | Description                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `validate_object`   | Check object health (shape validity, error states, recompute status).                 |
+| `validate_document` | Check health of all objects in document, return summary of invalid/error objects.     |
+| `undo_if_invalid`   | Check document health and automatically undo last operation if invalid objects exist. |
+| `safe_execute`      | Execute Python code with automatic validation and rollback on failure.                |
+
 ### Export/Import Tools
 
 | Tool          | Description                                        |
