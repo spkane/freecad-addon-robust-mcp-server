@@ -1,6 +1,9 @@
 # Tools Reference
 
-The FreeCAD Robust MCP Server provides 82+ tools for CAD operations. This page provides a quick reference organized by category.
+The FreeCAD Robust MCP Server provides 120+ tools for CAD operations. This page provides a quick reference organized by category.
+
+!!! tip "Transaction Support"
+    All MCP operations are wrapped in FreeCAD transactions for undo support. After any operation, you can use `undo` to revert changes. This makes it safe for AI agents to experiment and recover from mistakes.
 
 For detailed documentation including parameters and examples, see [MCP Tools Reference](../MCP_TOOLS_REFERENCE.md).
 
@@ -8,17 +11,21 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 
 ## Tool Categories
 
-| Category                        | Tools | Description                          |
-| ------------------------------- | ----- | ------------------------------------ |
-| [Execution](#execution-tools)   | 5     | Python execution, debugging          |
-| [Documents](#document-tools)    | 7     | Document management                  |
-| [Primitives](#primitive-tools)  | 8     | Basic 3D shapes                      |
-| [Objects](#object-tools)        | 12    | Object manipulation                  |
-| [PartDesign](#partdesign-tools) | 19    | Parametric modeling                  |
-| [View & Display](#view-tools)   | 11    | View control, screenshots (GUI only) |
-| [Export/Import](#export-tools)  | 7     | File format conversion               |
-| [Macros](#macro-tools)          | 6     | Macro management                     |
-| [Utility](#utility-tools)       | 7     | Undo/redo, parts library             |
+| Category                                        | Tools | Description                          |
+| ----------------------------------------------- | ----- | ------------------------------------ |
+| [Execution](#execution-tools)                   | 5     | Python execution, debugging          |
+| [Documents](#document-tools)                    | 7     | Document management                  |
+| [Primitives](#primitive-tools)                  | 8     | Basic 3D shapes                      |
+| [Part Workbench](#part-workbench-tools)         | 30    | Shape creation, operations, queries  |
+| [Objects](#object-tools)                        | 12    | Object manipulation                  |
+| [PartDesign](#partdesign-tools)                 | 28    | Parametric modeling                  |
+| [Sketcher Geometry](#sketcher-geometry-tools)   | 18    | Sketch shapes and operations         |
+| [Sketcher Constraints](#sketcher-constraints)   | 17    | Sketch constraints and dimensions    |
+| [Validation](#validation-tools)                 | 4     | Object/document health checking      |
+| [View & Display](#view-tools)                   | 11    | View control, screenshots (GUI only) |
+| [Export/Import](#export-tools)                  | 7     | File format conversion               |
+| [Macros](#macro-tools)                          | 6     | Macro management                     |
+| [Utility](#utility-tools)                       | 7     | Undo/redo, parts library             |
 
 ---
 
@@ -63,6 +70,57 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 
 ---
 
+## Part Workbench Tools
+
+The Part workbench provides direct shape creation and manipulation tools using OpenCASCADE geometry.
+
+### Shape Creation
+
+| Tool                 | Description                              |
+| -------------------- | ---------------------------------------- |
+| `part_make_line`     | Create a line between two points         |
+| `part_make_wire`     | Create a wire from connected edges       |
+| `part_make_face`     | Create a face from a closed wire         |
+| `part_make_shell`    | Create a shell from faces                |
+| `part_make_solid`    | Create a solid from a closed shell       |
+| `part_make_compound` | Create a compound from multiple shapes   |
+| `part_make_polygon`  | Create a polygon wire from points        |
+| `part_make_circle`   | Create a circle edge or wire             |
+| `part_make_ellipse`  | Create an ellipse edge                   |
+| `part_make_b_spline` | Create a B-spline curve from points      |
+
+### Shape Operations
+
+| Tool            | Description                                |
+| --------------- | ------------------------------------------ |
+| `part_fuse`     | Boolean union (combine shapes)             |
+| `part_cut`      | Boolean subtraction (cut one from another) |
+| `part_common`   | Boolean intersection (common volume)       |
+| `part_fillet`   | Add fillets to shape edges                 |
+| `part_chamfer`  | Add chamfers to shape edges                |
+| `part_extrude`  | Extrude a shape along a vector             |
+| `part_revolve`  | Revolve a shape around an axis             |
+| `part_loft`     | Create a loft through multiple profiles    |
+| `part_sweep`    | Sweep a profile along a path               |
+| `part_offset`   | Create an offset shell of a shape          |
+| `part_slice`    | Slice a shape with a plane                 |
+| `part_section`  | Create intersection curve of two shapes    |
+
+### Shape Queries
+
+| Tool                      | Description                           |
+| ------------------------- | ------------------------------------- |
+| `part_check_shape`        | Validate shape geometry               |
+| `part_get_faces`          | Get all faces of a shape              |
+| `part_get_edges`          | Get all edges of a shape              |
+| `part_get_vertices`       | Get all vertices of a shape           |
+| `part_measure_distance`   | Measure distance between shapes       |
+| `part_measure_angle`      | Measure angle between faces/edges     |
+| `part_get_center_of_mass` | Calculate center of mass              |
+| `part_get_bounding_box`   | Get axis-aligned bounding box         |
+
+---
+
 ## Object Tools
 
 | Tool                | Description                      |
@@ -92,7 +150,15 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 | `create_partdesign_body` | Create a PartDesign body        |
 | `create_sketch`          | Create a sketch on a plane/face |
 
-### Sketch Geometry
+### Datum Features
+
+| Tool                             | Description                           |
+| -------------------------------- | ------------------------------------- |
+| `partdesign_create_datum_point`  | Create a datum point for construction |
+| `partdesign_create_datum_line`   | Create a datum line/axis              |
+| `partdesign_create_datum_plane`  | Create a datum plane for sketches     |
+
+### Basic Sketch Geometry
 
 | Tool                   | Description             |
 | ---------------------- | ----------------------- |
@@ -104,30 +170,134 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 
 ### Additive Features
 
-| Tool                | Description                    |
-| ------------------- | ------------------------------ |
-| `pad_sketch`        | Extrude sketch (additive)      |
-| `revolution_sketch` | Revolve sketch around axis     |
-| `loft_sketches`     | Loft through multiple sketches |
-| `sweep_sketch`      | Sweep profile along path       |
+| Tool                              | Description                    |
+| --------------------------------- | ------------------------------ |
+| `pad_sketch`                      | Extrude sketch (additive)      |
+| `revolution_sketch`               | Revolve sketch around axis     |
+| `loft_sketches`                   | Loft through multiple sketches |
+| `sweep_sketch`                    | Sweep profile along path       |
+| `partdesign_create_additive_pipe` | Pipe/sweep with auxiliary path |
+| `partdesign_create_additive_loft` | Loft with more options         |
 
 ### Subtractive Features
 
-| Tool            | Description             |
-| --------------- | ----------------------- |
-| `pocket_sketch` | Cut by extruding sketch |
-| `groove_sketch` | Cut by revolving sketch |
-| `create_hole`   | Create parametric holes |
+| Tool                                 | Description                  |
+| ------------------------------------ | ---------------------------- |
+| `pocket_sketch`                      | Cut by extruding sketch      |
+| `groove_sketch`                      | Cut by revolving sketch      |
+| `create_hole`                        | Create parametric holes      |
+| `partdesign_create_subtractive_pipe` | Subtractive pipe/sweep       |
+| `partdesign_create_subtractive_loft` | Subtractive loft             |
 
-### Edge Operations & Patterns
+### Dress-up Features
+
+| Tool                          | Description               |
+| ----------------------------- | ------------------------- |
+| `fillet_edges`                | Add rounded edges         |
+| `chamfer_edges`               | Add beveled edges         |
+| `partdesign_create_thickness` | Shell/hollow a solid      |
+| `partdesign_create_draft`     | Add draft angle to faces  |
+
+### Patterns
 
 | Tool               | Description                 |
 | ------------------ | --------------------------- |
-| `fillet_edges`     | Add rounded edges           |
-| `chamfer_edges`    | Add beveled edges           |
 | `linear_pattern`   | Repeat feature linearly     |
 | `polar_pattern`    | Repeat feature circularly   |
 | `mirrored_feature` | Mirror feature across plane |
+
+---
+
+## Sketcher Geometry Tools
+
+Extended sketch geometry and manipulation tools beyond the basic shapes.
+
+### Additional Geometry
+
+| Tool                   | Description                            |
+| ---------------------- | -------------------------------------- |
+| `sketcher_add_ellipse` | Add ellipse to sketch                  |
+| `sketcher_add_b_spline`| Add B-spline curve from control points |
+| `sketcher_add_polygon` | Add regular polygon                    |
+| `sketcher_add_slot`    | Add slot (rounded rectangle)           |
+
+### Edge Operations
+
+| Tool                    | Description                       |
+| ----------------------- | --------------------------------- |
+| `sketcher_add_fillet`   | Fillet corner between two lines   |
+| `sketcher_add_chamfer`  | Chamfer corner between two lines  |
+| `sketcher_trim_curve`   | Trim curve at intersection        |
+| `sketcher_extend_curve` | Extend curve to boundary          |
+| `sketcher_split_curve`  | Split curve at a point            |
+| `sketcher_offset_curve` | Create offset copy of curve       |
+
+### Transformations
+
+| Tool                    | Description                       |
+| ----------------------- | --------------------------------- |
+| `sketcher_mirror`       | Mirror geometry across axis       |
+| `sketcher_array_linear` | Create linear array of geometry   |
+| `sketcher_array_polar`  | Create polar array of geometry    |
+
+---
+
+## Sketcher Constraints
+
+Constraints define relationships between sketch geometry elements.
+
+### Geometric Constraints
+
+| Tool                                     | Description                            |
+| ---------------------------------------- | -------------------------------------- |
+| `sketcher_add_constraint_horizontal`     | Make line horizontal                   |
+| `sketcher_add_constraint_vertical`       | Make line vertical                     |
+| `sketcher_add_constraint_coincident`     | Make two points coincide               |
+| `sketcher_add_constraint_point_on_object`| Place point on line/curve              |
+| `sketcher_add_constraint_parallel`       | Make lines parallel                    |
+| `sketcher_add_constraint_perpendicular`  | Make lines perpendicular               |
+| `sketcher_add_constraint_tangent`        | Make curves tangent                    |
+| `sketcher_add_constraint_equal`          | Make lengths/radii equal               |
+| `sketcher_add_constraint_symmetric`      | Make points symmetric about a line     |
+
+### Dimensional Constraints
+
+| Tool                               | Description                          |
+| ---------------------------------- | ------------------------------------ |
+| `sketcher_add_constraint_distance` | Set distance between elements        |
+| `sketcher_add_constraint_radius`   | Set circle/arc radius                |
+| `sketcher_add_constraint_diameter` | Set circle/arc diameter              |
+| `sketcher_add_constraint_angle`    | Set angle between lines              |
+
+### Fix/Lock Constraints
+
+| Tool                            | Description                          |
+| ------------------------------- | ------------------------------------ |
+| `sketcher_add_constraint_lock`  | Lock point to specific coordinates   |
+| `sketcher_add_constraint_block` | Block element from moving            |
+| `sketcher_add_constraint_fix`   | Fix point position                   |
+
+### Constraint Management
+
+| Tool                        | Description                          |
+| --------------------------- | ------------------------------------ |
+| `sketcher_delete_constraint`| Delete a constraint by index         |
+
+---
+
+## Validation Tools
+
+Tools for checking object and document health, with automatic recovery.
+
+| Tool                | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `validate_object`   | Check shape validity, error states, recompute     |
+| `validate_document` | Check all objects in document, return summary     |
+| `undo_if_invalid`   | Validate and auto-undo if invalid objects exist   |
+| `safe_execute`      | Execute code with validation and auto-rollback    |
+
+!!! tip "Recovery Pattern"
+    Use `undo_if_invalid` after complex operations to automatically recover from failures.
 
 ---
 

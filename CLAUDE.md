@@ -1722,7 +1722,40 @@ When Claude Code is connected to the FreeCAD Robust MCP server, the following to
 
 The MCP server provides a `freecad://capabilities` resource that returns a complete JSON catalog of all available tools, resources, and prompts. This is the authoritative source for what's available.
 
-**IMPORTANT**: When adding new MCP tools or resources, you MUST also update the `freecad://capabilities` resource in `src/freecad_mcp/resources/freecad.py` to keep it in sync. The capabilities resource is defined in the `resource_capabilities()` function.
+### Updating Documentation When Tools Change
+
+**CRITICAL**: When adding, modifying, or removing MCP tools, you MUST update ALL of these files:
+
+| File                                   | What to Update                                    |
+| -------------------------------------- | ------------------------------------------------- |
+| `src/freecad_mcp/resources/freecad.py` | `freecad://capabilities` resource (tool catalog)  |
+| `src/freecad_mcp/prompts/freecad.py`   | AI guidance prompts (tool references, workflows)  |
+| `docs/guide/tools.md`                  | User-facing tool reference (categories, tables)   |
+| `CLAUDE.md` (this file)                | Tools Reference section (if adding new category)  |
+
+**What to update in each file:**
+
+1. **`freecad://capabilities` resource** (`src/freecad_mcp/resources/freecad.py`):
+   - Add tool to the appropriate category in `resource_capabilities()`
+   - Include `name`, `description`, and `key_params` for each tool
+   - Add new categories if the tool doesn't fit existing ones
+
+2. **Prompts** (`src/freecad_mcp/prompts/freecad.py`):
+   - Update relevant guidance sections (partdesign, sketching, validation, etc.)
+   - Add workflow examples if the tool introduces new patterns
+   - Update quick reference tables in `freecad_startup` prompt
+
+3. **Tools documentation** (`docs/guide/tools.md`):
+   - Update the tool count in the header
+   - Add tool to appropriate category table
+   - Create new section if adding a new category
+   - Update the category summary table
+
+4. **CLAUDE.md** (this file):
+   - Only update if adding a completely new tool category
+   - The Tools Reference section serves as quick reference for AI agents
+
+**Note on transaction support**: All tool operations are wrapped in FreeCAD transactions for undo support. Document this in the `transaction_safety` section of capabilities and in relevant prompts.
 
 ### Execution & Debugging Tools
 
