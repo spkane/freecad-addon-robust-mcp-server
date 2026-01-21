@@ -1079,6 +1079,113 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                         },
                     ],
                 },
+                "spreadsheet": {
+                    "description": "Spreadsheet workbench for parametric design",
+                    "note": "All operations are wrapped in transactions for undo support",
+                    "tools": [
+                        {
+                            "name": "spreadsheet_create",
+                            "description": "Create a new Spreadsheet object",
+                            "key_params": ["name", "doc_name"],
+                        },
+                        {
+                            "name": "spreadsheet_set_cell",
+                            "description": "Set cell value (number, string, or formula)",
+                            "key_params": ["spreadsheet_name", "cell", "value"],
+                        },
+                        {
+                            "name": "spreadsheet_get_cell",
+                            "description": "Get cell value and computed result",
+                            "key_params": ["spreadsheet_name", "cell"],
+                        },
+                        {
+                            "name": "spreadsheet_set_alias",
+                            "description": "Set alias for parametric references",
+                            "key_params": ["spreadsheet_name", "cell", "alias"],
+                        },
+                        {
+                            "name": "spreadsheet_get_aliases",
+                            "description": "Get all aliases in a spreadsheet",
+                            "key_params": ["spreadsheet_name"],
+                        },
+                        {
+                            "name": "spreadsheet_clear_cell",
+                            "description": "Clear a cell and its alias",
+                            "key_params": ["spreadsheet_name", "cell"],
+                        },
+                        {
+                            "name": "spreadsheet_bind_property",
+                            "description": "Bind object property to spreadsheet cell",
+                            "key_params": [
+                                "spreadsheet_name",
+                                "alias",
+                                "target_object",
+                                "target_property",
+                            ],
+                        },
+                        {
+                            "name": "spreadsheet_get_cell_range",
+                            "description": "Get values from a range of cells",
+                            "key_params": [
+                                "spreadsheet_name",
+                                "start_cell",
+                                "end_cell",
+                            ],
+                        },
+                        {
+                            "name": "spreadsheet_import_csv",
+                            "description": "Import CSV data into spreadsheet",
+                            "key_params": ["spreadsheet_name", "file_path"],
+                        },
+                        {
+                            "name": "spreadsheet_export_csv",
+                            "description": "Export spreadsheet to CSV file",
+                            "key_params": ["spreadsheet_name", "file_path"],
+                        },
+                    ],
+                },
+                "draft": {
+                    "description": "Draft workbench - ShapeString for 3D text",
+                    "note": "All operations are wrapped in transactions for undo support",
+                    "tools": [
+                        {
+                            "name": "draft_shapestring",
+                            "description": "Create 3D text geometry from string and font",
+                            "key_params": ["text", "font_path", "size", "position"],
+                        },
+                        {
+                            "name": "draft_list_fonts",
+                            "description": "List available system fonts for ShapeString",
+                            "key_params": [],
+                        },
+                        {
+                            "name": "draft_shapestring_to_sketch",
+                            "description": "Convert ShapeString to Sketch for PartDesign",
+                            "key_params": ["shapestring_name", "body_name", "plane"],
+                        },
+                        {
+                            "name": "draft_shapestring_to_face",
+                            "description": "Convert ShapeString to Face for boolean ops",
+                            "key_params": ["shapestring_name"],
+                        },
+                        {
+                            "name": "draft_text_on_surface",
+                            "description": "Emboss or engrave text on a surface",
+                            "key_params": [
+                                "text",
+                                "target_face",
+                                "target_object",
+                                "depth",
+                                "operation",
+                            ],
+                        },
+                        {
+                            "name": "draft_extrude_shapestring",
+                            "description": "Extrude ShapeString to create 3D solid text",
+                            "key_params": ["shapestring_name", "height", "direction"],
+                        },
+                    ],
+                },
                 "sketcher_constraints": {
                     "description": "Sketcher constraint tools for fully defining geometry",
                     "note": "All operations are wrapped in transactions for undo support",

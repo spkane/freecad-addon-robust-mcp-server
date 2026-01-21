@@ -1,0 +1,830 @@
+"""Spreadsheet tools for FreeCAD Robust MCP Server.
+
+This module provides tools for the Spreadsheet workbench, enabling
+parametric design through cell values that can drive model dimensions.
+"""
+
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+
+def register_spreadsheet_tools(
+    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
+) -> None:
+    """Register Spreadsheet-related tools with the Robust MCP Server.
+
+    Args:
+        mcp: The FastMCP (Robust MCP Server) instance.
+        get_bridge: Async function to get the active bridge.
+    """
+
+    @mcp.tool()
+    async def spreadsheet_create(
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new Spreadsheet object.
+
+        Spreadsheets allow storing values and formulas that can be
+        referenced by other objects in the document for parametric design.
+
+        Args:
+            name: Spreadsheet name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created spreadsheet information:
+                - name: Spreadsheet object name
+                - label: Spreadsheet label
+                - type_id: Object type
+
+        Example:
+            Create a spreadsheet for parameters::
+
+                result = await spreadsheet_create(name="Parameters")
+                # Returns {"name": "Parameters", "label": "Parameters", ...}
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    doc = FreeCAD.newDocument("Unnamed")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Create Spreadsheet")
+try:
+    sheet_name = {name!r} or "Spreadsheet"
+    sheet = doc.addObject("Spreadsheet::Sheet", sheet_name)
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": sheet.Name,
+        "label": sheet.Label,
+        "type_id": sheet.TypeId,
+    }}
+except Exception:
+    doc.abortTransaction()
+    raise
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to create spreadsheet")
+
+    @mcp.tool()
+    async def spreadsheet_set_cell(
+        spreadsheet_name: str,
+        cell: str,
+        value: str | int | float,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Set the value of a cell in a spreadsheet.
+
+        Values can be numbers, strings, or formulas. Formulas start with '='.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            cell: Cell address (e.g., "A1", "B2", "C10").
+            value: Value to set. Can be:
+                - Number (int or float)
+                - String (text)
+                - Formula starting with '=' (e.g., "=A1+B1", "=2*pi")
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with result:
+                - success: Whether the operation succeeded
+                - cell: Cell address that was set
+                - value: Value that was set
+                - computed: Computed value (for formulas)
+
+        Example:
+            Set numeric values and formulas::
+
+                await spreadsheet_set_cell("Params", "A1", 100)  # Number
+                await spreadsheet_set_cell("Params", "A2", "=A1*2")  # Formula
+                await spreadsheet_set_cell("Params", "B1", "Length")  # String
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+if not hasattr(sheet, "set"):
+    raise ValueError(f"Object is not a spreadsheet: {spreadsheet_name!r}")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Set Spreadsheet Cell")
+try:
+    cell = {cell!r}
+    value = {value!r}
+
+    # Set the cell value
+    sheet.set(cell, str(value))
+    doc.recompute()
+
+    # Get the computed value
+    try:
+        computed = sheet.get(cell)
+    except Exception:
+        computed = value
+
+    doc.commitTransaction()
+
+    _result_ = {{
+        "success": True,
+        "cell": cell,
+        "value": value,
+        "computed": computed,
+    }}
+except Exception:
+    doc.abortTransaction()
+    raise
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to set cell")
+
+    @mcp.tool()
+    async def spreadsheet_get_cell(
+        spreadsheet_name: str,
+        cell: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Get the value of a cell in a spreadsheet.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            cell: Cell address (e.g., "A1", "B2").
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with cell information:
+                - cell: Cell address
+                - value: Raw value (formula if it's a formula)
+                - computed: Computed/displayed value
+                - alias: Cell alias if set, None otherwise
+
+        Example:
+            Get a cell value::
+
+                result = await spreadsheet_get_cell("Params", "A1")
+                print(f"Value: {result['computed']}")
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+cell = {cell!r}
+
+# Get computed value
+try:
+    computed = sheet.get(cell)
+except Exception:
+    computed = None
+
+# Get raw content (formula or value)
+try:
+    content = sheet.getContents(cell)
+except Exception:
+    content = None
+
+# Check for alias
+alias = None
+try:
+    # Get all aliases and check if this cell has one
+    aliases = sheet.getPropertyByName("cells").Content
+    # Parse XML to find alias - simplified approach
+    for prop_name in dir(sheet):
+        if not prop_name.startswith("_"):
+            try:
+                cell_prop = sheet.getCellFromAlias(prop_name)
+                if cell_prop == cell:
+                    alias = prop_name
+                    break
+            except Exception:
+                pass
+except Exception:
+    pass
+
+_result_ = {{
+    "cell": cell,
+    "value": content,
+    "computed": computed,
+    "alias": alias,
+}}
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to get cell")
+
+    @mcp.tool()
+    async def spreadsheet_set_alias(
+        spreadsheet_name: str,
+        cell: str,
+        alias: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Set an alias for a cell in a spreadsheet.
+
+        Aliases allow referencing cell values by name instead of cell address.
+        This is the key to parametric design - set an alias like "Length"
+        and then reference it in object properties as "Spreadsheet.Length".
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            cell: Cell address (e.g., "A1").
+            alias: Alias name (e.g., "Length", "Width"). Must be a valid
+                Python identifier (no spaces, starts with letter).
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with result:
+                - success: Whether the operation succeeded
+                - cell: Cell address
+                - alias: Alias that was set
+
+        Example:
+            Set aliases for parametric dimensions::
+
+                await spreadsheet_set_alias("Params", "A1", "BoxLength")
+                await spreadsheet_set_alias("Params", "A2", "BoxWidth")
+                # Now use Params.BoxLength in expressions
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Set Cell Alias")
+try:
+    cell = {cell!r}
+    alias = {alias!r}
+
+    # Validate alias is a valid identifier
+    if not alias.isidentifier():
+        raise ValueError(f"Invalid alias: {alias!r}. Must be a valid Python identifier.")
+
+    sheet.setAlias(cell, alias)
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "success": True,
+        "cell": cell,
+        "alias": alias,
+    }}
+except Exception:
+    doc.abortTransaction()
+    raise
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to set alias")
+
+    @mcp.tool()
+    async def spreadsheet_get_aliases(
+        spreadsheet_name: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Get all aliases defined in a spreadsheet.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with aliases:
+                - spreadsheet: Spreadsheet name
+                - aliases: Dictionary mapping alias names to cell addresses
+                - count: Number of aliases
+
+        Example:
+            List all parameter aliases::
+
+                result = await spreadsheet_get_aliases("Params")
+                for alias, cell in result["aliases"].items():
+                    print(f"{alias} -> {cell}")
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+aliases = {{}}
+
+# Get aliases by checking which properties are aliases
+# In FreeCAD, spreadsheet aliases become properties on the sheet object
+try:
+    # Method 1: Try getPropertyByName for each potential alias
+    for prop_name in sheet.PropertiesList:
+        try:
+            cell = sheet.getCellFromAlias(prop_name)
+            if cell:
+                aliases[prop_name] = cell
+        except Exception:
+            pass
+except Exception:
+    pass
+
+_result_ = {{
+    "spreadsheet": sheet.Name,
+    "aliases": aliases,
+    "count": len(aliases),
+}}
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to get aliases")
+
+    @mcp.tool()
+    async def spreadsheet_clear_cell(
+        spreadsheet_name: str,
+        cell: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Clear a cell in a spreadsheet.
+
+        This removes the cell's content and any alias.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            cell: Cell address to clear (e.g., "A1").
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with result:
+                - success: Whether the operation succeeded
+                - cell: Cell address that was cleared
+
+        Example:
+            Clear a cell::
+
+                await spreadsheet_clear_cell("Params", "A1")
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Clear Spreadsheet Cell")
+try:
+    cell = {cell!r}
+
+    # Clear alias first if any
+    try:
+        sheet.setAlias(cell, "")
+    except Exception:
+        pass
+
+    # Clear content
+    sheet.clear(cell)
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "success": True,
+        "cell": cell,
+    }}
+except Exception:
+    doc.abortTransaction()
+    raise
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to clear cell")
+
+    @mcp.tool()
+    async def spreadsheet_bind_property(
+        spreadsheet_name: str,
+        alias: str,
+        target_object: str,
+        target_property: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Bind an object property to a spreadsheet cell using expressions.
+
+        This creates a parametric link where the object property is
+        driven by the spreadsheet cell value. When the spreadsheet
+        value changes, the object updates automatically.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            alias: Cell alias to bind (the cell must have an alias set).
+            target_object: Name of the object to modify.
+            target_property: Property name to bind (e.g., "Length", "Width").
+            doc_name: Document containing the objects. Uses active if None.
+
+        Returns:
+            Dictionary with result:
+                - success: Whether the operation succeeded
+                - expression: The expression that was set
+                - target_object: Object that was modified
+                - target_property: Property that was bound
+
+        Example:
+            Bind a box's length to a spreadsheet parameter::
+
+                await spreadsheet_set_cell("Params", "A1", 50)
+                await spreadsheet_set_alias("Params", "A1", "BoxLength")
+                await spreadsheet_bind_property("Params", "BoxLength", "Box", "Length")
+                # Now Box.Length = 50 and updates when A1 changes
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+target = doc.getObject({target_object!r})
+if target is None:
+    raise ValueError(f"Target object not found: {target_object!r}")
+
+alias = {alias!r}
+prop = {target_property!r}
+
+# Verify the alias exists
+try:
+    cell = sheet.getCellFromAlias(alias)
+    if not cell:
+        raise ValueError(f"Alias not found: {{alias!r}}")
+except Exception as e:
+    raise ValueError(f"Alias not found: {{alias!r}}") from e
+
+# Verify the property exists on target
+if not hasattr(target, prop):
+    raise ValueError(f"Property not found on target: {{prop!r}}")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Bind Property to Spreadsheet")
+try:
+    # Create the expression binding
+    # Format: ObjectName.Alias
+    expression = f"{{sheet.Name}}.{{alias}}"
+    target.setExpression(prop, expression)
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "success": True,
+        "expression": expression,
+        "target_object": target.Name,
+        "target_property": prop,
+    }}
+except Exception:
+    doc.abortTransaction()
+    raise
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to bind property")
+
+    @mcp.tool()
+    async def spreadsheet_get_cell_range(
+        spreadsheet_name: str,
+        start_cell: str,
+        end_cell: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Get values from a range of cells in a spreadsheet.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            start_cell: Starting cell address (e.g., "A1").
+            end_cell: Ending cell address (e.g., "C5").
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with range data:
+                - spreadsheet: Spreadsheet name
+                - start: Start cell
+                - end: End cell
+                - cells: Dictionary mapping cell addresses to their values
+
+        Example:
+            Get a range of values::
+
+                result = await spreadsheet_get_cell_range("Params", "A1", "B3")
+                for cell, value in result["cells"].items():
+                    print(f"{cell}: {value}")
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+import re
+
+start_cell = {start_cell!r}.upper()
+end_cell = {end_cell!r}.upper()
+
+# Parse cell addresses
+def parse_cell(cell_str):
+    match = re.match(r'^([A-Z]+)([0-9]+)$', cell_str)
+    if not match:
+        raise ValueError(f"Invalid cell address: {{cell_str}}")
+    col_str, row_str = match.groups()
+    # Convert column letters to number (A=0, B=1, etc)
+    col = 0
+    for c in col_str:
+        col = col * 26 + (ord(c) - ord('A'))
+    row = int(row_str)
+    return col, row
+
+def col_to_str(col):
+    result = ""
+    while col >= 0:
+        result = chr(ord('A') + col % 26) + result
+        col = col // 26 - 1
+    return result
+
+start_col, start_row = parse_cell(start_cell)
+end_col, end_row = parse_cell(end_cell)
+
+# Ensure start <= end
+if start_col > end_col:
+    start_col, end_col = end_col, start_col
+if start_row > end_row:
+    start_row, end_row = end_row, start_row
+
+cells = {{}}
+for col in range(start_col, end_col + 1):
+    for row in range(start_row, end_row + 1):
+        cell_addr = col_to_str(col) + str(row)
+        try:
+            value = sheet.get(cell_addr)
+            cells[cell_addr] = value
+        except Exception:
+            # Cell might be empty
+            cells[cell_addr] = None
+
+_result_ = {{
+    "spreadsheet": sheet.Name,
+    "start": start_cell,
+    "end": end_cell,
+    "cells": cells,
+}}
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to get cell range")
+
+    @mcp.tool()
+    async def spreadsheet_import_csv(
+        spreadsheet_name: str,
+        file_path: str,
+        delimiter: str = ",",
+        start_cell: str = "A1",
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Import data from a CSV file into a spreadsheet.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            file_path: Path to the CSV file to import.
+            delimiter: CSV delimiter character. Defaults to ",".
+            start_cell: Cell to start importing at. Defaults to "A1".
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with import result:
+                - success: Whether the operation succeeded
+                - rows_imported: Number of rows imported
+                - cols_imported: Number of columns imported
+                - start_cell: Starting cell
+
+        Example:
+            Import parameters from CSV::
+
+                await spreadsheet_import_csv("Params", "/path/to/data.csv")
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import csv
+import re
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+file_path = {file_path!r}
+delimiter = {delimiter!r}
+start_cell = {start_cell!r}.upper()
+
+# Parse start cell
+match = re.match(r'^([A-Z]+)([0-9]+)$', start_cell)
+if not match:
+    raise ValueError(f"Invalid cell address: {{start_cell}}")
+col_str, row_str = match.groups()
+start_col = 0
+for c in col_str:
+    start_col = start_col * 26 + (ord(c) - ord('A'))
+start_row = int(row_str)
+
+def col_to_str(col):
+    result = ""
+    while col >= 0:
+        result = chr(ord('A') + col % 26) + result
+        col = col // 26 - 1
+    return result
+
+# Wrap in transaction for undo support
+doc.openTransaction("Import CSV to Spreadsheet")
+try:
+    rows_imported = 0
+    max_cols = 0
+
+    with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        reader = csv.reader(f, delimiter=delimiter)
+        for row_idx, row in enumerate(reader):
+            for col_idx, value in enumerate(row):
+                cell_addr = col_to_str(start_col + col_idx) + str(start_row + row_idx)
+                # Try to convert to number if possible
+                try:
+                    if '.' in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                except ValueError:
+                    pass  # Keep as string
+                sheet.set(cell_addr, str(value))
+            rows_imported += 1
+            max_cols = max(max_cols, len(row))
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "success": True,
+        "rows_imported": rows_imported,
+        "cols_imported": max_cols,
+        "start_cell": start_cell,
+    }}
+except Exception:
+    doc.abortTransaction()
+    raise
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to import CSV")
+
+    @mcp.tool()
+    async def spreadsheet_export_csv(
+        spreadsheet_name: str,
+        file_path: str,
+        delimiter: str = ",",
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Export spreadsheet data to a CSV file.
+
+        Args:
+            spreadsheet_name: Name of the spreadsheet object.
+            file_path: Path to write the CSV file.
+            delimiter: CSV delimiter character. Defaults to ",".
+            doc_name: Document containing the spreadsheet. Uses active if None.
+
+        Returns:
+            Dictionary with export result:
+                - success: Whether the operation succeeded
+                - file_path: Path where file was written
+                - rows_exported: Number of rows exported
+
+        Example:
+            Export spreadsheet to CSV::
+
+                await spreadsheet_export_csv("Params", "/path/to/output.csv")
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import csv
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+sheet = doc.getObject({spreadsheet_name!r})
+if sheet is None:
+    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+
+file_path = {file_path!r}
+delimiter = {delimiter!r}
+
+# Get used range - find max row and column with data
+max_row = 0
+max_col = 0
+
+# Check a reasonable range for data
+for col in range(26 * 2):  # Up to BZ
+    for row in range(1, 1001):  # Up to row 1000
+        col_str = ""
+        c = col
+        while c >= 0:
+            col_str = chr(ord('A') + c % 26) + col_str
+            c = c // 26 - 1
+        cell_addr = col_str + str(row)
+        try:
+            val = sheet.get(cell_addr)
+            if val is not None:
+                max_row = max(max_row, row)
+                max_col = max(max_col, col)
+        except Exception:
+            pass
+
+if max_row == 0:
+    # Empty spreadsheet
+    _result_ = {{
+        "success": True,
+        "file_path": file_path,
+        "rows_exported": 0,
+    }}
+else:
+    def col_to_str(col):
+        result = ""
+        while col >= 0:
+            result = chr(ord('A') + col % 26) + result
+            col = col // 26 - 1
+        return result
+
+    with open(file_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, delimiter=delimiter)
+        for row in range(1, max_row + 1):
+            row_data = []
+            for col in range(max_col + 1):
+                cell_addr = col_to_str(col) + str(row)
+                try:
+                    val = sheet.get(cell_addr)
+                    row_data.append(val if val is not None else "")
+                except Exception:
+                    row_data.append("")
+            writer.writerow(row_data)
+
+    _result_ = {{
+        "success": True,
+        "file_path": file_path,
+        "rows_exported": max_row,
+    }}
+"""
+        result = await bridge.execute_python(code)
+        if result.success and result.result:
+            return result.result
+        raise ValueError(result.error_traceback or "Failed to export CSV")

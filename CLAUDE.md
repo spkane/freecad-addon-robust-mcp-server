@@ -608,6 +608,33 @@ uv run pytest tests/unit/       # Run specific test directory
 uv run pytest -k "test_name"    # Run specific test by name
 ```
 
+### Integration Tests with Auto-Start FreeCAD
+
+**IMPORTANT**: The following commands **automatically start FreeCAD** and run the integration tests. You do NOT need to manually start FreeCAD first:
+
+```bash
+just testing::integration-gui-release      # Starts FreeCAD GUI, runs tests, stops FreeCAD
+just testing::integration-headless-release # Starts FreeCAD headless, runs tests, stops FreeCAD
+```
+
+These commands handle the full lifecycle:
+
+1. Start FreeCAD with the MCP bridge
+2. Wait for the bridge to be ready
+3. Run integration tests
+4. Stop FreeCAD when done
+
+Use these commands when you need to verify integration tests pass. They are the recommended way to run integration tests during development.
+
+For manual testing (when you want FreeCAD to stay running), use:
+
+```bash
+just freecad::run-gui      # Start FreeCAD GUI with bridge (stays running)
+just freecad::run-headless # Start FreeCAD headless with bridge (stays running)
+# Then in another terminal:
+just testing::integration  # Run integration tests against running FreeCAD
+```
+
 ### Just Command Testing
 
 The project includes a comprehensive test suite for all `just` commands in `tests/just_commands/`. This ensures that justfile syntax errors, missing dependencies, and runtime failures are caught early.
@@ -1512,6 +1539,16 @@ This project uses component-specific release workflows along with CI/CD pipeline
 | `codeql.yaml`     | Push, PR, scheduled           | GitHub CodeQL security analysis                           |
 | `docs.yaml`       | Push to main, MCP server tags | Deploys versioned documentation to GitHub Pages           |
 
+**IMPORTANT - test.yaml Workflow**: The `test.yaml` workflow **automatically starts FreeCAD** in headless mode for integration tests. It:
+
+1. Installs FreeCAD via the custom `setup-freecad` action
+2. Starts FreeCAD headless with the MCP bridge (`blocking_bridge.py`)
+3. Waits for the bridge to be ready (pings the XML-RPC endpoint)
+4. Runs integration tests
+5. Stops FreeCAD and shows logs on failure
+
+You do NOT need to manually start FreeCAD when the CI workflow runs. The workflow handles the full lifecycle automatically.
+
 ### Release Workflows
 
 | Workflow                     | Trigger                        | Purpose                                                |
@@ -1933,6 +1970,32 @@ The MCP server provides a `freecad://capabilities` resource that returns a compl
 | `delete_sketch_constraint` | Delete a constraint from a sketch.                       |
 | `get_sketch_info`          | Get detailed info about sketch geometry and constraints. |
 | `toggle_construction`      | Toggle geometry between normal and construction mode.    |
+
+### Spreadsheet Tools (Parametric Design)
+
+| Tool                        | Description                                             |
+| --------------------------- | ------------------------------------------------------- |
+| `spreadsheet_create`        | Create a new Spreadsheet object for parametric design.  |
+| `spreadsheet_set_cell`      | Set cell value (number, string, or formula like =A1*2). |
+| `spreadsheet_get_cell`      | Get cell value and computed result.                     |
+| `spreadsheet_set_alias`     | Set alias for cell (e.g., "Length") for expressions.    |
+| `spreadsheet_get_aliases`   | Get all aliases defined in a spreadsheet.               |
+| `spreadsheet_clear_cell`    | Clear a cell content and alias.                         |
+| `spreadsheet_bind_property` | Bind object property to spreadsheet cell via expression.|
+| `spreadsheet_get_cell_range`| Get values from a range of cells.                       |
+| `spreadsheet_import_csv`    | Import data from CSV file into spreadsheet.             |
+| `spreadsheet_export_csv`    | Export spreadsheet data to CSV file.                    |
+
+### Draft Tools (3D Text/ShapeString)
+
+| Tool                          | Description                                           |
+| ----------------------------- | ----------------------------------------------------- |
+| `draft_shapestring`           | Create 3D text geometry from a string and font.       |
+| `draft_list_fonts`            | List available system fonts for ShapeString.          |
+| `draft_shapestring_to_sketch` | Convert ShapeString to Sketch for PartDesign use.     |
+| `draft_shapestring_to_face`   | Convert ShapeString to Face for boolean operations.   |
+| `draft_text_on_surface`       | Emboss or engrave text directly on a surface.         |
+| `draft_extrude_shapestring`   | Extrude ShapeString to create 3D solid text.          |
 
 ### View & GUI Tools (Require GUI Mode)
 

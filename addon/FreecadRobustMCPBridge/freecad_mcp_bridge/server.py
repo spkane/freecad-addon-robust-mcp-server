@@ -760,9 +760,29 @@ class FreecadMCPPlugin:
 
     def _run_xmlrpc_server(self) -> None:
         """Run the XML-RPC server."""
+
+        # Custom request handler that silently handles GET requests
+        # instead of logging "Unsupported method ('GET')" errors
+        class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
+            """XML-RPC handler that responds gracefully to GET requests."""
+
+            def do_GET(self) -> None:
+                """Handle GET requests with a friendly response."""
+                response = b"FreeCAD MCP Bridge - XML-RPC endpoint (POST only)"
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Content-Length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+
+            def log_message(self, format: str, *args: Any) -> None:
+                """Suppress all HTTP request logging."""
+                pass
+
         try:
             self._xmlrpc_server = xmlrpc.server.SimpleXMLRPCServer(
                 (self._host, self._xmlrpc_port),
+                requestHandler=QuietXMLRPCRequestHandler,
                 allow_none=True,
                 logRequests=False,
             )
