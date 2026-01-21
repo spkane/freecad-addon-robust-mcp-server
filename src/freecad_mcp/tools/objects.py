@@ -523,15 +523,22 @@ if obj1 is None:
 if obj2 is None:
     raise ValueError(f"Object not found: {object2_name!r}")
 
-if {op_type!r} == "Part::Cut":
-    result = doc.addObject({op_type!r}, {result_name!r})
-    result.Base = obj1
-    result.Tool = obj2
-else:
-    result = doc.addObject({op_type!r}, {result_name!r})
-    result.Shapes = [obj1, obj2]
+# Wrap in transaction for undo support
+doc.openTransaction("Boolean {operation.capitalize()}")
+try:
+    if {op_type!r} == "Part::Cut":
+        result = doc.addObject({op_type!r}, {result_name!r})
+        result.Base = obj1
+        result.Tool = obj2
+    else:
+        result = doc.addObject({op_type!r}, {result_name!r})
+        result.Shapes = [obj1, obj2]
 
-doc.recompute()
+    doc.recompute()
+    doc.commitTransaction()
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 
 _result_ = {{
     "name": result.Name,
@@ -586,11 +593,18 @@ obj = doc.getObject({object_name!r})
 if obj is None:
     raise ValueError(f"Object not found: {object_name!r}")
 
-pos = {pos_str}
-rot = {rot_str}
+# Wrap in transaction for undo support
+doc.openTransaction("Set Placement")
+try:
+    pos = {pos_str}
+    rot = {rot_str}
 
-obj.Placement = FreeCAD.Placement(pos, rot)
-doc.recompute()
+    obj.Placement = FreeCAD.Placement(pos, rot)
+    doc.recompute()
+    doc.commitTransaction()
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 
 _result_ = {{
     "position": [obj.Placement.Base.x, obj.Placement.Base.y, obj.Placement.Base.z],
@@ -648,20 +662,27 @@ if not hasattr(obj, "Shape"):
 
 import Part
 
-scale_vec = {scale_vec}
-center = obj.Shape.BoundBox.Center
+# Wrap in transaction for undo support
+doc.openTransaction("Scale Object")
+try:
+    scale_vec = {scale_vec}
+    center = obj.Shape.BoundBox.Center
 
-# Create scaled shape
-mat = FreeCAD.Matrix()
-mat.scale(scale_vec)
-scaled_shape = obj.Shape.transformGeometry(mat)
+    # Create scaled shape
+    mat = FreeCAD.Matrix()
+    mat.scale(scale_vec)
+    scaled_shape = obj.Shape.transformGeometry(mat)
 
-# Create result object
-result_name = {result_name!r} or f"{{obj.Name}}_scaled"
-result = doc.addObject("Part::Feature", result_name)
-result.Shape = scaled_shape
+    # Create result object
+    result_name = {result_name!r} or f"{{obj.Name}}_scaled"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = scaled_shape
 
-doc.recompute()
+    doc.recompute()
+    doc.commitTransaction()
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 
 _result_ = {{
     "name": result.Name,
@@ -716,22 +737,29 @@ obj = doc.getObject({object_name!r})
 if obj is None:
     raise ValueError(f"Object not found: {object_name!r}")
 
-axis = FreeCAD.Vector({axis[0]}, {axis[1]}, {axis[2]})
-center = {center_str}
+# Wrap in transaction for undo support
+doc.openTransaction("Rotate Object")
+try:
+    axis = FreeCAD.Vector({axis[0]}, {axis[1]}, {axis[2]})
+    center = {center_str}
 
-# Create rotation
-rot = FreeCAD.Rotation(axis, {angle})
+    # Create rotation
+    rot = FreeCAD.Rotation(axis, {angle})
 
-# Apply rotation around center
-old_placement = obj.Placement
-new_rot = rot.multiply(old_placement.Rotation)
+    # Apply rotation around center
+    old_placement = obj.Placement
+    new_rot = rot.multiply(old_placement.Rotation)
 
-# Adjust position for rotation around center
-pos_vec = old_placement.Base - center
-rotated_pos = rot.multVec(pos_vec) + center
+    # Adjust position for rotation around center
+    pos_vec = old_placement.Base - center
+    rotated_pos = rot.multVec(pos_vec) + center
 
-obj.Placement = FreeCAD.Placement(rotated_pos, new_rot)
-doc.recompute()
+    obj.Placement = FreeCAD.Placement(rotated_pos, new_rot)
+    doc.recompute()
+    doc.commitTransaction()
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 
 _result_ = {{
     "position": [obj.Placement.Base.x, obj.Placement.Base.y, obj.Placement.Base.z],
@@ -779,26 +807,33 @@ obj = doc.getObject({object_name!r})
 if obj is None:
     raise ValueError(f"Object not found: {object_name!r}")
 
-# Create copy
-new_name = {new_name!r} or f"{{obj.Name}}_copy"
+# Wrap in transaction for undo support
+doc.openTransaction("Copy Object")
+try:
+    # Create copy
+    new_name = {new_name!r} or f"{{obj.Name}}_copy"
 
-if hasattr(obj, "Shape"):
-    copy_obj = doc.addObject("Part::Feature", new_name)
-    copy_obj.Shape = obj.Shape.copy()
-else:
-    # For non-shape objects, create simple copy
-    copy_obj = doc.copyObject(obj, False)
-    copy_obj.Label = new_name
+    if hasattr(obj, "Shape"):
+        copy_obj = doc.addObject("Part::Feature", new_name)
+        copy_obj.Shape = obj.Shape.copy()
+    else:
+        # For non-shape objects, create simple copy
+        copy_obj = doc.copyObject(obj, False)
+        copy_obj.Label = new_name
 
-# Apply offset
-offset = {offset_str}
-copy_obj.Placement.Base = FreeCAD.Vector(
-    obj.Placement.Base.x + offset[0],
-    obj.Placement.Base.y + offset[1],
-    obj.Placement.Base.z + offset[2]
-)
+    # Apply offset
+    offset = {offset_str}
+    copy_obj.Placement.Base = FreeCAD.Vector(
+        obj.Placement.Base.x + offset[0],
+        obj.Placement.Base.y + offset[1],
+        obj.Placement.Base.z + offset[2]
+    )
 
-doc.recompute()
+    doc.recompute()
+    doc.commitTransaction()
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 
 _result_ = {{
     "name": copy_obj.Name,
@@ -859,20 +894,28 @@ if obj is None:
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape to mirror")
 
-# Create mirror matrix
 import Part
-normal = FreeCAD.Vector{normal}
-center = obj.Shape.BoundBox.Center
 
-# Mirror the shape
-mirrored = obj.Shape.mirror(center, normal)
+# Wrap in transaction for undo support
+doc.openTransaction("Mirror Object")
+try:
+    # Create mirror matrix
+    normal = FreeCAD.Vector{normal}
+    center = obj.Shape.BoundBox.Center
 
-# Create result object
-result_name = {result_name!r} or f"{{obj.Name}}_mirror"
-result = doc.addObject("Part::Feature", result_name)
-result.Shape = mirrored
+    # Mirror the shape
+    mirrored = obj.Shape.mirror(center, normal)
 
-doc.recompute()
+    # Create result object
+    result_name = {result_name!r} or f"{{obj.Name}}_mirror"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = mirrored
+
+    doc.recompute()
+    doc.commitTransaction()
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 
 _result_ = {{
     "name": result.Name,
@@ -992,3 +1035,1216 @@ else:
         if result.success:
             return result.result
         raise ValueError(result.error_traceback or "Clear selection failed")
+
+    # =========================================================================
+    # Part Primitives - Additional shapes
+    # =========================================================================
+
+    @mcp.tool()
+    async def create_line(
+        point1: list[float],
+        point2: list[float],
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Part Line (edge) between two points.
+
+        Args:
+            point1: Start point as [x, y, z].
+            point2: End point as [x, y, z].
+            name: Object name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created object information:
+                - name: Object name
+                - label: Object label
+                - type_id: Object type
+                - length: Line length
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    doc = FreeCAD.newDocument("Unnamed")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Create Line")
+try:
+    p1 = FreeCAD.Vector({point1[0]}, {point1[1]}, {point1[2]})
+    p2 = FreeCAD.Vector({point2[0]}, {point2[1]}, {point2[2]})
+
+    line = Part.makeLine(p1, p2)
+    obj_name = {name!r} or "Line"
+    obj = doc.addObject("Part::Feature", obj_name)
+    obj.Shape = line
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": obj.Name,
+        "label": obj.Label,
+        "type_id": obj.TypeId,
+        "length": line.Length,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Create line failed")
+
+    @mcp.tool()
+    async def create_plane(
+        length: float = 10.0,
+        width: float = 10.0,
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Part Plane (flat rectangular face).
+
+        Args:
+            length: Plane length (X direction). Defaults to 10.0.
+            width: Plane width (Y direction). Defaults to 10.0.
+            name: Object name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created object information:
+                - name: Object name
+                - label: Object label
+                - type_id: Object type
+        """
+        bridge = await get_bridge()
+        obj = await bridge.create_object(
+            "Part::Plane",
+            name,
+            {"Length": length, "Width": width},
+            doc_name,
+        )
+        return {
+            "name": obj.name,
+            "label": obj.label,
+            "type_id": obj.type_id,
+        }
+
+    @mcp.tool()
+    async def create_ellipse(
+        major_radius: float = 10.0,
+        minor_radius: float = 5.0,
+        angle1: float = 0.0,
+        angle2: float = 360.0,
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Part Ellipse curve.
+
+        Args:
+            major_radius: Semi-major axis radius. Defaults to 10.0.
+            minor_radius: Semi-minor axis radius. Defaults to 5.0.
+            angle1: Start angle in degrees. Defaults to 0.
+            angle2: End angle in degrees. Defaults to 360.
+            name: Object name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created object information:
+                - name: Object name
+                - label: Object label
+                - type_id: Object type
+        """
+        bridge = await get_bridge()
+        obj = await bridge.create_object(
+            "Part::Ellipse",
+            name,
+            {
+                "MajorRadius": major_radius,
+                "MinorRadius": minor_radius,
+                "Angle1": angle1,
+                "Angle2": angle2,
+            },
+            doc_name,
+        )
+        return {
+            "name": obj.name,
+            "label": obj.label,
+            "type_id": obj.type_id,
+        }
+
+    @mcp.tool()
+    async def create_prism(
+        polygon_sides: int = 6,
+        circumradius: float = 5.0,
+        height: float = 10.0,
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Part Prism (extruded regular polygon).
+
+        Args:
+            polygon_sides: Number of sides (3 for triangle, 6 for hexagon, etc.).
+                           Defaults to 6.
+            circumradius: Radius of circumscribed circle. Defaults to 5.0.
+            height: Prism height. Defaults to 10.0.
+            name: Object name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created object information:
+                - name: Object name
+                - label: Object label
+                - type_id: Object type
+        """
+        bridge = await get_bridge()
+        obj = await bridge.create_object(
+            "Part::Prism",
+            name,
+            {"Polygon": polygon_sides, "Circumradius": circumradius, "Height": height},
+            doc_name,
+        )
+        return {
+            "name": obj.name,
+            "label": obj.label,
+            "type_id": obj.type_id,
+        }
+
+    @mcp.tool()
+    async def create_regular_polygon(
+        polygon_sides: int = 6,
+        circumradius: float = 5.0,
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Part Regular Polygon (2D wire).
+
+        Args:
+            polygon_sides: Number of sides (3 for triangle, 6 for hexagon, etc.).
+                           Defaults to 6.
+            circumradius: Radius of circumscribed circle. Defaults to 5.0.
+            name: Object name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created object information:
+                - name: Object name
+                - label: Object label
+                - type_id: Object type
+        """
+        bridge = await get_bridge()
+        obj = await bridge.create_object(
+            "Part::RegularPolygon",
+            name,
+            {"Polygon": polygon_sides, "Circumradius": circumradius},
+            doc_name,
+        )
+        return {
+            "name": obj.name,
+            "label": obj.label,
+            "type_id": obj.type_id,
+        }
+
+    # =========================================================================
+    # Part Shape Operations
+    # =========================================================================
+
+    @mcp.tool()
+    async def shell_object(
+        object_name: str,
+        thickness: float,
+        faces_to_remove: list[str] | None = None,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a shell (hollow) version of a solid by removing faces.
+
+        Also known as "thickness" operation. Removes specified faces and
+        offsets the remaining faces to create a hollow shell.
+
+        Args:
+            object_name: Name of the solid object to shell.
+            thickness: Wall thickness (positive = outward, negative = inward).
+            faces_to_remove: List of face names to remove (e.g., ["Face1", "Face6"]).
+                            If None, tries to remove the largest face.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        faces_str = faces_to_remove if faces_to_remove else "None"
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Shell Object")
+try:
+    faces_to_remove = {faces_str!r}
+
+    if faces_to_remove is None:
+        # Find and remove the largest face
+        faces = obj.Shape.Faces
+        largest = max(faces, key=lambda f: f.Area)
+        faces_to_remove_objs = [largest]
+    else:
+        # Get faces by name
+        faces_to_remove_objs = []
+        for fname in faces_to_remove:
+            idx = int(fname.replace("Face", "")) - 1
+            if 0 <= idx < len(obj.Shape.Faces):
+                faces_to_remove_objs.append(obj.Shape.Faces[idx])
+
+    shell = obj.Shape.makeThickness(faces_to_remove_objs, {thickness}, 1e-3)
+
+    result_name = {result_name!r} or f"{{obj.Name}}_shell"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = shell
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Shell operation failed")
+
+    @mcp.tool()
+    async def offset_3d(
+        object_name: str,
+        offset: float,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a 3D offset of a shape.
+
+        Offsets all faces of the shape by the specified distance.
+
+        Args:
+            object_name: Name of the object to offset.
+            offset: Offset distance (positive = outward, negative = inward).
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("3D Offset")
+try:
+    offset_shape = obj.Shape.makeOffsetShape({offset}, 1e-3)
+
+    result_name = {result_name!r} or f"{{obj.Name}}_offset"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = offset_shape
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "3D offset failed")
+
+    @mcp.tool()
+    async def slice_shape(
+        object_name: str,
+        plane_point: list[float],
+        plane_normal: list[float],
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Slice a shape with a plane, returning the cross-section.
+
+        Args:
+            object_name: Name of the object to slice.
+            plane_point: A point on the cutting plane [x, y, z].
+            plane_normal: Normal vector of the cutting plane [x, y, z].
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Slice Shape")
+try:
+    point = FreeCAD.Vector({plane_point[0]}, {plane_point[1]}, {plane_point[2]})
+    normal = FreeCAD.Vector({plane_normal[0]}, {plane_normal[1]}, {plane_normal[2]})
+
+    # Create section
+    wires = obj.Shape.slice(normal, point.dot(normal))
+
+    if not wires:
+        raise ValueError("Slice produced no result - plane may not intersect shape")
+
+    # Make a compound of the wires
+    if len(wires) == 1:
+        section_shape = wires[0]
+    else:
+        section_shape = Part.makeCompound(wires)
+
+    result_name = {result_name!r} or f"{{obj.Name}}_slice"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = section_shape
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Slice operation failed")
+
+    @mcp.tool()
+    async def section_shape(
+        object_name: str,
+        plane: str = "XY",
+        offset: float = 0.0,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a cross-section of a shape at a standard plane.
+
+        Args:
+            object_name: Name of the object to section.
+            plane: Section plane: "XY", "XZ", or "YZ". Defaults to "XY".
+            offset: Offset from origin along the plane normal. Defaults to 0.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        plane_normals = {
+            "XY": [0, 0, 1],
+            "XZ": [0, 1, 0],
+            "YZ": [1, 0, 0],
+        }
+
+        if plane not in plane_normals:
+            raise ValueError(f"Invalid plane: {plane}. Use: XY, XZ, YZ")
+
+        normal = plane_normals[plane]
+        point = [n * offset for n in normal]
+
+        return await slice_shape(object_name, point, normal, result_name, doc_name)
+
+    # =========================================================================
+    # Part Compound Operations
+    # =========================================================================
+
+    @mcp.tool()
+    async def make_compound(
+        object_names: list[str],
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Combine multiple shapes into a single compound.
+
+        A compound is a collection of shapes that can be manipulated together
+        but are not fused (each shape remains separate).
+
+        Args:
+            object_names: List of object names to combine.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the objects. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+                - shape_count: Number of shapes in compound
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+shapes = []
+for obj_name in {object_names!r}:
+    obj = doc.getObject(obj_name)
+    if obj is None:
+        raise ValueError(f"Object not found: {{obj_name}}")
+    if not hasattr(obj, "Shape"):
+        raise ValueError(f"Object has no shape: {{obj_name}}")
+    shapes.append(obj.Shape)
+
+# Wrap in transaction for undo support
+doc.openTransaction("Make Compound")
+try:
+    compound = Part.makeCompound(shapes)
+
+    result_name = {result_name!r} or "Compound"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = compound
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+        "shape_count": len(shapes),
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Make compound failed")
+
+    @mcp.tool()
+    async def explode_compound(
+        object_name: str,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Separate a compound into individual shape objects.
+
+        Args:
+            object_name: Name of the compound object to explode.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result:
+                - success: Whether operation succeeded
+                - created_objects: List of created object names
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Explode Compound")
+try:
+    created = []
+
+    # Get solids, shells, or other sub-shapes
+    solids = obj.Shape.Solids
+    if solids:
+        shapes = solids
+    else:
+        shapes = obj.Shape.Shells if obj.Shape.Shells else obj.Shape.Faces
+
+    for i, shape in enumerate(shapes):
+        new_obj = doc.addObject("Part::Feature", f"{{obj.Name}}_{{i+1}}")
+        new_obj.Shape = shape
+        created.append(new_obj.Name)
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "success": True,
+        "created_objects": created,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Explode compound failed")
+
+    @mcp.tool()
+    async def fuse_all(
+        object_names: list[str],
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Fuse (union) multiple shapes into a single solid.
+
+        Unlike boolean_operation which works on two objects at a time,
+        this fuses all specified objects at once.
+
+        Args:
+            object_names: List of object names to fuse.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the objects. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+shapes = []
+for obj_name in {object_names!r}:
+    obj = doc.getObject(obj_name)
+    if obj is None:
+        raise ValueError(f"Object not found: {{obj_name}}")
+    if not hasattr(obj, "Shape"):
+        raise ValueError(f"Object has no shape: {{obj_name}}")
+    shapes.append(obj.Shape)
+
+if len(shapes) < 2:
+    raise ValueError("Need at least 2 objects to fuse")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Fuse All")
+try:
+    # Fuse all shapes
+    fused = shapes[0]
+    for s in shapes[1:]:
+        fused = fused.fuse(s)
+
+    result_name = {result_name!r} or "Fusion"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = fused
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Fuse all failed")
+
+    @mcp.tool()
+    async def common_all(
+        object_names: list[str],
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Find the common (intersection) of multiple shapes.
+
+        Args:
+            object_names: List of object names to intersect.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the objects. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+shapes = []
+for obj_name in {object_names!r}:
+    obj = doc.getObject(obj_name)
+    if obj is None:
+        raise ValueError(f"Object not found: {{obj_name}}")
+    if not hasattr(obj, "Shape"):
+        raise ValueError(f"Object has no shape: {{obj_name}}")
+    shapes.append(obj.Shape)
+
+if len(shapes) < 2:
+    raise ValueError("Need at least 2 objects for common operation")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Common All")
+try:
+    # Find common of all shapes
+    common = shapes[0]
+    for s in shapes[1:]:
+        common = common.common(s)
+
+    result_name = {result_name!r} or "Common"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = common
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Common all failed")
+
+    # =========================================================================
+    # Part Wire/Face Operations
+    # =========================================================================
+
+    @mcp.tool()
+    async def make_wire(
+        points: list[list[float]],
+        closed: bool = False,
+        name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a wire (polyline) from a list of points.
+
+        Args:
+            points: List of points, each as [x, y, z].
+            closed: Whether to close the wire. Defaults to False.
+            name: Object name. Auto-generated if None.
+            doc_name: Target document. Uses active document if None.
+
+        Returns:
+            Dictionary with created object information:
+                - name: Object name
+                - label: Object label
+                - type_id: Object type
+                - length: Wire length
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    doc = FreeCAD.newDocument("Unnamed")
+
+points = {points!r}
+if len(points) < 2:
+    raise ValueError("Need at least 2 points to make a wire")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Make Wire")
+try:
+    vectors = [FreeCAD.Vector(p[0], p[1], p[2]) for p in points]
+
+    # Create edges between consecutive points
+    edges = []
+    for i in range(len(vectors) - 1):
+        edges.append(Part.makeLine(vectors[i], vectors[i+1]))
+
+    # Close the wire if requested
+    if {closed} and len(vectors) > 2:
+        edges.append(Part.makeLine(vectors[-1], vectors[0]))
+
+    wire = Part.Wire(edges)
+
+    obj_name = {name!r} or "Wire"
+    obj = doc.addObject("Part::Feature", obj_name)
+    obj.Shape = wire
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": obj.Name,
+        "label": obj.Label,
+        "type_id": obj.TypeId,
+        "length": wire.Length,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Make wire failed")
+
+    @mcp.tool()
+    async def make_face(
+        object_name: str,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a face from a closed wire.
+
+        Args:
+            object_name: Name of the wire object.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+                - area: Face area
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Make Face")
+try:
+    # Get wire from shape
+    wires = obj.Shape.Wires
+    if not wires:
+        raise ValueError("Object has no wires to make face from")
+
+    face = Part.Face(wires[0])
+
+    result_name = {result_name!r} or f"{{obj.Name}}_face"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = face
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+        "area": face.Area,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Make face failed")
+
+    @mcp.tool()
+    async def extrude_shape(
+        object_name: str,
+        direction: list[float],
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Extrude a wire or face along a direction vector.
+
+        Args:
+            object_name: Name of the wire or face object to extrude.
+            direction: Extrusion direction and length as [x, y, z].
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Extrude Shape")
+try:
+    direction = FreeCAD.Vector({direction[0]}, {direction[1]}, {direction[2]})
+    extruded = obj.Shape.extrude(direction)
+
+    result_name = {result_name!r} or f"{{obj.Name}}_extruded"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = extruded
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Extrude shape failed")
+
+    @mcp.tool()
+    async def revolve_shape(
+        object_name: str,
+        axis_point: list[float],
+        axis_direction: list[float],
+        angle: float = 360.0,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Revolve a wire or face around an axis.
+
+        Args:
+            object_name: Name of the wire or face object to revolve.
+            axis_point: A point on the rotation axis [x, y, z].
+            axis_direction: Direction of the rotation axis [x, y, z].
+            angle: Revolution angle in degrees. Defaults to 360.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the object. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+obj = doc.getObject({object_name!r})
+if obj is None:
+    raise ValueError(f"Object not found: {object_name!r}")
+
+if not hasattr(obj, "Shape"):
+    raise ValueError("Object has no shape")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Revolve Shape")
+try:
+    import math
+
+    axis_point = FreeCAD.Vector({axis_point[0]}, {axis_point[1]}, {axis_point[2]})
+    axis_dir = FreeCAD.Vector({axis_direction[0]}, {axis_direction[1]}, {axis_direction[2]})
+    angle_rad = math.radians({angle})
+
+    revolved = obj.Shape.revolve(axis_point, axis_dir, {angle})
+
+    result_name = {result_name!r} or f"{{obj.Name}}_revolved"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = revolved
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Revolve shape failed")
+
+    # =========================================================================
+    # Part Loft and Sweep
+    # =========================================================================
+
+    @mcp.tool()
+    async def part_loft(
+        profile_names: list[str],
+        solid: bool = True,
+        ruled: bool = False,
+        closed: bool = False,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a loft (transition shape) between multiple profiles.
+
+        This is the Part workbench version of loft, working directly on
+        wires/faces rather than PartDesign sketches.
+
+        Args:
+            profile_names: List of wire/face object names to loft through (in order).
+            solid: Whether to create a solid (True) or shell (False). Defaults to True.
+            ruled: Whether to create ruled surfaces. Defaults to False.
+            closed: Whether to close the loft (connect last to first). Defaults to False.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the profiles. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+profiles = []
+for name in {profile_names!r}:
+    obj = doc.getObject(name)
+    if obj is None:
+        raise ValueError(f"Object not found: {{name}}")
+    if not hasattr(obj, "Shape"):
+        raise ValueError(f"Object has no shape: {{name}}")
+
+    # Get wire from shape
+    if obj.Shape.Wires:
+        profiles.append(obj.Shape.Wires[0])
+    else:
+        raise ValueError(f"Object has no wires: {{name}}")
+
+if len(profiles) < 2:
+    raise ValueError("Need at least 2 profiles for loft")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Part Loft")
+try:
+    loft = Part.makeLoft(profiles, {solid}, {ruled}, {closed})
+
+    result_name = {result_name!r} or "Loft"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = loft
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Part loft failed")
+
+    @mcp.tool()
+    async def part_sweep(
+        profile_name: str,
+        spine_name: str,
+        solid: bool = True,
+        frenet: bool = True,
+        result_name: str | None = None,
+        doc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Sweep a profile along a spine path.
+
+        This is the Part workbench version of sweep, working directly on
+        wires/faces rather than PartDesign sketches.
+
+        Args:
+            profile_name: Name of the profile wire/face object.
+            spine_name: Name of the spine (path) wire object.
+            solid: Whether to create a solid. Defaults to True.
+            frenet: Whether to use Frenet mode for orientation. Defaults to True.
+            result_name: Name for result object. Auto-generated if None.
+            doc_name: Document containing the objects. Uses active document if None.
+
+        Returns:
+            Dictionary with result object information:
+                - name: Result object name
+                - label: Result object label
+                - type_id: Result object type
+        """
+        bridge = await get_bridge()
+
+        code = f"""
+import Part
+
+doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("No document found")
+
+profile_obj = doc.getObject({profile_name!r})
+if profile_obj is None:
+    raise ValueError(f"Profile object not found: {profile_name!r}")
+
+spine_obj = doc.getObject({spine_name!r})
+if spine_obj is None:
+    raise ValueError(f"Spine object not found: {spine_name!r}")
+
+if not hasattr(profile_obj, "Shape") or not hasattr(spine_obj, "Shape"):
+    raise ValueError("Objects must have shapes")
+
+# Wrap in transaction for undo support
+doc.openTransaction("Part Sweep")
+try:
+    # Get profile wire
+    if profile_obj.Shape.Wires:
+        profile = profile_obj.Shape.Wires[0]
+    else:
+        raise ValueError("Profile has no wires")
+
+    # Get spine wire
+    if spine_obj.Shape.Wires:
+        spine = spine_obj.Shape.Wires[0]
+    else:
+        raise ValueError("Spine has no wires")
+
+    sweep = Part.Wire(spine).makePipeShell([profile], {solid}, {frenet})
+
+    result_name = {result_name!r} or "Sweep"
+    result = doc.addObject("Part::Feature", result_name)
+    result.Shape = sweep
+
+    doc.recompute()
+    doc.commitTransaction()
+
+    _result_ = {{
+        "name": result.Name,
+        "label": result.Label,
+        "type_id": result.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
+"""
+        result = await bridge.execute_python(code)
+        if result.success:
+            return result.result
+        raise ValueError(result.error_traceback or "Part sweep failed")

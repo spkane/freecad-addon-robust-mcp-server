@@ -523,3 +523,462 @@ class TestObjectTools:
 
         assert result["success"] is True
         mock_bridge.execute_python.assert_called_once()
+
+    # Tests for new Part primitives
+
+    @pytest.mark.asyncio
+    async def test_create_line(self, register_tools, mock_bridge):
+        """create_line should create a line between two points."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={"name": "Line", "label": "Line", "type_id": "Part::Feature"},
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        create_line = register_tools["create_line"]
+        result = await create_line(point1=[0.0, 0.0, 0.0], point2=[10.0, 10.0, 10.0])
+
+        assert result["name"] == "Line"
+        assert result["type_id"] == "Part::Feature"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_plane(self, register_tools, mock_bridge):
+        """create_plane should create a planar surface via create_object."""
+        mock_object = ObjectInfo(
+            name="Plane",
+            label="Plane",
+            type_id="Part::Plane",
+            visibility=True,
+            children=[],
+            parents=[],
+        )
+        mock_bridge.create_object = AsyncMock(return_value=mock_object)
+
+        create_plane = register_tools["create_plane"]
+        result = await create_plane(length=20.0, width=15.0)
+
+        assert result["name"] == "Plane"
+        assert result["type_id"] == "Part::Plane"
+        mock_bridge.create_object.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_ellipse(self, register_tools, mock_bridge):
+        """create_ellipse should create an ellipse curve via create_object."""
+        mock_object = ObjectInfo(
+            name="Ellipse",
+            label="Ellipse",
+            type_id="Part::Ellipse",
+            visibility=True,
+            children=[],
+            parents=[],
+        )
+        mock_bridge.create_object = AsyncMock(return_value=mock_object)
+
+        create_ellipse = register_tools["create_ellipse"]
+        result = await create_ellipse(major_radius=10.0, minor_radius=5.0)
+
+        assert result["name"] == "Ellipse"
+        assert result["type_id"] == "Part::Ellipse"
+        mock_bridge.create_object.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_prism(self, register_tools, mock_bridge):
+        """create_prism should create a prism via create_object."""
+        mock_object = ObjectInfo(
+            name="Prism",
+            label="Prism",
+            type_id="Part::Prism",
+            visibility=True,
+            children=[],
+            parents=[],
+        )
+        mock_bridge.create_object = AsyncMock(return_value=mock_object)
+
+        create_prism = register_tools["create_prism"]
+        result = await create_prism(polygon_sides=6, circumradius=10.0, height=20.0)
+
+        assert result["name"] == "Prism"
+        assert result["type_id"] == "Part::Prism"
+        mock_bridge.create_object.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_regular_polygon(self, register_tools, mock_bridge):
+        """create_regular_polygon should create a flat polygon via create_object."""
+        mock_object = ObjectInfo(
+            name="RegularPolygon",
+            label="RegularPolygon",
+            type_id="Part::RegularPolygon",
+            visibility=True,
+            children=[],
+            parents=[],
+        )
+        mock_bridge.create_object = AsyncMock(return_value=mock_object)
+
+        create_regular_polygon = register_tools["create_regular_polygon"]
+        result = await create_regular_polygon(polygon_sides=8, circumradius=15.0)
+
+        assert result["name"] == "RegularPolygon"
+        assert result["type_id"] == "Part::RegularPolygon"
+        mock_bridge.create_object.assert_called_once()
+
+    # Tests for Part shape operations
+
+    @pytest.mark.asyncio
+    async def test_shell_object(self, register_tools, mock_bridge):
+        """shell_object should create a hollow shell from a solid."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Shell",
+                    "label": "Shell",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        shell_object = register_tools["shell_object"]
+        result = await shell_object(
+            object_name="Box", thickness=2.0, faces_to_remove=["Face1"]
+        )
+
+        assert result["name"] == "Shell"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_offset_3d(self, register_tools, mock_bridge):
+        """offset_3d should create an offset copy of a shape."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Offset",
+                    "label": "Offset",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        offset_3d = register_tools["offset_3d"]
+        result = await offset_3d(object_name="Box", offset=2.0)
+
+        assert result["name"] == "Offset"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_slice_shape(self, register_tools, mock_bridge):
+        """slice_shape should slice a shape with a plane."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Slice",
+                    "label": "Slice",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        slice_shape = register_tools["slice_shape"]
+        result = await slice_shape(
+            object_name="Box",
+            plane_point=[0.0, 0.0, 5.0],
+            plane_normal=[0.0, 0.0, 1.0],
+        )
+
+        assert result["name"] == "Slice"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_section_shape(self, register_tools, mock_bridge):
+        """section_shape should create a section of a shape."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Section",
+                    "label": "Section",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        section_shape = register_tools["section_shape"]
+        result = await section_shape(object_name="Box", plane="XY", offset=5.0)
+
+        assert result["name"] == "Section"
+        mock_bridge.execute_python.assert_called_once()
+
+    # Tests for Part compound operations
+
+    @pytest.mark.asyncio
+    async def test_make_compound(self, register_tools, mock_bridge):
+        """make_compound should combine objects into a compound."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Compound",
+                    "label": "Compound",
+                    "type_id": "Part::Compound",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        make_compound = register_tools["make_compound"]
+        result = await make_compound(object_names=["Box", "Cylinder"])
+
+        assert result["name"] == "Compound"
+        assert result["type_id"] == "Part::Compound"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_explode_compound(self, register_tools, mock_bridge):
+        """explode_compound should separate a compound into parts."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "success": True,
+                    "parts": ["Part001", "Part002", "Part003"],
+                    "count": 3,
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        explode_compound = register_tools["explode_compound"]
+        result = await explode_compound(object_name="Compound")
+
+        assert result["success"] is True
+        assert len(result["parts"]) == 3
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_fuse_all(self, register_tools, mock_bridge):
+        """fuse_all should fuse multiple objects into one."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Fusion",
+                    "label": "Fusion",
+                    "type_id": "Part::MultiFuse",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=20.0,
+            )
+        )
+
+        fuse_all = register_tools["fuse_all"]
+        result = await fuse_all(object_names=["Box", "Cylinder", "Sphere"])
+
+        assert result["name"] == "Fusion"
+        assert result["type_id"] == "Part::MultiFuse"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_common_all(self, register_tools, mock_bridge):
+        """common_all should find intersection of multiple objects."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Common",
+                    "label": "Common",
+                    "type_id": "Part::MultiCommon",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=20.0,
+            )
+        )
+
+        common_all = register_tools["common_all"]
+        result = await common_all(object_names=["Box", "Cylinder"])
+
+        assert result["name"] == "Common"
+        assert result["type_id"] == "Part::MultiCommon"
+        mock_bridge.execute_python.assert_called_once()
+
+    # Tests for Part wire/face operations
+
+    @pytest.mark.asyncio
+    async def test_make_wire(self, register_tools, mock_bridge):
+        """make_wire should create a wire from points."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Wire",
+                    "label": "Wire",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        make_wire = register_tools["make_wire"]
+        result = await make_wire(
+            points=[[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]],
+            closed=True,
+        )
+
+        assert result["name"] == "Wire"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_make_face(self, register_tools, mock_bridge):
+        """make_face should create a face from a wire."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Face",
+                    "label": "Face",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        make_face = register_tools["make_face"]
+        result = await make_face(object_name="Wire")
+
+        assert result["name"] == "Face"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_extrude_shape(self, register_tools, mock_bridge):
+        """extrude_shape should extrude a 2D shape along a direction."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Extrusion",
+                    "label": "Extrusion",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        extrude_shape = register_tools["extrude_shape"]
+        result = await extrude_shape(object_name="Face", direction=[0, 0, 20])
+
+        assert result["name"] == "Extrusion"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_revolve_shape(self, register_tools, mock_bridge):
+        """revolve_shape should revolve a shape around an axis."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Revolution",
+                    "label": "Revolution",
+                    "type_id": "Part::Feature",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=15.0,
+            )
+        )
+
+        revolve_shape = register_tools["revolve_shape"]
+        result = await revolve_shape(
+            object_name="Face",
+            axis_point=[0, 0, 0],
+            axis_direction=[0, 0, 1],
+            angle=360.0,
+        )
+
+        assert result["name"] == "Revolution"
+        mock_bridge.execute_python.assert_called_once()
+
+    # Tests for Part loft and sweep
+
+    @pytest.mark.asyncio
+    async def test_part_loft(self, register_tools, mock_bridge):
+        """part_loft should create a loft through profiles."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Loft",
+                    "label": "Loft",
+                    "type_id": "Part::Loft",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=20.0,
+            )
+        )
+
+        part_loft = register_tools["part_loft"]
+        result = await part_loft(
+            profile_names=["Circle1", "Circle2", "Circle3"],
+            solid=True,
+        )
+
+        assert result["name"] == "Loft"
+        assert result["type_id"] == "Part::Loft"
+        mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_part_sweep(self, register_tools, mock_bridge):
+        """part_sweep should sweep a profile along a spine."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Sweep",
+                    "label": "Sweep",
+                    "type_id": "Part::Sweep",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=20.0,
+            )
+        )
+
+        part_sweep = register_tools["part_sweep"]
+        result = await part_sweep(
+            profile_name="Circle",
+            spine_name="Helix",
+            solid=True,
+        )
+
+        assert result["name"] == "Sweep"
+        assert result["type_id"] == "Part::Sweep"
+        mock_bridge.execute_python.assert_called_once()

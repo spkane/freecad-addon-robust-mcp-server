@@ -360,20 +360,38 @@ Example sequence:
                     ],
                 },
                 "transaction_safety": {
-                    "description": "Use transactions for safe, undoable operations",
-                    "pattern": """For operations that might fail or need rollback:
-1. Use safe_execute() which wraps code in a transaction
-2. If validation fails after execution, it automatically undoes
-3. For manual control, use undo() and redo() tools
-4. Check undo_redo_status before critical operations
+                    "description": "All tool operations support undo/redo",
+                    "pattern": """IMPORTANT: All MCP tool operations are wrapped in FreeCAD transactions,
+meaning every operation can be undone with the undo() tool.
 
-Example using safe_execute:
+Built-in transaction support:
+1. Every tool that modifies the document opens a transaction
+2. Operations can be undone with undo() and redone with redo()
+3. Transaction names appear in FreeCAD's undo history
+
+For complex or risky operations:
+1. Use safe_execute() for automatic validation + rollback
+2. If validation fails after execution, it automatically undoes
+3. Use undo_if_invalid() to check and undo in one call
+4. Check get_undo_redo_status() to see available undo steps
+
+Example - automatic rollback on failure:
 safe_execute(
     code="... complex operation ...",
     validate_after=True,
     auto_undo_on_failure=True
-)""",
-                    "tools": ["safe_execute", "undo", "redo", "undo_if_invalid"],
+)
+
+Example - manual undo:
+create_box(length=10, width=10, height=10)  # Can be undone
+undo()  # Reverts the box creation""",
+                    "tools": [
+                        "safe_execute",
+                        "undo",
+                        "redo",
+                        "undo_if_invalid",
+                        "get_undo_redo_status",
+                    ],
                 },
             },
             "version_compatibility": {
@@ -637,6 +655,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                 },
                 "objects": {
                     "description": "Object creation and manipulation",
+                    "note": "All operations are wrapped in transactions for undo support",
                     "tools": [
                         {
                             "name": "list_objects",
@@ -696,9 +715,104 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                             "key_params": ["pitch", "height", "radius"],
                         },
                         {
+                            "name": "create_line",
+                            "description": "Create Part::Line (edge between two points)",
+                            "key_params": ["point1", "point2"],
+                        },
+                        {
+                            "name": "create_plane",
+                            "description": "Create Part::Plane (rectangular face)",
+                            "key_params": ["length", "width"],
+                        },
+                        {
+                            "name": "create_ellipse",
+                            "description": "Create Part ellipse (2D shape)",
+                            "key_params": ["major_radius", "minor_radius"],
+                        },
+                        {
+                            "name": "create_prism",
+                            "description": "Create Part::Prism (extruded polygon)",
+                            "key_params": ["polygon", "height"],
+                        },
+                        {
+                            "name": "create_regular_polygon",
+                            "description": "Create regular polygon face",
+                            "key_params": ["num_sides", "radius"],
+                        },
+                        {
                             "name": "boolean_operation",
-                            "description": "Union, cut, or intersection operations",
+                            "description": "Union, cut, or intersection of two shapes",
                             "key_params": ["operation", "object1", "object2"],
+                        },
+                        {
+                            "name": "fuse_all",
+                            "description": "Fuse multiple objects together",
+                            "key_params": ["object_names"],
+                        },
+                        {
+                            "name": "common_all",
+                            "description": "Find intersection of multiple objects",
+                            "key_params": ["object_names"],
+                        },
+                        {
+                            "name": "shell_object",
+                            "description": "Create hollow shell from solid",
+                            "key_params": ["object_name", "thickness", "faces"],
+                        },
+                        {
+                            "name": "offset_3d",
+                            "description": "Offset object surface by distance",
+                            "key_params": ["object_name", "offset"],
+                        },
+                        {
+                            "name": "slice_shape",
+                            "description": "Slice object with a plane",
+                            "key_params": ["object_name", "plane"],
+                        },
+                        {
+                            "name": "section_shape",
+                            "description": "Get 2D section where plane intersects object",
+                            "key_params": ["object_name", "plane"],
+                        },
+                        {
+                            "name": "make_compound",
+                            "description": "Group objects into a compound",
+                            "key_params": ["object_names"],
+                        },
+                        {
+                            "name": "explode_compound",
+                            "description": "Split compound into individual objects",
+                            "key_params": ["object_name"],
+                        },
+                        {
+                            "name": "make_wire",
+                            "description": "Create wire from edges/curves",
+                            "key_params": ["object_names"],
+                        },
+                        {
+                            "name": "make_face",
+                            "description": "Create face from wire",
+                            "key_params": ["wire_name"],
+                        },
+                        {
+                            "name": "extrude_shape",
+                            "description": "Extrude shape along vector",
+                            "key_params": ["object_name", "direction", "length"],
+                        },
+                        {
+                            "name": "revolve_shape",
+                            "description": "Revolve shape around axis",
+                            "key_params": ["object_name", "axis", "angle"],
+                        },
+                        {
+                            "name": "part_loft",
+                            "description": "Create Part loft between shapes",
+                            "key_params": ["object_names", "solid"],
+                        },
+                        {
+                            "name": "part_sweep",
+                            "description": "Sweep profile along path",
+                            "key_params": ["profile_name", "path_name"],
                         },
                         {
                             "name": "edit_object",
@@ -759,6 +873,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                 },
                 "partdesign": {
                     "description": "Parametric modeling with PartDesign workbench",
+                    "note": "All operations are wrapped in transactions for undo support",
                     "tools": [
                         {
                             "name": "create_partdesign_body",
@@ -801,88 +916,269 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                             "key_params": ["sketch_name", "x", "y"],
                         },
                         {
+                            "name": "add_sketch_ellipse",
+                            "description": "Add ellipse to sketch",
+                            "key_params": [
+                                "sketch_name",
+                                "center_x",
+                                "center_y",
+                                "major_radius",
+                                "minor_radius",
+                            ],
+                        },
+                        {
+                            "name": "add_sketch_polygon",
+                            "description": "Add regular polygon to sketch",
+                            "key_params": [
+                                "sketch_name",
+                                "center_x",
+                                "center_y",
+                                "sides",
+                                "radius",
+                            ],
+                        },
+                        {
+                            "name": "add_sketch_slot",
+                            "description": "Add slot (rounded rectangle) to sketch",
+                            "key_params": [
+                                "sketch_name",
+                                "x1",
+                                "y1",
+                                "x2",
+                                "y2",
+                                "width",
+                            ],
+                        },
+                        {
+                            "name": "add_sketch_bspline",
+                            "description": "Add B-spline curve to sketch",
+                            "key_params": ["sketch_name", "points"],
+                        },
+                        {
                             "name": "pad_sketch",
                             "description": "Extrude sketch (additive)",
-                            "key_params": ["body_name", "sketch_name", "length"],
+                            "key_params": ["sketch_name", "length"],
                         },
                         {
                             "name": "pocket_sketch",
                             "description": "Cut using sketch (subtractive)",
-                            "key_params": ["body_name", "sketch_name", "length"],
+                            "key_params": ["sketch_name", "length"],
                         },
                         {
                             "name": "revolution_sketch",
                             "description": "Revolve sketch around axis",
-                            "key_params": ["body_name", "sketch_name", "axis", "angle"],
+                            "key_params": ["sketch_name", "axis", "angle"],
                         },
                         {
                             "name": "groove_sketch",
                             "description": "Cut by revolving sketch (subtractive revolve)",
-                            "key_params": ["body_name", "sketch_name", "axis", "angle"],
+                            "key_params": ["sketch_name", "axis", "angle"],
+                        },
+                        {
+                            "name": "loft_sketches",
+                            "description": "Create additive loft between sketches",
+                            "key_params": ["sketch_names"],
+                        },
+                        {
+                            "name": "subtractive_loft",
+                            "description": "Create subtractive loft between sketches",
+                            "key_params": ["sketch_names"],
+                        },
+                        {
+                            "name": "sweep_sketch",
+                            "description": "Additive sweep sketch along path",
+                            "key_params": ["profile_sketch", "spine_sketch"],
+                        },
+                        {
+                            "name": "subtractive_pipe",
+                            "description": "Subtractive sweep sketch along path",
+                            "key_params": ["profile_sketch", "spine_sketch"],
                         },
                         {
                             "name": "create_hole",
                             "description": "Create parametric hole feature",
-                            "key_params": [
-                                "body_name",
-                                "sketch_name",
-                                "diameter",
-                                "depth",
-                            ],
+                            "key_params": ["sketch_name", "diameter", "depth"],
                         },
                         {
                             "name": "fillet_edges",
                             "description": "Add fillets to edges",
-                            "key_params": ["body_name", "edges", "radius"],
+                            "key_params": ["object_name", "radius", "edges"],
                         },
                         {
                             "name": "chamfer_edges",
                             "description": "Add chamfers to edges",
-                            "key_params": ["body_name", "edges", "size"],
+                            "key_params": ["object_name", "size", "edges"],
                         },
                         {
-                            "name": "loft_sketches",
-                            "description": "Create loft between sketches",
-                            "key_params": ["body_name", "sketch_names"],
+                            "name": "draft_feature",
+                            "description": "Add draft angle to faces",
+                            "key_params": ["object_name", "angle", "faces"],
                         },
                         {
-                            "name": "sweep_sketch",
-                            "description": "Sweep sketch along path",
+                            "name": "thickness_feature",
+                            "description": "Shell solid to hollow with thickness",
                             "key_params": [
-                                "body_name",
-                                "profile_sketch",
-                                "path_sketch",
+                                "object_name",
+                                "thickness",
+                                "faces_to_remove",
                             ],
+                        },
+                        {
+                            "name": "create_datum_plane",
+                            "description": "Create reference plane for sketches",
+                            "key_params": ["body_name", "offset", "plane"],
+                        },
+                        {
+                            "name": "create_datum_line",
+                            "description": "Create reference line/axis",
+                            "key_params": ["body_name"],
+                        },
+                        {
+                            "name": "create_datum_point",
+                            "description": "Create reference point",
+                            "key_params": ["body_name"],
                         },
                     ],
                 },
                 "patterns": {
                     "description": "Pattern and transform features",
+                    "note": "All operations are wrapped in transactions for undo support",
                     "tools": [
                         {
                             "name": "linear_pattern",
                             "description": "Create linear pattern",
                             "key_params": [
-                                "body_name",
                                 "feature_name",
                                 "direction",
-                                "count",
+                                "occurrences",
+                                "length",
                             ],
                         },
                         {
                             "name": "polar_pattern",
                             "description": "Create circular/polar pattern",
                             "key_params": [
-                                "body_name",
                                 "feature_name",
                                 "axis",
-                                "count",
+                                "occurrences",
+                                "angle",
                             ],
                         },
                         {
                             "name": "mirrored_feature",
                             "description": "Mirror feature across plane",
-                            "key_params": ["body_name", "feature_name", "plane"],
+                            "key_params": ["feature_name", "plane"],
+                        },
+                    ],
+                },
+                "sketcher_constraints": {
+                    "description": "Sketcher constraint tools for fully defining geometry",
+                    "note": "All operations are wrapped in transactions for undo support",
+                    "tools": [
+                        {
+                            "name": "add_sketch_constraint",
+                            "description": "Add generic constraint (flexible API)",
+                            "key_params": ["sketch_name", "constraint_type", "params"],
+                        },
+                        {
+                            "name": "constrain_horizontal",
+                            "description": "Make line horizontal",
+                            "key_params": ["sketch_name", "geometry_index"],
+                        },
+                        {
+                            "name": "constrain_vertical",
+                            "description": "Make line vertical",
+                            "key_params": ["sketch_name", "geometry_index"],
+                        },
+                        {
+                            "name": "constrain_coincident",
+                            "description": "Make two points coincident",
+                            "key_params": [
+                                "sketch_name",
+                                "geo1",
+                                "point1",
+                                "geo2",
+                                "point2",
+                            ],
+                        },
+                        {
+                            "name": "constrain_parallel",
+                            "description": "Make lines parallel",
+                            "key_params": ["sketch_name", "geo1", "geo2"],
+                        },
+                        {
+                            "name": "constrain_perpendicular",
+                            "description": "Make lines perpendicular",
+                            "key_params": ["sketch_name", "geo1", "geo2"],
+                        },
+                        {
+                            "name": "constrain_tangent",
+                            "description": "Make curves tangent",
+                            "key_params": ["sketch_name", "geo1", "geo2"],
+                        },
+                        {
+                            "name": "constrain_equal",
+                            "description": "Make lengths/radii equal",
+                            "key_params": ["sketch_name", "geo1", "geo2"],
+                        },
+                        {
+                            "name": "constrain_distance",
+                            "description": "Set distance between elements",
+                            "key_params": ["sketch_name", "value", "geo1", "point1"],
+                        },
+                        {
+                            "name": "constrain_distance_x",
+                            "description": "Set horizontal distance",
+                            "key_params": ["sketch_name", "value", "geo1", "point1"],
+                        },
+                        {
+                            "name": "constrain_distance_y",
+                            "description": "Set vertical distance",
+                            "key_params": ["sketch_name", "value", "geo1", "point1"],
+                        },
+                        {
+                            "name": "constrain_radius",
+                            "description": "Set circle/arc radius",
+                            "key_params": ["sketch_name", "geometry_index", "value"],
+                        },
+                        {
+                            "name": "constrain_angle",
+                            "description": "Set angle between lines",
+                            "key_params": ["sketch_name", "geo1", "geo2", "angle"],
+                        },
+                        {
+                            "name": "constrain_fix",
+                            "description": "Fix point at location",
+                            "key_params": [
+                                "sketch_name",
+                                "geometry_index",
+                                "point_index",
+                            ],
+                        },
+                        {
+                            "name": "add_external_geometry",
+                            "description": "Reference external geometry in sketch",
+                            "key_params": ["sketch_name", "object_name", "element"],
+                        },
+                        {
+                            "name": "delete_sketch_geometry",
+                            "description": "Delete geometry from sketch",
+                            "key_params": ["sketch_name", "geometry_index"],
+                        },
+                        {
+                            "name": "delete_sketch_constraint",
+                            "description": "Delete constraint from sketch",
+                            "key_params": ["sketch_name", "constraint_index"],
+                        },
+                        {
+                            "name": "get_sketch_info",
+                            "description": "Get sketch geometry and constraint info",
+                            "key_params": ["sketch_name"],
+                        },
+                        {
+                            "name": "toggle_construction",
+                            "description": "Toggle geometry construction mode",
+                            "key_params": ["sketch_name", "geometry_index"],
                         },
                     ],
                 },

@@ -879,7 +879,9 @@ else:
             _result_ = {{"success": False, "error": "No active view"}}
         else:
             # Check view type
-            view_class = view.__class__.__name__
+            # Note: Use type() instead of __class__ because FreeCAD's View3DInventor
+            # has a broken __class__ attribute that returns a dict of methods.
+            view_class = type(view).__name__
             if view_class not in ["View3DInventor", "View3DInventorPy"]:
                 _result_ = {{"success": False, "error": f"Cannot capture from {{view_class}}"}}
             else:

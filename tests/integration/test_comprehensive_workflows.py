@@ -986,3 +986,780 @@ _result_ = {{
             f"Failed steps: {result['result']['failed_steps']}"
         )
         assert result["result"]["final_volume"] > 0
+
+
+class TestPartDesignDatumFeatures:
+    """Test PartDesign datum features (reference geometry)."""
+
+    def test_datum_plane_workflow(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test creating and using a datum plane.
+
+        This verifies:
+        1. Creating a PartDesign Body
+        2. Creating a datum plane offset from XY
+        3. Creating a sketch on the datum plane
+        4. Padding the sketch
+        """
+        doc_name = f"DatumPlane_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+import Part
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+workflow_steps = []
+
+# Step 1: Create PartDesign Body
+try:
+    body = doc.addObject("PartDesign::Body", "Body")
+    workflow_steps.append(("create_body", True))
+except Exception as e:
+    workflow_steps.append(("create_body", False))
+    body = None
+
+# Step 2: Create a base feature first (required for PartDesign)
+base_sketch = None
+base_pad = None
+if body:
+    try:
+        # Create base sketch on XY plane
+        base_sketch = body.newObject("Sketcher::SketchObject", "BaseSketch")
+        xy_plane = body.Origin.getObject("XY_Plane")
+        base_sketch.AttachmentSupport = [(xy_plane, "")]
+        base_sketch.MapMode = "FlatFace"
+
+        # Add a rectangle for the base
+        base_sketch.addGeometry(Part.LineSegment(
+            FreeCAD.Vector(-20, -20, 0),
+            FreeCAD.Vector(20, -20, 0)
+        ))
+        base_sketch.addGeometry(Part.LineSegment(
+            FreeCAD.Vector(20, -20, 0),
+            FreeCAD.Vector(20, 20, 0)
+        ))
+        base_sketch.addGeometry(Part.LineSegment(
+            FreeCAD.Vector(20, 20, 0),
+            FreeCAD.Vector(-20, 20, 0)
+        ))
+        base_sketch.addGeometry(Part.LineSegment(
+            FreeCAD.Vector(-20, 20, 0),
+            FreeCAD.Vector(-20, -20, 0)
+        ))
+
+        doc.recompute()
+
+        # Pad the base sketch
+        base_pad = body.newObject("PartDesign::Pad", "BasePad")
+        base_pad.Profile = base_sketch
+        base_pad.Length = 10
+        doc.recompute()
+
+        workflow_steps.append(("create_base_feature", base_pad.Shape.isValid()))
+    except Exception as e:
+        workflow_steps.append(("create_base_feature", False))
+
+# Step 3: Create a datum plane offset from the top face
+datum_plane = None
+if base_pad:
+    try:
+        datum_plane = body.newObject("PartDesign::Plane", "DatumPlane")
+
+        # Attach to XY_Plane with offset above the base
+        xy_plane = body.Origin.getObject("XY_Plane")
+        datum_plane.AttachmentSupport = [(xy_plane, "")]
+        datum_plane.MapMode = "FlatFace"
+        datum_plane.AttachmentOffset = FreeCAD.Placement(
+            FreeCAD.Vector(0, 0, 25),  # 25mm offset in Z (above the 10mm base)
+            FreeCAD.Rotation()
+        )
+
+        doc.recompute()
+        workflow_steps.append(("create_datum_plane", True))
+    except Exception as e:
+        workflow_steps.append(("create_datum_plane", False))
+
+# Step 4: Create sketch on datum plane
+sketch = None
+if datum_plane:
+    try:
+        sketch = body.newObject("Sketcher::SketchObject", "SketchOnDatum")
+        sketch.AttachmentSupport = [(datum_plane, "")]
+        sketch.MapMode = "FlatFace"
+
+        # Add a circle
+        sketch.addGeometry(Part.Circle(
+            FreeCAD.Vector(0, 0, 0),
+            FreeCAD.Vector(0, 0, 1),
+            10
+        ))
+
+        doc.recompute()
+        workflow_steps.append(("create_sketch_on_datum", True))
+    except Exception as e:
+        workflow_steps.append(("create_sketch_on_datum", False))
+
+# Step 5: Pad the sketch (this adds material starting from the datum plane)
+pad = None
+if sketch:
+    try:
+        pad = body.newObject("PartDesign::Pad", "PadOnDatum")
+        pad.Profile = sketch
+        pad.Length = 15
+        pad.Reversed = True  # Pad downward toward the base
+        doc.recompute()
+
+        pad_valid = pad.Shape.isValid() if hasattr(pad, 'Shape') and pad.Shape else False
+        workflow_steps.append(("pad_sketch", pad_valid))
+    except Exception as e:
+        workflow_steps.append(("pad_sketch", False))
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+all_passed = all(success for step, success in workflow_steps)
+failed_steps = [step for step, success in workflow_steps if not success]
+
+_result_ = {{
+    "workflow_steps": workflow_steps,
+    "all_passed": all_passed,
+    "failed_steps": failed_steps,
+    "datum_plane_offset": 25,
+}}
+""",
+        )
+
+        assert result["result"]["all_passed"] is True, (
+            f"Failed steps: {result['result']['failed_steps']}"
+        )
+
+    def test_datum_line_and_point(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test creating datum line and datum point features."""
+        doc_name = f"DatumLinePoint_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+results = {{}}
+
+# Create PartDesign Body
+body = doc.addObject("PartDesign::Body", "Body")
+
+# Create datum line - use Translate mode with offset
+try:
+    datum_line = body.newObject("PartDesign::Line", "DatumLine")
+
+    # Use Translate mode - positions the line at an offset from origin
+    # This is the simplest and most reliable attachment mode
+    datum_line.MapMode = "Translate"
+    datum_line.AttachmentOffset = FreeCAD.Placement(
+        FreeCAD.Vector(0, 10, 5),  # Position at offset
+        FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 0)  # Aligned with X axis
+    )
+
+    doc.recompute()
+    results["datum_line_created"] = True
+    results["datum_line_name"] = datum_line.Name
+except Exception as e:
+    results["datum_line_created"] = False
+    results["datum_line_error"] = str(e)
+
+# Create datum point - use Translate mode
+try:
+    datum_point = body.newObject("PartDesign::Point", "DatumPoint")
+
+    # Use Translate mode with offset to position the point
+    datum_point.MapMode = "Translate"
+    datum_point.AttachmentOffset = FreeCAD.Placement(
+        FreeCAD.Vector(20, 30, 40),
+        FreeCAD.Rotation()
+    )
+
+    doc.recompute()
+    results["datum_point_created"] = True
+    results["datum_point_name"] = datum_point.Name
+except Exception as e:
+    results["datum_point_created"] = False
+    results["datum_point_error"] = str(e)
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = results
+""",
+        )
+
+        assert result["result"]["datum_line_created"] is True, (
+            f"Datum line error: {result['result'].get('datum_line_error')}"
+        )
+        assert result["result"]["datum_point_created"] is True, (
+            f"Datum point error: {result['result'].get('datum_point_error')}"
+        )
+
+
+class TestSketcherConstraints:
+    """Test Sketcher constraint operations."""
+
+    def test_fully_constrained_rectangle(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test creating a fully constrained rectangle with dimensions.
+
+        This verifies:
+        1. Creating sketch geometry (lines)
+        2. Adding geometric constraints (horizontal, vertical, coincident)
+        3. Adding dimensional constraints (distance)
+        4. Checking if sketch is fully constrained
+        """
+        doc_name = f"ConstrainedRect_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+import Part
+import Sketcher
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+# Create a sketch
+sketch = doc.addObject("Sketcher::SketchObject", "ConstrainedSketch")
+
+results = {{}}
+
+# Add rectangle lines (4 lines)
+# Bottom line (0)
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(0, 0, 0),
+    FreeCAD.Vector(50, 0, 0)
+))
+# Right line (1)
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(50, 0, 0),
+    FreeCAD.Vector(50, 30, 0)
+))
+# Top line (2)
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(50, 30, 0),
+    FreeCAD.Vector(0, 30, 0)
+))
+# Left line (3)
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(0, 30, 0),
+    FreeCAD.Vector(0, 0, 0)
+))
+
+results["geometry_count"] = sketch.GeometryCount
+
+# Add geometric constraints
+constraints_added = 0
+
+# Make lines horizontal/vertical
+try:
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 0))  # Bottom
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 2))  # Top
+    sketch.addConstraint(Sketcher.Constraint("Vertical", 1))    # Right
+    sketch.addConstraint(Sketcher.Constraint("Vertical", 3))    # Left
+    constraints_added += 4
+except Exception as e:
+    results["h_v_error"] = str(e)
+
+# Connect corners (coincident constraints)
+# Line endpoints: 1=start, 2=end
+try:
+    # Bottom-right corner: end of line 0 to start of line 1
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 2, 1, 1))
+    # Top-right corner: end of line 1 to start of line 2
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 1, 2, 2, 1))
+    # Top-left corner: end of line 2 to start of line 3
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 2, 2, 3, 1))
+    # Bottom-left corner: end of line 3 to start of line 0
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 3, 2, 0, 1))
+    constraints_added += 4
+except Exception as e:
+    results["coincident_error"] = str(e)
+
+# Fix the origin corner
+try:
+    sketch.addConstraint(Sketcher.Constraint("DistanceX", 0, 1, 0))  # X = 0
+    sketch.addConstraint(Sketcher.Constraint("DistanceY", 0, 1, 0))  # Y = 0
+    constraints_added += 2
+except Exception as e:
+    results["fix_error"] = str(e)
+
+# Add dimensional constraints
+try:
+    sketch.addConstraint(Sketcher.Constraint("DistanceX", 0, 1, 0, 2, 50))  # Width = 50
+    sketch.addConstraint(Sketcher.Constraint("DistanceY", 0, 1, 2, 1, 30))  # Height = 30
+    constraints_added += 2
+except Exception as e:
+    results["dimension_error"] = str(e)
+
+doc.recompute()
+
+results["constraints_added"] = constraints_added
+results["constraint_count"] = sketch.ConstraintCount
+results["dof"] = sketch.solve()  # Returns degrees of freedom, 0 = fully constrained
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = results
+""",
+        )
+
+        assert result["result"]["geometry_count"] == 4
+        assert result["result"]["constraints_added"] >= 8
+        # DOF of 0 means fully constrained
+        assert result["result"]["dof"] == 0, (
+            f"Sketch not fully constrained, DOF={result['result']['dof']}"
+        )
+
+    def test_tangent_and_equal_constraints(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test tangent and equal constraints between curves."""
+        doc_name = f"TangentEqual_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+import Part
+import Sketcher
+import math
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+sketch = doc.addObject("Sketcher::SketchObject", "TangentSketch")
+
+results = {{}}
+
+# Create two circles that will be made tangent
+# Circle 1 centered at (0, 0) with radius 10
+sketch.addGeometry(Part.Circle(
+    FreeCAD.Vector(0, 0, 0),
+    FreeCAD.Vector(0, 0, 1),
+    10
+))
+
+# Circle 2 centered at (25, 0) with radius 10 (will be made tangent)
+sketch.addGeometry(Part.Circle(
+    FreeCAD.Vector(25, 0, 0),
+    FreeCAD.Vector(0, 0, 1),
+    10
+))
+
+# Circle 3 centered at (0, 25) - will be constrained equal to circle 1
+sketch.addGeometry(Part.Circle(
+    FreeCAD.Vector(0, 30, 0),
+    FreeCAD.Vector(0, 0, 1),
+    8
+))
+
+results["circles_created"] = 3
+
+# Add tangent constraint between circles 0 and 1
+try:
+    # External tangent - circles touch on outside
+    sketch.addConstraint(Sketcher.Constraint("Tangent", 0, 1))
+    results["tangent_added"] = True
+except Exception as e:
+    results["tangent_added"] = False
+    results["tangent_error"] = str(e)
+
+# Add equal constraint to make circle 2 same size as circle 0
+try:
+    sketch.addConstraint(Sketcher.Constraint("Equal", 0, 2))
+    results["equal_added"] = True
+except Exception as e:
+    results["equal_added"] = False
+    results["equal_error"] = str(e)
+
+# Fix circle 1 radius
+try:
+    sketch.addConstraint(Sketcher.Constraint("Radius", 0, 15))
+    results["radius_constrained"] = True
+except Exception as e:
+    results["radius_constrained"] = False
+
+doc.recompute()
+
+results["constraint_count"] = sketch.ConstraintCount
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = results
+""",
+        )
+
+        assert result["result"]["circles_created"] == 3
+        assert result["result"]["tangent_added"] is True, (
+            f"Tangent error: {result['result'].get('tangent_error')}"
+        )
+        assert result["result"]["equal_added"] is True, (
+            f"Equal error: {result['result'].get('equal_error')}"
+        )
+
+    def test_angle_and_perpendicular_constraints(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test angle and perpendicular constraints between lines."""
+        doc_name = f"AnglePerp_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+import Part
+import Sketcher
+import math
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+sketch = doc.addObject("Sketcher::SketchObject", "AngleSketch")
+
+results = {{}}
+
+# Create three lines from origin
+# Line 0: horizontal baseline
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(0, 0, 0),
+    FreeCAD.Vector(30, 0, 0)
+))
+
+# Line 1: will be constrained to 45 degrees from line 0
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(0, 0, 0),
+    FreeCAD.Vector(20, 20, 0)
+))
+
+# Line 2: will be constrained perpendicular to line 0
+sketch.addGeometry(Part.LineSegment(
+    FreeCAD.Vector(0, 0, 0),
+    FreeCAD.Vector(0, 25, 0)
+))
+
+results["lines_created"] = 3
+
+# Make lines share the origin point
+try:
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 1, 1, 1))
+    sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 1, 2, 1))
+    results["coincident_added"] = True
+except Exception as e:
+    results["coincident_added"] = False
+    results["coincident_error"] = str(e)
+
+# Constrain line 0 to be horizontal
+try:
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", 0))
+    results["horizontal_added"] = True
+except Exception as e:
+    results["horizontal_added"] = False
+
+# Constrain angle between line 0 and line 1 to 45 degrees
+try:
+    sketch.addConstraint(Sketcher.Constraint("Angle", 0, 1, 45 * math.pi / 180))
+    results["angle_45_added"] = True
+except Exception as e:
+    results["angle_45_added"] = False
+    results["angle_error"] = str(e)
+
+# Constrain line 2 perpendicular to line 0
+try:
+    sketch.addConstraint(Sketcher.Constraint("Perpendicular", 0, 2))
+    results["perpendicular_added"] = True
+except Exception as e:
+    results["perpendicular_added"] = False
+    results["perpendicular_error"] = str(e)
+
+doc.recompute()
+
+results["constraint_count"] = sketch.ConstraintCount
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = results
+""",
+        )
+
+        assert result["result"]["lines_created"] == 3
+        assert result["result"]["coincident_added"] is True
+        assert result["result"]["angle_45_added"] is True, (
+            f"Angle error: {result['result'].get('angle_error')}"
+        )
+        assert result["result"]["perpendicular_added"] is True, (
+            f"Perpendicular error: {result['result'].get('perpendicular_error')}"
+        )
+
+
+class TestSketcherGeometry:
+    """Test advanced Sketcher geometry creation."""
+
+    def test_ellipse_and_slot(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test creating ellipse and slot geometry in a sketch."""
+        doc_name = f"EllipseSlot_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+import Part
+import Sketcher
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+sketch = doc.addObject("Sketcher::SketchObject", "GeometrySketch")
+
+results = {{}}
+
+# Create an ellipse using the Sketcher-compatible method
+try:
+    # For Sketcher, Part.Ellipse needs to be created properly in the XY plane
+    # The proper way is to use the parametric constructor
+    major = 20.0
+    minor = 10.0
+
+    # Create ellipse by specifying center, major axis direction, and radii
+    # Ellipse centered at origin, major axis along X
+    ellipse = Part.Ellipse()
+
+    # Set the ellipse parameters after creation
+    # Note: Sketcher expects 2D geometry in the XY plane
+    geoIndex = sketch.addGeometry(
+        Part.Ellipse(
+            FreeCAD.Vector(0, 0, 0),           # Center
+            major,                              # Major radius
+            minor                               # Minor radius
+        ),
+        False  # Not construction geometry
+    )
+
+    results["ellipse_created"] = True
+    results["ellipse_geo_index"] = geoIndex
+except Exception as e:
+    results["ellipse_created"] = False
+    results["ellipse_error"] = str(e)
+
+# Create a slot (rounded rectangle/obround)
+# A slot is typically two arcs connected by two lines
+try:
+    # Create slot using lines and arcs
+    # Left arc center at (-15, 40), right arc center at (15, 40), radius 8
+    slot_y = 40
+    slot_half_length = 15
+    slot_radius = 8
+
+    # Bottom line
+    sketch.addGeometry(Part.LineSegment(
+        FreeCAD.Vector(-slot_half_length, slot_y - slot_radius, 0),
+        FreeCAD.Vector(slot_half_length, slot_y - slot_radius, 0)
+    ))
+
+    # Right arc
+    sketch.addGeometry(Part.ArcOfCircle(
+        Part.Circle(
+            FreeCAD.Vector(slot_half_length, slot_y, 0),
+            FreeCAD.Vector(0, 0, 1),
+            slot_radius
+        ),
+        -1.5708,  # -90 degrees (bottom)
+        1.5708    # 90 degrees (top)
+    ))
+
+    # Top line
+    sketch.addGeometry(Part.LineSegment(
+        FreeCAD.Vector(slot_half_length, slot_y + slot_radius, 0),
+        FreeCAD.Vector(-slot_half_length, slot_y + slot_radius, 0)
+    ))
+
+    # Left arc
+    sketch.addGeometry(Part.ArcOfCircle(
+        Part.Circle(
+            FreeCAD.Vector(-slot_half_length, slot_y, 0),
+            FreeCAD.Vector(0, 0, 1),
+            slot_radius
+        ),
+        1.5708,   # 90 degrees (top)
+        4.7124    # 270 degrees (bottom)
+    ))
+
+    results["slot_created"] = True
+    results["slot_geometry_count"] = 4  # 2 lines + 2 arcs
+except Exception as e:
+    results["slot_created"] = False
+    results["slot_error"] = str(e)
+
+doc.recompute()
+
+results["total_geometry"] = sketch.GeometryCount
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = results
+""",
+        )
+
+        assert result["result"]["ellipse_created"] is True, (
+            f"Ellipse error: {result['result'].get('ellipse_error')}"
+        )
+        assert result["result"]["slot_created"] is True, (
+            f"Slot error: {result['result'].get('slot_error')}"
+        )
+        # Ellipse (1) + slot (4 geometries)
+        assert result["result"]["total_geometry"] >= 5
+
+    def test_bspline_creation(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+        unique_suffix: str,
+    ) -> None:
+        """Test creating B-spline curves in a sketch."""
+        doc_name = f"BSpline_{unique_suffix}"
+
+        result = execute_code(
+            xmlrpc_proxy,
+            f"""
+import FreeCAD
+import Part
+import Sketcher
+
+doc_name = {doc_name!r}
+if doc_name in FreeCAD.listDocuments():
+    FreeCAD.closeDocument(doc_name)
+doc = FreeCAD.newDocument(doc_name)
+
+sketch = doc.addObject("Sketcher::SketchObject", "BSplineSketch")
+
+results = {{}}
+
+# Create a B-spline through control points
+try:
+    # Define control points for a wavy curve
+    control_points = [
+        FreeCAD.Vector(0, 0, 0),
+        FreeCAD.Vector(10, 15, 0),
+        FreeCAD.Vector(20, -10, 0),
+        FreeCAD.Vector(30, 20, 0),
+        FreeCAD.Vector(40, 0, 0),
+    ]
+
+    # Create B-spline
+    bspline = Part.BSplineCurve()
+    bspline.interpolate(control_points)
+
+    sketch.addGeometry(bspline)
+    results["bspline_created"] = True
+    results["control_points"] = len(control_points)
+except Exception as e:
+    results["bspline_created"] = False
+    results["bspline_error"] = str(e)
+
+# Create a closed B-spline (periodic)
+try:
+    # Circular-ish control points
+    import math
+    closed_points = []
+    radius = 20
+    center_y = 50
+    for i in range(6):
+        angle = i * math.pi / 3
+        r = radius + (5 if i % 2 == 0 else 0)  # Slightly vary radius
+        x = r * math.cos(angle)
+        y = center_y + r * math.sin(angle)
+        closed_points.append(FreeCAD.Vector(x, y, 0))
+
+    closed_bspline = Part.BSplineCurve()
+    closed_bspline.interpolate(closed_points, PeriodicFlag=True)
+
+    sketch.addGeometry(closed_bspline)
+    results["closed_bspline_created"] = True
+except Exception as e:
+    results["closed_bspline_created"] = False
+    results["closed_bspline_error"] = str(e)
+
+doc.recompute()
+
+results["geometry_count"] = sketch.GeometryCount
+
+# Center viewport
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+    FreeCADGui.ActiveDocument.ActiveView.fitAll()
+
+_result_ = results
+""",
+        )
+
+        assert result["result"]["bspline_created"] is True, (
+            f"B-spline error: {result['result'].get('bspline_error')}"
+        )
+        assert result["result"]["closed_bspline_created"] is True, (
+            f"Closed B-spline error: {result['result'].get('closed_bspline_error')}"
+        )
+        assert result["result"]["geometry_count"] >= 2

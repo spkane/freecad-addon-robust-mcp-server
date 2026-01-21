@@ -127,17 +127,17 @@ _result_ = {{
 
         code = f"""
 import Mesh
+import MeshPart
 import Part
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
 {_build_object_selection_code(object_names)}
-# Create mesh from shapes
+# Create mesh from shapes using MeshPart (more reliable than manual tessellation)
 meshes = []
 for obj in objects:
-    mesh = Mesh.Mesh()
-    mesh.addFacets(obj.Shape.tessellate({mesh_tolerance})[0])
+    mesh = MeshPart.meshFromShape(obj.Shape, LinearDeflection={mesh_tolerance})
     meshes.append(mesh)
 
 # Combine meshes
@@ -190,17 +190,17 @@ _result_ = {{
 
         code = f"""
 import Mesh
+import MeshPart
 import Part
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
 {_build_object_selection_code(object_names)}
-# Create mesh from shapes
+# Create mesh from shapes using MeshPart (more reliable than manual tessellation)
 meshes = []
 for obj in objects:
-    mesh = Mesh.Mesh()
-    mesh.addFacets(obj.Shape.tessellate({mesh_tolerance})[0])
+    mesh = MeshPart.meshFromShape(obj.Shape, LinearDeflection={mesh_tolerance})
     meshes.append(mesh)
 
 # Combine meshes
@@ -253,16 +253,16 @@ _result_ = {{
 
         code = f"""
 import Mesh
+import MeshPart
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("No document found")
 {_build_object_selection_code(object_names)}
-# Create mesh from shapes
+# Create mesh from shapes using MeshPart (more reliable than manual tessellation)
 meshes = []
 for obj in objects:
-    mesh = Mesh.Mesh()
-    mesh.addFacets(obj.Shape.tessellate({mesh_tolerance})[0])
+    mesh = MeshPart.meshFromShape(obj.Shape, LinearDeflection={mesh_tolerance})
     meshes.append(mesh)
 
 # Combine meshes

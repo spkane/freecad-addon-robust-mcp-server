@@ -687,31 +687,38 @@ if not os.path.exists(part_path):
 ext = os.path.splitext(part_path)[1].lower()
 part_name = {name!r} or os.path.splitext(os.path.basename(part_path))[0]
 
-if ext == ".fcstd":
-    # Import FreeCAD document
-    src_doc = FreeCAD.openDocument(part_path)
-    for obj in src_doc.Objects:
-        if hasattr(obj, "Shape"):
-            new_obj = doc.addObject("Part::Feature", part_name)
-            new_obj.Shape = obj.Shape.copy()
-            break
-    FreeCAD.closeDocument(src_doc.Name)
-else:
-    # Import STEP/IGES
-    shape = Part.read(part_path)
-    new_obj = doc.addObject("Part::Feature", part_name)
-    new_obj.Shape = shape
+# Wrap in transaction for undo support
+doc.openTransaction("Insert Part from Library")
+try:
+    if ext == ".fcstd":
+        # Import FreeCAD document
+        src_doc = FreeCAD.openDocument(part_path)
+        for obj in src_doc.Objects:
+            if hasattr(obj, "Shape"):
+                new_obj = doc.addObject("Part::Feature", part_name)
+                new_obj.Shape = obj.Shape.copy()
+                break
+        FreeCAD.closeDocument(src_doc.Name)
+    else:
+        # Import STEP/IGES
+        shape = Part.read(part_path)
+        new_obj = doc.addObject("Part::Feature", part_name)
+        new_obj.Shape = shape
 
-# Set position
-new_obj.Placement.Base = {pos_str}
+    # Set position
+    new_obj.Placement.Base = {pos_str}
 
-doc.recompute()
+    doc.recompute()
+    doc.commitTransaction()
 
-_result_ = {{
-    "name": new_obj.Name,
-    "label": new_obj.Label,
-    "type_id": new_obj.TypeId,
-}}
+    _result_ = {{
+        "name": new_obj.Name,
+        "label": new_obj.Label,
+        "type_id": new_obj.TypeId,
+    }}
+except Exception as _txn_err:
+    doc.abortTransaction()
+    raise _txn_err
 """
         result = await bridge.execute_python(code)
         if result.success and result.result:

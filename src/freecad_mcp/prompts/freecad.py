@@ -62,18 +62,24 @@ You are connected to the FreeCAD Robust MCP Server. Follow these guidelines for 
 
 ## Critical Rules
 
+### Transaction Support (Undo/Redo)
+**ALL tool operations are wrapped in transactions** - every change can be undone:
+- Use `undo()` to revert any operation
+- Use `redo()` to redo after undo
+- Use `get_undo_redo_status()` to see available undo steps
+
 ### For Parametric Parts (PartDesign)
 ```
 1. ALWAYS create Body first: create_partdesign_body(name="Body")
 2. Create sketches ON the body: create_sketch(body_name="Body", plane="XY_Plane")
-3. Extrude with: pad_sketch(body_name="Body", sketch_name="...", length=...)
+3. Extrude with: pad_sketch(sketch_name="...", length=...)
 4. VALIDATE after each feature: validate_object(object_name="...")
 ```
 
 ### For Error Prevention
+- **All operations support undo** - simply call `undo()` if something goes wrong
 - **Use safe_execute()** for risky operations - auto-undoes on failure
 - **Use validate_document()** to check all objects after complex operations
-- **Use undo()** immediately if something goes wrong
 
 ### Version Compatibility
 The MCP tools automatically handle FreeCAD version differences (1.0 vs older).
@@ -87,10 +93,11 @@ No special handling needed on your part.
 |------|---------|
 | Create parametric part | `create_partdesign_body` → `create_sketch` → `pad_sketch` |
 | Simple primitive | `create_box`, `create_cylinder`, `create_sphere` |
-| Combine shapes | `boolean_operation(operation="fuse/cut/common")` |
+| Combine shapes | `boolean_operation(operation="fuse/cut/common")` or `fuse_all` |
+| Add sketch constraints | `constrain_horizontal`, `constrain_distance`, etc. |
 | Check for errors | `validate_object` or `validate_document` |
 | Debug issues | `get_console_output(lines=50)` |
-| Undo mistake | `undo()` |
+| Undo any operation | `undo()` (all operations are undoable) |
 | Safe execution | `safe_execute(code="...", validate_after=True)` |
 
 ---
@@ -149,9 +156,17 @@ Or read the full `freecad://best-practices` resource for comprehensive documenta
 3. **Check document**: Use `get_active_document()` or create one with `create_document()`
 
 ## Key Principles
+- **All Operations are Undoable**: Every tool operation is wrapped in a transaction
 - **Validate Early**: After any geometry creation, use `validate_object()` to check validity
-- **Use Transactions**: For risky operations, use `safe_execute()` for automatic rollback
+- **Use safe_execute()**: For risky operations with automatic rollback on failure
 - **Check Version Compatibility**: FreeCAD 1.x changed some APIs (see best-practices resource)
+
+## Undo/Redo Support
+All tool operations support undo:
+- `undo()` - Reverts the last operation
+- `redo()` - Redoes after undo
+- `get_undo_redo_status()` - Shows available undo/redo steps
+- `undo_if_invalid()` - Checks and reverts if geometry is invalid
 
 ## Error Recovery
 - If something breaks: `undo()` reverts the last operation
@@ -165,6 +180,9 @@ These tools require GUI mode (fail gracefully in headless):
 All other tools work in both modes.""",
             "partdesign": """# PartDesign Workflow Guidance
 
+## Undo Support
+All PartDesign operations are wrapped in transactions - use `undo()` to revert any operation.
+
 ## Critical Rules
 1. **Always create a Body first** - PartDesign features MUST be inside a Body
 2. **Use body.newObject()** - Don't use doc.addObject() for PartDesign objects
@@ -174,9 +192,9 @@ All other tools work in both modes.""",
 ```
 1. create_document(name="MyPart")
 2. create_partdesign_body(name="Body")
-3. create_sketch(body_name="Body", plane="XY_Plane", sketch_name="BaseSketch")
+3. create_sketch(body_name="Body", plane="XY_Plane", name="BaseSketch")
 4. add_sketch_rectangle(sketch_name="BaseSketch", x=-10, y=-10, width=20, height=20)
-5. pad_sketch(body_name="Body", sketch_name="BaseSketch", length=15)
+5. pad_sketch(sketch_name="BaseSketch", length=15)
 6. validate_object(object_name="Pad")  # Check the result
 ```
 
@@ -187,28 +205,54 @@ FreeCAD 1.x changed sketch attachment:
 The MCP tools handle this automatically.
 
 ## Adding Features
-- **Additive**: pad_sketch, revolution_sketch, loft_sketches
-- **Subtractive**: pocket_sketch, groove_sketch, create_hole
-- **Modifiers**: fillet_edges, chamfer_edges
+- **Additive**: pad_sketch, revolution_sketch, loft_sketches, sweep_sketch
+- **Subtractive**: pocket_sketch, groove_sketch, create_hole, subtractive_loft, subtractive_pipe
+- **Modifiers**: fillet_edges, chamfer_edges, draft_feature, thickness_feature
 - **Patterns**: linear_pattern, polar_pattern, mirrored_feature
+- **Datums**: create_datum_plane, create_datum_line, create_datum_point
+
+## Sketch Constraints
+Use constraints to fully define sketches:
+- Geometric: constrain_horizontal, constrain_vertical, constrain_parallel, constrain_perpendicular
+- Dimensional: constrain_distance, constrain_radius, constrain_angle
+- Special: constrain_coincident, constrain_tangent, constrain_equal, constrain_fix
 
 ## Common Mistakes
 - Creating sketch without a body (will fail on pad)
 - Using wrong plane name (must be exact: "XY_Plane" not "XY")
-- Not closing sketch contour (pad requires closed profile)""",
+- Not closing sketch contour (pad requires closed profile)
+- Not constraining sketches (use get_sketch_info to check degrees of freedom)""",
             "sketching": """# Sketch Creation Guidance
+
+## Undo Support
+All sketch operations are wrapped in transactions - use `undo()` to revert any operation.
 
 ## Basic Workflow
 1. Create sketch attached to plane or face
-2. Add geometry (rectangle, circle, line, arc, point)
-3. Ensure sketch is closed for Pad/Pocket operations
+2. Add geometry (rectangle, circle, line, arc, point, ellipse, polygon, slot, bspline)
+3. Add constraints to fully define the geometry
+4. Ensure sketch is closed for Pad/Pocket operations
 
-## Available Sketch Tools
+## Available Sketch Geometry Tools
 - `add_sketch_rectangle(sketch_name, x, y, width, height)`
-- `add_sketch_circle(sketch_name, x, y, radius)`
+- `add_sketch_circle(sketch_name, center_x, center_y, radius)`
 - `add_sketch_line(sketch_name, x1, y1, x2, y2)`
 - `add_sketch_arc(sketch_name, center_x, center_y, radius, start_angle, end_angle)`
 - `add_sketch_point(sketch_name, x, y)` - for hole placement
+- `add_sketch_ellipse(sketch_name, center_x, center_y, major_radius, minor_radius)`
+- `add_sketch_polygon(sketch_name, center_x, center_y, sides, radius)`
+- `add_sketch_slot(sketch_name, x1, y1, x2, y2, width)` - rounded rectangle
+- `add_sketch_bspline(sketch_name, points)` - smooth curve through points
+
+## Constraint Tools
+- `constrain_horizontal(sketch_name, geometry_index)` - make line horizontal
+- `constrain_vertical(sketch_name, geometry_index)` - make line vertical
+- `constrain_distance(sketch_name, value, geo1, point1, ...)` - set distance
+- `constrain_radius(sketch_name, geometry_index, value)` - set radius
+- `constrain_coincident(sketch_name, geo1, point1, geo2, point2)` - join points
+- `constrain_parallel(sketch_name, geo1, geo2)` - make lines parallel
+- `constrain_perpendicular(sketch_name, geo1, geo2)` - make lines perpendicular
+- `get_sketch_info(sketch_name)` - check degrees of freedom
 
 ## Coordinate System
 - X, Y coordinates are in the sketch plane
@@ -217,14 +261,15 @@ The MCP tools handle this automatically.
 
 ## Closed Profiles
 For Pad/Pocket operations, sketches must be closed:
-- Rectangle: automatically closed
-- Circle: automatically closed
+- Rectangle, Circle, Ellipse, Polygon: automatically closed
 - Lines/Arcs: must connect to form closed loop
 
 ## Tips
 - Start simple: rectangle or circle first
 - Build complex shapes with multiple sketch elements
-- Use `add_sketch_point` for hole features (then `create_hole`)""",
+- Use `add_sketch_point` for hole features (then `create_hole`)
+- Use `get_sketch_info` to check if fully constrained (0 DOF)
+- Use `toggle_construction` for reference geometry""",
             "boolean": """# Boolean Operations Guidance
 
 ## Available Operations
@@ -351,6 +396,12 @@ safe_execute(
 Automatically reverts if validation fails.""",
             "validation": """# Validation Guidance
 
+## Transaction Support
+**All MCP tool operations are wrapped in transactions** - this means:
+- Every operation can be undone with `undo()`
+- Use `get_undo_redo_status()` to see available undo steps
+- Transaction names appear in FreeCAD's Edit > Undo menu
+
 ## Validation Tools
 
 ### validate_object(object_name, doc_name)
@@ -382,13 +433,18 @@ Protected code execution:
 ## Validation Pattern
 After any operation:
 ```
-# Option 1: Manual check
+# Option 1: Simple undo if something goes wrong
+create_box(length=10, width=10, height=10)
+# Oops, wrong size
+undo()  # Reverts the box creation
+
+# Option 2: Manual validation
 result = validate_object(object_name="NewFeature")
 if not result["is_valid"]:
     undo()
     # Try different approach
 
-# Option 2: Automatic protection
+# Option 3: Automatic protection
 safe_execute(
     code="...",
     validate_after=True,
