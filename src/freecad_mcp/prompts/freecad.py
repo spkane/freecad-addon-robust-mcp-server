@@ -42,6 +42,13 @@ def register_prompts(mcp: Any, get_bridge: Any) -> None:  # noqa: ARG001
 
         Returns:
             Essential startup guidance for FreeCAD MCP sessions.
+
+        Example:
+            Invoke via MCP prompt mechanism::
+
+                # In an MCP client
+                guidance = await mcp.get_prompt("freecad_startup")
+                print(guidance)  # Displays session initialization checklist
         """
         return """# FreeCAD MCP Session Initialized
 
@@ -146,6 +153,11 @@ Or read the full `freecad://best-practices` resource for comprehensive documenta
 
         Returns:
             Targeted guidance for the task type.
+
+        Example:
+            Get PartDesign workflow guidance::
+
+                guidance = await freecad_guidance(task_type="partdesign")
         """
         guidance = {
             "general": """# FreeCAD AI Assistant Guidance

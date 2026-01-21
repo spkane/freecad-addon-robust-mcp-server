@@ -126,9 +126,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": sketch.Name,
@@ -179,6 +179,7 @@ doc.openTransaction("Add Sketch Rectangle")
 try:
     # Add rectangle
     import Part
+    import Sketcher
 
     x, y, w, h = {x}, {y}, {width}, {height}
 
@@ -197,9 +198,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "constraint_count": sketch.ConstraintCount,
@@ -249,9 +250,9 @@ try:
     idx = sketch.addGeometry(Part.Circle(FreeCAD.Vector({center_x}, {center_y}, 0), FreeCAD.Vector(0,0,1), {radius}), False)
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "geometry_index": idx,
@@ -319,9 +320,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": pad.Name,
@@ -387,9 +388,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": pocket.Name,
@@ -428,7 +429,8 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        edges_str = edges if edges else "None"
+        # Use actual None or list, not string "None"
+        edges_param = edges if edges else None
 
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
@@ -444,6 +446,9 @@ for parent in doc.Objects:
             body = parent
             break
 
+# Get selected edges (None means all edges)
+selected_edges = {edges_param!r}
+
 # Wrap in transaction for undo support
 doc.openTransaction("Fillet Edges")
 try:
@@ -452,15 +457,15 @@ try:
     if body:
         # PartDesign Fillet
         fillet = body.newObject("PartDesign::Fillet", fillet_name)
-        fillet.Base = (obj, {edges_str!r} or obj.Shape.Edges)
+        fillet.Base = (obj, selected_edges if selected_edges else obj.Shape.Edges)
         fillet.Radius = {radius}
     else:
         # Part Fillet
         fillet = doc.addObject("Part::Fillet", fillet_name)
         fillet.Base = obj
 
-        if {edges_str!r}:
-            edge_list = [(int(e.replace("Edge", "")), {radius}, {radius}) for e in {edges_str!r}]
+        if selected_edges:
+            edge_list = [(int(e.replace("Edge", "")), {radius}, {radius}) for e in selected_edges]
         else:
             edge_list = [(i+1, {radius}, {radius}) for i in range(len(obj.Shape.Edges))]
 
@@ -468,9 +473,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": fillet.Name,
@@ -509,7 +514,8 @@ _result_ = {{
         """
         bridge = await get_bridge()
 
-        edges_str = edges if edges else "None"
+        # Use actual None or list, not string "None"
+        edges_param = edges if edges else None
 
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
@@ -525,6 +531,9 @@ for parent in doc.Objects:
             body = parent
             break
 
+# Get selected edges (None means all edges)
+selected_edges = {edges_param!r}
+
 # Wrap in transaction for undo support
 doc.openTransaction("Chamfer Edges")
 try:
@@ -533,15 +542,15 @@ try:
     if body:
         # PartDesign Chamfer
         chamfer = body.newObject("PartDesign::Chamfer", chamfer_name)
-        chamfer.Base = (obj, {edges_str!r} or obj.Shape.Edges)
+        chamfer.Base = (obj, selected_edges if selected_edges else obj.Shape.Edges)
         chamfer.Size = {size}
     else:
         # Part Chamfer
         chamfer = doc.addObject("Part::Chamfer", chamfer_name)
         chamfer.Base = obj
 
-        if {edges_str!r}:
-            edge_list = [(int(e.replace("Edge", "")), {size}, {size}) for e in {edges_str!r}]
+        if selected_edges:
+            edge_list = [(int(e.replace("Edge", "")), {size}, {size}) for e in selected_edges]
         else:
             edge_list = [(i+1, {size}, {size}) for i in range(len(obj.Shape.Edges))]
 
@@ -549,9 +558,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": chamfer.Name,
@@ -640,9 +649,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": rev.Name,
@@ -731,9 +740,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": groove.Name,
@@ -830,9 +839,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": hole.Name,
@@ -906,9 +915,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": pattern.Name,
@@ -982,9 +991,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": pattern.Name,
@@ -1060,9 +1069,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": mirror.Name,
@@ -1123,9 +1132,9 @@ try:
     )
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "geometry_index": idx,
@@ -1189,9 +1198,9 @@ try:
     idx = sketch.addGeometry(arc, False)
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "geometry_index": idx,
@@ -1241,9 +1250,9 @@ try:
     idx = sketch.addGeometry(Part.Point(FreeCAD.Vector({x}, {y}, 0)), False)
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "geometry_index": idx,
@@ -1318,9 +1327,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": loft.Name,
@@ -1407,9 +1416,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": sweep.Name,
@@ -1491,9 +1500,9 @@ try:
         "label": datum.Label,
         "type_id": datum.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1554,9 +1563,9 @@ try:
         "label": datum.Label,
         "type_id": datum.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1622,9 +1631,9 @@ try:
         "label": datum.Label,
         "type_id": datum.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1666,7 +1675,8 @@ except Exception as _txn_err:
         """
         bridge = await get_bridge()
 
-        faces_str = faces if faces else "None"
+        # Use actual None or list, not string "None"
+        faces_param = faces if faces else None
 
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
@@ -1688,6 +1698,9 @@ for parent in doc.Objects:
 if body is None:
     raise ValueError("Object must be inside a PartDesign Body for Draft operation")
 
+# Get selected faces (None means all suitable faces)
+selected_faces = {faces_param!r}
+
 # Wrap in transaction for undo support
 doc.openTransaction("Draft Feature")
 try:
@@ -1695,7 +1708,7 @@ try:
     draft = body.newObject("PartDesign::Draft", draft_name)
 
     draft.Angle = {angle}
-    draft.Base = (obj, {faces_str!r} if {faces_str!r} else [])
+    draft.Base = (obj, selected_faces if selected_faces else [])
 
     # Set neutral plane
     plane_name = {plane!r}
@@ -1712,9 +1725,9 @@ try:
         "label": draft.Label,
         "type_id": draft.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1788,9 +1801,9 @@ try:
         "label": thick.Label,
         "type_id": thick.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1870,9 +1883,9 @@ try:
         "label": loft.Label,
         "type_id": loft.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1957,9 +1970,9 @@ try:
         "label": pipe.Label,
         "type_id": pipe.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2017,9 +2030,9 @@ try:
         "geometry_index": idx,
         "geometry_count": sketch.GeometryCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2055,6 +2068,7 @@ except Exception as _txn_err:
         code = f"""
 import math
 import Part
+import Sketcher
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 sketch = doc.getObject({sketch_name!r})
@@ -2096,9 +2110,9 @@ try:
         "first_line_index": first_idx,
         "geometry_count": sketch.GeometryCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2138,6 +2152,7 @@ except Exception as _txn_err:
         code = f"""
 import math
 import Part
+import Sketcher
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 sketch = doc.getObject({sketch_name!r})
@@ -2204,9 +2219,9 @@ try:
         "first_geometry_index": first_idx,
         "geometry_count": sketch.GeometryCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2267,9 +2282,9 @@ try:
         "geometry_index": idx,
         "geometry_count": sketch.GeometryCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2319,6 +2334,8 @@ except Exception as _txn_err:
         bridge = await get_bridge()
 
         code = f"""
+import Sketcher
+
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 sketch = doc.getObject({sketch_name!r})
 if sketch is None:
@@ -2343,7 +2360,10 @@ try:
         else:
             constraint = Sketcher.Constraint(ctype, g1, g2)
     elif ctype == "Symmetric":
-        # Symmetric requires a symmetry line
+        # Symmetric requires geometry2 to be the symmetry line index
+        # Points g1,p1 and g2,p2 are symmetric about line geometry2
+        if g2 < 0:
+            raise ValueError("Symmetric constraint requires geometry2 as the symmetry line index")
         constraint = Sketcher.Constraint(ctype, g1, p1, g2, p2, geometry2)
     elif ctype in ["Distance", "DistanceX", "DistanceY"]:
         if value is None:
@@ -2376,9 +2396,9 @@ try:
         "constraint_index": idx,
         "constraint_count": sketch.ConstraintCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2771,9 +2791,9 @@ try:
         "success": True,
         "external_geometry_count": sketch.ExternalGeometryCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2817,9 +2837,9 @@ try:
         "success": True,
         "geometry_count": sketch.GeometryCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2863,9 +2883,9 @@ try:
         "success": True,
         "constraint_count": sketch.ConstraintCount,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2959,9 +2979,9 @@ try:
         "success": True,
         "is_construction": is_construction,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:

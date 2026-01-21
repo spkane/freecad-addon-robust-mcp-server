@@ -323,6 +323,14 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
 
         Returns:
             JSON string containing best practices and guidance.
+
+        Example:
+            Read via MCP resource mechanism::
+
+                # In an MCP client
+                best_practices = await mcp.read_resource("freecad://best-practices")
+                data = json.loads(best_practices)
+                print(data["critical_patterns"])  # Shows validation_first, partdesign_workflow
         """
         best_practices = {
             "description": "FreeCAD Best Practices and AI Guidance",
@@ -351,7 +359,7 @@ Example sequence:
 - create_partdesign_body(name="Body")
 - create_sketch(body_name="Body", plane="XY_Plane")
 - add_sketch_rectangle(...)
-- pad_sketch(body_name="Body", sketch_name="...", length=10)""",
+- pad_sketch(sketch_name="...", length=10)""",
                     "tools": [
                         "create_partdesign_body",
                         "create_sketch",
@@ -485,7 +493,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                         "2. create_partdesign_body(name='Body')",
                         "3. create_sketch(body_name='Body', plane='XY_Plane')",
                         "4. Add geometry: add_sketch_rectangle/circle/line",
-                        "5. pad_sketch(body_name='Body', sketch_name='...', length=...)",
+                        "5. pad_sketch(sketch_name='...', length=...)",
                         "6. Add features: fillets, chamfers, pockets",
                         "7. validate_document() to check health",
                         "8. Export: export_step/stl/3mf",

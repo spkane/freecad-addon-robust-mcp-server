@@ -48,6 +48,13 @@ def register_validation_tools(
                 - area: Shape surface area if applicable (None otherwise)
                 - error_messages: List of any error messages
                 - warnings: List of any warnings
+
+        Example:
+            Validate an object after creating it::
+
+                result = await validate_object("MyBox")
+                if not result["valid"]:
+                    print(f"Errors: {result['error_messages']}")
         """
         bridge = await get_bridge()
 
@@ -192,6 +199,15 @@ else:
                 - objects_needing_recompute: List of objects that need recompute
                 - recompute_needed: Whether document needs recomputation
                 - summary: Human-readable summary of document health
+
+        Example:
+            Check document health before saving::
+
+                result = await validate_document()
+                if result["valid"]:
+                    await save_document()
+                else:
+                    print(f"Issues: {result['invalid_objects']}")
         """
         bridge = await get_bridge()
 
@@ -314,6 +330,14 @@ else:
                 - objects_with_errors: List of objects with errors (before undo)
                 - message: Human-readable description of what happened
                 - validation_after: Validation result after undo (if performed)
+
+        Example:
+            Auto-recover from a failed boolean operation::
+
+                await boolean_operation("cut", "Box", "InvalidShape")
+                result = await undo_if_invalid()
+                if result["undone"]:
+                    print("Recovered from invalid operation")
         """
         bridge = await get_bridge()
 
@@ -461,6 +485,17 @@ else:
                 - execution_error: Any execution error message
                 - validation: Validation results (if validate_after is True)
                 - message: Human-readable summary
+
+        Example:
+            Execute code with automatic rollback on failure::
+
+                result = await safe_execute('''
+                box = doc.addObject("Part::Box", "MyBox")
+                box.Length = 100
+                _result_ = {"created": box.Name}
+                ''')
+                if result["success"]:
+                    print(f"Created: {result['result']['created']}")
         """
         bridge = await get_bridge()
 

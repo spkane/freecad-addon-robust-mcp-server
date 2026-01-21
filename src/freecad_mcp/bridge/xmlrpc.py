@@ -569,9 +569,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": obj.Name,
@@ -616,9 +616,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": obj.Name,
@@ -657,9 +657,9 @@ doc.openTransaction("Delete Object")
 try:
     doc.removeObject({obj_name!r})
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = True
 """

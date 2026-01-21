@@ -26,6 +26,10 @@ def wrap_with_transaction(
     Returns:
         Code string wrapped with transaction open/commit/abort handling.
 
+    Raises:
+        Exception: Re-raises any exception from the wrapped code after aborting
+            the transaction. The original traceback is preserved.
+
     Example:
         >>> code = '''
         ... box = doc.addObject("Part::Box", "MyBox")
@@ -44,8 +48,8 @@ try:
 {indented_code}
     if _txn_doc is not None:
         _txn_doc.commitTransaction()
-except Exception as _txn_error:
+except Exception:
     if _txn_doc is not None:
         _txn_doc.abortTransaction()
-    raise _txn_error
+    raise
 """

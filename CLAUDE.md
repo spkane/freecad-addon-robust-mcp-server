@@ -1820,12 +1820,12 @@ The MCP server provides a `freecad://capabilities` resource that returns a compl
 
 ### Part Wire and Face Operations
 
-| Tool            | Description                                           |
-| --------------- | ----------------------------------------------------- |
-| `make_wire`     | Create a wire (connected edges) from a list of points.|
-| `make_face`     | Create a face from a closed wire or edge object.      |
-| `extrude_shape` | Extrude a 2D shape along a direction vector.          |
-| `revolve_shape` | Revolve a 2D shape around an axis.                    |
+| Tool             | Description                                            |
+| ---------------- | ------------------------------------------------------ |
+| `make_wire`      | Create a wire (connected edges) from a list of points. |
+| `make_face`      | Create a face from a closed wire or edge object.       |
+| `extrude_shape`  | Extrude a 2D shape along a direction vector.           |
+| `revolve_shape`  | Revolve a 2D shape around an axis.                     |
 
 ### Part Loft and Sweep
 
@@ -1907,22 +1907,22 @@ The MCP server provides a `freecad://capabilities` resource that returns a compl
 
 ### Sketcher Constraint Tools
 
-| Tool                     | Description                                             |
-| ------------------------ | ------------------------------------------------------- |
-| `add_sketch_constraint`  | Add any constraint type (general interface).            |
-| `constrain_horizontal`   | Constrain a line to be horizontal.                      |
-| `constrain_vertical`     | Constrain a line to be vertical.                        |
-| `constrain_coincident`   | Make two points coincident (same location).             |
-| `constrain_parallel`     | Constrain two lines to be parallel.                     |
-| `constrain_perpendicular`| Constrain two lines to be perpendicular.                |
-| `constrain_tangent`      | Constrain two curves to be tangent.                     |
-| `constrain_equal`        | Constrain two elements to have equal length/radius.     |
-| `constrain_distance`     | Set distance between two elements.                      |
-| `constrain_distance_x`   | Set horizontal distance from a point.                   |
-| `constrain_distance_y`   | Set vertical distance from a point.                     |
-| `constrain_radius`       | Set the radius of a circle or arc.                      |
-| `constrain_angle`        | Set the angle of a line or between two lines.           |
-| `constrain_fix`          | Fix a point or geometry at its current position.        |
+| Tool                       | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `add_sketch_constraint`    | Add any constraint type (general interface).        |
+| `constrain_horizontal`     | Constrain a line to be horizontal.                  |
+| `constrain_vertical`       | Constrain a line to be vertical.                    |
+| `constrain_coincident`     | Make two points coincident (same location).         |
+| `constrain_parallel`       | Constrain two lines to be parallel.                 |
+| `constrain_perpendicular`  | Constrain two lines to be perpendicular.            |
+| `constrain_tangent`        | Constrain two curves to be tangent.                 |
+| `constrain_equal`          | Constrain two elements to have equal length/radius. |
+| `constrain_distance`       | Set distance between two elements.                  |
+| `constrain_distance_x`     | Set horizontal distance from a point.               |
+| `constrain_distance_y`     | Set vertical distance from a point.                 |
+| `constrain_radius`         | Set the radius of a circle or arc.                  |
+| `constrain_angle`          | Set the angle of a line or between two lines.       |
+| `constrain_fix`            | Fix a point or geometry at its current position.    |
 
 ### Sketcher Operations
 

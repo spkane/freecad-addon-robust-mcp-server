@@ -214,12 +214,12 @@ Extended sketch geometry and manipulation tools beyond the basic shapes.
 
 ### Additional Geometry
 
-| Tool                   | Description                            |
-| ---------------------- | -------------------------------------- |
-| `sketcher_add_ellipse` | Add ellipse to sketch                  |
-| `sketcher_add_b_spline`| Add B-spline curve from control points |
-| `sketcher_add_polygon` | Add regular polygon                    |
-| `sketcher_add_slot`    | Add slot (rounded rectangle)           |
+| Tool                     | Description                            |
+| ------------------------ | -------------------------------------- |
+| `sketcher_add_ellipse`   | Add ellipse to sketch                  |
+| `sketcher_add_b_spline`  | Add B-spline curve from control points |
+| `sketcher_add_polygon`   | Add regular polygon                    |
+| `sketcher_add_slot`      | Add slot (rounded rectangle)           |
 
 ### Edge Operations
 

@@ -690,6 +690,7 @@ part_name = {name!r} or os.path.splitext(os.path.basename(part_path))[0]
 # Wrap in transaction for undo support
 doc.openTransaction("Insert Part from Library")
 try:
+    new_obj = None
     if ext == ".fcstd":
         # Import FreeCAD document
         src_doc = FreeCAD.openDocument(part_path)
@@ -705,6 +706,9 @@ try:
         new_obj = doc.addObject("Part::Feature", part_name)
         new_obj.Shape = shape
 
+    if new_obj is None:
+        raise ValueError(f"No importable shape found in {{part_path}}")
+
     # Set position
     new_obj.Placement.Base = {pos_str}
 
@@ -716,9 +720,9 @@ try:
         "label": new_obj.Label,
         "type_id": new_obj.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success and result.result:

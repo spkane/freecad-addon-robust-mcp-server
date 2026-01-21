@@ -536,9 +536,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": result.Name,
@@ -602,9 +602,9 @@ try:
     obj.Placement = FreeCAD.Placement(pos, rot)
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "position": [obj.Placement.Base.x, obj.Placement.Base.y, obj.Placement.Base.z],
@@ -680,9 +680,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": result.Name,
@@ -757,9 +757,9 @@ try:
     obj.Placement = FreeCAD.Placement(rotated_pos, new_rot)
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "position": [obj.Placement.Base.x, obj.Placement.Base.y, obj.Placement.Base.z],
@@ -831,9 +831,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": copy_obj.Name,
@@ -913,9 +913,9 @@ try:
 
     doc.recompute()
     doc.commitTransaction()
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 
 _result_ = {{
     "name": result.Name,
@@ -1091,9 +1091,9 @@ try:
         "type_id": obj.TypeId,
         "length": line.Length,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1282,7 +1282,8 @@ except Exception as _txn_err:
         """
         bridge = await get_bridge()
 
-        faces_str = faces_to_remove if faces_to_remove else "None"
+        # Use actual None or list, not string "None"
+        faces_param = faces_to_remove if faces_to_remove else None
 
         code = f"""
 import Part
@@ -1298,11 +1299,12 @@ if obj is None:
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
 
+# Get faces to remove (None means find largest face)
+faces_to_remove = {faces_param!r}
+
 # Wrap in transaction for undo support
 doc.openTransaction("Shell Object")
 try:
-    faces_to_remove = {faces_str!r}
-
     if faces_to_remove is None:
         # Find and remove the largest face
         faces = obj.Shape.Faces
@@ -1330,9 +1332,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1395,9 +1397,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1473,9 +1475,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1582,9 +1584,9 @@ try:
         "type_id": result.TypeId,
         "shape_count": len(shapes),
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1647,9 +1649,9 @@ try:
         "success": True,
         "created_objects": created,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1719,9 +1721,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1788,9 +1790,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1865,9 +1867,9 @@ try:
         "type_id": obj.TypeId,
         "length": wire.Length,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1933,9 +1935,9 @@ try:
         "type_id": result.TypeId,
         "area": face.Area,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -1997,9 +1999,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2070,9 +2072,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2154,9 +2156,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -2240,9 +2242,9 @@ try:
         "label": result.Label,
         "type_id": result.TypeId,
     }}
-except Exception as _txn_err:
+except Exception:
     doc.abortTransaction()
-    raise _txn_err
+    raise
 """
         result = await bridge.execute_python(code)
         if result.success:
