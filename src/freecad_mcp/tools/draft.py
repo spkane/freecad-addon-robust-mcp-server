@@ -8,6 +8,41 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 
+def _validate_vector(
+    value: list[float] | None,
+    expected_len: int,
+    name: str,
+    default: list[float],
+    *,
+    allow_zero: bool = True,
+) -> list[float]:
+    """Validate a vector parameter.
+
+    Args:
+        value: The vector value to validate, or None to use default.
+        expected_len: Expected number of elements (e.g., 2 for 2D, 3 for 3D).
+        name: Parameter name for error messages.
+        default: Default value to return when value is None.
+        allow_zero: Whether to allow zero-magnitude vectors. Defaults to True.
+
+    Returns:
+        The validated vector as a list of floats.
+
+    Raises:
+        ValueError: If vector length doesn't match expected_len.
+        ValueError: If allow_zero is False and all components are zero.
+    """
+    if value is None:
+        return default
+    if len(value) != expected_len:
+        raise ValueError(
+            f"{name} must have exactly {expected_len} elements, got {len(value)}"
+        )
+    if not allow_zero and all(v == 0 for v in value):
+        raise ValueError(f"{name} cannot be a zero vector")
+    return value
+
+
 def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register Draft-related tools with the Robust MCP Server.
 
@@ -41,12 +76,18 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
 
         Returns:
             Dictionary with created ShapeString information:
-                - name: Object name
+                - name: Object name (prefers Label if set, falls back to Name)
                 - label: Object label
                 - type_id: Object type
                 - text: The text that was created
                 - size: Font size used
                 - font: Font path used
+
+        Raises:
+            ValueError: If position has incorrect number of elements (not 3).
+            ValueError: If font_path is specified but file does not exist.
+            ValueError: If no font_path is specified and no default font found.
+            ValueError: If ShapeString creation fails (e.g., invalid font).
 
         Example:
             Create 3D text::
@@ -58,7 +99,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
                 )
         """
         bridge = await get_bridge()
-        pos = position or [0, 0, 0]
+        pos = _validate_vector(position, 3, "position", [0, 0, 0])
 
         code = f"""
 import Draft
@@ -116,7 +157,7 @@ try:
     doc.commitTransaction()
 
     _result_ = {{
-        "name": shape_string.Name,
+        "name": shape_string.Label if shape_string.Label else shape_string.Name,
         "label": shape_string.Label,
         "type_id": shape_string.TypeId,
         "text": text,
@@ -147,6 +188,9 @@ except Exception:
                     - type: Font type (ttf or otf)
                 - count: Total number of fonts found
                 - directories: Directories that were searched
+
+        Raises:
+            ValueError: If the bridge fails to execute the font search.
 
         Example:
             List available fonts::
@@ -234,6 +278,13 @@ _result_ = {
                 - type_id: Object type
                 - wire_count: Number of wires added to sketch
                 - source: Name of source ShapeString
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the ShapeString object is not found.
+            ValueError: If the ShapeString has no shape data.
+            ValueError: If the specified Body is not found.
+            ValueError: If conversion fails.
 
         Example:
             Convert ShapeString to sketch for extrusion::
@@ -370,6 +421,14 @@ except Exception:
                 - area: Total face area
                 - source: Name of source ShapeString
 
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the ShapeString object is not found.
+            ValueError: If the ShapeString has no shape data.
+            ValueError: If the ShapeString has no wires.
+            ValueError: If no faces could be created from the wires.
+            ValueError: If conversion fails.
+
         Example:
             Convert ShapeString to face for boolean operations::
 
@@ -502,6 +561,16 @@ except Exception:
                 - text: Text that was created
                 - depth: Depth used
 
+        Raises:
+            ValueError: If position has incorrect number of elements (not 2).
+            ValueError: If no document is found.
+            ValueError: If target_object is not found.
+            ValueError: If target_object has no shape.
+            ValueError: If target_face is not found on target_object.
+            ValueError: If operation is not "emboss" or "engrave".
+            ValueError: If font_path is invalid or no default font found.
+            ValueError: If text creation or boolean operation fails.
+
         Example:
             Engrave text on top of a box::
 
@@ -516,7 +585,7 @@ except Exception:
                 )
         """
         bridge = await get_bridge()
-        pos = position or [0, 0]
+        pos = _validate_vector(position, 2, "position", [0, 0])
 
         code = f"""
 import Draft
@@ -713,6 +782,16 @@ except Exception:
                 - height: Extrusion height used
                 - source: Name of source ShapeString
 
+        Raises:
+            ValueError: If direction has incorrect number of elements (not 3).
+            ValueError: If direction is a zero vector.
+            ValueError: If no document is found.
+            ValueError: If the ShapeString object is not found.
+            ValueError: If the ShapeString has no shape data.
+            ValueError: If the ShapeString has no wires.
+            ValueError: If no faces could be created from the wires.
+            ValueError: If extrusion fails.
+
         Example:
             Create extruded 3D text::
 
@@ -723,7 +802,9 @@ except Exception:
                 )
         """
         bridge = await get_bridge()
-        dir_vec = direction or [0, 0, 1]
+        dir_vec = _validate_vector(
+            direction, 3, "direction", [0, 0, 1], allow_zero=False
+        )
 
         code = f"""
 import Part

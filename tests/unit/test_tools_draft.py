@@ -156,12 +156,11 @@ class TestDraftTools:
     # =========================================================================
 
     @pytest.mark.asyncio
-    async def test_draft_list_fonts_success(self, register_tools, mock_bridge):
-        """draft_list_fonts should return available fonts."""
-        mock_bridge.execute_python = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result={
+    @pytest.mark.parametrize(
+        "fonts_data,expected_count,expected_dirs",
+        [
+            pytest.param(
+                {
                     "fonts": [
                         {
                             "name": "DejaVuSans.ttf",
@@ -177,42 +176,44 @@ class TestDraftTools:
                     "count": 2,
                     "directories": ["/usr/share/fonts", "/Library/Fonts"],
                 },
-                stdout="",
-                stderr="",
-                execution_time_ms=200.0,
-            )
-        )
-
-        list_fonts = register_tools["draft_list_fonts"]
-        result = await list_fonts()
-
-        assert result["count"] == 2
-        assert len(result["fonts"]) == 2
-        assert result["fonts"][0]["name"] == "DejaVuSans.ttf"
-        assert len(result["directories"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_draft_list_fonts_empty(self, register_tools, mock_bridge):
-        """draft_list_fonts should handle no fonts found."""
-        mock_bridge.execute_python = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result={
+                2,
+                2,
+                id="fonts_found",
+            ),
+            pytest.param(
+                {
                     "fonts": [],
                     "count": 0,
                     "directories": [],
                 },
+                0,
+                0,
+                id="no_fonts",
+            ),
+        ],
+    )
+    async def test_draft_list_fonts(
+        self, register_tools, mock_bridge, fonts_data, expected_count, expected_dirs
+    ):
+        """draft_list_fonts should return available fonts or handle empty case."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result=fonts_data,
                 stdout="",
                 stderr="",
-                execution_time_ms=100.0,
+                execution_time_ms=150.0,
             )
         )
 
         list_fonts = register_tools["draft_list_fonts"]
         result = await list_fonts()
 
-        assert result["count"] == 0
-        assert result["fonts"] == []
+        assert result["count"] == expected_count
+        assert len(result["fonts"]) == expected_count
+        assert len(result["directories"]) == expected_dirs
+        if expected_count > 0:
+            assert result["fonts"][0]["name"] == "DejaVuSans.ttf"
 
     # =========================================================================
     # draft_shapestring_to_sketch tests

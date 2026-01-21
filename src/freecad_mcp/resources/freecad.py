@@ -1081,7 +1081,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                 },
                 "spreadsheet": {
                     "description": "Spreadsheet workbench for parametric design",
-                    "note": "All operations are wrapped in transactions for undo support",
+                    "note": "All mutating operations are wrapped in transactions for undo support",
                     "tools": [
                         {
                             "name": "spreadsheet_create",
@@ -1146,7 +1146,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                 },
                 "draft": {
                     "description": "Draft workbench - ShapeString for 3D text",
-                    "note": "All operations are wrapped in transactions for undo support",
+                    "note": "All mutating operations are wrapped in transactions for undo support",
                     "tools": [
                         {
                             "name": "draft_shapestring",

@@ -1,5 +1,13 @@
-"""Tests for spreadsheet tools module."""
+"""Unit tests for the spreadsheet tools module.
 
+This module tests the Spreadsheet workbench tools for parametric design,
+including cell operations, aliases, and CSV import/export functionality.
+All tests use mocked FreeCAD bridges to avoid requiring a running FreeCAD
+instance.
+"""
+
+from collections.abc import Awaitable, Callable
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,14 +19,31 @@ class TestSpreadsheetTools:
     """Tests for Spreadsheet workbench tools."""
 
     @pytest.fixture
-    def mock_mcp(self):
-        """Create a mock MCP server that captures tool registrations."""
-        mcp = MagicMock()
-        mcp._registered_tools = {}
+    def mock_mcp(self) -> MagicMock:
+        """Create a mock MCP server that captures tool registrations.
 
-        def tool_decorator():
-            def wrapper(func):
-                mcp._registered_tools[func.__name__] = func
+        Creates a MagicMock that simulates the FastMCP server's tool
+        registration mechanism, storing registered tools in _registered_tools.
+
+        Returns:
+            MagicMock configured with a tool() decorator that captures
+            registered tool functions.
+
+        Example:
+            mcp = mock_mcp()
+            mcp._registered_tools["tool_name"]  # Access registered tool
+        """
+        mcp = MagicMock()
+        registered_tools: dict[str, Callable[..., Awaitable[Any]]] = {}
+        mcp._registered_tools = registered_tools
+
+        def tool_decorator() -> Callable[
+            [Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]
+        ]:
+            def wrapper(
+                func: Callable[..., Awaitable[Any]],
+            ) -> Callable[..., Awaitable[Any]]:
+                registered_tools[func.__name__] = func
                 return func
 
             return wrapper
@@ -27,16 +52,46 @@ class TestSpreadsheetTools:
         return mcp
 
     @pytest.fixture
-    def mock_bridge(self):
-        """Create a mock FreeCAD bridge."""
+    def mock_bridge(self) -> AsyncMock:
+        """Create a mock FreeCAD bridge.
+
+        Creates an AsyncMock that simulates the FreeCAD bridge's
+        execute_python method for testing without a real FreeCAD instance.
+
+        Returns:
+            AsyncMock that can be configured with return values for
+            execute_python calls.
+
+        Example:
+            mock_bridge.execute_python = AsyncMock(
+                return_value=ExecutionResult(success=True, result={...})
+            )
+        """
         return AsyncMock()
 
     @pytest.fixture
-    def register_tools(self, mock_mcp, mock_bridge):
-        """Register spreadsheet tools and return the registered functions."""
+    def register_tools(
+        self, mock_mcp: MagicMock, mock_bridge: AsyncMock
+    ) -> dict[str, Callable[..., Awaitable[Any]]]:
+        """Register spreadsheet tools and return the registered functions.
+
+        Imports and calls register_spreadsheet_tools with the mock MCP
+        and bridge, returning the dictionary of registered tool functions.
+
+        Args:
+            mock_mcp: The mock MCP server fixture.
+            mock_bridge: The mock bridge fixture.
+
+        Returns:
+            Dictionary mapping tool names to their async callable functions.
+
+        Example:
+            create = register_tools["spreadsheet_create"]
+            result = await create(name="Params")
+        """
         from freecad_mcp.tools.spreadsheet import register_spreadsheet_tools
 
-        async def get_bridge():
+        async def get_bridge() -> AsyncMock:
             return mock_bridge
 
         register_spreadsheet_tools(mock_mcp, get_bridge)
@@ -116,16 +171,25 @@ class TestSpreadsheetTools:
     # =========================================================================
 
     @pytest.mark.asyncio
-    async def test_spreadsheet_set_cell_number(self, register_tools, mock_bridge):
-        """spreadsheet_set_cell should set numeric values."""
+    @pytest.mark.parametrize(
+        "cell,value,computed",
+        [
+            pytest.param("A1", 100, 100, id="numeric_value"),
+            pytest.param("A2", "=A1*2", 200, id="formula_value"),
+        ],
+    )
+    async def test_spreadsheet_set_cell(
+        self, register_tools, mock_bridge, cell, value, computed
+    ):
+        """spreadsheet_set_cell should set numeric and formula values."""
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
                     "success": True,
-                    "cell": "A1",
-                    "value": 100,
-                    "computed": 100,
+                    "cell": cell,
+                    "value": value,
+                    "computed": computed,
                 },
                 stdout="",
                 stderr="",
@@ -134,36 +198,12 @@ class TestSpreadsheetTools:
         )
 
         set_cell = register_tools["spreadsheet_set_cell"]
-        result = await set_cell(spreadsheet_name="Params", cell="A1", value=100)
+        result = await set_cell(spreadsheet_name="Params", cell=cell, value=value)
 
         assert result["success"] is True
-        assert result["cell"] == "A1"
-        assert result["value"] == 100
-
-    @pytest.mark.asyncio
-    async def test_spreadsheet_set_cell_formula(self, register_tools, mock_bridge):
-        """spreadsheet_set_cell should set formula values."""
-        mock_bridge.execute_python = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result={
-                    "success": True,
-                    "cell": "A2",
-                    "value": "=A1*2",
-                    "computed": 200,
-                },
-                stdout="",
-                stderr="",
-                execution_time_ms=10.0,
-            )
-        )
-
-        set_cell = register_tools["spreadsheet_set_cell"]
-        result = await set_cell(spreadsheet_name="Params", cell="A2", value="=A1*2")
-
-        assert result["success"] is True
-        assert result["value"] == "=A1*2"
-        assert result["computed"] == 200
+        assert result["cell"] == cell
+        assert result["value"] == value
+        assert result["computed"] == computed
 
     @pytest.mark.asyncio
     async def test_spreadsheet_set_cell_not_found(self, register_tools, mock_bridge):

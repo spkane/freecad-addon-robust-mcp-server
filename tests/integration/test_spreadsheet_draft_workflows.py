@@ -31,25 +31,79 @@ pytestmark = pytest.mark.integration
 
 
 def _unique_suffix() -> str:
-    """Generate a unique suffix using timestamp."""
+    """Generate a unique suffix using timestamp.
+
+    Creates a timestamp-based string suffix to ensure unique document
+    names across test runs.
+
+    Returns:
+        A timestamp string in YYYYMMDDHHmmss format.
+
+    Example:
+        >>> suffix = _unique_suffix()
+        >>> suffix  # e.g., "20250121143052"
+    """
     return time.strftime("%Y%m%d%H%M%S")
 
 
 @pytest.fixture(scope="module")
 def temp_dir() -> Generator[str, None, None]:
-    """Create a temporary directory for test files."""
+    """Create a temporary directory for test files.
+
+    Creates a temporary directory that persists for the entire test module
+    and is automatically cleaned up after all tests complete.
+
+    Yields:
+        Path to the temporary directory as a string.
+
+    Example:
+        def test_export(temp_dir):
+            output_path = f"{temp_dir}/output.csv"
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         yield tmpdir
 
 
 @pytest.fixture(scope="module")
 def unique_suffix() -> str:
-    """Generate a unique suffix for document names in this test session."""
+    """Generate a unique suffix for document names in this test session.
+
+    Creates a timestamp-based suffix that remains constant for all tests
+    in the module, ensuring document names are unique but consistent
+    within a test session.
+
+    Returns:
+        A timestamp string in YYYYMMDDHHmmss format.
+
+    Example:
+        def test_create_doc(unique_suffix):
+            doc_name = f"TestDoc_{unique_suffix}"
+    """
     return _unique_suffix()
 
 
 def execute_code(proxy: xmlrpc.client.ServerProxy, code: str) -> dict[str, Any]:
-    """Execute Python code via the MCP bridge and return the result."""
+    """Execute Python code via the MCP bridge and return the result.
+
+    Sends Python code to FreeCAD for execution via the XML-RPC bridge
+    and validates that execution was successful.
+
+    Args:
+        proxy: The XML-RPC server proxy connected to FreeCAD.
+        code: Python code string to execute in FreeCAD's context.
+
+    Returns:
+        Dictionary containing the execution result with at least:
+            - success: Boolean indicating execution succeeded
+            - result: The value assigned to _result_ in the code
+
+    Raises:
+        AssertionError: If execution fails (result["success"] is False).
+
+    Example:
+        result = execute_code(proxy, "_result_ = {'version': 1}")
+        assert result["result"]["version"] == 1
+    """
     result: dict[str, Any] = proxy.execute(code)  # type: ignore[assignment]
     assert result.get("success"), f"Execution failed: {result.get('error_traceback')}"
     return result

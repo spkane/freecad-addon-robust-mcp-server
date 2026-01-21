@@ -38,6 +38,11 @@ def register_spreadsheet_tools(
                 - label: Spreadsheet label
                 - type_id: Object type
 
+        Raises:
+            ValueError: If the bridge fails to create the spreadsheet.
+            ValueError: If a spreadsheet with the same name already exists
+                (FreeCAD will auto-rename).
+
         Example:
             Create a spreadsheet for parameters::
 
@@ -576,10 +581,12 @@ def parse_cell(cell_str):
     if not match:
         raise ValueError(f"Invalid cell address: {{cell_str}}")
     col_str, row_str = match.groups()
-    # Convert column letters to number (A=0, B=1, etc)
+    # Convert column letters to number (A=0, Z=25, AA=26, etc.)
+    # Use 1-based indexing per position, then convert to 0-based
     col = 0
     for c in col_str:
-        col = col * 26 + (ord(c) - ord('A'))
+        col = col * 26 + (ord(c) - ord('A') + 1)
+    col = col - 1  # Convert to 0-based index
     row = int(row_str)
     return col, row
 
@@ -674,9 +681,12 @@ match = re.match(r'^([A-Z]+)([0-9]+)$', start_cell)
 if not match:
     raise ValueError(f"Invalid cell address: {{start_cell}}")
 col_str, row_str = match.groups()
+# Convert column letters to number (A=0, Z=25, AA=26, etc.)
+# Use 1-based indexing per position, then convert to 0-based
 start_col = 0
 for c in col_str:
-    start_col = start_col * 26 + (ord(c) - ord('A'))
+    start_col = start_col * 26 + (ord(c) - ord('A') + 1)
+start_col = start_col - 1  # Convert to 0-based index
 start_row = int(row_str)
 
 def col_to_str(col):
@@ -732,6 +742,8 @@ except Exception:
         spreadsheet_name: str,
         file_path: str,
         delimiter: str = ",",
+        max_row_limit: int = 1000,
+        max_col_limit: int = 52,
         doc_name: str | None = None,
     ) -> dict[str, Any]:
         """Export spreadsheet data to a CSV file.
@@ -740,6 +752,8 @@ except Exception:
             spreadsheet_name: Name of the spreadsheet object.
             file_path: Path to write the CSV file.
             delimiter: CSV delimiter character. Defaults to ",".
+            max_row_limit: Maximum rows to scan for data. Defaults to 1000.
+            max_col_limit: Maximum columns to scan for data. Defaults to 52 (AZ).
             doc_name: Document containing the spreadsheet. Uses active if None.
 
         Returns:
@@ -747,6 +761,13 @@ except Exception:
                 - success: Whether the operation succeeded
                 - file_path: Path where file was written
                 - rows_exported: Number of rows exported
+                - cols_exported: Number of columns exported
+                - truncated: True if data exists beyond the scan limits
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If export fails.
 
         Example:
             Export spreadsheet to CSV::
@@ -768,20 +789,25 @@ if sheet is None:
 
 file_path = {file_path!r}
 delimiter = {delimiter!r}
+max_row_limit = {max_row_limit!r}
+max_col_limit = {max_col_limit!r}
 
-# Get used range - find max row and column with data
+def col_to_str(col):
+    result = ""
+    while col >= 0:
+        result = chr(ord('A') + col % 26) + result
+        col = col // 26 - 1
+    return result
+
+# Get used range - find max row and column with data within limits
 max_row = 0
 max_col = 0
+truncated = False
 
-# Check a reasonable range for data
-for col in range(26 * 2):  # Up to BZ
-    for row in range(1, 1001):  # Up to row 1000
-        col_str = ""
-        c = col
-        while c >= 0:
-            col_str = chr(ord('A') + c % 26) + col_str
-            c = c // 26 - 1
-        cell_addr = col_str + str(row)
+# Scan within the configured limits
+for col in range(max_col_limit):
+    for row in range(1, max_row_limit + 1):
+        cell_addr = col_to_str(col) + str(row)
         try:
             val = sheet.get(cell_addr)
             if val is not None:
@@ -790,21 +816,41 @@ for col in range(26 * 2):  # Up to BZ
         except Exception:
             pass
 
+# Check if data exists beyond limits (probe one row/column past)
+if max_row > 0 or max_col > 0:
+    # Check row beyond limit
+    for col in range(max_col + 1):
+        cell_addr = col_to_str(col) + str(max_row_limit + 1)
+        try:
+            val = sheet.get(cell_addr)
+            if val is not None:
+                truncated = True
+                break
+        except Exception:
+            pass
+
+    # Check column beyond limit
+    if not truncated:
+        for row in range(1, max_row + 1):
+            cell_addr = col_to_str(max_col_limit) + str(row)
+            try:
+                val = sheet.get(cell_addr)
+                if val is not None:
+                    truncated = True
+                    break
+            except Exception:
+                pass
+
 if max_row == 0:
     # Empty spreadsheet
     _result_ = {{
         "success": True,
         "file_path": file_path,
         "rows_exported": 0,
+        "cols_exported": 0,
+        "truncated": False,
     }}
 else:
-    def col_to_str(col):
-        result = ""
-        while col >= 0:
-            result = chr(ord('A') + col % 26) + result
-            col = col // 26 - 1
-        return result
-
     with open(file_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f, delimiter=delimiter)
         for row in range(1, max_row + 1):
@@ -822,6 +868,8 @@ else:
         "success": True,
         "file_path": file_path,
         "rows_exported": max_row,
+        "cols_exported": max_col + 1,
+        "truncated": truncated,
     }}
 """
         result = await bridge.execute_python(code)

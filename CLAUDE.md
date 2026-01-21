@@ -1973,18 +1973,18 @@ The MCP server provides a `freecad://capabilities` resource that returns a compl
 
 ### Spreadsheet Tools (Parametric Design)
 
-| Tool                        | Description                                             |
-| --------------------------- | ------------------------------------------------------- |
-| `spreadsheet_create`        | Create a new Spreadsheet object for parametric design.  |
-| `spreadsheet_set_cell`      | Set cell value (number, string, or formula like =A1*2). |
-| `spreadsheet_get_cell`      | Get cell value and computed result.                     |
-| `spreadsheet_set_alias`     | Set alias for cell (e.g., "Length") for expressions.    |
-| `spreadsheet_get_aliases`   | Get all aliases defined in a spreadsheet.               |
-| `spreadsheet_clear_cell`    | Clear a cell content and alias.                         |
-| `spreadsheet_bind_property` | Bind object property to spreadsheet cell via expression.|
-| `spreadsheet_get_cell_range`| Get values from a range of cells.                       |
-| `spreadsheet_import_csv`    | Import data from CSV file into spreadsheet.             |
-| `spreadsheet_export_csv`    | Export spreadsheet data to CSV file.                    |
+| Tool                         | Description                                              |
+| ---------------------------- | -------------------------------------------------------- |
+| `spreadsheet_create`         | Create a new Spreadsheet object for parametric design.   |
+| `spreadsheet_set_cell`       | Set cell value (number, string, or formula like =A1*2).  |
+| `spreadsheet_get_cell`       | Get cell value and computed result.                      |
+| `spreadsheet_set_alias`      | Set alias for cell (e.g., "Length") for expressions.     |
+| `spreadsheet_get_aliases`    | Get all aliases defined in a spreadsheet.                |
+| `spreadsheet_clear_cell`     | Clear a cell content and alias.                          |
+| `spreadsheet_bind_property`  | Bind object property to spreadsheet cell via expression. |
+| `spreadsheet_get_cell_range` | Get values from a range of cells.                        |
+| `spreadsheet_import_csv`     | Import data from CSV file into spreadsheet.              |
+| `spreadsheet_export_csv`     | Export spreadsheet data to CSV file.                     |
 
 ### Draft Tools (3D Text/ShapeString)
 

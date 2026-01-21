@@ -292,18 +292,18 @@ Constraints define relationships between sketch geometry elements.
 The Spreadsheet workbench enables parametric design by storing values in cells
 that can drive model dimensions through expressions.
 
-| Tool                        | Description                                   |
-| --------------------------- | --------------------------------------------- |
-| `spreadsheet_create`        | Create a new Spreadsheet object               |
-| `spreadsheet_set_cell`      | Set cell value (number, string, or formula)   |
-| `spreadsheet_get_cell`      | Get cell value and computed result            |
-| `spreadsheet_set_alias`     | Set alias for parametric references           |
-| `spreadsheet_get_aliases`   | Get all aliases in a spreadsheet              |
-| `spreadsheet_clear_cell`    | Clear a cell and its alias                    |
-| `spreadsheet_bind_property` | Bind object property to spreadsheet cell      |
-| `spreadsheet_get_cell_range`| Get values from a range of cells              |
-| `spreadsheet_import_csv`    | Import CSV data into spreadsheet              |
-| `spreadsheet_export_csv`    | Export spreadsheet to CSV file                |
+| Tool                         | Description                                   |
+| ---------------------------- | --------------------------------------------- |
+| `spreadsheet_create`         | Create a new Spreadsheet object               |
+| `spreadsheet_set_cell`       | Set cell value (number, string, or formula)   |
+| `spreadsheet_get_cell`       | Get cell value and computed result            |
+| `spreadsheet_set_alias`      | Set alias for parametric references           |
+| `spreadsheet_get_aliases`    | Get all aliases in a spreadsheet              |
+| `spreadsheet_clear_cell`     | Clear a cell and its alias                    |
+| `spreadsheet_bind_property`  | Bind object property to spreadsheet cell      |
+| `spreadsheet_get_cell_range` | Get values from a range of cells              |
+| `spreadsheet_import_csv`     | Import CSV data into spreadsheet              |
+| `spreadsheet_export_csv`     | Export spreadsheet to CSV file                |
 
 !!! tip "Parametric Design Workflow"
     1. Create a spreadsheet with `spreadsheet_create`
