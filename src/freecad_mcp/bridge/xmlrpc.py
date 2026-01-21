@@ -557,14 +557,21 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-obj = doc.addObject({type_id!r}, {name!r} or "")
+# Wrap in transaction for undo support
+doc.openTransaction("Create Object")
+try:
+    obj = doc.addObject({type_id!r}, {name!r} or "")
 
-# Set properties
-for prop_name, prop_val in {properties!r}.items():
-    if hasattr(obj, prop_name):
-        setattr(obj, prop_name, prop_val)
+    # Set properties
+    for prop_name, prop_val in {properties!r}.items():
+        if hasattr(obj, prop_name):
+            setattr(obj, prop_name, prop_val)
 
-doc.recompute()
+    doc.recompute()
+    doc.commitTransaction()
+except Exception:
+    doc.abortTransaction()
+    raise
 
 _result_ = {{
     "name": obj.Name,
@@ -599,12 +606,19 @@ obj = doc.getObject({obj_name!r})
 if obj is None:
     raise ValueError(f"Object not found: {obj_name!r}")
 
-# Set properties
-for prop_name, prop_val in {properties!r}.items():
-    if hasattr(obj, prop_name):
-        setattr(obj, prop_name, prop_val)
+# Wrap in transaction for undo support
+doc.openTransaction("Edit Object")
+try:
+    # Set properties
+    for prop_name, prop_val in {properties!r}.items():
+        if hasattr(obj, prop_name):
+            setattr(obj, prop_name, prop_val)
 
-doc.recompute()
+    doc.recompute()
+    doc.commitTransaction()
+except Exception:
+    doc.abortTransaction()
+    raise
 
 _result_ = {{
     "name": obj.Name,
@@ -638,7 +652,15 @@ obj = doc.getObject({obj_name!r})
 if obj is None:
     raise ValueError(f"Object not found: {obj_name!r}")
 
-doc.removeObject({obj_name!r})
+# Wrap in transaction for undo support
+doc.openTransaction("Delete Object")
+try:
+    doc.removeObject({obj_name!r})
+    doc.commitTransaction()
+except Exception:
+    doc.abortTransaction()
+    raise
+
 _result_ = True
 """
         result = await self.execute_python(code)
@@ -678,7 +700,9 @@ if view is None:
     raise ValueError("No active view")
 
 # Check if this is a 3D view (not TechDraw, Spreadsheet, etc.)
-view_type = view.__class__.__name__
+# Note: Use type() instead of __class__ because FreeCAD's View3DInventor
+# has a broken __class__ attribute that returns a dict of methods.
+view_type = type(view).__name__
 if view_type not in ["View3DInventor", "View3DInventorPy"]:
     raise ValueError(f"Cannot capture screenshot from {{view_type}} view")
 

@@ -117,6 +117,77 @@ If installed from source with mise/uv:
 
 ---
 
+## AI Guidance Auto-Loading (Recommended)
+
+The FreeCAD MCP server provides built-in guidance resources and prompts to help AI assistants
+work effectively with FreeCAD. For the best experience, configure your AI client to automatically
+load this guidance when connecting.
+
+### Available Guidance
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| `freecad-startup` | Prompt | Essential startup checklist and quick reference (recommended for auto-load) |
+| `freecad://best-practices` | Resource | Comprehensive guidance on patterns, pitfalls, and workflows |
+| `freecad-guidance` | Prompt | Task-specific guidance (partdesign, sketching, boolean, etc.) |
+
+### Claude Desktop / Claude Code Configuration
+
+Add the `customInstructions` field to auto-load guidance on connection:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "freecad-mcp",
+      "env": {
+        "FREECAD_MODE": "xmlrpc"
+      },
+      "customInstructions": "When connecting to FreeCAD, first invoke the 'freecad-startup' prompt to get essential guidance. For complex tasks, also read the 'freecad://best-practices' resource."
+    }
+  }
+}
+```
+
+### Alternative: System Prompt Addition
+
+If your MCP client doesn't support `customInstructions`, add this to your system prompt or initial message:
+
+```text
+Before working with FreeCAD:
+1. Invoke the 'freecad-startup' prompt for essential guidance
+2. For complex tasks, read the 'freecad://best-practices' resource
+3. For specific tasks, use 'freecad-guidance' prompt with task_type parameter
+```
+
+### Manual Invocation
+
+If auto-loading isn't configured, you can always ask the AI to:
+
+- "Run the freecad-startup prompt"
+- "Read the freecad://best-practices resource"
+- "Get guidance for PartDesign" (uses freecad-guidance with task_type="partdesign")
+
+### What the Guidance Provides
+
+**freecad-startup prompt:**
+
+- Session initialization checklist
+- Critical rules for parametric parts
+- Error prevention patterns
+- Quick reference table for common tasks
+- GUI vs headless mode considerations
+
+**freecad://best-practices resource:**
+
+- Version compatibility notes (FreeCAD 1.x API changes)
+- Validation-first workflow patterns
+- Common pitfalls and solutions
+- Recommended workflows for different tasks
+- Error recovery strategies
+
+---
+
 ## GUI vs Headless Mode
 
 FreeCAD can run in two modes, and the Robust MCP Server works with both:

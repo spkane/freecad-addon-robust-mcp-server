@@ -10,6 +10,7 @@ Tools are organized by category:
 - export: Export functionality tools
 - macros: Macro management tools
 - view: View and screenshot tools
+- validation: Object and document validation tools
 """
 
 from collections.abc import Awaitable, Callable
@@ -21,6 +22,7 @@ from freecad_mcp.tools.export import register_export_tools
 from freecad_mcp.tools.macros import register_macro_tools
 from freecad_mcp.tools.objects import register_object_tools
 from freecad_mcp.tools.partdesign import register_partdesign_tools
+from freecad_mcp.tools.validation import register_validation_tools
 from freecad_mcp.tools.view import register_view_tools
 
 __all__ = [
@@ -31,6 +33,7 @@ __all__ = [
     "register_macro_tools",
     "register_object_tools",
     "register_partdesign_tools",
+    "register_validation_tools",
     "register_view_tools",
 ]
 
@@ -49,3 +52,4 @@ def register_all_tools(mcp: Any, get_bridge_func: Callable[[], Awaitable[Any]]) 
     register_export_tools(mcp, get_bridge_func)
     register_macro_tools(mcp, get_bridge_func)
     register_view_tools(mcp, get_bridge_func)
+    register_validation_tools(mcp, get_bridge_func)

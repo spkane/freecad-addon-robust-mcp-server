@@ -23,6 +23,457 @@ def register_prompts(mcp: Any, get_bridge: Any) -> None:  # noqa: ARG001
             for interface consistency with other register functions).
     """
     # =========================================================================
+    # Session Initialization Prompt (RECOMMENDED: Auto-load on connection)
+    # =========================================================================
+
+    @mcp.prompt()
+    async def freecad_startup() -> str:
+        """Essential startup guidance for AI assistants.
+
+        **RECOMMENDED**: Configure your MCP client to automatically invoke
+        this prompt when connecting to the FreeCAD MCP server. This provides
+        critical context for reliable FreeCAD operations.
+
+        This prompt provides:
+        - Session initialization checklist
+        - Critical patterns to follow
+        - Version compatibility notes
+        - Quick reference for common operations
+
+        Returns:
+            Essential startup guidance for FreeCAD MCP sessions.
+
+        Example:
+            Invoke via MCP prompt mechanism::
+
+                # In an MCP client
+                guidance = await mcp.get_prompt("freecad_startup")
+                print(guidance)  # Displays session initialization checklist
+        """
+        return """# FreeCAD MCP Session Initialized
+
+## IMPORTANT: Read Before Starting
+
+You are connected to the FreeCAD Robust MCP Server. Follow these guidelines for reliable operations.
+
+---
+
+## Session Checklist (Do These First)
+
+1. **Verify connection**: Call `get_connection_status()` to confirm FreeCAD is responding
+2. **Check capabilities**: Read `freecad://best-practices` resource for detailed guidance
+3. **Check GUI mode**: Call `get_freecad_version()` - note `gui_available` field
+   - If `false`: Screenshot and visibility tools won't work (this is OK for modeling)
+
+---
+
+## Critical Rules
+
+### Transaction Support (Undo/Redo)
+**ALL tool operations are wrapped in transactions** - every change can be undone:
+- Use `undo()` to revert any operation
+- Use `redo()` to redo after undo
+- Use `get_undo_redo_status()` to see available undo steps
+
+### For Parametric Parts (PartDesign)
+```
+1. ALWAYS create Body first: create_partdesign_body(name="Body")
+2. Create sketches ON the body: create_sketch(body_name="Body", plane="XY_Plane")
+3. Extrude with: pad_sketch(sketch_name="...", length=...)
+4. VALIDATE after each feature: validate_object(object_name="...")
+```
+
+### For Error Prevention
+- **All operations support undo** - simply call `undo()` if something goes wrong
+- **Use safe_execute()** for risky operations - auto-undoes on failure
+- **Use validate_document()** to check all objects after complex operations
+
+### Version Compatibility
+The MCP tools automatically handle FreeCAD version differences (1.0 vs older).
+No special handling needed on your part.
+
+---
+
+## Quick Reference
+
+| Task | Tool(s) |
+|------|---------|
+| Create parametric part | `create_partdesign_body` → `create_sketch` → `pad_sketch` |
+| Simple primitive | `create_box`, `create_cylinder`, `create_sphere` |
+| Combine shapes | `boolean_operation(operation="fuse/cut/common")` or `fuse_all` |
+| Add sketch constraints | `constrain_horizontal`, `constrain_distance`, etc. |
+| Check for errors | `validate_object` or `validate_document` |
+| Debug issues | `get_console_output(lines=50)` |
+| Undo any operation | `undo()` (all operations are undoable) |
+| Safe execution | `safe_execute(code="...", validate_after=True)` |
+
+---
+
+## GUI-Only Tools (Skip in Headless Mode)
+
+These require `gui_available=true`:
+- `get_screenshot()`, `set_object_visibility()`, `set_object_color()`
+- Camera controls: `zoom_in()`, `zoom_out()`, `set_view_angle()`
+
+All other tools work in both GUI and headless modes.
+
+---
+
+For detailed guidance on specific tasks, use the `freecad-guidance` prompt with:
+- `task_type="partdesign"` - Parametric modeling workflow
+- `task_type="sketching"` - 2D sketch creation
+- `task_type="boolean"` - Boolean operations
+- `task_type="debugging"` - Troubleshooting
+- `task_type="validation"` - Checking model health
+
+Or read the full `freecad://best-practices` resource for comprehensive documentation.
+"""
+
+    # =========================================================================
+    # AI Guidance Prompts
+    # =========================================================================
+
+    @mcp.prompt()
+    async def freecad_guidance(task_type: str = "general") -> str:
+        """Get AI guidance for specific FreeCAD task types.
+
+        This prompt provides targeted best practices and reminders
+        for different types of FreeCAD operations. Use at the start
+        of a task to get relevant guidance.
+
+        Args:
+            task_type: Type of task - one of:
+                - "general": Overall best practices
+                - "partdesign": Parametric part creation
+                - "sketching": 2D sketch creation
+                - "boolean": Boolean operations
+                - "export": File export operations
+                - "debugging": Troubleshooting issues
+                - "validation": Checking model health
+
+        Returns:
+            Targeted guidance for the task type.
+
+        Example:
+            Get PartDesign workflow guidance::
+
+                guidance = await freecad_guidance(task_type="partdesign")
+        """
+        guidance = {
+            "general": """# FreeCAD AI Assistant Guidance
+
+## Before Starting Any Task
+1. **Check connection**: Use `get_connection_status()` to verify FreeCAD connection
+2. **Check GUI**: Use `get_freecad_version()` - GUI features only work if gui_available=true
+3. **Check document**: Use `get_active_document()` or create one with `create_document()`
+
+## Key Principles
+- **All Operations are Undoable**: Every tool operation is wrapped in a transaction
+- **Validate Early**: After any geometry creation, use `validate_object()` to check validity
+- **Use safe_execute()**: For risky operations with automatic rollback on failure
+- **Check Version Compatibility**: FreeCAD 1.x changed some APIs (see best-practices resource)
+
+## Undo/Redo Support
+All tool operations support undo:
+- `undo()` - Reverts the last operation
+- `redo()` - Redoes after undo
+- `get_undo_redo_status()` - Shows available undo/redo steps
+- `undo_if_invalid()` - Checks and reverts if geometry is invalid
+
+## Error Recovery
+- If something breaks: `undo()` reverts the last operation
+- For batch issues: `undo_if_invalid()` checks and reverts if needed
+- Always check `get_console_output()` for error messages
+
+## GUI vs Headless
+These tools require GUI mode (fail gracefully in headless):
+- `get_screenshot()`, `set_object_visibility()`, `set_object_color()`
+- Camera controls: `zoom_in()`, `zoom_out()`, `set_camera_position()`
+All other tools work in both modes.""",
+            "partdesign": """# PartDesign Workflow Guidance
+
+## Undo Support
+All PartDesign operations are wrapped in transactions - use `undo()` to revert any operation.
+
+## Critical Rules
+1. **Always create a Body first** - PartDesign features MUST be inside a Body
+2. **Use body.newObject()** - Don't use doc.addObject() for PartDesign objects
+3. **Attach sketches to planes** - XY_Plane, XZ_Plane, YZ_Plane, or existing faces
+
+## Correct Workflow
+```
+1. create_document(name="MyPart")
+2. create_partdesign_body(name="Body")
+3. create_sketch(body_name="Body", plane="XY_Plane", name="BaseSketch")
+4. add_sketch_rectangle(sketch_name="BaseSketch", x=-10, y=-10, width=20, height=20)
+5. pad_sketch(sketch_name="BaseSketch", length=15)
+6. validate_object(object_name="Pad")  # Check the result
+```
+
+## Version Compatibility
+FreeCAD 1.x changed sketch attachment:
+- Old: `sketch.Support = (plane, [''])`
+- New: `sketch.AttachmentSupport = [(plane, '')]`
+The MCP tools handle this automatically.
+
+## Adding Features
+- **Additive**: pad_sketch, revolution_sketch, loft_sketches, sweep_sketch
+- **Subtractive**: pocket_sketch, groove_sketch, create_hole, subtractive_loft, subtractive_pipe
+- **Modifiers**: fillet_edges, chamfer_edges, draft_feature, thickness_feature
+- **Patterns**: linear_pattern, polar_pattern, mirrored_feature
+- **Datums**: create_datum_plane, create_datum_line, create_datum_point
+
+## Sketch Constraints
+Use constraints to fully define sketches:
+- Geometric: constrain_horizontal, constrain_vertical, constrain_parallel, constrain_perpendicular
+- Dimensional: constrain_distance, constrain_radius, constrain_angle
+- Special: constrain_coincident, constrain_tangent, constrain_equal, constrain_fix
+
+## Common Mistakes
+- Creating sketch without a body (will fail on pad)
+- Using wrong plane name (must be exact: "XY_Plane" not "XY")
+- Not closing sketch contour (pad requires closed profile)
+- Not constraining sketches (use get_sketch_info to check degrees of freedom)""",
+            "sketching": """# Sketch Creation Guidance
+
+## Undo Support
+All sketch operations are wrapped in transactions - use `undo()` to revert any operation.
+
+## Basic Workflow
+1. Create sketch attached to plane or face
+2. Add geometry (rectangle, circle, line, arc, point, ellipse, polygon, slot, bspline)
+3. Add constraints to fully define the geometry
+4. Ensure sketch is closed for Pad/Pocket operations
+
+## Available Sketch Geometry Tools
+- `add_sketch_rectangle(sketch_name, x, y, width, height)`
+- `add_sketch_circle(sketch_name, center_x, center_y, radius)`
+- `add_sketch_line(sketch_name, x1, y1, x2, y2)`
+- `add_sketch_arc(sketch_name, center_x, center_y, radius, start_angle, end_angle)`
+- `add_sketch_point(sketch_name, x, y)` - for hole placement
+- `add_sketch_ellipse(sketch_name, center_x, center_y, major_radius, minor_radius)`
+- `add_sketch_polygon(sketch_name, center_x, center_y, sides, radius)`
+- `add_sketch_slot(sketch_name, x1, y1, x2, y2, width)` - rounded rectangle
+- `add_sketch_bspline(sketch_name, points)` - smooth curve through points
+
+## Constraint Tools
+- `constrain_horizontal(sketch_name, geometry_index)` - make line horizontal
+- `constrain_vertical(sketch_name, geometry_index)` - make line vertical
+- `constrain_distance(sketch_name, value, geo1, point1, ...)` - set distance
+- `constrain_radius(sketch_name, geometry_index, value)` - set radius
+- `constrain_coincident(sketch_name, geo1, point1, geo2, point2)` - join points
+- `constrain_parallel(sketch_name, geo1, geo2)` - make lines parallel
+- `constrain_perpendicular(sketch_name, geo1, geo2)` - make lines perpendicular
+- `get_sketch_info(sketch_name)` - check degrees of freedom
+
+## Coordinate System
+- X, Y coordinates are in the sketch plane
+- Origin (0, 0) is at plane center
+- Use negative values for left/down from center
+
+## Closed Profiles
+For Pad/Pocket operations, sketches must be closed:
+- Rectangle, Circle, Ellipse, Polygon: automatically closed
+- Lines/Arcs: must connect to form closed loop
+
+## Tips
+- Start simple: rectangle or circle first
+- Build complex shapes with multiple sketch elements
+- Use `add_sketch_point` for hole features (then `create_hole`)
+- Use `get_sketch_info` to check if fully constrained (0 DOF)
+- Use `toggle_construction` for reference geometry""",
+            "boolean": """# Boolean Operations Guidance
+
+## Available Operations
+- **fuse** (union): Combines shapes into one
+- **cut** (difference): Removes second shape from first
+- **common** (intersection): Keeps only overlapping region
+
+## Tool Usage
+```
+boolean_operation(
+    operation="fuse",  # or "cut" or "common"
+    object1="Box",     # Base shape
+    object2="Cylinder", # Tool shape
+    result_name="FusedShape"  # Optional result name
+)
+```
+
+## Prerequisites
+- Both shapes must be **solids** (not curves, meshes, or compounds)
+- Shapes should **overlap** for meaningful results
+- Both objects must have **valid geometry**
+
+## Validation Pattern
+```
+# Before boolean
+validate_object(object_name="Box")
+validate_object(object_name="Cylinder")
+
+# Perform operation
+boolean_operation(operation="fuse", object1="Box", object2="Cylinder")
+
+# After boolean
+validate_object(object_name="Fused")  # Check result is valid
+```
+
+## Common Issues
+- **Empty result**: Shapes don't overlap - check positions
+- **Invalid result**: Source shape has bad geometry
+- **Fails completely**: Wrong shape type (mesh vs solid)
+
+## Recovery
+If boolean fails:
+1. `undo()` to revert
+2. Check source shapes with `validate_object()`
+3. Ensure shapes actually intersect
+4. Try simplifying geometry""",
+            "export": """# Export Operations Guidance
+
+## Available Formats
+| Format | Tool | Best For |
+|--------|------|----------|
+| STEP | `export_step()` | CAD interchange, precise geometry |
+| STL | `export_stl()` | 3D printing (mesh format) |
+| 3MF | `export_3mf()` | 3D printing with color/material |
+| OBJ | `export_obj()` | Graphics, rendering, games |
+| IGES | `export_iges()` | Legacy CAD systems |
+
+## Pre-Export Checklist
+1. `validate_document()` - Ensure all objects are valid
+2. `list_objects()` - Verify correct objects will export
+3. `recompute_document()` - Force update before export
+
+## Export Tips
+- Specify `object_names` list to export specific objects
+- Omit `object_names` to export all visible objects
+- Use absolute paths for `file_path`
+
+## Import Formats
+- `import_step()` - Preserves precise CAD geometry
+- `import_stl()` - Imports as mesh (may need conversion for CAD ops)
+
+## Common Issues
+- **Export fails**: Object has invalid shape
+- **Missing objects**: Object not visible or wrong document
+- **Wrong file**: Path error or permission issue""",
+            "debugging": """# Debugging Guidance
+
+## First Steps
+1. `get_console_output(lines=50)` - Check for error messages
+2. `validate_document()` - Find all invalid objects
+3. `list_objects()` - See document structure
+
+## Object Investigation
+```
+inspect_object(object_name="ProblemObject")
+```
+Check these fields:
+- `state`: Should be empty; "Error" or "Invalid" indicates problems
+- `is_valid` in shape_info: Geometry validity
+- `type_id`: Ensure correct object type
+
+## Common Problems
+
+### "Object not found"
+- Wrong name (case-sensitive)
+- Wrong document (check `get_active_document()`)
+- Object was deleted
+
+### Invalid Shape
+- Geometry computation failed
+- Check parent objects (sketch, body)
+- `undo()` and try simpler approach
+
+### Recompute Errors
+- Circular dependencies
+- Invalid parent objects
+- `recompute_document()` after fixing
+
+## Recovery Steps
+1. `undo()` - Revert last operation
+2. `validate_document()` - Check what's broken
+3. Fix or delete problem objects
+4. `recompute_document()` - Refresh everything
+
+## Using safe_execute
+For risky operations:
+```
+safe_execute(
+    code="... risky Python code ...",
+    validate_after=True,
+    auto_undo_on_failure=True
+)
+```
+Automatically reverts if validation fails.""",
+            "validation": """# Validation Guidance
+
+## Transaction Support
+**All MCP tool operations are wrapped in transactions** - this means:
+- Every operation can be undone with `undo()`
+- Use `get_undo_redo_status()` to see available undo steps
+- Transaction names appear in FreeCAD's Edit > Undo menu
+
+## Validation Tools
+
+### validate_object(object_name, doc_name)
+Checks a single object:
+- `is_valid`: Shape geometry is valid
+- `has_shape`: Object has geometry
+- `state`: Error flags from FreeCAD
+- `error_messages`: Human-readable errors
+
+### validate_document(doc_name)
+Checks all objects in document:
+- `overall_valid`: True if ALL objects valid
+- `invalid_count`: Number of problem objects
+- `invalid_objects`: List of problem object names
+- `objects`: Detailed status of each object
+
+### undo_if_invalid(doc_name)
+Checks document and auto-undoes if problems:
+- Runs validation
+- If invalid objects found, calls undo()
+- Returns both validation and undo results
+
+### safe_execute(code, validate_after, auto_undo_on_failure)
+Protected code execution:
+- Wraps code in transaction
+- Validates result if validate_after=True
+- Auto-reverts if validation fails and auto_undo_on_failure=True
+
+## Validation Pattern
+After any operation:
+```
+# Option 1: Simple undo if something goes wrong
+create_box(length=10, width=10, height=10)
+# Oops, wrong size
+undo()  # Reverts the box creation
+
+# Option 2: Manual validation
+result = validate_object(object_name="NewFeature")
+if not result["is_valid"]:
+    undo()
+    # Try different approach
+
+# Option 3: Automatic protection
+safe_execute(
+    code="...",
+    validate_after=True,
+    auto_undo_on_failure=True
+)
+```
+
+## What Gets Checked
+- Shape.isValid() - Geometry integrity
+- Object.State - FreeCAD error flags
+- Shape existence - Object has geometry
+- Recompute state - Object up to date""",
+        }
+
+        return guidance.get(task_type, guidance["general"])
+
+    # =========================================================================
     # Design Workflow Prompts
     # =========================================================================
 
