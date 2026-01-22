@@ -495,31 +495,20 @@ try:
     if not wires:
         raise ValueError("ShapeString has no wires")
 
-    # Create faces from wires
-    # For text, outer wires are character boundaries, inner wires are holes
-    faces = []
-    for wire in wires:
-        try:
-            if wire.isClosed():
-                face = Part.Face(wire)
-                faces.append(face)
-        except Exception:
-            pass
+    # Filter to closed wires only
+    closed_wires = [w for w in wires if w.isClosed()]
+    if not closed_wires:
+        raise ValueError("ShapeString has no closed wires")
 
-    if not faces:
+    # Use FaceMakerBullseye to properly handle nested wires (outer + holes)
+    # This correctly creates faces where inner wires become holes in outer wires
+    try:
+        result_shape = Part.makeFace(closed_wires, "Part::FaceMakerBullseye")
+    except Exception as e:
+        raise ValueError(f"Failed to create face from wires: {{e}}")
+
+    if not result_shape.Faces:
         raise ValueError("Could not create any faces from ShapeString")
-
-    # Combine faces into a compound or shell
-    if len(faces) == 1:
-        result_shape = faces[0]
-    else:
-        # Try to fuse faces, or make compound if that fails
-        try:
-            result_shape = faces[0]
-            for f in faces[1:]:
-                result_shape = result_shape.fuse(f)
-        except Exception:
-            result_shape = Part.Compound(faces)
 
     # Create Part::Feature to hold the face
     face_obj = doc.addObject("Part::Feature", obj_name)
@@ -714,28 +703,23 @@ try:
 
     # Convert ShapeString wires to faces
     wires = shape_string.Shape.Wires
-    faces = []
-    for wire in wires:
-        try:
-            if wire.isClosed():
-                f = Part.Face(wire)
-                faces.append(f)
-        except Exception:
-            pass
+    if not wires:
+        raise ValueError("ShapeString has no wires")
 
-    if not faces:
+    # Filter to closed wires only
+    closed_wires = [w for w in wires if w.isClosed()]
+    if not closed_wires:
+        raise ValueError("Could not create faces from text - no closed wires")
+
+    # Use FaceMakerBullseye to properly handle nested wires (outer + holes)
+    # This correctly creates faces where inner wires become holes in outer wires
+    try:
+        text_face = Part.makeFace(closed_wires, "Part::FaceMakerBullseye")
+    except Exception as e:
+        raise ValueError(f"Could not create faces from text: {{e}}")
+
+    if not text_face.Faces:
         raise ValueError("Could not create faces from text")
-
-    # Combine faces
-    if len(faces) == 1:
-        text_face = faces[0]
-    else:
-        try:
-            text_face = faces[0]
-            for f in faces[1:]:
-                text_face = text_face.fuse(f)
-        except Exception:
-            text_face = Part.Compound(faces)
 
     # Extrude the text face
     extrude_dir = face_normal * depth
@@ -867,42 +851,26 @@ try:
     if not wires:
         raise ValueError("ShapeString has no wires")
 
-    # Create faces from wires
-    faces = []
-    for wire in wires:
-        try:
-            if wire.isClosed():
-                face = Part.Face(wire)
-                faces.append(face)
-        except Exception:
-            pass
+    # Filter to closed wires only
+    closed_wires = [w for w in wires if w.isClosed()]
+    if not closed_wires:
+        raise ValueError("ShapeString has no closed wires")
 
-    if not faces:
+    # Use FaceMakerBullseye to properly handle nested wires (outer + holes)
+    # This correctly creates faces where inner wires become holes in outer wires
+    try:
+        text_face = Part.makeFace(closed_wires, "Part::FaceMakerBullseye")
+    except Exception as e:
+        raise ValueError(f"Could not create faces from ShapeString: {{e}}")
+
+    if not text_face.Faces:
         raise ValueError("Could not create any faces from ShapeString")
 
-    # Extrude faces
-    solids = []
-    for face in faces:
-        try:
-            solid = face.extrude(extrude_vec)
-            solids.append(solid)
-        except Exception:
-            pass
-
-    if not solids:
-        raise ValueError("Could not extrude any faces")
-
-    # Combine solids
-    if len(solids) == 1:
-        result_shape = solids[0]
-    else:
-        # Fuse all solids
-        result_shape = solids[0]
-        for s in solids[1:]:
-            try:
-                result_shape = result_shape.fuse(s)
-            except Exception:
-                pass
+    # Extrude the face(s) - this preserves holes properly
+    try:
+        result_shape = text_face.extrude(extrude_vec)
+    except Exception as e:
+        raise ValueError(f"Could not extrude faces: {{e}}")
 
     # Create Part::Feature to hold the result
     extruded_obj = doc.addObject("Part::Feature", obj_name)

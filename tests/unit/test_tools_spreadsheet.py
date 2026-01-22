@@ -32,6 +32,9 @@ class TestSpreadsheetTools:
             MagicMock configured with a tool() decorator that captures
             registered tool functions.
 
+        Raises:
+            None.
+
         Example:
             mcp = mock_mcp()
             mcp._registered_tools["tool_name"]  # Access registered tool
@@ -65,6 +68,9 @@ class TestSpreadsheetTools:
             AsyncMock that can be configured with return values for
             execute_python calls.
 
+        Raises:
+            None.
+
         Example:
             mock_bridge.execute_python = AsyncMock(
                 return_value=ExecutionResult(success=True, result={...})
@@ -87,6 +93,9 @@ class TestSpreadsheetTools:
 
         Returns:
             Dictionary mapping tool names to their async callable functions.
+
+        Raises:
+            None.
 
         Example:
             create = register_tools["spreadsheet_create"]
@@ -118,6 +127,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -159,6 +171,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -258,6 +273,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await set_cell(spreadsheet_name="Params", cell="A1", value=100)
             assert result["computed"] == 100
@@ -344,6 +362,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await get_cell(spreadsheet_name="Params", cell="A1")
             assert result["alias"] == "Length"
@@ -384,6 +405,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -430,6 +454,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -518,6 +545,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await get_aliases(spreadsheet_name="Params")
             assert result["aliases"]["Length"] == "A1"
@@ -557,6 +587,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -603,6 +636,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await clear_cell(spreadsheet_name="Params", cell="A1")
             assert result["success"] is True
@@ -644,6 +680,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -745,6 +784,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await get_range(spreadsheet_name="Params", start_cell="A1", end_cell="B2")
             assert result["cells"]["A1"] == 10
@@ -794,6 +836,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await import_csv(spreadsheet_name="Data", file_path="/tmp/data.csv")
             assert result["rows_imported"] == 10
@@ -834,6 +879,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -889,6 +937,9 @@ class TestSpreadsheetTools:
         Returns:
             None.
 
+        Raises:
+            None.
+
         Example:
             result = await export_csv(spreadsheet_name="Data", file_path="/tmp/output.csv")
             assert result["rows_exported"] == 15
@@ -928,6 +979,9 @@ class TestSpreadsheetTools:
             mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:
@@ -971,6 +1025,9 @@ class TestSpreadsheetTools:
             register_tools: Dictionary of registered spreadsheet tool functions.
 
         Returns:
+            None.
+
+        Raises:
             None.
 
         Example:

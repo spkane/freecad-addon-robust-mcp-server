@@ -65,6 +65,9 @@ def _unique_suffix() -> str:
     Returns:
         A timestamp string in YYYYMMDDHHmmss format.
 
+    Raises:
+        None.
+
     Example:
         >>> suffix = _unique_suffix()
         >>> suffix  # e.g., "20250121143052"
@@ -81,6 +84,9 @@ def temp_dir() -> Generator[str, None, None]:
 
     Yields:
         Path to the temporary directory as a string.
+
+    Raises:
+        None.
 
     Example:
         def test_export(temp_dir):
@@ -100,6 +106,9 @@ def unique_suffix() -> str:
 
     Returns:
         A timestamp string in YYYYMMDDHHmmss format.
+
+    Raises:
+        None.
 
     Example:
         def test_create_doc(unique_suffix):
@@ -141,7 +150,24 @@ class TestSpreadsheetWorkflow:
     def test_create_spreadsheet_and_set_cells(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
     ) -> None:
-        """Test creating a spreadsheet and setting cell values."""
+        """Test creating a spreadsheet and setting cell values.
+
+        Verifies that a spreadsheet can be created, cell values set, and
+        aliases assigned for use in expressions.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+
+        Returns:
+            None.
+
+        Raises:
+            AssertionError: If spreadsheet operations fail.
+
+        Example:
+            Test creates a Parameters spreadsheet with Length, Width, Height.
+        """
         doc_name = f"SpreadsheetTest_{unique_suffix}"
 
         result = execute_code(
@@ -196,7 +222,24 @@ _result_ = {{
     def test_parametric_box_from_spreadsheet(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
     ) -> None:
-        """Test creating a parametric box driven by spreadsheet values."""
+        """Test creating a parametric box driven by spreadsheet values.
+
+        Verifies that a Part::Box can be linked to spreadsheet cells via
+        expressions, and that changing spreadsheet values updates the box.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+
+        Returns:
+            None.
+
+        Raises:
+            AssertionError: If parametric linking or updates fail.
+
+        Example:
+            Test creates a box linked to Params.Length, Params.Width, Params.Height.
+        """
         doc_name = f"ParametricBox_{unique_suffix}"
 
         result = execute_code(
@@ -271,7 +314,24 @@ _result_ = {{
     def test_spreadsheet_formulas(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
     ) -> None:
-        """Test spreadsheet with formulas for calculated values."""
+        """Test spreadsheet with formulas for calculated values.
+
+        Verifies that spreadsheet cells can contain formulas that reference
+        other cells, and that calculated values are correct.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+
+        Returns:
+            None.
+
+        Raises:
+            AssertionError: If formula calculation fails.
+
+        Example:
+            Test creates formulas like =B1*B2 for area calculation.
+        """
         doc_name = f"SpreadsheetFormulas_{unique_suffix}"
 
         result = execute_code(
@@ -336,7 +396,25 @@ _result_ = {{
         unique_suffix: str,
         temp_dir: str,
     ) -> None:
-        """Test using spreadsheet to drive PartDesign dimensions."""
+        """Test using spreadsheet to drive PartDesign dimensions.
+
+        Verifies that spreadsheet values can drive PartDesign sketch
+        constraints via expressions for fully parametric design.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+            temp_dir: Temporary directory for export files.
+
+        Returns:
+            None.
+
+        Raises:
+            AssertionError: If parametric PartDesign operations fail.
+
+        Example:
+            Test creates a plate with dimensions from Dimensions spreadsheet.
+        """
         doc_name = f"SpreadsheetPartDesign_{unique_suffix}"
         step_path = Path(temp_dir) / f"{doc_name}.step"
 
@@ -477,7 +555,25 @@ class TestDraftShapeStringWorkflow:
     def test_create_shapestring(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy, unique_suffix: str
     ) -> None:
-        """Test creating a basic ShapeString."""
+        """Test creating a basic ShapeString.
+
+        Verifies that Draft.make_shapestring creates valid wire geometry
+        for text that can be used in further modeling operations.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+
+        Returns:
+            None.
+
+        Raises:
+            pytest.skip: If no suitable font file is found in test environment.
+            AssertionError: If ShapeString creation fails.
+
+        Example:
+            Test creates a ShapeString with text "TEST" and validates shape.
+        """
         doc_name = f"ShapeStringTest_{unique_suffix}"
 
         result = execute_code(
@@ -551,7 +647,26 @@ _result_ = results
         unique_suffix: str,
         temp_dir: str,
     ) -> None:
-        """Test converting ShapeString to face and extruding to 3D solid."""
+        """Test converting ShapeString to face and extruding to 3D solid.
+
+        Verifies the complete workflow of creating ShapeString, converting
+        wires to faces, and extruding to create 3D text geometry.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+            temp_dir: Temporary directory for export files.
+
+        Returns:
+            None.
+
+        Raises:
+            pytest.skip: If no suitable font file is found in test environment.
+            AssertionError: If extrusion workflow fails.
+
+        Example:
+            Test creates "ABC" text, converts to face, extrudes to 5mm solid.
+        """
         doc_name = f"ShapeStringExtrude_{unique_suffix}"
         step_path = Path(temp_dir) / f"{doc_name}.step"
 
@@ -667,7 +782,26 @@ else:
         unique_suffix: str,
         temp_dir: str,
     ) -> None:
-        """Test embossing text onto a plate using boolean fuse."""
+        """Test embossing text onto a plate using boolean fuse.
+
+        Verifies the workflow of creating raised text on a surface by
+        extruding ShapeString and fusing with a base plate.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+            temp_dir: Temporary directory for export files.
+
+        Returns:
+            None.
+
+        Raises:
+            pytest.skip: If no suitable font file is found in test environment.
+            AssertionError: If emboss workflow steps fail.
+
+        Example:
+            Test creates "HI" text embossed on an 80x40x5 plate.
+        """
         doc_name = f"TextEmboss_{unique_suffix}"
         step_path = Path(temp_dir) / f"{doc_name}.step"
 
@@ -803,7 +937,26 @@ else:
         unique_suffix: str,
         temp_dir: str,
     ) -> None:
-        """Test engraving text into a plate using boolean cut."""
+        """Test engraving text into a plate using boolean cut.
+
+        Verifies the workflow of cutting text into a surface by extruding
+        ShapeString and performing a boolean cut on a base plate.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+            temp_dir: Temporary directory for export files.
+
+        Returns:
+            None.
+
+        Raises:
+            pytest.skip: If no suitable font file is found in test environment.
+            AssertionError: If engrave workflow steps fail.
+
+        Example:
+            Test creates "CUT" text engraved into an 80x40x10 plate.
+        """
         doc_name = f"TextEngrave_{unique_suffix}"
         step_path = Path(temp_dir) / f"{doc_name}.step"
 
@@ -942,7 +1095,25 @@ class TestCombinedSpreadsheetDraftWorkflow:
         xmlrpc_proxy: xmlrpc.client.ServerProxy,
         unique_suffix: str,
     ) -> None:
-        """Test using spreadsheet to control text size parameters."""
+        """Test using spreadsheet to control text size parameters.
+
+        Verifies that spreadsheet values can drive ShapeString font size,
+        demonstrating integration between Spreadsheet and Draft workbenches.
+
+        Args:
+            xmlrpc_proxy: The XML-RPC server proxy connected to FreeCAD.
+            unique_suffix: Unique timestamp suffix for document naming.
+
+        Returns:
+            None.
+
+        Raises:
+            pytest.skip: If no suitable font file is found in test environment.
+            AssertionError: If parametric text workflow fails.
+
+        Example:
+            Test creates text with size from TextParams.TextSize spreadsheet cell.
+        """
         doc_name = f"ParametricText_{unique_suffix}"
 
         result = execute_code(

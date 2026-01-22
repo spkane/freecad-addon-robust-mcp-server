@@ -1,10 +1,20 @@
-"""Tests for draft tools module."""
+"""Unit tests for the draft tools module.
 
+This module tests the Draft workbench tools, focusing on ShapeString
+functionality for creating 3D text geometry. All tests use mocked FreeCAD
+bridges to avoid requiring a running FreeCAD instance.
+"""
+
+from collections.abc import Awaitable, Callable
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from freecad_mcp.bridge.base import ExecutionResult
+
+# Type aliases for fixtures
+RegisteredTools = dict[str, Callable[..., Awaitable[Any]]]
 
 
 class TestDraftTools:
@@ -20,6 +30,9 @@ class TestDraftTools:
         Returns:
             MagicMock configured with a tool() decorator that captures
             registered tool functions by name.
+
+        Raises:
+            None.
 
         Example:
             def test_example(self, mock_mcp):
@@ -50,6 +63,9 @@ class TestDraftTools:
             AsyncMock that can be configured with return values for
             execute_python calls.
 
+        Raises:
+            None.
+
         Example:
             def test_example(self, mock_bridge):
                 mock_bridge.execute_python = AsyncMock(
@@ -59,7 +75,9 @@ class TestDraftTools:
         return AsyncMock()
 
     @pytest.fixture
-    def register_tools(self, mock_mcp: MagicMock, mock_bridge: AsyncMock) -> dict:
+    def register_tools(
+        self, mock_mcp: MagicMock, mock_bridge: AsyncMock
+    ) -> RegisteredTools:
         """Register draft tools and return the registered functions.
 
         Imports and calls register_draft_tools with the mock MCP and bridge,
@@ -71,7 +89,10 @@ class TestDraftTools:
 
         Returns:
             Dictionary mapping tool names (str) to their async callable
-            functions.
+            functions (e.g., draft_shapestring, draft_list_fonts).
+
+        Raises:
+            None.
 
         Example:
             async def test_shapestring(self, register_tools, mock_bridge):
@@ -80,7 +101,7 @@ class TestDraftTools:
         """
         from freecad_mcp.tools.draft import register_draft_tools
 
-        async def get_bridge():
+        async def get_bridge() -> AsyncMock:
             return mock_bridge
 
         register_draft_tools(mock_mcp, get_bridge)
@@ -91,8 +112,25 @@ class TestDraftTools:
     # =========================================================================
 
     @pytest.mark.asyncio
-    async def test_draft_shapestring_success(self, register_tools, mock_bridge):
-        """draft_shapestring should create 3D text geometry."""
+    async def test_draft_shapestring_success(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring creates 3D text geometry with default settings.
+
+        Verifies that the draft_shapestring tool successfully creates a
+        ShapeString object with the specified text and size.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await shapestring(text="Hello", size=10.0)
+            assert result["text"] == "Hello"
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -119,8 +157,25 @@ class TestDraftTools:
         mock_bridge.execute_python.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_draft_shapestring_with_font(self, register_tools, mock_bridge):
-        """draft_shapestring should use custom font."""
+    async def test_draft_shapestring_with_font(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring uses custom font path.
+
+        Verifies that the draft_shapestring tool accepts and uses a custom
+        font file path when creating the ShapeString.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await shapestring(text="Custom", font_path="/path/to/font.ttf")
+            assert result["font"] == "/path/to/font.ttf"
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -149,8 +204,24 @@ class TestDraftTools:
         assert result["size"] == 15.0
 
     @pytest.mark.asyncio
-    async def test_draft_shapestring_with_position(self, register_tools, mock_bridge):
-        """draft_shapestring should use custom position."""
+    async def test_draft_shapestring_with_position(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring uses custom 3D position.
+
+        Verifies that the draft_shapestring tool accepts and uses a custom
+        position vector [x, y, z] when placing the ShapeString.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await shapestring(text="Positioned", position=[10, 20, 5])
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -177,8 +248,28 @@ class TestDraftTools:
         assert result["text"] == "Positioned"
 
     @pytest.mark.asyncio
-    async def test_draft_shapestring_no_font(self, register_tools, mock_bridge):
-        """draft_shapestring should fail when no font available."""
+    async def test_draft_shapestring_no_font(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring fails when no font is available.
+
+        Verifies that the draft_shapestring tool raises a ValueError when
+        no font file is specified and no default font can be found on the system.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When no font file is available.
+
+        Example:
+            with pytest.raises(ValueError, match="No font file specified"):
+                await shapestring(text="NoFont")
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
@@ -237,9 +328,34 @@ class TestDraftTools:
         ],
     )
     async def test_draft_list_fonts(
-        self, register_tools, mock_bridge, fonts_data, expected_count, expected_dirs
-    ):
-        """draft_list_fonts should return available fonts or handle empty case."""
+        self,
+        register_tools: RegisteredTools,
+        mock_bridge: AsyncMock,
+        fonts_data: dict[str, Any],
+        expected_count: int,
+        expected_dirs: int,
+    ) -> None:
+        """Test draft_list_fonts returns available fonts or handles empty case.
+
+        Verifies that the draft_list_fonts tool correctly returns font
+        information when fonts are found and handles the case when no fonts
+        are available on the system.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+            fonts_data: Parametrized font data returned by the mock.
+            expected_count: Expected number of fonts in the result.
+            expected_dirs: Expected number of directories searched.
+
+        Returns:
+            None.
+
+        Example:
+            result = await list_fonts()
+            assert result["count"] == 2
+            assert len(result["fonts"]) == 2
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -265,9 +381,24 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_shapestring_to_sketch_success(
-        self, register_tools, mock_bridge
-    ):
-        """draft_shapestring_to_sketch should convert to sketch."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring_to_sketch converts ShapeString to sketch.
+
+        Verifies that the tool successfully converts a ShapeString object
+        into a Sketcher::SketchObject containing the text outline geometry.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await to_sketch(shapestring_name="ShapeString")
+            assert result["type_id"] == "Sketcher::SketchObject"
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -294,9 +425,24 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_shapestring_to_sketch_with_body(
-        self, register_tools, mock_bridge
-    ):
-        """draft_shapestring_to_sketch should attach to body."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring_to_sketch attaches sketch to PartDesign body.
+
+        Verifies that the tool can convert a ShapeString to a sketch and
+        attach it to an existing PartDesign body for parametric modeling.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await to_sketch(shapestring_name="ShapeString", body_name="Body")
+            assert result["type_id"] == "Sketcher::SketchObject"
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -323,9 +469,27 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_shapestring_to_sketch_not_found(
-        self, register_tools, mock_bridge
-    ):
-        """draft_shapestring_to_sketch should fail if source not found."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring_to_sketch fails when source object not found.
+
+        Verifies that the tool raises a ValueError when the specified
+        ShapeString object does not exist in the active document.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When the specified ShapeString object is not found.
+
+        Example:
+            with pytest.raises(ValueError, match="ShapeString not found"):
+                await to_sketch(shapestring_name="BadName")
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
@@ -347,8 +511,28 @@ class TestDraftTools:
     # =========================================================================
 
     @pytest.mark.asyncio
-    async def test_draft_shapestring_to_face_success(self, register_tools, mock_bridge):
-        """draft_shapestring_to_face should convert to face."""
+    async def test_draft_shapestring_to_face_success(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring_to_face converts ShapeString to face.
+
+        Verifies that the tool successfully converts a ShapeString object
+        into a Part::Feature containing face geometry suitable for boolean
+        operations. Uses Part.makeFace with FaceMakerBullseye to preserve
+        inner holes in letters like 'A', 'O', etc.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await to_face(shapestring_name="ShapeString")
+            assert result["type_id"] == "Part::Feature"
+            assert result["face_count"] == 5
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -376,9 +560,27 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_shapestring_to_face_no_wires(
-        self, register_tools, mock_bridge
-    ):
-        """draft_shapestring_to_face should fail if no wires."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_shapestring_to_face fails when ShapeString has no wires.
+
+        Verifies that the tool raises a ValueError when the ShapeString
+        object has no wire geometry to convert into faces.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When the ShapeString has no wires.
+
+        Example:
+            with pytest.raises(ValueError, match="ShapeString has no wires"):
+                await to_face(shapestring_name="EmptyShape")
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
@@ -400,8 +602,28 @@ class TestDraftTools:
     # =========================================================================
 
     @pytest.mark.asyncio
-    async def test_draft_text_on_surface_engrave(self, register_tools, mock_bridge):
-        """draft_text_on_surface should engrave text."""
+    async def test_draft_text_on_surface_engrave(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_text_on_surface engraves text into a surface.
+
+        Verifies that the tool successfully creates engraved (cut into)
+        text on a target object's face using a boolean cut operation.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await text_on_surface(
+                text="SAMPLE", target_face="Face6", target_object="Box",
+                depth=1.5, operation="engrave"
+            )
+            assert result["operation"] == "engrave"
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -433,8 +655,28 @@ class TestDraftTools:
         assert result["depth"] == 1.5
 
     @pytest.mark.asyncio
-    async def test_draft_text_on_surface_emboss(self, register_tools, mock_bridge):
-        """draft_text_on_surface should emboss text."""
+    async def test_draft_text_on_surface_emboss(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_text_on_surface embosses text on a surface.
+
+        Verifies that the tool successfully creates embossed (raised)
+        text on a target object's face using a boolean fuse operation.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await text_on_surface(
+                text="RAISED", target_face="Face6", target_object="Box",
+                depth=2.0, operation="emboss"
+            )
+            assert result["operation"] == "emboss"
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -466,9 +708,27 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_text_on_surface_invalid_operation(
-        self, register_tools, mock_bridge
-    ):
-        """draft_text_on_surface should reject invalid operation."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_text_on_surface rejects invalid operation type.
+
+        Verifies that the tool raises a ValueError when an invalid operation
+        type is specified (not 'emboss' or 'engrave').
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When operation is not 'emboss' or 'engrave'.
+
+        Example:
+            with pytest.raises(ValueError, match="Invalid operation"):
+                await text_on_surface(text="TEST", ..., operation="cut")
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
@@ -492,9 +752,27 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_text_on_surface_face_not_found(
-        self, register_tools, mock_bridge
-    ):
-        """draft_text_on_surface should fail if face not found."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_text_on_surface fails when target face not found.
+
+        Verifies that the tool raises a ValueError when the specified
+        face does not exist on the target object.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When the specified face is not found on the target object.
+
+        Example:
+            with pytest.raises(ValueError, match="Face not found"):
+                await text_on_surface(text="TEST", target_face="Face99", ...)
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
@@ -520,8 +798,26 @@ class TestDraftTools:
     # =========================================================================
 
     @pytest.mark.asyncio
-    async def test_draft_extrude_shapestring_success(self, register_tools, mock_bridge):
-        """draft_extrude_shapestring should create 3D solid text."""
+    async def test_draft_extrude_shapestring_success(
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_extrude_shapestring creates 3D solid text.
+
+        Verifies that the tool successfully extrudes a ShapeString into
+        a 3D solid Part::Feature with the specified height.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await extrude(shapestring_name="ShapeString", height=5.0)
+            assert result["type_id"] == "Part::Feature"
+            assert result["volume"] == 1500.0
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -550,9 +846,26 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_extrude_shapestring_with_direction(
-        self, register_tools, mock_bridge
-    ):
-        """draft_extrude_shapestring should use custom direction."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_extrude_shapestring uses custom extrusion direction.
+
+        Verifies that the tool can extrude a ShapeString along a custom
+        direction vector instead of the default Z direction.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Example:
+            result = await extrude(
+                shapestring_name="ShapeString", height=10.0,
+                direction=[1.0, 0.0, 0.0]  # Extrude in X direction
+            )
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
@@ -581,9 +894,27 @@ class TestDraftTools:
 
     @pytest.mark.asyncio
     async def test_draft_extrude_shapestring_no_faces(
-        self, register_tools, mock_bridge
-    ):
-        """draft_extrude_shapestring should fail if no faces created."""
+        self, register_tools: RegisteredTools, mock_bridge: AsyncMock
+    ) -> None:
+        """Test draft_extrude_shapestring fails when no faces can be created.
+
+        Verifies that the tool raises a ValueError when the ShapeString
+        cannot be converted to faces for extrusion.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+            mock_bridge: Mock FreeCAD bridge for simulating execute_python calls.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When no faces can be created from the ShapeString.
+
+        Example:
+            with pytest.raises(ValueError, match="Could not create any faces"):
+                await extrude(shapestring_name="BadShape", height=5.0)
+        """
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
@@ -604,8 +935,22 @@ class TestDraftTools:
     # Test that all expected tools are registered
     # =========================================================================
 
-    def test_all_draft_tools_registered(self, register_tools):
-        """All draft tools should be registered."""
+    def test_all_draft_tools_registered(self, register_tools: RegisteredTools) -> None:
+        """Test that all expected draft tools are registered.
+
+        Verifies that all required draft tools are properly registered
+        with the MCP server when register_draft_tools is called.
+
+        Args:
+            register_tools: Dictionary of registered draft tool functions.
+
+        Returns:
+            None.
+
+        Example:
+            assert "draft_shapestring" in register_tools
+            assert "draft_list_fonts" in register_tools
+        """
         expected_tools = [
             "draft_shapestring",
             "draft_list_fonts",
