@@ -11,8 +11,21 @@ class TestDraftTools:
     """Tests for Draft workbench tools (ShapeString)."""
 
     @pytest.fixture
-    def mock_mcp(self):
-        """Create a mock MCP server that captures tool registrations."""
+    def mock_mcp(self) -> MagicMock:
+        """Create a mock MCP server that captures tool registrations.
+
+        Creates a MagicMock that simulates the FastMCP server's tool
+        registration mechanism, storing registered tools in _registered_tools.
+
+        Returns:
+            MagicMock configured with a tool() decorator that captures
+            registered tool functions by name.
+
+        Example:
+            def test_example(self, mock_mcp):
+                # Access registered tools via mock_mcp._registered_tools
+                assert "draft_shapestring" in mock_mcp._registered_tools
+        """
         mcp = MagicMock()
         mcp._registered_tools = {}
 
@@ -27,13 +40,44 @@ class TestDraftTools:
         return mcp
 
     @pytest.fixture
-    def mock_bridge(self):
-        """Create a mock FreeCAD bridge."""
+    def mock_bridge(self) -> AsyncMock:
+        """Create a mock FreeCAD bridge.
+
+        Creates an AsyncMock that simulates the FreeCAD bridge's
+        execute_python method for testing without a real FreeCAD instance.
+
+        Returns:
+            AsyncMock that can be configured with return values for
+            execute_python calls.
+
+        Example:
+            def test_example(self, mock_bridge):
+                mock_bridge.execute_python = AsyncMock(
+                    return_value=ExecutionResult(success=True, result={})
+                )
+        """
         return AsyncMock()
 
     @pytest.fixture
-    def register_tools(self, mock_mcp, mock_bridge):
-        """Register draft tools and return the registered functions."""
+    def register_tools(self, mock_mcp: MagicMock, mock_bridge: AsyncMock) -> dict:
+        """Register draft tools and return the registered functions.
+
+        Imports and calls register_draft_tools with the mock MCP and bridge,
+        returning the dictionary of registered tool functions.
+
+        Args:
+            mock_mcp: The mock MCP server fixture.
+            mock_bridge: The mock bridge fixture.
+
+        Returns:
+            Dictionary mapping tool names (str) to their async callable
+            functions.
+
+        Example:
+            async def test_shapestring(self, register_tools, mock_bridge):
+                shapestring = register_tools["draft_shapestring"]
+                result = await shapestring(text="Hello")
+        """
         from freecad_mcp.tools.draft import register_draft_tools
 
         async def get_bridge():

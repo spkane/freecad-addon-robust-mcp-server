@@ -31,6 +31,18 @@ def _validate_vector(
     Raises:
         ValueError: If vector length doesn't match expected_len.
         ValueError: If allow_zero is False and all components are zero.
+
+    Example:
+        Validate a 3D position vector::
+
+            pos = _validate_vector([1.0, 2.0, 3.0], 3, "position", [0, 0, 0])
+            # Returns [1.0, 2.0, 3.0]
+
+            pos = _validate_vector(None, 3, "position", [0, 0, 0])
+            # Returns default [0, 0, 0]
+
+            _validate_vector([1.0, 2.0], 3, "position", [0, 0, 0])
+            # Raises ValueError: position must have exactly 3 elements
     """
     if value is None:
         return default
@@ -46,9 +58,28 @@ def _validate_vector(
 def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register Draft-related tools with the Robust MCP Server.
 
+    Registers tools for the Draft workbench, primarily focused on ShapeString
+    functionality for creating 3D text geometry that can be used with
+    PartDesign for embossing, engraving, and extrusion workflows.
+
     Args:
         mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
+
+    Returns:
+        None. Tools are registered as side effect on the mcp instance.
+
+    Raises:
+        TypeError: If mcp does not have a tool() decorator method.
+        TypeError: If get_bridge is not callable.
+
+    Example:
+        Register draft tools with an MCP server::
+
+            from freecad_mcp.tools.draft import register_draft_tools
+
+            register_draft_tools(mcp, get_bridge)
+            # Now draft_shapestring, draft_list_fonts, etc. are available
     """
 
     @mcp.tool()

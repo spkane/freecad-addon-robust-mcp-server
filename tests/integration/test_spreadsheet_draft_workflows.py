@@ -29,6 +29,32 @@ if TYPE_CHECKING:
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
 
+# Shared font discovery code block - used by multiple tests
+# Sets `font_path` to the first valid font found, or None if no fonts available
+FONT_DISCOVERY_CODE = """
+# Find a suitable font file
+font_path = None
+font_dirs = [
+    "/usr/share/fonts/truetype/dejavu",
+    "/usr/share/fonts/truetype/liberation",
+    "/System/Library/Fonts",
+    "/Library/Fonts",
+    "C:/Windows/Fonts",
+]
+
+font_names = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf", "Helvetica.ttc"]
+
+for font_dir in font_dirs:
+    if os.path.isdir(font_dir):
+        for font_name in font_names:
+            test_path = os.path.join(font_dir, font_name)
+            if os.path.isfile(test_path):
+                font_path = test_path
+                break
+    if font_path:
+        break
+"""
+
 
 def _unique_suffix() -> str:
     """Generate a unique suffix using timestamp.
@@ -468,27 +494,7 @@ doc = FreeCAD.newDocument(doc_name)
 
 results = {{}}
 
-# Find a suitable font file
-font_path = None
-font_dirs = [
-    "/usr/share/fonts/truetype/dejavu",
-    "/usr/share/fonts/truetype/liberation",
-    "/System/Library/Fonts",
-    "/Library/Fonts",
-    "C:/Windows/Fonts",
-]
-
-font_names = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf", "Helvetica.ttc"]
-
-for font_dir in font_dirs:
-    if os.path.isdir(font_dir):
-        for font_name in font_names:
-            test_path = os.path.join(font_dir, font_name)
-            if os.path.isfile(test_path):
-                font_path = test_path
-                break
-    if font_path:
-        break
+{FONT_DISCOVERY_CODE}
 
 if font_path:
     results["font_found"] = True
@@ -567,27 +573,7 @@ doc = FreeCAD.newDocument(doc_name)
 results = {{}}
 workflow_steps = []
 
-# Find a suitable font file
-font_path = None
-font_dirs = [
-    "/usr/share/fonts/truetype/dejavu",
-    "/usr/share/fonts/truetype/liberation",
-    "/System/Library/Fonts",
-    "/Library/Fonts",
-    "C:/Windows/Fonts",
-]
-
-font_names = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf", "Helvetica.ttc"]
-
-for font_dir in font_dirs:
-    if os.path.isdir(font_dir):
-        for font_name in font_names:
-            test_path = os.path.join(font_dir, font_name)
-            if os.path.isfile(test_path):
-                font_path = test_path
-                break
-    if font_path:
-        break
+{FONT_DISCOVERY_CODE}
 
 if not font_path:
     results["font_found"] = False
@@ -703,27 +689,7 @@ doc = FreeCAD.newDocument(doc_name)
 results = {{}}
 workflow_steps = []
 
-# Find a suitable font file
-font_path = None
-font_dirs = [
-    "/usr/share/fonts/truetype/dejavu",
-    "/usr/share/fonts/truetype/liberation",
-    "/System/Library/Fonts",
-    "/Library/Fonts",
-    "C:/Windows/Fonts",
-]
-
-font_names = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf", "Helvetica.ttc"]
-
-for font_dir in font_dirs:
-    if os.path.isdir(font_dir):
-        for font_name in font_names:
-            test_path = os.path.join(font_dir, font_name)
-            if os.path.isfile(test_path):
-                font_path = test_path
-                break
-    if font_path:
-        break
+{FONT_DISCOVERY_CODE}
 
 if not font_path:
     results["font_found"] = False
@@ -859,27 +825,7 @@ doc = FreeCAD.newDocument(doc_name)
 results = {{}}
 workflow_steps = []
 
-# Find a suitable font file
-font_path = None
-font_dirs = [
-    "/usr/share/fonts/truetype/dejavu",
-    "/usr/share/fonts/truetype/liberation",
-    "/System/Library/Fonts",
-    "/Library/Fonts",
-    "C:/Windows/Fonts",
-]
-
-font_names = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf", "Helvetica.ttc"]
-
-for font_dir in font_dirs:
-    if os.path.isdir(font_dir):
-        for font_name in font_names:
-            test_path = os.path.join(font_dir, font_name)
-            if os.path.isfile(test_path):
-                font_path = test_path
-                break
-    if font_path:
-        break
+{FONT_DISCOVERY_CODE}
 
 if not font_path:
     results["font_found"] = False
@@ -1015,27 +961,7 @@ doc = FreeCAD.newDocument(doc_name)
 results = {{}}
 workflow_steps = []
 
-# Find a suitable font file
-font_path = None
-font_dirs = [
-    "/usr/share/fonts/truetype/dejavu",
-    "/usr/share/fonts/truetype/liberation",
-    "/System/Library/Fonts",
-    "/Library/Fonts",
-    "C:/Windows/Fonts",
-]
-
-font_names = ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf", "Helvetica.ttc"]
-
-for font_dir in font_dirs:
-    if os.path.isdir(font_dir):
-        for font_name in font_names:
-            test_path = os.path.join(font_dir, font_name)
-            if os.path.isfile(test_path):
-                font_path = test_path
-                break
-    if font_path:
-        break
+{FONT_DISCOVERY_CODE}
 
 if not font_path:
     results["font_found"] = False

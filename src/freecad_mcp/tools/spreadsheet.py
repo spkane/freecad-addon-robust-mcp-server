@@ -13,9 +13,28 @@ def register_spreadsheet_tools(
 ) -> None:
     """Register Spreadsheet-related tools with the Robust MCP Server.
 
+    Registers tools for creating and manipulating FreeCAD spreadsheets,
+    enabling parametric design through cell values that can drive model
+    dimensions via expressions.
+
     Args:
         mcp: The FastMCP (Robust MCP Server) instance.
         get_bridge: Async function to get the active bridge.
+
+    Returns:
+        None. Tools are registered as side effect on the mcp instance.
+
+    Raises:
+        TypeError: If mcp does not have a tool() decorator method.
+        TypeError: If get_bridge is not callable.
+
+    Example:
+        Register spreadsheet tools with an MCP server::
+
+            from freecad_mcp.tools.spreadsheet import register_spreadsheet_tools
+
+            register_spreadsheet_tools(mcp, get_bridge)
+            # Now spreadsheet_create, spreadsheet_set_cell, etc. are available
     """
 
     @mcp.tool()
@@ -105,6 +124,12 @@ except Exception:
                 - value: Value that was set
                 - computed: Computed value (for formulas)
 
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If the object is not a spreadsheet.
+            ValueError: If setting the cell value fails.
+
         Example:
             Set numeric values and formulas::
 
@@ -178,6 +203,11 @@ except Exception:
                 - value: Raw value (formula if it's a formula)
                 - computed: Computed/displayed value
                 - alias: Cell alias if set, None otherwise
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If retrieving cell data fails.
 
         Example:
             Get a cell value::
@@ -266,6 +296,12 @@ _result_ = {{
                 - cell: Cell address
                 - alias: Alias that was set
 
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If the alias is not a valid Python identifier.
+            ValueError: If setting the alias fails.
+
         Example:
             Set aliases for parametric dimensions::
 
@@ -328,6 +364,11 @@ except Exception:
                 - spreadsheet: Spreadsheet name
                 - aliases: Dictionary mapping alias names to cell addresses
                 - count: Number of aliases
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If retrieving aliases fails.
 
         Example:
             List all parameter aliases::
@@ -393,6 +434,11 @@ _result_ = {{
             Dictionary with result:
                 - success: Whether the operation succeeded
                 - cell: Cell address that was cleared
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If clearing the cell fails.
 
         Example:
             Clear a cell::
@@ -466,6 +512,14 @@ except Exception:
                 - expression: The expression that was set
                 - target_object: Object that was modified
                 - target_property: Property that was bound
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If the target object is not found.
+            ValueError: If the alias does not exist on the spreadsheet.
+            ValueError: If the target property does not exist.
+            ValueError: If binding the expression fails.
 
         Example:
             Bind a box's length to a spreadsheet parameter::
@@ -551,6 +605,12 @@ except Exception:
                 - start: Start cell
                 - end: End cell
                 - cells: Dictionary mapping cell addresses to their values
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If start_cell or end_cell has an invalid format.
+            ValueError: If retrieving the cell range fails.
 
         Example:
             Get a range of values::
@@ -652,6 +712,13 @@ _result_ = {{
                 - rows_imported: Number of rows imported
                 - cols_imported: Number of columns imported
                 - start_cell: Starting cell
+
+        Raises:
+            ValueError: If no document is found.
+            ValueError: If the spreadsheet object is not found.
+            ValueError: If start_cell has an invalid format.
+            FileNotFoundError: If the CSV file does not exist.
+            ValueError: If importing the CSV data fails.
 
         Example:
             Import parameters from CSV::
@@ -817,10 +884,25 @@ for col in range(max_col_limit):
             pass
 
 # Check if data exists beyond limits (probe one row/column past)
-if max_row > 0 or max_col > 0:
-    # Check row beyond limit
-    for col in range(max_col + 1):
-        cell_addr = col_to_str(col) + str(max_row_limit + 1)
+# Always probe, even if sheet appears empty within scan limits - data may exist beyond
+
+# Check row beyond limit (probe first row past max_row_limit across all columns scanned)
+probe_cols = max(max_col + 1, 1)  # At least probe column A
+for col in range(probe_cols):
+    cell_addr = col_to_str(col) + str(max_row_limit + 1)
+    try:
+        val = sheet.get(cell_addr)
+        if val is not None:
+            truncated = True
+            break
+    except Exception:
+        pass
+
+# Check column beyond limit (probe column at max_col_limit across rows)
+if not truncated:
+    probe_rows = max(max_row, 1)  # At least probe row 1
+    for row in range(1, probe_rows + 1):
+        cell_addr = col_to_str(max_col_limit) + str(row)
         try:
             val = sheet.get(cell_addr)
             if val is not None:
@@ -829,26 +911,25 @@ if max_row > 0 or max_col > 0:
         except Exception:
             pass
 
-    # Check column beyond limit
-    if not truncated:
-        for row in range(1, max_row + 1):
-            cell_addr = col_to_str(max_col_limit) + str(row)
-            try:
-                val = sheet.get(cell_addr)
-                if val is not None:
-                    truncated = True
-                    break
-            except Exception:
-                pass
+# Also probe a cell beyond both limits if sheet appears empty
+if not truncated and max_row == 0 and max_col == 0:
+    # Probe one cell beyond both row and column limits
+    cell_addr = col_to_str(max_col_limit) + str(max_row_limit + 1)
+    try:
+        val = sheet.get(cell_addr)
+        if val is not None:
+            truncated = True
+    except Exception:
+        pass
 
 if max_row == 0:
-    # Empty spreadsheet
+    # Empty spreadsheet (within scan limits)
     _result_ = {{
         "success": True,
         "file_path": file_path,
         "rows_exported": 0,
         "cols_exported": 0,
-        "truncated": False,
+        "truncated": truncated,
     }}
 else:
     with open(file_path, 'w', newline='', encoding='utf-8') as f:
