@@ -520,6 +520,7 @@ try:
     doc.recompute()
     doc.commitTransaction()
 
+    faces = result_shape.Faces
     total_area = sum(f.Area for f in faces)
 
     _result_ = {{
