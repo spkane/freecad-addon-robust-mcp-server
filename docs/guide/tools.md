@@ -1,6 +1,6 @@
 # Tools Reference
 
-The FreeCAD Robust MCP Server provides 120+ tools for CAD operations. This page provides a quick reference organized by category.
+The FreeCAD Robust MCP Server provides 130+ tools for CAD operations. This page provides a quick reference organized by category.
 
 !!! tip "Transaction Support"
     All MCP operations are wrapped in FreeCAD transactions for undo support. After any operation, you can use `undo` to revert changes. This makes it safe for AI agents to experiment and recover from mistakes.
@@ -21,6 +21,8 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 | [PartDesign](#partdesign-tools)                 | 28    | Parametric modeling                  |
 | [Sketcher Geometry](#sketcher-geometry-tools)   | 18    | Sketch shapes and operations         |
 | [Sketcher Constraints](#sketcher-constraints)   | 17    | Sketch constraints and dimensions    |
+| [Spreadsheet](#spreadsheet-tools)               | 10    | Parametric design with spreadsheets  |
+| [Draft ShapeString](#draft-tools)               | 6     | 3D text geometry for emboss/engrave  |
 | [Validation](#validation-tools)                 | 4     | Object/document health checking      |
 | [View & Display](#view-tools)                   | 11    | View control, screenshots (GUI only) |
 | [Export/Import](#export-tools)                  | 7     | File format conversion               |
@@ -282,6 +284,67 @@ Constraints define relationships between sketch geometry elements.
 | Tool                        | Description                          |
 | --------------------------- | ------------------------------------ |
 | `sketcher_delete_constraint`| Delete a constraint by index         |
+
+---
+
+## Spreadsheet Tools
+
+The Spreadsheet workbench enables parametric design by storing values in cells
+that can drive model dimensions through expressions.
+
+| Tool                         | Description                                   |
+| ---------------------------- | --------------------------------------------- |
+| `spreadsheet_create`         | Create a new Spreadsheet object               |
+| `spreadsheet_set_cell`       | Set cell value (number, string, or formula)   |
+| `spreadsheet_get_cell`       | Get cell value and computed result            |
+| `spreadsheet_set_alias`      | Set alias for parametric references           |
+| `spreadsheet_get_aliases`    | Get all aliases in a spreadsheet              |
+| `spreadsheet_clear_cell`     | Clear a cell and its alias                    |
+| `spreadsheet_bind_property`  | Bind object property to spreadsheet cell      |
+| `spreadsheet_get_cell_range` | Get values from a range of cells              |
+| `spreadsheet_import_csv`     | Import CSV data into spreadsheet              |
+| `spreadsheet_export_csv`     | Export spreadsheet to CSV file                |
+
+!!! tip "Parametric Design Workflow"
+    1. Create a spreadsheet with `spreadsheet_create`
+    2. Set parameter values with `spreadsheet_set_cell`
+    3. Define aliases with `spreadsheet_set_alias` (e.g., "Length", "Width")
+    4. Bind to object properties with `spreadsheet_bind_property`
+    5. Now changing the spreadsheet cell updates the model automatically!
+
+---
+
+## Draft Tools
+
+The Draft workbench ShapeString tools create 3D text geometry that can be
+used for embossing, engraving, or standalone 3D text objects.
+
+| Tool                          | Description                              |
+| ----------------------------- | ---------------------------------------- |
+| `draft_shapestring`           | Create 3D text geometry from font        |
+| `draft_list_fonts`            | List available system fonts              |
+| `draft_shapestring_to_sketch` | Convert ShapeString to Sketch            |
+| `draft_shapestring_to_face`   | Convert ShapeString to Face              |
+| `draft_text_on_surface`       | Emboss or engrave text on a surface      |
+| `draft_extrude_shapestring`   | Extrude ShapeString to 3D solid          |
+
+<!-- markdownlint-disable MD046 -->
+!!! example "Text Embossing Workflow"
+    ```python
+    # Create a box
+    await create_box(length=100, width=50, height=20)
+
+    # Engrave text on top face
+    await draft_text_on_surface(
+        text="SAMPLE",
+        target_face="Face6",  # Top face
+        target_object="Box",
+        depth=1.5,
+        size=8,
+        operation="engrave"  # or "emboss" for raised text
+    )
+    ```
+<!-- markdownlint-enable MD046 -->
 
 ---
 

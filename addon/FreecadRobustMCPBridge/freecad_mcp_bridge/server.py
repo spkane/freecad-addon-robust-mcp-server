@@ -760,9 +760,72 @@ class FreecadMCPPlugin:
 
     def _run_xmlrpc_server(self) -> None:
         """Run the XML-RPC server."""
+
+        # Custom request handler that silently handles GET requests
+        # instead of logging "Unsupported method ('GET')" errors
+        class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
+            """XML-RPC handler that responds gracefully to GET requests."""
+
+            def do_GET(self) -> None:
+                """Handle GET requests with a friendly plain-text response.
+
+                Responds to HTTP GET requests with a simple message instead of
+                logging "Unsupported method ('GET')" errors. This is useful for
+                health checks and browser probing.
+
+                Args:
+                    self: The request handler instance.
+
+                Returns:
+                    None. Writes response directly to wfile.
+
+                Side Effects:
+                    Sends HTTP 200 response with Content-type: text/plain header
+                    and writes response body to self.wfile.
+
+                Example:
+                    A simple GET request to check if the bridge is running::
+
+                        curl http://localhost:9875/
+                        # Returns: FreeCAD MCP Bridge - XML-RPC endpoint (POST only)
+                """
+                response = b"FreeCAD MCP Bridge - XML-RPC endpoint (POST only)"
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Content-Length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+
+            def log_message(self, format: str, *args: Any) -> None:
+                """Suppress HTTP request logging to keep console output clean.
+
+                Overrides the parent class method to prevent logging of every
+                HTTP request, which would clutter the FreeCAD console.
+
+                Args:
+                    self: The request handler instance.
+                    format: The format string for the log message (ignored).
+                    *args: Arguments to format into the message (ignored).
+
+                Returns:
+                    None. No logging is performed.
+
+                Behavior:
+                    All log messages are silently discarded. No output is
+                    produced regardless of the format or arguments passed.
+
+                Example:
+                    Calling log_message produces no output::
+
+                        handler.log_message("%s - %s", "GET", "/")
+                        # No output is produced
+                """
+                pass
+
         try:
             self._xmlrpc_server = xmlrpc.server.SimpleXMLRPCServer(
                 (self._host, self._xmlrpc_port),
+                requestHandler=QuietXMLRPCRequestHandler,
                 allow_none=True,
                 logRequests=False,
             )
