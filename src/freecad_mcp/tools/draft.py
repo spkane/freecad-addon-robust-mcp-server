@@ -217,8 +217,10 @@ except Exception:
     async def draft_list_fonts() -> dict[str, Any]:
         """List available font files on the system.
 
-        Searches common font directories for TrueType (.ttf) and
-        OpenType (.otf) fonts that can be used with ShapeString.
+        Searches common font directories for TrueType (.ttf), OpenType (.otf),
+        and TrueType Collection (.ttc) fonts that can be used with ShapeString.
+
+        Note: For .ttc files, FreeCAD only uses the first font in the collection.
 
         Args:
             None.
@@ -228,7 +230,7 @@ except Exception:
                 - fonts: List of dictionaries with font details:
                     - name: Font filename
                     - path: Full path to font file
-                    - type: Font type (ttf or otf)
+                    - type: Font type ("ttf", "otf", or "ttc")
                 - count: Total number of fonts found
                 - directories: Directories that were searched
 
