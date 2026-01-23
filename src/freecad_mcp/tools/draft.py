@@ -81,6 +81,15 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
             register_draft_tools(mcp, get_bridge)
             # Now draft_shapestring, draft_list_fonts, etc. are available
     """
+    # Validate mcp parameter has a callable tool attribute
+    if not hasattr(mcp, "tool") or not callable(mcp.tool):
+        raise TypeError("mcp must have a callable 'tool' attribute (decorator method)")
+
+    # Validate get_bridge is callable
+    if not callable(get_bridge):
+        raise TypeError(
+            "get_bridge must be a callable that returns an awaitable bridge"
+        )
 
     @mcp.tool()
     async def draft_shapestring(
@@ -210,6 +219,9 @@ except Exception:
 
         Searches common font directories for TrueType (.ttf) and
         OpenType (.otf) fonts that can be used with ShapeString.
+
+        Args:
+            None.
 
         Returns:
             Dictionary with font information:
@@ -378,6 +390,10 @@ try:
                 FreeCAD.Vector(0, 0, 0),
                 FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90)
             )
+        else:
+            raise ValueError(
+                f"Invalid plane: '{{plane}}'. Must be one of: XY_Plane, XZ_Plane, YZ_Plane"
+            )
 
     # Get the shape and convert wires to sketch geometry
     shape = shape_string.Shape
@@ -391,7 +407,6 @@ try:
                 # Convert edge to sketch geometry
                 # This handles lines, arcs, and bezier curves
                 sketch.addGeometry(edge.Curve, False)
-                wire_count += 1
             except Exception:
                 # Some edge types might not convert directly
                 # Try to approximate with line segments
@@ -401,9 +416,10 @@ try:
                     for i in range(len(points) - 1):
                         line = Part.LineSegment(points[i], points[i + 1])
                         sketch.addGeometry(line, False)
-                    wire_count += 1
                 except Exception:
                     pass
+        # Count each wire once (not each edge)
+        wire_count += 1
 
     doc.recompute()
     doc.commitTransaction()
