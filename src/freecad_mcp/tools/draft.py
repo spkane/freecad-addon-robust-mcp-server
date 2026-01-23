@@ -180,7 +180,6 @@ try:
         raise ValueError(f"Font file not found: {{font_path}}")
 
     # Create the ShapeString
-    obj_name = {name!r} or "ShapeString"
     shape_string = Draft.make_shapestring(text, font_path, size)
 
     if shape_string is None:
