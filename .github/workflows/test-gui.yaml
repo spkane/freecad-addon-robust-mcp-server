@@ -1,0 +1,192 @@
+name: GUI Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "src/**/*.py"
+      - "freecad/**/*.py"
+      - "tests/**/*.py"
+      - "tests/ci-test/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test-gui.yaml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "src/**/*.py"
+      - "freecad/**/*.py"
+      - "tests/**/*.py"
+      - "tests/ci-test/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test-gui.yaml"
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gui-integration-test:
+    name: Integration Tests (FreeCAD GUI)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build GUI test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tests/ci-test/Dockerfile.gui-test
+          push: false
+          load: true
+          tags: freecad-gui-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run GUI integration tests
+        run: |
+          # Create output directory for artifacts
+          mkdir -p test-output
+
+          # Run tests in container with workspace mounted
+          # The container has Xvfb, openbox, and FreeCAD pre-installed
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -v "${{ github.workspace }}/test-output:/test-output" \
+            -w /workspace \
+            -e DISPLAY=:99 \
+            -e QT_QPA_PLATFORM=xcb \
+            -e LIBGL_ALWAYS_SOFTWARE=1 \
+            -e XDG_RUNTIME_DIR=/tmp/runtime-root \
+            freecad-gui-test:latest \
+            /bin/bash -c '
+              set -e
+
+              # Setup XDG runtime dir
+              mkdir -p /tmp/runtime-root
+              chmod 700 /tmp/runtime-root
+
+              # Start Xvfb
+              echo "Starting Xvfb..."
+              Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
+              XVFB_PID=$!
+              sleep 2
+
+              # Start openbox window manager (required for FreeCAD GUI)
+              echo "Starting openbox..."
+              openbox &
+              sleep 1
+
+              # Verify X11 display
+              echo "Verifying X11 display..."
+              xdpyinfo -display :99 | head -3
+
+              # Install project dependencies
+              echo "Installing dependencies..."
+              uv sync --all-extras
+
+              # Start FreeCAD GUI with MCP bridge
+              echo "Starting FreeCAD GUI with MCP bridge..."
+              freecad freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /test-output/freecad_bridge.log 2>&1 &
+              FREECAD_PID=$!
+
+              # Start xdotool events in background to help FreeCAD GUI initialization
+              (
+                for j in {1..120}; do
+                  xdotool mousemove $((400 + j*3)) $((300 + j*3)) click 1 key Escape 2>/dev/null || true
+                  sleep 0.5
+                done
+              ) &
+              XDOT_PID=$!
+
+              # Wait for MCP bridge to be ready
+              echo "Waiting for MCP bridge..."
+              MAX_RETRIES=90
+              BRIDGE_READY=0
+              for i in $(seq 1 $MAX_RETRIES); do
+                if ! ps -p $FREECAD_PID > /dev/null 2>&1; then
+                  echo "ERROR: FreeCAD process died after ${i}s"
+                  cat /test-output/freecad_bridge.log || true
+                  exit 1
+                fi
+
+                # Check XML-RPC endpoint
+                if curl -s --max-time 1 -X POST \
+                    -H "Content-Type: text/xml" \
+                    -d "<?xml version=\"1.0\"?><methodCall><methodName>ping</methodName></methodCall>" \
+                    http://localhost:9875 2>/dev/null | grep -q "pong"; then
+                  echo "MCP bridge is ready after ${i}s!"
+                  BRIDGE_READY=1
+                  break
+                fi
+
+                if [ $((i % 10)) -eq 0 ]; then
+                  echo "Still waiting... (${i}s)"
+                fi
+                sleep 1
+              done
+
+              if [ "$BRIDGE_READY" -ne 1 ]; then
+                echo "ERROR: MCP bridge did not start within ${MAX_RETRIES}s"
+                cat /test-output/freecad_bridge.log || true
+                kill $XDOT_PID 2>/dev/null || true
+                kill $FREECAD_PID 2>/dev/null || true
+                exit 1
+              fi
+
+              # Verify GUI mode is active
+              echo "Verifying GUI mode..."
+              RESULT=$(curl -s -X POST \
+                -H "Content-Type: text/xml" \
+                -d "<?xml version=\"1.0\"?><methodCall><methodName>execute</methodName><params><param><value><string>_result_ = FreeCAD.GuiUp</string></value></param></params></methodCall>" \
+                http://localhost:9875)
+              echo "GuiUp check result: $RESULT"
+
+              if ! echo "$RESULT" | grep -q "true\|True\|1"; then
+                echo "ERROR: FreeCAD GUI mode not active"
+                cat /test-output/freecad_bridge.log || true
+                kill $XDOT_PID 2>/dev/null || true
+                kill $FREECAD_PID 2>/dev/null || true
+                exit 1
+              fi
+
+              echo "FreeCAD GUI mode confirmed!"
+
+              # Run GUI integration tests
+              echo "Running GUI integration tests..."
+              uv run pytest tests/integration/test_gui_mode.py -v --tb=short -x \
+                --junit-xml=/test-output/gui-test-results.xml \
+                || TEST_EXIT=$?
+
+              # Copy any screenshots to output
+              cp /tmp/*.png /test-output/ 2>/dev/null || true
+              cp /tmp/*.FCStd /test-output/ 2>/dev/null || true
+
+              # Cleanup
+              kill $XDOT_PID 2>/dev/null || true
+              kill $FREECAD_PID 2>/dev/null || true
+
+              exit ${TEST_EXIT:-0}
+            '
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-test-artifacts
+          path: test-output/
+          retention-days: 7
+
+      - name: Show bridge log on failure
+        if: failure()
+        run: |
+          echo "=== FreeCAD Bridge Log ==="
+          cat test-output/freecad_bridge.log 2>/dev/null || echo "No log file found"

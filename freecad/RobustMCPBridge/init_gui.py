@@ -184,15 +184,15 @@ try:
     # Note: Init.py does NOT run at startup for workbench addons, so auto-start
     # must be triggered from here instead.
     #
-    # We use GuiWaiter to poll FreeCAD.GuiUp instead of a fixed timer delay.
-    # This ensures we wait for the GUI to actually be ready, rather than
-    # hoping a fixed delay is long enough.
+    # We use a deferred QTimer callback that rechecks FreeCAD.GuiUp.
+    # This waits for the GUI to be ready without relying solely on a fixed delay.
     def _auto_start_bridge() -> None:
         """Auto-start bridge after GUI is confirmed ready.
 
-        This is the callback invoked by GuiWaiter once FreeCAD.GuiUp is True
-        and a defer period has elapsed. At this point, it's safe to start
-        the MCP bridge with Qt timer-based queue processing.
+        This is the callback invoked by QTimer.singleShot() after a delay.
+        It rechecks FreeCAD.GuiUp before starting to ensure the GUI is ready.
+        At this point, it's safe to start the MCP bridge with Qt timer-based
+        queue processing.
 
         Args:
             None.

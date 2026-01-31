@@ -1539,6 +1539,7 @@ This project uses component-specific release workflows along with CI/CD pipeline
 | Workflow          | Trigger                       | Purpose                                                   |
 | ----------------- | ----------------------------- | --------------------------------------------------------- |
 | `test.yaml`       | Push, PR                      | Runs unit tests and integration tests on Ubuntu and macOS |
+| `test-gui.yaml`   | Push, PR                      | Runs GUI integration tests using Docker + Xvfb            |
 | `pre-commit.yaml` | Push, PR                      | Runs all pre-commit hooks for code quality                |
 | `docker.yaml`     | Push, PR                      | Builds Docker image to verify Dockerfile works            |
 | `codeql.yaml`     | Push, PR, scheduled           | GitHub CodeQL security analysis                           |
@@ -1553,6 +1554,18 @@ This project uses component-specific release workflows along with CI/CD pipeline
 5. Stops FreeCAD and shows logs on failure
 
 You do NOT need to manually start FreeCAD when the CI workflow runs. The workflow handles the full lifecycle automatically.
+
+**IMPORTANT - test-gui.yaml Workflow**: The `test-gui.yaml` workflow runs **GUI integration tests** using Docker and Xvfb. It:
+
+1. Builds the `tests/ci-test/Dockerfile.gui-test` image (with caching)
+2. Starts Xvfb (virtual framebuffer) and openbox (window manager)
+3. Starts FreeCAD GUI mode with the MCP bridge
+4. Uses xdotool to send synthetic mouse/keyboard events (helps GUI initialization)
+5. Verifies `FreeCAD.GuiUp == True` before running tests
+6. Runs `tests/integration/test_gui_mode.py` for GUI-specific tests
+7. Collects artifacts (screenshots, logs, test results) for debugging
+
+This workflow tests GUI-only features like screenshots, visibility, display modes, and camera operations that cannot be tested in headless mode.
 
 ### Release Workflows
 

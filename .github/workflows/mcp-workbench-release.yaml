@@ -85,16 +85,16 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Create staging directory
-          mkdir -p "staging/freecad-mcp-workbench-${VERSION}"
+          # Create staging directory with namespace path preserved
+          mkdir -p "staging/freecad-mcp-workbench-${VERSION}/freecad"
 
-          # Copy workbench files
-          cp -r freecad/RobustMCPBridge/* "staging/freecad-mcp-workbench-${VERSION}/"
+          # Copy workbench files (preserve namespace path)
+          cp -r freecad/RobustMCPBridge "staging/freecad-mcp-workbench-${VERSION}/freecad/"
 
-          # Copy LICENSE
-          cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/"
+          # Copy LICENSE to the workbench directory
+          cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/freecad/RobustMCPBridge/"
 
-          # Create README for the archive
+          # Create README for the archive (at archive root)
           cat > "staging/freecad-mcp-workbench-${VERSION}/README.md" << EOF
           # Robust MCP Bridge Workbench
 
@@ -112,11 +112,11 @@ jobs:
 
           ### Manual Installation
 
-          Copy the contents of this archive to your FreeCAD Mod directory:
+          Extract this archive into your FreeCAD Mod directory (it includes \`freecad/RobustMCPBridge/\`):
 
-          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/freecad/RobustMCPBridge/\`
-          - **Linux**: \`~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/\`
-          - **Windows**: \`%APPDATA%/FreeCAD/Mod/freecad/RobustMCPBridge/\`
+          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/\`
+          - **Linux**: \`~/.local/share/FreeCAD/Mod/\`
+          - **Windows**: \`%APPDATA%/FreeCAD/Mod/\`
 
           ## Usage
 
