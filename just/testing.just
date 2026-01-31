@@ -323,7 +323,7 @@ release-test:
         echo ""
         echo "   Edit the RELEASE_NOTES.md file for each component:"
         echo "     - MCP Server:  src/freecad_mcp/RELEASE_NOTES.md"
-        echo "     - Workbench:   addon/FreecadRobustMCPBridge/RELEASE_NOTES.md"
+        echo "     - Workbench:   freecad/RobustMCPBridge/RELEASE_NOTES.md"
         echo ""
         echo "   Add a new version section at the top:"
         echo "     ## Version X.Y.Z (YYYY-MM-DD)"

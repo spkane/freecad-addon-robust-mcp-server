@@ -27,7 +27,7 @@ except Exception as e:
 # Register preferences page with FreeCAD's Preferences dialog
 # This must be done at module level, before the workbench is registered
 try:
-    from preferences_page import MCPBridgePreferencesPage
+    from Qt.preferences_page import MCPBridgePreferencesPage
 
     FreeCADGui.addPreferencePage(MCPBridgePreferencesPage, "Robust MCP Bridge")
 except Exception as e:
@@ -120,7 +120,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         # Sync status bar widget with current bridge state
         # (bridge may have been started by Init.py before workbench was selected)
         try:
-            from status_widget import sync_status_with_bridge
+            from Qt.status_widget import sync_status_with_bridge
 
             sync_status_with_bridge()
         except Exception as e:
@@ -130,7 +130,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         """Called when the workbench is activated."""
         # Sync status bar widget with current bridge state
         try:
-            from status_widget import sync_status_with_bridge
+            from Qt.status_widget import sync_status_with_bridge
 
             sync_status_with_bridge()
         except Exception as e:
@@ -161,7 +161,7 @@ try:
         try:
             from commands import is_bridge_running
             from preferences import get_status_bar_enabled
-            from status_widget import sync_status_with_bridge
+            from Qt.status_widget import sync_status_with_bridge
 
             if get_status_bar_enabled() and is_bridge_running():
                 FreeCAD.Console.PrintMessage(
@@ -258,7 +258,7 @@ try:
 
             # Sync status bar now that bridge is running
             try:
-                from status_widget import sync_status_with_bridge
+                from Qt.status_widget import sync_status_with_bridge
 
                 sync_status_with_bridge()
             except Exception as status_err:

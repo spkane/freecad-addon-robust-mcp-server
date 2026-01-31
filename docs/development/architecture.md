@@ -125,10 +125,15 @@ class FreecadBridge(ABC):
 The workbench addon runs inside FreeCAD:
 
 ```text
-addon/FreecadRobustMCPBridge/
-├── Init.py                # Module initialization
-├── InitGui.py             # GUI initialization (workbench)
-├── FreecadRobustMCPBridge.svg   # Workbench icon
+freecad/RobustMCPBridge/
+├── __init__.py            # Module initialization (was Init.py)
+├── init_gui.py            # GUI initialization (was InitGui.py)
+├── Qt/                    # Qt/PySide UI components
+│   ├── status_widget.py   # Status bar widget
+│   └── preferences_page.py # Preferences dialog
+├── Resources/
+│   ├── Icons/             # SVG icons
+│   └── Media/             # Screenshots
 └── freecad_mcp_bridge/    # Bridge plugin
     ├── __init__.py
     ├── server.py          # XML-RPC/JSON-RPC server

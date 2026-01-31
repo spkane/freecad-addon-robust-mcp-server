@@ -14,8 +14,8 @@ The tests in this module cover:
     - Safe execution of GUI operations (document creation, view operations)
 
 See Also:
-    addon/FreecadRobustMCPBridge/Init.py: The fix for the GUI startup race condition
-    addon/FreecadRobustMCPBridge/freecad_mcp_bridge/bridge_utils.py: GuiWaiter helper
+    freecad/RobustMCPBridge/__init__.py: The fix for the GUI startup race condition
+    freecad/RobustMCPBridge/freecad_mcp_bridge/bridge_utils.py: GuiWaiter helper
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ _result_ = {
         This bug caused SIGABRT crashes when creating documents or
         doing any Qt operations from the background thread.
 
-        See: addon/FreecadRobustMCPBridge/Init.py for the fix.
+        See: freecad/RobustMCPBridge/__init__.py for the fix.
         """
         code = """
 import threading

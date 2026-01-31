@@ -48,7 +48,7 @@ bump-workbench version:
     echo ""
 
     # Update __version__ in the bridge module's __init__.py
-    INIT_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
+    INIT_FILE="{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/__init__.py"
     if [ -f "$INIT_FILE" ]; then
         sed 's/^__version__ = "[^"]*"/__version__ = "'"$VERSION"'"/' "$INIT_FILE" > "$INIT_FILE.tmp" && mv "$INIT_FILE.tmp" "$INIT_FILE"
         echo "Updated $INIT_FILE:"
@@ -145,7 +145,7 @@ tag-workbench version:
     echo "Verifying version in source files..."
 
     # Check __init__.py
-    INIT_FILE="{{project_root}}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
+    INIT_FILE="{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/__init__.py"
     INIT_VERSION=$(grep -o '__version__ = "[^"]*"' "$INIT_FILE" | cut -d'"' -f2)
     if [ "$INIT_VERSION" != "$VERSION" ]; then
         echo "ERROR: Version mismatch in $INIT_FILE"
@@ -226,7 +226,7 @@ changes-since component:
             ;;
         workbench)
             PREFIX="robust-mcp-workbench-v"
-            PATHS="addon/FreecadRobustMCPBridge"
+            PATHS="freecad/RobustMCPBridge"
             ;;
         *)
             echo "Unknown component: {{component}}"
@@ -686,7 +686,7 @@ status:
     echo ""
 
     # Robust MCP Bridge Workbench
-    WORKBENCH_CHANGES=$(count_changes "robust-mcp-workbench-v" "addon/FreecadRobustMCPBridge")
+    WORKBENCH_CHANGES=$(count_changes "robust-mcp-workbench-v" "freecad/RobustMCPBridge")
     WORKBENCH_TAG=$(git tag -l 'robust-mcp-workbench-v*' --sort=-v:refname | head -1)
     if [ "$WORKBENCH_CHANGES" -gt 0 ]; then
         echo "Robust MCP Bridge Workbench: $WORKBENCH_CHANGES unreleased commit(s)"
@@ -715,7 +715,7 @@ draft-notes component:
             ;;
         workbench)
             PREFIX="robust-mcp-workbench-v"
-            PATHS="addon/FreecadRobustMCPBridge"
+            PATHS="freecad/RobustMCPBridge"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
         *)
@@ -784,7 +784,7 @@ extract-changelog component version:
             RELEASE_NOTES="{{project_root}}/src/freecad_mcp/RELEASE_NOTES.md"
             ;;
         workbench)
-            RELEASE_NOTES="{{project_root}}/addon/FreecadRobustMCPBridge/RELEASE_NOTES.md"
+            RELEASE_NOTES="{{project_root}}/freecad/RobustMCPBridge/RELEASE_NOTES.md"
             ;;
         *)
             echo "Unknown component: {{component}}"
@@ -852,7 +852,7 @@ wiki-update component:
 
     case "{{component}}" in
         workbench|bridge)
-            WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+            WIKI_SOURCE="{{project_root}}/freecad/RobustMCPBridge/wiki-source.txt"
             WIKI_PAGE="Robust_MCP_Bridge_Workbench"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
@@ -962,7 +962,7 @@ wiki-show component:
 
     case "{{component}}" in
         workbench|bridge)
-            WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+            WIKI_SOURCE="{{project_root}}/freecad/RobustMCPBridge/wiki-source.txt"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;
         *)
@@ -988,7 +988,7 @@ wiki-diff component:
 
     case "{{component}}" in
         workbench|bridge)
-            WIKI_SOURCE="{{project_root}}/addon/FreecadRobustMCPBridge/wiki-source.txt"
+            WIKI_SOURCE="{{project_root}}/freecad/RobustMCPBridge/wiki-source.txt"
             WIKI_PAGE="Robust_MCP_Bridge_Workbench"
             COMPONENT_NAME="Robust MCP Bridge Workbench"
             ;;

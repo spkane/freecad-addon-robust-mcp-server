@@ -30,9 +30,9 @@ The workbench provides:
 
 Download from [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases) and extract to your FreeCAD Mod directory:
 
-- **Linux:** `~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/`
-- **macOS:** `~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCPBridge/`
-- **Windows:** `%APPDATA%\FreeCAD\Mod\FreecadRobustMCPBridge\`
+- **Linux:** `~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/`
+- **macOS:** `~/Library/Application Support/FreeCAD/Mod/freecad/RobustMCPBridge/`
+- **Windows:** `%APPDATA%\FreeCAD\Mod\freecad\RobustMCPBridge\`
 
 ---
 
@@ -75,14 +75,14 @@ The workbench includes a blocking bridge script for running in server mode (keep
 **Linux:**
 
 ```bash
-freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **macOS:**
 
 ```bash
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    ~/Library/Application\ Support/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **Using just commands (from source):**

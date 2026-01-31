@@ -198,5 +198,5 @@ Error: Execution timed out after 30000ms
 
 ## Next Steps
 
-- [Tools Reference](tools.md) - Complete API for all 82+ tools
+- [Tools Reference](tools.md) - Complete API for all 150+ tools
 - [MCP Resources](resources.md) - Query FreeCAD state via MCP resources

@@ -255,7 +255,7 @@ freecad_mcp/
 │   ├── xmlrpc.py            # XML-RPC bridge (recommended)
 │   └── protocol.py          # Wire protocol for socket communication
 │
-├── tools/                    # MCP tool implementations (82 tools)
+├── tools/                    # MCP tool implementations (150+ tools)
 │   ├── __init__.py
 │   ├── execution.py         # Python execution & debugging (4 tools)
 │   ├── documents.py         # Document management (7 tools)

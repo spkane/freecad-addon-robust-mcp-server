@@ -283,7 +283,7 @@ jobs:
       - name: Start FreeCAD headless with MCP bridge
         run: |
           # Start FreeCAD headless with MCP bridge in background
-          setsid freecadcmd addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
+          setsid freecadcmd freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
           echo "FREECAD_PID=$FREECAD_PID" >> "$GITHUB_ENV"
 

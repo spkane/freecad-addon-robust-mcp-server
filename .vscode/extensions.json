@@ -7,6 +7,9 @@
     "ms-python.mypy-type-checker",
     "charliermarsh.ruff",
 
+    // Astral ty - experimental Python type checker (from ruff/uv makers)
+    "astral-sh.ty",
+
     // Just (command runner)
     "skellock.just",
 
@@ -21,6 +24,12 @@
     "tamasfe.even-better-toml",
     "redhat.vscode-yaml",
 
+    // EditorConfig (consistent coding styles across editors)
+    "editorconfig.editorconfig",
+
+    // Enhanced comment highlighting (TODO, FIXME, etc.)
+    "aaron-bond.better-comments",
+
     // Markdown
     "DavidAnson.vscode-markdownlint",
 
@@ -31,6 +40,9 @@
     "eamodio.gitlens",
 
     // Spell checking
-    "streetsidesoftware.code-spell-checker"
+    "streetsidesoftware.code-spell-checker",
+
+    // Qt/PySide development (FreeCAD uses Qt for GUI)
+    "theqtcompany.qt-ui"
   ]
 }

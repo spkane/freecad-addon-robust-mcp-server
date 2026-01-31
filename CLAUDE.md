@@ -785,12 +785,17 @@ project-root/
 │   │   ├── pre-commit.yaml       # Pre-commit checks
 │   │   └── test.yaml             # Unit/integration tests
 │   └── dependabot.yaml       # Dependency updates
-├── addon/                    # FreeCAD addon (workbench)
-│   └── FreecadRobustMCPBridge/     # Robust MCP Bridge workbench
+├── freecad/                  # FreeCAD addon namespace package
+│   └── RobustMCPBridge/      # Robust MCP Bridge workbench
+│       ├── Qt/               # Qt/PySide UI components
+│       │   ├── status_widget.py      # Status bar widget
+│       │   └── preferences_page.py   # Preferences dialog
 │       ├── freecad_mcp_bridge/   # Bridge Python package
-│       ├── Init.py           # FreeCAD workbench init
-│       ├── InitGui.py        # FreeCAD GUI init
-│       └── metadata.txt      # Addon metadata
+│       ├── Resources/
+│       │   ├── Icons/        # Workbench icons (SVG)
+│       │   └── Media/        # Screenshots (PNG)
+│       ├── __init__.py       # FreeCAD workbench init (was Init.py)
+│       └── init_gui.py       # FreeCAD GUI init (was InitGui.py)
 ├── docs/                     # MkDocs documentation source
 │   ├── assets/               # Images, diagrams
 │   ├── development/          # Developer guides
@@ -1188,11 +1193,11 @@ An integration test in `tests/integration/test_thread_safety.py` verifies that:
 
 **CRITICAL**: The MCP bridge can be started from THREE different entry points. They must use compatible detection logic:
 
-| File                                             | Purpose                                          |
-| ------------------------------------------------ | ------------------------------------------------ |
-| `addon/FreecadRobustMCPBridge/InitGui.py`        | Auto-start at FreeCAD GUI startup (if enabled)   |
-| `addon/FreecadRobustMCPBridge/Init.py`           | Fallback auto-start when workbench selected      |
-| `addon/.../freecad_mcp_bridge/startup_bridge.py` | Manual start via `just freecad::run-gui`         |
+| File                                               | Purpose                                          |
+| -------------------------------------------------- | ------------------------------------------------ |
+| `freecad/RobustMCPBridge/init_gui.py`              | Auto-start at FreeCAD GUI startup (if enabled)   |
+| `freecad/RobustMCPBridge/__init__.py`              | Fallback auto-start when workbench selected      |
+| `freecad/.../freecad_mcp_bridge/startup_bridge.py` | Manual start via `just freecad::run-gui`         |
 
 **When modifying startup logic in one file, you MUST update the others to match.**
 
@@ -1206,8 +1211,8 @@ All files must have compatible logic for:
 
 **Why these files exist:**
 
-- `InitGui.py` module-level code runs at FreeCAD GUI startup (primary auto-start location)
-- `Init.py` runs when workbench is selected (fallback if InitGui didn't auto-start)
+- `init_gui.py` module-level code runs at FreeCAD GUI startup (primary auto-start location)
+- `__init__.py` runs when workbench is selected (fallback if init_gui didn't auto-start)
 - `startup_bridge.py` is passed as a command-line argument for `just freecad::run-gui`
 - All check if a bridge is already running to avoid conflicts
 
@@ -1594,10 +1599,10 @@ This project uses **component-specific versioning**. Each component has its own 
 
 Each component has its own `RELEASE_NOTES.md` file. Release workflows automatically extract the relevant section for GitHub Releases.
 
-| Component         | Release Notes File                              |
-| ----------------- | ----------------------------------------------- |
-| MCP Server        | `src/freecad_mcp/RELEASE_NOTES.md`              |
-| Robust MCP Bridge | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
+| Component         | Release Notes File                             |
+| ----------------- | ---------------------------------------------- |
+| MCP Server        | `src/freecad_mcp/RELEASE_NOTES.md`             |
+| Robust MCP Bridge | `freecad/RobustMCPBridge/RELEASE_NOTES.md`     |
 
 **Before releasing a component:**
 
@@ -1744,10 +1749,10 @@ Each component has its own `RELEASE_NOTES.md` file that is updated before releas
 
 **Release notes files:**
 
-| Component         | File                                            |
-| ----------------- | ----------------------------------------------- |
-| MCP Server        | `src/freecad_mcp/RELEASE_NOTES.md`              |
-| Robust MCP Bridge | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
+| Component         | File                                           |
+| ----------------- | ---------------------------------------------- |
+| MCP Server        | `src/freecad_mcp/RELEASE_NOTES.md`             |
+| Robust MCP Bridge | `freecad/RobustMCPBridge/RELEASE_NOTES.md`     |
 
 ---
 

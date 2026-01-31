@@ -39,7 +39,7 @@ def _is_main_thread() -> bool:
         try:
             from PySide6 import QtCore, QtWidgets
         except ImportError:
-            from PySide2 import QtCore, QtWidgets
+            from PySide2 import QtCore, QtWidgets  # type: ignore[no-redef]
 
         # Get the QApplication instance
         app = QtWidgets.QApplication.instance()

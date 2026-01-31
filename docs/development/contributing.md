@@ -87,8 +87,8 @@ freecad-robust-mcp-and-more/
 │   ├── resources/             # MCP resource implementations
 │   ├── prompts/               # MCP prompt templates
 │   └── server.py              # Main server entry point
-├── addon/                     # FreeCAD workbench addon
-│   └── FreecadRobustMCPBridge/      # Workbench files
+├── freecad/                   # FreeCAD addon namespace package
+│   └── RobustMCPBridge/       # Workbench files
 ├── tests/                     # Test suite
 │   ├── unit/                  # Unit tests
 │   └── integration/           # Integration tests
