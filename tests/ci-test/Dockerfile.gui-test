@@ -12,7 +12,7 @@
 # Run with local code mounted:
 #   docker run --rm -it -v $(pwd):/workspace freecad-gui-test
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -42,8 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Window manager and X11 tools (required for FreeCAD GUI)
     openbox \
     xdotool \
-    # Tools for debugging
+    # Tools for debugging and version control
     curl \
+    git \
     jq \
     procps \
     strace \
@@ -58,9 +59,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f -v
 
-# Install uv for Python package management
-# hadolint ignore=DL3013
-RUN pip3 install --no-cache-dir uv
+# Install uv for Python package management (using official installer)
+# hadolint ignore=DL3047
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+SHELL ["/bin/sh", "-c"]
+ENV PATH="/root/.local/bin:$PATH"
 
 # Set up working directory
 WORKDIR /workspace

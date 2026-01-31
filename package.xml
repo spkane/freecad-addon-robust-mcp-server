@@ -3,7 +3,7 @@
 
     <name>FreeCAD Robust MCP Bridge</name>
     <description>A robust MCP (Model Context Protocol) bridge workbench for AI assistant integration with FreeCAD.</description>
-    <icon>addon/FreecadRobustMCPBridge/FreecadRobustMCPBridge.svg</icon>
+    <icon>freecad/RobustMCPBridge/Resources/Icons/FreecadRobustMCPBridge.svg</icon>
 
     <!-- Note: Each component has its own version below. This top-level date is for reference only. -->
     <date>2026-01-07</date>
@@ -12,6 +12,7 @@
     <author email="spkane@gmail.com">Sean P. Kane</author>
 
     <license file="LICENSE">MIT</license>
+    <license file="LICENSE-ICON">CC-BY-NC-SA-4.0</license>
 
     <freecadmin>0.21</freecadmin>
 
@@ -35,10 +36,10 @@
             <name>Robust MCP Bridge</name>
             <version>0.6.2</version>
             <date>2026-01-18</date>
-            <description>Robust MCP Bridge workbench for AI assistant integration with FreeCAD. Uses the Model Context Protocol (MCP) to connect AI assistants like Claude Code and Cursor to FreeCAD. Works in both GUI mode (with full visual features including screenshots, colors, and camera control) and headless mode (for automation and CI/CD). Provides toolbar commands to start, stop, and monitor the MCP bridge server. Supports XML-RPC and JSON-RPC protocols with 82+ CAD tools.</description>
+            <description>Robust MCP Bridge workbench for AI assistant integration with FreeCAD. Uses the Model Context Protocol (MCP) to connect AI assistants like Claude Code and Cursor to FreeCAD. Works in both GUI mode (with full visual features including screenshots, colors, and camera control) and headless mode (for automation and CI/CD). Provides toolbar commands to start, stop, and monitor the MCP bridge server. Supports XML-RPC and JSON-RPC protocols with 150+ CAD tools.</description>
             <classname>FreecadRobustMCPBridgeWorkbench</classname>
-            <subdirectory>./addon/FreecadRobustMCPBridge/</subdirectory>
-            <icon>FreecadRobustMCPBridge.svg</icon>
+            <subdirectory>./freecad/RobustMCPBridge/</subdirectory>
+            <icon>Resources/Icons/FreecadRobustMCPBridge.svg</icon>
             <freecadmin>0.21</freecadmin>
         </workbench>
 

@@ -2,6 +2,9 @@
 
 These tests verify that the addon has the correct file structure and
 that the Python files are valid (can be parsed).
+
+Note: This addon uses the new-style namespace package format:
+    freecad/RobustMCPBridge/
 """
 
 import ast
@@ -9,10 +12,14 @@ from pathlib import Path
 
 import pytest
 
-# Get the addon directory path
-ADDON_DIR = (
-    Path(__file__).parent.parent.parent.parent / "addon" / "FreecadRobustMCPBridge"
-)
+# Get the addon directory path (new-style namespace package format)
+ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPBridge"
+
+
+@pytest.fixture
+def addon_dir() -> Path:
+    """Fixture providing the addon directory path."""
+    return ADDON_DIR
 
 
 class TestAddonFileStructure:
@@ -23,87 +30,90 @@ class TestAddonFileStructure:
         assert ADDON_DIR.exists(), f"Addon directory not found: {ADDON_DIR}"
         assert ADDON_DIR.is_dir(), f"Addon path is not a directory: {ADDON_DIR}"
 
-    def test_init_py_exists(self) -> None:
-        """Init.py should exist in the addon directory."""
-        init_file = ADDON_DIR / "Init.py"
-        assert init_file.exists(), f"Init.py not found: {init_file}"
+    @pytest.mark.parametrize(
+        ("subdir", "description"),
+        [
+            ("freecad_mcp_bridge", "bridge module"),
+            ("Qt", "Qt UI components"),
+            (Path("Resources") / "Media", "Resources/Media screenshots"),
+        ],
+        ids=["bridge_module", "qt_module", "resources_media"],
+    )
+    def test_subdirectory_exists(self, subdir: str | Path, description: str) -> None:
+        """Subdirectories should exist."""
+        dir_path = ADDON_DIR / subdir
+        assert dir_path.exists(), f"{description} not found: {dir_path}"
+        assert dir_path.is_dir(), f"{description} is not a directory: {dir_path}"
 
-    def test_initgui_py_exists(self) -> None:
-        """InitGui.py should exist in the addon directory."""
-        initgui_file = ADDON_DIR / "InitGui.py"
-        assert initgui_file.exists(), f"InitGui.py not found: {initgui_file}"
-
-    def test_icon_exists(self) -> None:
-        """The workbench icon should exist."""
-        icon_file = ADDON_DIR / "FreecadRobustMCPBridge.svg"
-        assert icon_file.exists(), f"Icon not found: {icon_file}"
-
-    def test_bridge_module_exists(self) -> None:
-        """The bridge module directory should exist."""
-        bridge_dir = ADDON_DIR / "freecad_mcp_bridge"
-        assert bridge_dir.exists(), f"Bridge module not found: {bridge_dir}"
-        assert bridge_dir.is_dir(), f"Bridge path is not a directory: {bridge_dir}"
-
-    def test_bridge_init_exists(self) -> None:
-        """The bridge module __init__.py should exist."""
-        init_file = ADDON_DIR / "freecad_mcp_bridge" / "__init__.py"
-        assert init_file.exists(), f"Bridge __init__.py not found: {init_file}"
-
-    def test_bridge_server_exists(self) -> None:
-        """The bridge server.py should exist."""
-        server_file = ADDON_DIR / "freecad_mcp_bridge" / "server.py"
-        assert server_file.exists(), f"Bridge server.py not found: {server_file}"
-
-    def test_blocking_bridge_exists(self) -> None:
-        """The blocking_bridge.py should exist for blocking server mode."""
-        blocking_file = ADDON_DIR / "freecad_mcp_bridge" / "blocking_bridge.py"
-        assert blocking_file.exists(), f"blocking_bridge.py not found: {blocking_file}"
-
-    def test_bridge_utils_exists(self) -> None:
-        """The bridge_utils.py should exist for shared utilities."""
-        utils_file = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
-        assert utils_file.exists(), f"bridge_utils.py not found: {utils_file}"
+    @pytest.mark.parametrize(
+        ("filepath", "description"),
+        [
+            ("__init__.py", "__init__.py (new-style)"),
+            ("init_gui.py", "init_gui.py (new-style)"),
+            (
+                Path("Resources") / "Icons" / "FreecadRobustMCPBridge.svg",
+                "workbench icon",
+            ),
+            (Path("freecad_mcp_bridge") / "__init__.py", "bridge __init__.py"),
+            (Path("freecad_mcp_bridge") / "server.py", "bridge server.py"),
+            (Path("freecad_mcp_bridge") / "blocking_bridge.py", "blocking_bridge.py"),
+            (Path("freecad_mcp_bridge") / "bridge_utils.py", "bridge_utils.py"),
+            (Path("Qt") / "__init__.py", "Qt __init__.py"),
+            (Path("Qt") / "status_widget.py", "Qt status_widget.py"),
+            (Path("Qt") / "preferences_page.py", "Qt preferences_page.py"),
+        ],
+        ids=[
+            "init_py",
+            "init_gui_py",
+            "icon",
+            "bridge_init",
+            "bridge_server",
+            "blocking_bridge",
+            "bridge_utils",
+            "qt_init",
+            "qt_status_widget",
+            "qt_preferences_page",
+        ],
+    )
+    def test_file_exists(self, filepath: str | Path, description: str) -> None:
+        """Required files should exist."""
+        file_path = ADDON_DIR / filepath
+        assert file_path.exists(), f"{description} not found: {file_path}"
 
 
 class TestAddonPythonSyntax:
     """Tests to verify Python files have valid syntax."""
 
-    def test_init_py_valid_syntax(self) -> None:
-        """Init.py should have valid Python syntax."""
-        init_file = ADDON_DIR / "Init.py"
-        code = init_file.read_text()
+    @pytest.mark.parametrize(
+        "filepath",
+        [
+            "__init__.py",
+            "init_gui.py",
+            Path("freecad_mcp_bridge") / "__init__.py",
+            Path("freecad_mcp_bridge") / "server.py",
+            Path("freecad_mcp_bridge") / "blocking_bridge.py",
+            Path("freecad_mcp_bridge") / "bridge_utils.py",
+            Path("Qt") / "__init__.py",
+            Path("Qt") / "status_widget.py",
+            Path("Qt") / "preferences_page.py",
+        ],
+        ids=[
+            "init_py",
+            "init_gui_py",
+            "bridge_init",
+            "bridge_server",
+            "blocking_bridge",
+            "bridge_utils",
+            "qt_init",
+            "qt_status_widget",
+            "qt_preferences_page",
+        ],
+    )
+    def test_python_file_valid_syntax(self, filepath: str | Path) -> None:
+        """Python files should have valid syntax."""
+        file_path = ADDON_DIR / filepath
+        code = file_path.read_text()
         # This will raise SyntaxError if invalid
-        ast.parse(code)
-
-    def test_initgui_py_valid_syntax(self) -> None:
-        """InitGui.py should have valid Python syntax."""
-        initgui_file = ADDON_DIR / "InitGui.py"
-        code = initgui_file.read_text()
-        # This will raise SyntaxError if invalid
-        ast.parse(code)
-
-    def test_bridge_init_valid_syntax(self) -> None:
-        """Bridge __init__.py should have valid Python syntax."""
-        init_file = ADDON_DIR / "freecad_mcp_bridge" / "__init__.py"
-        code = init_file.read_text()
-        ast.parse(code)
-
-    def test_bridge_server_valid_syntax(self) -> None:
-        """Bridge server.py should have valid Python syntax."""
-        server_file = ADDON_DIR / "freecad_mcp_bridge" / "server.py"
-        code = server_file.read_text()
-        ast.parse(code)
-
-    def test_blocking_bridge_valid_syntax(self) -> None:
-        """blocking_bridge.py should have valid Python syntax."""
-        blocking_file = ADDON_DIR / "freecad_mcp_bridge" / "blocking_bridge.py"
-        code = blocking_file.read_text()
-        ast.parse(code)
-
-    def test_bridge_utils_valid_syntax(self) -> None:
-        """bridge_utils.py should have valid Python syntax."""
-        utils_file = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
-        code = utils_file.read_text()
         ast.parse(code)
 
 
@@ -111,29 +121,29 @@ class TestAddonMetadata:
     """Tests for addon metadata and content."""
 
     def test_init_py_has_freecad_import(self) -> None:
-        """Init.py should import FreeCAD."""
-        init_file = ADDON_DIR / "Init.py"
+        """__init__.py should import FreeCAD."""
+        init_file = ADDON_DIR / "__init__.py"
         code = init_file.read_text()
         assert "import FreeCAD" in code
 
-    def test_initgui_py_has_workbench_class(self) -> None:
-        """InitGui.py should define the workbench class."""
-        initgui_file = ADDON_DIR / "InitGui.py"
-        code = initgui_file.read_text()
+    def test_init_gui_py_has_workbench_class(self) -> None:
+        """init_gui.py should define the workbench class."""
+        init_gui_file = ADDON_DIR / "init_gui.py"
+        code = init_gui_file.read_text()
         assert "FreecadRobustMCPBridgeWorkbench" in code
         assert "Gui.Workbench" in code or "Workbench" in code
 
-    def test_initgui_py_has_commands(self) -> None:
-        """InitGui.py should define start/stop commands."""
-        initgui_file = ADDON_DIR / "InitGui.py"
-        code = initgui_file.read_text()
+    def test_init_gui_py_has_commands(self) -> None:
+        """init_gui.py should define start/stop commands."""
+        init_gui_file = ADDON_DIR / "init_gui.py"
+        code = init_gui_file.read_text()
         assert "StartMCPBridgeCommand" in code
         assert "StopMCPBridgeCommand" in code
 
-    def test_initgui_py_registers_workbench(self) -> None:
-        """InitGui.py should register the workbench."""
-        initgui_file = ADDON_DIR / "InitGui.py"
-        code = initgui_file.read_text()
+    def test_init_gui_py_registers_workbench(self) -> None:
+        """init_gui.py should register the workbench."""
+        init_gui_file = ADDON_DIR / "init_gui.py"
+        code = init_gui_file.read_text()
         assert "Gui.addWorkbench" in code
 
     def test_bridge_server_has_plugin_class(self) -> None:
@@ -162,7 +172,7 @@ class TestAddonMetadata:
 
     def test_icon_is_valid_svg(self) -> None:
         """The icon should be a valid SVG file."""
-        icon_file = ADDON_DIR / "FreecadRobustMCPBridge.svg"
+        icon_file = ADDON_DIR / "Resources" / "Icons" / "FreecadRobustMCPBridge.svg"
         content = icon_file.read_text()
         assert content.startswith("<?xml") or content.startswith("<svg")
         assert "<svg" in content
@@ -174,7 +184,7 @@ class TestAddonIconSize:
 
     def test_icon_size_under_10kb(self) -> None:
         """The icon file should be under 10KB (FreeCAD requirement)."""
-        icon_file = ADDON_DIR / "FreecadRobustMCPBridge.svg"
+        icon_file = ADDON_DIR / "Resources" / "Icons" / "FreecadRobustMCPBridge.svg"
         size_bytes = icon_file.stat().st_size
         size_kb = size_bytes / 1024
         assert size_kb <= 10, f"Icon is {size_kb:.2f}KB, must be <= 10KB"
@@ -198,9 +208,9 @@ class TestPackageXml:
         assert "<classname>FreecadRobustMCPBridgeWorkbench</classname>" in package_xml
 
     def test_workbench_subdirectory(self, package_xml: str) -> None:
-        """package.xml should reference the correct subdirectory."""
-        assert "./addon/FreecadRobustMCPBridge/" in package_xml
+        """package.xml should reference the correct subdirectory (new-style)."""
+        assert "./freecad/RobustMCPBridge/" in package_xml
 
     def test_workbench_icon(self, package_xml: str) -> None:
-        """package.xml should reference the workbench icon."""
-        assert "<icon>FreecadRobustMCPBridge.svg</icon>" in package_xml
+        """package.xml should reference the workbench icon (new-style path)."""
+        assert "Resources/Icons/FreecadRobustMCPBridge.svg</icon>" in package_xml

@@ -54,7 +54,7 @@ class StartMCPBridgeCommand:
             socket_port = 9876
 
         return {
-            "Pixmap": get_icon_path("icons/mcp_start.svg"),
+            "Pixmap": get_icon_path("Resources/Icons/mcp_start.svg"),
             "MenuText": "Start MCP Bridge",
             "ToolTip": (
                 "Start the MCP bridge server for AI assistant integration.\n"
@@ -81,7 +81,7 @@ class StartMCPBridgeCommand:
                 get_status_bar_enabled,
                 get_xmlrpc_port,
             )
-            from status_widget import (
+            from Qt.status_widget import (
                 update_status_error,
                 update_status_running,
                 update_status_starting,
@@ -133,11 +133,11 @@ class StartMCPBridgeCommand:
             _running_config = None
             FreeCAD.Console.PrintError(f"Failed to import MCP Bridge module: {e}\n")
             FreeCAD.Console.PrintError(
-                "Ensure the FreecadRobustMCPBridge addon is properly installed.\n"
+                "Ensure the Robust MCP Bridge addon is properly installed.\n"
             )
             try:
                 from preferences import get_status_bar_enabled
-                from status_widget import update_status_error
+                from Qt.status_widget import update_status_error
 
                 if get_status_bar_enabled():
                     update_status_error(str(e))
@@ -150,7 +150,7 @@ class StartMCPBridgeCommand:
             FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
             try:
                 from preferences import get_status_bar_enabled
-                from status_widget import update_status_error
+                from Qt.status_widget import update_status_error
 
                 if get_status_bar_enabled():
                     update_status_error(str(e))
@@ -164,7 +164,7 @@ class StopMCPBridgeCommand:
     def GetResources(self) -> dict[str, str]:
         """Return the command resources (icon, menu text, tooltip)."""
         return {
-            "Pixmap": get_icon_path("icons/mcp_stop.svg"),
+            "Pixmap": get_icon_path("Resources/Icons/mcp_stop.svg"),
             "MenuText": "Stop MCP Bridge",
             "ToolTip": "Stop the running MCP bridge server.",
         }
@@ -189,7 +189,7 @@ class StopMCPBridgeCommand:
             # Update status bar widget
             try:
                 from preferences import get_status_bar_enabled
-                from status_widget import update_status_stopped
+                from Qt.status_widget import update_status_stopped
 
                 if get_status_bar_enabled():
                     update_status_stopped()
@@ -211,7 +211,7 @@ class MCPBridgeStatusCommand:
     def GetResources(self) -> dict[str, str]:
         """Return the command resources (icon, menu text, tooltip)."""
         return {
-            "Pixmap": get_icon_path("icons/mcp_status.svg"),
+            "Pixmap": get_icon_path("Resources/Icons/mcp_status.svg"),
             "MenuText": "MCP Bridge Status",
             "ToolTip": "Show the current status of the MCP bridge server.",
         }
@@ -259,7 +259,7 @@ def restart_bridge_if_running() -> bool:
     # Update status bar widget
     try:
         from preferences import get_status_bar_enabled
-        from status_widget import update_status_starting
+        from Qt.status_widget import update_status_starting
 
         if get_status_bar_enabled():
             update_status_starting()
@@ -275,7 +275,7 @@ def restart_bridge_if_running() -> bool:
         FreeCAD.Console.PrintError(f"Failed to stop MCP Bridge: {e}\n")
         try:
             from preferences import get_status_bar_enabled
-            from status_widget import update_status_error
+            from Qt.status_widget import update_status_error
 
             if get_status_bar_enabled():
                 update_status_error(str(e))
@@ -287,7 +287,7 @@ def restart_bridge_if_running() -> bool:
     try:
         from freecad_mcp_bridge.server import FreecadMCPPlugin
         from preferences import get_socket_port, get_status_bar_enabled, get_xmlrpc_port
-        from status_widget import update_status_running
+        from Qt.status_widget import update_status_running
 
         xmlrpc_port = get_xmlrpc_port()
         socket_port = get_socket_port()
@@ -318,7 +318,7 @@ def restart_bridge_if_running() -> bool:
         FreeCAD.Console.PrintError(f"Failed to restart MCP Bridge: {e}\n")
         try:
             from preferences import get_status_bar_enabled
-            from status_widget import update_status_error
+            from Qt.status_widget import update_status_error
 
             if get_status_bar_enabled():
                 update_status_error(str(e))
@@ -333,7 +333,9 @@ class MCPBridgePreferencesCommand:
     def GetResources(self) -> dict[str, str]:
         """Return the command resources (icon, menu text, tooltip)."""
         return {
-            "Pixmap": get_icon_path("icons/preferences-robust_mcp_bridge.svg"),
+            "Pixmap": get_icon_path(
+                "Resources/Icons/preferences-robust_mcp_bridge.svg"
+            ),
             "MenuText": "MCP Bridge Preferences...",
             "ToolTip": "Configure MCP Bridge settings (ports, auto-start, etc.)",
         }
@@ -367,9 +369,9 @@ class MCPBridgePreferencesCommand:
             from PySide6 import QtWidgets
         except ImportError:
             try:
-                from PySide2 import QtWidgets
+                from PySide2 import QtWidgets  # type: ignore[no-redef]
             except ImportError:
-                from PySide import QtWidgets  # type: ignore[import-not-found]
+                from PySide import QtWidgets  # type: ignore[import-not-found,no-redef]
 
         # Create the dialog
         dialog = QtWidgets.QDialog(FreeCADGui.getMainWindow())
@@ -440,15 +442,18 @@ class MCPBridgePreferencesCommand:
         layout.addWidget(status_group)
 
         # Buttons
+        # Note: PySide6 uses StandardButton.Ok, PySide2 uses Ok directly
         button_box = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            QtWidgets.QDialogButtonBox.Ok  # type: ignore[attr-defined]
+            | QtWidgets.QDialogButtonBox.Cancel  # type: ignore[attr-defined]
         )
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
         layout.addWidget(button_box)
 
         # Show dialog (use exec() not exec_() which is deprecated in PySide6)
-        if dialog.exec() == QtWidgets.QDialog.Accepted:
+        # Note: PySide6 uses DialogCode.Accepted, PySide2 uses Accepted directly
+        if dialog.exec() == QtWidgets.QDialog.Accepted:  # type: ignore[attr-defined]
             # Save preferences
             old_xmlrpc = get_xmlrpc_port()
             old_socket = get_socket_port()

@@ -27,7 +27,7 @@ Before starting, ensure you have:
 
 ```bash
 # If installed via Addon Manager (Linux)
-FreeCADCmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+FreeCADCmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 
 # If working from source
 just freecad::run-headless
@@ -76,7 +76,7 @@ Try these example prompts with your AI assistant:
 
 ## Step 4: Explore Available Tools
 
-The MCP server provides 82+ tools organized into categories:
+The MCP server provides 150+ tools organized into categories:
 
 | Category   | Examples                                             |
 | ---------- | ---------------------------------------------------- |

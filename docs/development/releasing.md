@@ -128,7 +128,7 @@ Each component has its own `RELEASE_NOTES.md` file. Release workflows automatica
 | Component                   | Release Notes File                              |
 | --------------------------- | ----------------------------------------------- |
 | MCP Server                  | `src/freecad_mcp/RELEASE_NOTES.md`              |
-| Robust MCP Bridge Workbench | `addon/FreecadRobustMCPBridge/RELEASE_NOTES.md` |
+| Robust MCP Bridge Workbench | `freecad/RobustMCPBridge/RELEASE_NOTES.md`      |
 
 #### Draft Release Notes
 
@@ -231,7 +231,7 @@ just release::tag-workbench 1.0.0
 
 **Files updated by `bump-workbench`:**
 
-- `addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py` (`__version__`)
+- `freecad/RobustMCPBridge/freecad_mcp_bridge/__init__.py` (`__version__`)
 - `package.xml` (workbench section: `<version>` and `<date>`)
 
 **What happens automatically:**

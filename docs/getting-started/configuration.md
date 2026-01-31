@@ -222,7 +222,7 @@ just freecad::run-gui
 just freecad::run-headless
 
 # Or run directly with FreeCADCmd
-FreeCADCmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+FreeCADCmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 ---

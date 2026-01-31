@@ -70,6 +70,9 @@ dev = [
     # Linting and formatting
     "mypy>=1.14.0",
     "ruff>=0.8.0",
+    # Type stubs for FreeCAD/Qt development
+    "freecad-stubs>=1.0.21",
+    "PySide6-stubs>=6.7.0",
     # Security scanning
     "bandit[toml]>=1.8.0",
     "safety>=3.2.0",

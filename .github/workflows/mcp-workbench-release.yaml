@@ -55,7 +55,7 @@ jobs:
           echo "Verifying version in source files matches tag: $VERSION"
 
           # Check __version__ in __init__.py
-          INIT_FILE="addon/FreecadRobustMCPBridge/freecad_mcp_bridge/__init__.py"
+          INIT_FILE="freecad/RobustMCPBridge/freecad_mcp_bridge/__init__.py"
           INIT_VERSION=$(grep -o '__version__ = "[^"]*"' "$INIT_FILE" | cut -d'"' -f2)
           if [ "$INIT_VERSION" != "$VERSION" ]; then
               echo "ERROR: Version mismatch in $INIT_FILE"
@@ -85,16 +85,16 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Create staging directory
-          mkdir -p "staging/freecad-mcp-workbench-${VERSION}"
+          # Create staging directory with namespace path preserved
+          mkdir -p "staging/freecad-mcp-workbench-${VERSION}/freecad"
 
-          # Copy workbench files
-          cp -r addon/FreecadRobustMCPBridge/* "staging/freecad-mcp-workbench-${VERSION}/"
+          # Copy workbench files (preserve namespace path)
+          cp -r freecad/RobustMCPBridge "staging/freecad-mcp-workbench-${VERSION}/freecad/"
 
-          # Copy LICENSE
-          cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/"
+          # Copy LICENSE to the workbench directory
+          cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/freecad/RobustMCPBridge/"
 
-          # Create README for the archive
+          # Create README for the archive (at archive root)
           cat > "staging/freecad-mcp-workbench-${VERSION}/README.md" << EOF
           # Robust MCP Bridge Workbench
 
@@ -112,11 +112,11 @@ jobs:
 
           ### Manual Installation
 
-          Copy the contents of this archive to your FreeCAD Mod directory:
+          Extract this archive into your FreeCAD Mod directory (it includes \`freecad/RobustMCPBridge/\`):
 
-          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCPBridge/\`
-          - **Linux**: \`~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/\`
-          - **Windows**: \`%APPDATA%/FreeCAD/Mod/FreecadRobustMCPBridge/\`
+          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/\`
+          - **Linux**: \`~/.local/share/FreeCAD/Mod/\`
+          - **Windows**: \`%APPDATA%/FreeCAD/Mod/\`
 
           ## Usage
 
@@ -151,7 +151,7 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          RELEASE_NOTES="addon/FreecadRobustMCPBridge/RELEASE_NOTES.md"
+          RELEASE_NOTES="freecad/RobustMCPBridge/RELEASE_NOTES.md"
 
           # Extract section for this version from RELEASE_NOTES.md
           # Format: ## Version X.Y.Z (date)

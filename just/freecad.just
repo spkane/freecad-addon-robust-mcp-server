@@ -14,7 +14,7 @@ run-headless:
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
     # Use the blocking bridge script from the addon directory (source of truth)
-    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py"
+    SCRIPT_PATH="${PROJECT_DIR}/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py"
 
     # Find FreeCADCmd executable based on OS
     FREECAD_CMD=""
@@ -73,7 +73,7 @@ run-headless-custom freecad_cmd:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    SCRIPT_PATH="${PROJECT_DIR}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py"
+    SCRIPT_PATH="${PROJECT_DIR}/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py"
 
     if [[ ! -x "{{freecad_cmd}}" ]]; then
         echo "ERROR: FreeCADCmd not found or not executable: {{freecad_cmd}}"
@@ -95,7 +95,7 @@ run-gui:
     PROJECT_DIR="{{project_root}}"
 
     # Use the shared startup script from the addon directory
-    STARTUP_SCRIPT="${PROJECT_DIR}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/startup_bridge.py"
+    STARTUP_SCRIPT="${PROJECT_DIR}/freecad/RobustMCPBridge/freecad_mcp_bridge/startup_bridge.py"
 
     if [[ ! -f "$STARTUP_SCRIPT" ]]; then
         echo "ERROR: Startup script not found: $STARTUP_SCRIPT"
@@ -172,7 +172,7 @@ run-gui-custom freecad_path:
     PROJECT_DIR="{{project_root}}"
 
     # Use the shared startup script from the addon directory
-    STARTUP_SCRIPT="${PROJECT_DIR}/addon/FreecadRobustMCPBridge/freecad_mcp_bridge/startup_bridge.py"
+    STARTUP_SCRIPT="${PROJECT_DIR}/freecad/RobustMCPBridge/freecad_mcp_bridge/startup_bridge.py"
 
     if [[ ! -f "$STARTUP_SCRIPT" ]]; then
         echo "ERROR: Startup script not found: $STARTUP_SCRIPT"

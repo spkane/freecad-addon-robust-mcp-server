@@ -128,19 +128,23 @@ uninstall-mcp-server:
 # =============================================================================
 
 # Install the FreeCAD Robust MCP workbench addon to FreeCAD's Mod directory
+# Uses new-style namespace package format: Mod/freecad/RobustMCPBridge/
 mcp-bridge-workbench:
     #!/usr/bin/env bash
     set -euo pipefail
     PROJECT_DIR="{{project_root}}"
-    ADDON_NAME="FreecadRobustMCPBridge"
+    # New-style namespace package: freecad/RobustMCPBridge
+    ADDON_NAMESPACE="freecad"
+    ADDON_NAME="RobustMCPBridge"
 
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
 
-    ADDON_DEST="$MOD_DIR/$ADDON_NAME"
+    # Install to Mod/freecad/RobustMCPBridge/ (namespace package structure)
+    ADDON_DEST="$MOD_DIR/$ADDON_NAMESPACE/$ADDON_NAME"
 
-    # Create Mod directory if it doesn't exist
-    mkdir -p "$MOD_DIR"
+    # Create namespace directory structure if it doesn't exist
+    mkdir -p "$MOD_DIR/$ADDON_NAMESPACE"
 
     # Remove existing installation if present
     if [[ -d "$ADDON_DEST" ]]; then
@@ -148,8 +152,15 @@ mcp-bridge-workbench:
         rm -rf "$ADDON_DEST"
     fi
 
+    # Also remove old-style installation if present (FreecadRobustMCPBridge)
+    OLD_STYLE_DEST="$MOD_DIR/FreecadRobustMCPBridge"
+    if [[ -d "$OLD_STYLE_DEST" ]]; then
+        echo "Removing legacy old-style installation at: $OLD_STYLE_DEST"
+        rm -rf "$OLD_STYLE_DEST"
+    fi
+
     # Verify source exists before copying
-    ADDON_SRC="${PROJECT_DIR}/addon/$ADDON_NAME"
+    ADDON_SRC="${PROJECT_DIR}/$ADDON_NAMESPACE/$ADDON_NAME"
     if [[ ! -d "$ADDON_SRC" ]]; then
         echo "Error: Addon source directory not found: $ADDON_SRC" >&2
         exit 1
@@ -238,7 +249,7 @@ mcp-bridge-workbench:
             u = ET.SubElement(standalone, 'url', type='readme')
             u.text = readme_url.text
 
-        icon_text = wb_icon.text if wb_icon is not None else 'FreecadRobustMCPBridge.svg'
+        icon_text = wb_icon.text if wb_icon is not None else 'Resources/Icons/FreecadRobustMCPBridge.svg'
         ET.SubElement(standalone, 'icon').text = icon_text
         fcmin_text = wb_freecadmin.text if wb_freecadmin is not None else '0.21'
         ET.SubElement(standalone, 'freecadmin').text = fcmin_text
@@ -305,18 +316,27 @@ mcp-bridge-workbench:
 uninstall-mcp-bridge-workbench:
     #!/usr/bin/env bash
     set -euo pipefail
-    ADDON_NAME="FreecadRobustMCPBridge"
+    # New-style namespace package: freecad/RobustMCPBridge
+    ADDON_NAMESPACE="freecad"
+    ADDON_NAME="RobustMCPBridge"
 
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
 
-    ADDON_DEST="$MOD_DIR/$ADDON_NAME"
+    ADDON_DEST="$MOD_DIR/$ADDON_NAMESPACE/$ADDON_NAME"
 
     if [[ -d "$ADDON_DEST" ]]; then
         rm -rf "$ADDON_DEST"
         echo "FreeCAD Robust MCP Workbench uninstalled from: $ADDON_DEST"
     else
         echo "Workbench not found at: $ADDON_DEST"
+    fi
+
+    # Also remove old-style installation if present
+    OLD_STYLE_DEST="$MOD_DIR/FreecadRobustMCPBridge"
+    if [[ -d "$OLD_STYLE_DEST" ]]; then
+        rm -rf "$OLD_STYLE_DEST"
+        echo "Legacy old-style workbench uninstalled from: $OLD_STYLE_DEST"
     fi
 
 # =============================================================================
@@ -394,17 +414,30 @@ status:
     ' 2>/dev/null || echo "unknown"
     }
 
-    # Check workbench
-    if [[ -d "$MOD_DIR/FreecadRobustMCPBridge" ]]; then
+    # Check workbench (new-style namespace package: freecad/RobustMCPBridge)
+    WB_PATH="$MOD_DIR/freecad/RobustMCPBridge"
+    if [[ -d "$WB_PATH" ]]; then
+        WB_VERSION="unknown"
+        if [[ -f "$WB_PATH/package.xml" ]]; then
+            WB_VERSION=$(extract_package_version "$WB_PATH/package.xml")
+        fi
+        WB_MOD_TIME=$(get_mod_time "$WB_PATH/init_gui.py")
+        echo "✓ Robust MCP Bridge Workbench: INSTALLED"
+        echo "  Version: $WB_VERSION"
+        echo "  Updated: $WB_MOD_TIME"
+        echo "  Path: $WB_PATH"
+    # Also check old-style installation
+    elif [[ -d "$MOD_DIR/FreecadRobustMCPBridge" ]]; then
         WB_VERSION="unknown"
         if [[ -f "$MOD_DIR/FreecadRobustMCPBridge/package.xml" ]]; then
             WB_VERSION=$(extract_package_version "$MOD_DIR/FreecadRobustMCPBridge/package.xml")
         fi
         WB_MOD_TIME=$(get_mod_time "$MOD_DIR/FreecadRobustMCPBridge/InitGui.py")
-        echo "✓ Robust MCP Bridge Workbench: INSTALLED"
+        echo "⚠ Robust MCP Bridge Workbench: INSTALLED (legacy format)"
         echo "  Version: $WB_VERSION"
         echo "  Updated: $WB_MOD_TIME"
         echo "  Path: $MOD_DIR/FreecadRobustMCPBridge"
+        echo "  Note: Reinstall to upgrade to new format: just install::mcp-bridge-workbench"
     else
         echo "✗ Robust MCP Bridge Workbench: NOT INSTALLED"
         echo "  Install: just install::mcp-bridge-workbench"

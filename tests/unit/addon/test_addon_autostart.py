@@ -1,6 +1,6 @@
 """Tests for the FreeCAD Robust MCP workbench auto-start logic.
 
-These tests verify that the auto-start logic in Init.py is correctly
+These tests verify that the auto-start logic in __init__.py is correctly
 implemented with proper diagnostic logging and all code paths covered.
 
 This test suite was added after discovering a bug where auto-start wasn't
@@ -13,10 +13,8 @@ from pathlib import Path
 
 import pytest
 
-# Get the addon directory path
-ADDON_DIR = (
-    Path(__file__).parent.parent.parent.parent / "addon" / "FreecadRobustMCPBridge"
-)
+# Get the addon directory path (new-style namespace package format)
+ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPBridge"
 
 
 class TestAutoStartPreferences:
@@ -70,24 +68,24 @@ class TestAutoStartPreferences:
 
 
 class TestAutoStartInitLogic:
-    """Tests for auto-start logic in Init.py."""
+    """Tests for auto-start logic in __init__.py."""
 
     @pytest.fixture
     def init_code(self) -> str:
-        """Load Init.py content."""
-        return (ADDON_DIR / "Init.py").read_text()
+        """Load __init__.py content."""
+        return (ADDON_DIR / "__init__.py").read_text()
 
     def test_imports_get_auto_start(self, init_code: str) -> None:
-        """Init.py should import get_auto_start from preferences."""
+        """__init__.py should import get_auto_start from preferences."""
         assert "from preferences import get_auto_start" in init_code
 
     def test_checks_auto_start_preference(self, init_code: str) -> None:
-        """Init.py should check the auto_start preference value."""
+        """__init__.py should check the auto_start preference value."""
         # Should call get_auto_start() and store/check the result
         assert "get_auto_start()" in init_code
 
     def test_logs_auto_start_preference_value(self, init_code: str) -> None:
-        """Init.py should log whether auto-start is enabled.
+        """__init__.py should log whether auto-start is enabled.
 
         This diagnostic logging helps debug auto-start issues by showing
         what value was read from preferences.
@@ -96,7 +94,7 @@ class TestAutoStartInitLogic:
         assert "Auto-start preference" in init_code
 
     def test_logs_gui_state(self, init_code: str) -> None:
-        """Init.py should log GuiUp, QtCore, and QApp availability.
+        """__init__.py should log GuiUp, QtCore, and QApp availability.
 
         This diagnostic logging helps debug which code path is taken.
         """
@@ -105,18 +103,18 @@ class TestAutoStartInitLogic:
         assert "QApp=" in init_code
 
     def test_handles_gui_already_up_path(self, init_code: str) -> None:
-        """Init.py should handle the case when GUI is already up."""
+        """__init__.py should handle the case when GUI is already up."""
         # Should check FreeCAD.GuiUp and log accordingly
         assert "GUI already up" in init_code
 
     def test_handles_gui_not_ready_path(self, init_code: str) -> None:
-        """Init.py should handle the case when GUI is not yet ready."""
+        """__init__.py should handle the case when GUI is not yet ready."""
         # Should use GuiWaiter when GUI is not ready but Qt is available
         assert "GUI not ready" in init_code
         assert "GuiWaiter" in init_code
 
     def test_handles_headless_path(self, init_code: str) -> None:
-        """Init.py should handle true headless mode (QCoreApplication only)."""
+        """__init__.py should handle true headless mode (QCoreApplication only)."""
         # Should detect and handle true headless mode
         assert "True headless mode" in init_code or "headless" in init_code.lower()
         # Should check QCoreApplication to detect true headless
@@ -125,7 +123,7 @@ class TestAutoStartInitLogic:
         assert "isinstance" in init_code
 
     def test_imports_gui_waiter(self, init_code: str) -> None:
-        """Init.py should import GuiWaiter for waiting on GUI."""
+        """__init__.py should import GuiWaiter for waiting on GUI."""
         assert "from freecad_mcp_bridge.bridge_utils import GuiWaiter" in init_code
 
     def test_uses_single_shot_timer_for_gui_up(self, init_code: str) -> None:
@@ -152,7 +150,7 @@ class TestAutoStartInitLogic:
         Both _auto_start_timer and _gui_waiter must be defined at module level
         (not indented) to prevent garbage collection of Qt timers and callbacks.
         """
-        assert var_name in init_code, f"{var_name} should be present in Init.py"
+        assert var_name in init_code, f"{var_name} should be present in __init__.py"
         # Verify module-level definition (line starts with var name, not indented)
         lines = init_code.split("\n")
         for line in lines:
@@ -167,8 +165,8 @@ class TestAutoStartBridgeFunction:
 
     @pytest.fixture
     def init_code(self) -> str:
-        """Load Init.py content."""
-        return (ADDON_DIR / "Init.py").read_text()
+        """Load __init__.py content."""
+        return (ADDON_DIR / "__init__.py").read_text()
 
     def test_auto_start_bridge_function_exists(self, init_code: str) -> None:
         """_auto_start_bridge function should exist."""
@@ -177,7 +175,7 @@ class TestAutoStartBridgeFunction:
     def test_auto_start_bridge_checks_preference_again(self, init_code: str) -> None:
         """_auto_start_bridge should re-check preference before starting.
 
-        This handles the case where preference changed between Init.py load
+        This handles the case where preference changed between __init__.py load
         and the deferred timer firing.
         """
         # Parse the function body
@@ -279,26 +277,26 @@ class TestGuiWaiterUsage:
 
 
 class TestInitGuiAutoStart:
-    """Tests for auto-start logic in InitGui.py.
+    """Tests for auto-start logic in init_gui.py.
 
-    InitGui.py is the primary entry point for auto-start at FreeCAD GUI startup.
-    Init.py does NOT run at startup for workbench addons, so InitGui.py must
+    init_gui.py is the primary entry point for auto-start at FreeCAD GUI startup.
+    __init__.py does NOT run at startup for workbench addons, so init_gui.py must
     handle auto-start using QTimer.singleShot() to defer the bridge start.
     """
 
     @pytest.fixture
     def initgui_code(self) -> str:
-        """Load InitGui.py content."""
-        return (ADDON_DIR / "InitGui.py").read_text()
+        """Load init_gui.py content."""
+        return (ADDON_DIR / "init_gui.py").read_text()
 
     def test_uses_single_shot_timer_for_auto_start(self, initgui_code: str) -> None:
-        """InitGui.py should use QTimer.singleShot for deferred auto-start."""
+        """init_gui.py should use QTimer.singleShot for deferred auto-start."""
         # Should use singleShot with a delay
         assert "QTimer.singleShot" in initgui_code
         assert "_auto_start_bridge" in initgui_code
 
     def test_checks_auto_start_preference(self, initgui_code: str) -> None:
-        """InitGui.py should check auto-start preference before scheduling.
+        """init_gui.py should check auto-start preference before scheduling.
 
         Uses AST-based analysis to verify there's an if-condition that calls
         get_auto_start(), rather than relying on brittle string matching.
@@ -326,12 +324,12 @@ class TestInitGuiAutoStart:
                 return  # Found an if-condition invoking get_auto_start()
 
         pytest.fail(
-            "InitGui.py should have an if-condition that calls get_auto_start() "
+            "init_gui.py should have an if-condition that calls get_auto_start() "
             "to check whether auto-start is enabled before scheduling"
         )
 
     def test_auto_start_bridge_function_exists(self, initgui_code: str) -> None:
-        """InitGui.py should have _auto_start_bridge callback function."""
+        """init_gui.py should have _auto_start_bridge callback function."""
         assert "def _auto_start_bridge" in initgui_code
 
     def test_auto_start_bridge_checks_if_running(self, initgui_code: str) -> None:
@@ -357,11 +355,11 @@ class TestInitGuiAutoStart:
         pytest.fail("_auto_start_bridge function not found")
 
     def test_logs_auto_start_scheduled(self, initgui_code: str) -> None:
-        """InitGui.py should log when auto-start is scheduled."""
+        """init_gui.py should log when auto-start is scheduled."""
         assert "Auto-start scheduled" in initgui_code
 
     def test_logs_auto_start_disabled(self, initgui_code: str) -> None:
-        """InitGui.py should log when auto-start is disabled."""
+        """init_gui.py should log when auto-start is disabled."""
         assert "Auto-start disabled" in initgui_code
 
 
@@ -370,11 +368,11 @@ class TestAutoStartCodePaths:
 
     @pytest.fixture
     def init_code(self) -> str:
-        """Load Init.py content."""
-        return (ADDON_DIR / "Init.py").read_text()
+        """Load __init__.py content."""
+        return (ADDON_DIR / "__init__.py").read_text()
 
     def test_four_startup_scenarios_documented(self, init_code: str) -> None:
-        """Init.py should document the four startup scenarios.
+        """__init__.py should document the four startup scenarios.
 
         1. GUI already up - use timer for deferred start
         2. True headless (QCoreApplication only) - start directly with background thread

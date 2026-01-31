@@ -19,7 +19,9 @@ import os  # noqa: PTH
 import FreeCAD
 
 # Addon directory name - single source of truth for renames
-_ADDON_DIRNAME = "FreecadRobustMCPBridge"
+# Uses new-style namespace package format: freecad/RobustMCPBridge/
+_ADDON_DIRNAME = "RobustMCPBridge"
+_ADDON_NAMESPACE = "freecad"
 
 # Cache for addon path to avoid repeated filesystem lookups
 _addon_path_cache: str | None = None
@@ -48,10 +50,11 @@ def get_addon_path() -> str:
     except NameError:
         pass
 
-    # Method 2: Use FreeCAD's Mod path + our addon name
+    # Method 2: Use FreeCAD's Mod path + namespace package structure
+    # New-style: Mod/freecad/RobustMCPBridge/
     try:
         mod_path = os.path.join(  # noqa: PTH118
-            FreeCAD.getUserAppDataDir(), "Mod", _ADDON_DIRNAME
+            FreeCAD.getUserAppDataDir(), "Mod", _ADDON_NAMESPACE, _ADDON_DIRNAME
         )
         if os.path.exists(mod_path):  # noqa: PTH110
             _addon_path_cache = mod_path
@@ -60,12 +63,13 @@ def get_addon_path() -> str:
         FreeCAD.Console.PrintWarning(f"Could not access Mod directory: {e}\n")
 
     # Method 3: Try versioned FreeCAD directory (FreeCAD 1.x)
+    # New-style: v1-*/Mod/freecad/RobustMCPBridge/
     try:
         base_path = FreeCAD.getUserAppDataDir()
         for item in os.listdir(base_path):  # noqa: PTH208
             if item.startswith("v1-"):
                 versioned_mod = os.path.join(  # noqa: PTH118
-                    base_path, item, "Mod", _ADDON_DIRNAME
+                    base_path, item, "Mod", _ADDON_NAMESPACE, _ADDON_DIRNAME
                 )
                 if os.path.exists(versioned_mod):  # noqa: PTH110
                     _addon_path_cache = versioned_mod
@@ -80,7 +84,7 @@ def get_icon_path(icon_name: str) -> str:
     """Get the full path to an icon file.
 
     Args:
-        icon_name: The icon filename or relative path (e.g., "icons/mcp_start.svg")
+        icon_name: The icon filename or relative path (e.g., "Resources/Icons/mcp_start.svg")
 
     Returns:
         The absolute path to the icon file, or empty string if addon path not found.
@@ -99,7 +103,8 @@ def get_icons_dir() -> str:
     """
     addon_path = get_addon_path()
     if addon_path:
-        icons_dir = os.path.join(addon_path, "icons")  # noqa: PTH118
+        # New-style: Resources/Icons/
+        icons_dir = os.path.join(addon_path, "Resources", "Icons")  # noqa: PTH118
         if os.path.isdir(icons_dir):  # noqa: PTH112
             return icons_dir
     return ""
@@ -113,7 +118,10 @@ def get_workbench_icon() -> str:
     """
     addon_path = get_addon_path()
     if addon_path:
-        icon_path = os.path.join(addon_path, f"{_ADDON_DIRNAME}.svg")  # noqa: PTH118
+        # New-style: Resources/Icons/FreecadRobustMCPBridge.svg
+        icon_path = os.path.join(  # noqa: PTH118
+            addon_path, "Resources", "Icons", "FreecadRobustMCPBridge.svg"
+        )
         if os.path.exists(icon_path):  # noqa: PTH110
             return icon_path
     return ""
