@@ -11,6 +11,7 @@ charset = utf-8
 
 [*.{toml,xml,py}]
 trim_trailing_whitespace = true
+max_line_length = 88
 
 [*.{md}]
 trim_trailing_whitespace = false
