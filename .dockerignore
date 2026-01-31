@@ -86,7 +86,6 @@ tests/
 # Development files
 justfile
 .pre-commit-config.yaml
-.mise.toml
 .gitleaks.toml
 .markdownlint.yaml
 .codespell-ignore-words.txt

@@ -59,15 +59,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f -v
 
-# Install uv for Python package management (using official installer)
-# hadolint ignore=DL3047
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-SHELL ["/bin/sh", "-c"]
-ENV PATH="/root/.local/bin:$PATH"
-
 # Set up working directory
 WORKDIR /workspace
+
+# Install mise for pinned tool version management
+# hadolint ignore=DL3047
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN curl https://mise.run | sh
+SHELL ["/bin/sh", "-c"]
+ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:$PATH"
+
+# Copy mise config and install pinned uv version
+COPY .mise.toml /workspace/.mise.toml
+# hadolint ignore=DL3059
+RUN mise trust /workspace/.mise.toml && mise install uv && mise reshim
 
 # Environment variables for GUI testing
 ENV DISPLAY=:99 \
