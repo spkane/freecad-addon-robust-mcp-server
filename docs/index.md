@@ -8,7 +8,7 @@ This project provides an [MCP (Model Context Protocol)](https://modelcontextprot
 
 ## Features
 
-- **82+ MCP Tools** - Comprehensive CAD operations including primitives, PartDesign, booleans, export
+- **150+ MCP Tools** - Comprehensive CAD operations including primitives, PartDesign, booleans, export
 - **Multiple Connection Modes** - XML-RPC (recommended), JSON-RPC socket, or embedded (Linux only)
 - **GUI & Headless Support** - Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development** - Create, edit, run, and template FreeCAD macros via MCP
@@ -79,7 +79,7 @@ See [Macros Guide](guide/macros.md) for details on using macros with the MCP ser
 | -------------------------------------------------- | ------------------------------------------------- |
 | [Getting Started](getting-started/installation.md) | Installation, configuration, and quick start      |
 | [User Guide](guide/connection-modes.md)            | Connection modes, workbench, macros, and tools    |
-| [Tools Reference](MCP_TOOLS_REFERENCE.md)          | Complete API reference for all 82+ MCP tools      |
+| [Tools Reference](MCP_TOOLS_REFERENCE.md)          | Complete API reference for all 150+ MCP tools     |
 | [API Reference](api/server.md)                     | Python API documentation                          |
 | [Development](development/contributing.md)         | Contributing, architecture, and development setup |
 | [Comparison](COMPARISON.md)                        | Compare with other FreeCAD MCP implementations    |
