@@ -1,6 +1,6 @@
 # Tools Reference
 
-The FreeCAD Robust MCP Server provides 130+ tools for CAD operations. This page provides a quick reference organized by category.
+The FreeCAD Robust MCP Server provides 150+ tools for CAD operations. This page provides a quick reference organized by category.
 
 !!! tip "Transaction Support"
     All MCP operations are wrapped in FreeCAD transactions for undo support. After any operation, you can use `undo` to revert changes. This makes it safe for AI agents to experiment and recover from mistakes.
