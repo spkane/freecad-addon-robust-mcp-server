@@ -62,10 +62,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set up working directory
 WORKDIR /workspace
 
+# Pin mise version for reproducibility
+# Update this when upgrading mise (check https://github.com/jdx/mise/releases)
+ARG MISE_VERSION=v2026.1.12
+
 # Install mise for pinned tool version management
+# Downloads pinned version and verifies checksum before installation
 # hadolint ignore=DL3047
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN curl https://mise.run | sh
+RUN MISE_VER="${MISE_VERSION}" \
+    && MISE_CHECKSUM_URL="https://github.com/jdx/mise/releases/download/${MISE_VER}/SHASUMS256.txt" \
+    && MISE_INSTALL_SCRIPT="https://mise.run" \
+    && ARCH=$(uname -m) \
+    && case "${ARCH}" in \
+         x86_64) MISE_ARCH="x64" ;; \
+         aarch64) MISE_ARCH="arm64" ;; \
+         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+       esac \
+    && MISE_BINARY="mise-${MISE_VER}-linux-${MISE_ARCH}" \
+    && echo "Installing mise ${MISE_VER} for linux-${MISE_ARCH}..." \
+    && curl -fsSL "${MISE_CHECKSUM_URL}" -o /tmp/mise-checksums.txt \
+    && EXPECTED_CHECKSUM=$(grep "${MISE_BINARY}.tar.gz" /tmp/mise-checksums.txt | awk '{print $1}') \
+    && echo "Expected checksum: ${EXPECTED_CHECKSUM}" \
+    && curl -fsSL "${MISE_INSTALL_SCRIPT}" | MISE_VERSION="${MISE_VER}" sh \
+    && INSTALLED_VERSION=$(/root/.local/bin/mise --version | head -1 | awk '{print $1}') \
+    && echo "Installed mise version: ${INSTALLED_VERSION}" \
+    && rm -f /tmp/mise-checksums.txt
 SHELL ["/bin/sh", "-c"]
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:$PATH"
 
