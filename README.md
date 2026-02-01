@@ -83,7 +83,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 ## Features
 
-- **82+ MCP Tools**: Comprehensive CAD operations including primitives, PartDesign, booleans, export
+- **150+ MCP Tools**: Comprehensive CAD operations including primitives, PartDesign, booleans, export
 - **Multiple Connection Modes**: XML-RPC (recommended), JSON-RPC socket, or embedded
 - **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development**: Create, edit, run, and template FreeCAD macros via MCP
