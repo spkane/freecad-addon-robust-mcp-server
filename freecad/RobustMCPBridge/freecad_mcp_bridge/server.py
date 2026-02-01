@@ -18,6 +18,7 @@ Attribution:
 from __future__ import annotations
 
 import asyncio
+import atexit
 import contextlib
 import errno
 import io
@@ -29,9 +30,33 @@ import threading
 import time
 import traceback
 import uuid
+import weakref
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Any
+
+# Global registry of active servers for cleanup on Python exit
+# Uses weak references to avoid preventing garbage collection
+_active_servers: weakref.WeakSet[FreecadMCPPlugin] = weakref.WeakSet()
+_atexit_registered = False
+
+
+def _cleanup_all_servers() -> None:
+    """Clean up all active MCP servers before Python exits.
+
+    This is registered with atexit to ensure QTimer objects are properly
+    stopped and deleted before Python's garbage collector runs during
+    Py_FinalizeEx, which would otherwise cause crashes when Qt tries to
+    disconnect signals from partially-destroyed Python objects.
+    """
+    for server in list(_active_servers):
+        try:
+            if server._running:
+                server.stop()
+        except Exception:
+            # Ignore errors during cleanup - we're shutting down anyway
+            pass
+
 
 # These imports only work inside FreeCAD
 try:
@@ -155,6 +180,15 @@ class FreecadMCPPlugin:
         self._status_timer = None
         self._request_count = 0
         self._last_request_time: float | None = None
+
+        # Register this server for cleanup on Python exit
+        # This prevents crashes when Python's GC tries to clean up QTimer
+        # objects during Py_FinalizeEx
+        global _atexit_registered
+        _active_servers.add(self)
+        if not _atexit_registered:
+            atexit.register(_cleanup_all_servers)
+            _atexit_registered = True
 
     # =========================================================================
     # Public API (for external access without using private attributes)
@@ -280,16 +314,25 @@ class FreecadMCPPlugin:
         self._start_status_updates()
 
     def stop(self) -> None:
-        """Stop all servers."""
+        """Stop all servers.
+
+        This method properly cleans up QTimer objects by stopping them,
+        disconnecting their signals, and scheduling them for deletion with
+        deleteLater(). This prevents crashes during Python finalization when
+        Qt tries to disconnect signals from partially-destroyed Python objects.
+        """
         self._running = False
 
         # Stop status bar updates
         self._stop_status_updates()
 
         # Stop queue processor timer (GUI mode)
+        # Must disconnect signal before deleteLater to avoid crash during cleanup
         if self._timer:
             with contextlib.suppress(Exception):
                 self._timer.stop()
+                self._timer.timeout.disconnect()
+                self._timer.deleteLater()
             self._timer = None
 
         # Stop XML-RPC server by closing its socket directly
@@ -395,10 +438,16 @@ class FreecadMCPPlugin:
         self._update_status_bar()
 
     def _stop_status_updates(self) -> None:
-        """Stop status bar updates and clear the status."""
+        """Stop status bar updates and clear the status.
+
+        Properly disconnects signals and schedules timer for deletion to
+        prevent crashes during Python finalization.
+        """
         if self._status_timer:
             with contextlib.suppress(Exception):
                 self._status_timer.stop()
+                self._status_timer.timeout.disconnect()
+                self._status_timer.deleteLater()
             self._status_timer = None
 
         # Clear status bar message
