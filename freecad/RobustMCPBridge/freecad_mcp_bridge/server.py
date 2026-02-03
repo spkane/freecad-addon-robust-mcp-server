@@ -37,8 +37,8 @@ from typing import Any
 
 # Global registry of active servers for cleanup on Python exit
 # Uses weak references to avoid preventing garbage collection
-_active_servers: weakref.WeakSet[FreecadMCPPlugin] = weakref.WeakSet()
-_atexit_registered = False
+_activeServers: weakref.WeakSet[FreecadMCPPlugin] = weakref.WeakSet()
+_atexitRegistered = False
 
 
 def _get_shiboken_delete() -> Any:
@@ -67,14 +67,26 @@ def _cleanup_all_servers() -> None:
     This is registered with atexit to ensure QTimer objects are properly
     destroyed BEFORE Python's garbage collector runs during Py_FinalizeEx.
 
-    The key insight is that deleteLater() doesn't work during shutdown because:
-    1. deleteLater() schedules deletion for the next event loop iteration
+    QTimer objects are only created when ``FreeCAD.GuiUp`` is True (GUI mode).
+    In headless mode no Qt timers exist, so this function is effectively a
+    no-op—each server's ``_cleanup_for_exit`` will find no timers to destroy.
+
+    This atexit handler **must** run before ``Py_FinalizeEx`` to avoid Qt
+    signal-disconnect crashes.  During startup there is a race window where
+    timers may not yet exist if the GUI has not finished initialising; the
+    cleanup is safe regardless because ``_cleanup_for_exit`` guards every
+    timer operation with ``if self._timer`` / ``if self._status_timer``.
+
+    The key insight is that ``deleteLater()`` doesn't work during shutdown
+    because:
+
+    1. ``deleteLater()`` schedules deletion for the next event loop iteration
     2. The event loop isn't running during atexit
     3. So Python's GC tries to finalize the PySide wrapper objects
-    4. The PySide destructor triggers Qt's disconnectNotify callback
-    5. disconnectNotify tries to do Python operations → crash
+    4. The PySide destructor triggers Qt's ``disconnectNotify`` callback
+    5. ``disconnectNotify`` tries to do Python operations → crash
 
-    The fix is to use shiboken.delete() to explicitly destroy the Qt/C++
+    The fix is to use ``shiboken.delete()`` to explicitly destroy the Qt/C++
     object immediately, which marks the PySide wrapper as invalid so Python's
     GC won't try to destroy it again.
 
@@ -82,15 +94,14 @@ def _cleanup_all_servers() -> None:
     (like QMainWindow) may already be destroyed. We must NOT access any
     GUI elements here - only stop timers and threads.
     """
-    for server in list(_active_servers):
-        try:
-            if server._running:
-                # Use _cleanup_for_exit instead of stop() to avoid
-                # accessing destroyed GUI elements
-                server._cleanup_for_exit()
-        except Exception:
-            # Ignore errors during cleanup - we're shutting down anyway
-            pass
+    for server in list(_activeServers):
+        # Always call _cleanup_for_exit, even if server._running is False.
+        # A server may have timers allocated from a failed startup that
+        # still need explicit shiboken.delete() to avoid GC crashes.
+        # _cleanup_for_exit is safe to call multiple times.
+        # Ignore errors during cleanup - we're shutting down anyway.
+        with contextlib.suppress(Exception):
+            server._cleanup_for_exit()
 
 
 # These imports only work inside FreeCAD
@@ -219,11 +230,11 @@ class FreecadMCPPlugin:
         # Register this server for cleanup on Python exit
         # This prevents crashes when Python's GC tries to clean up QTimer
         # objects during Py_FinalizeEx
-        global _atexit_registered
-        _active_servers.add(self)
-        if not _atexit_registered:
+        global _atexitRegistered
+        _activeServers.add(self)
+        if not _atexitRegistered:
             atexit.register(_cleanup_all_servers)
-            _atexit_registered = True
+            _atexitRegistered = True
 
     # =========================================================================
     # Public API (for external access without using private attributes)
@@ -406,18 +417,31 @@ class FreecadMCPPlugin:
         """Clean up server resources during Python exit (atexit handler).
 
         This is a minimal cleanup that ONLY stops timers and threads without
-        accessing any GUI elements. During Python finalization, Qt GUI objects
-        like QMainWindow may already be destroyed, so accessing them would crash.
+        accessing any GUI elements.  During Python finalization, Qt GUI objects
+        like ``QMainWindow`` may already be destroyed, so accessing them would
+        crash.
 
-        CRITICAL: We must use shiboken.delete() to explicitly destroy QTimer
-        objects, NOT deleteLater(). deleteLater() schedules deletion for the
-        next event loop iteration, but the event loop isn't running during
-        atexit. This causes Python's GC to try to finalize the PySide wrapper,
-        which triggers Qt's disconnectNotify callback into partially-finalized
-        Python, causing a crash.
+        QTimer objects (``self._timer`` and ``self._status_timer``) are only
+        created when ``FreeCAD.GuiUp`` is True (GUI mode).  In headless mode
+        these attributes remain ``None``, making this method a safe no-op for
+        timer-related cleanup.  During startup there is a race window where
+        timers may not yet be allocated if the GUI has not finished
+        initialising; the guards (``if self._timer``) handle that gracefully.
 
-        This method is called by the atexit handler. For normal shutdown, use
-        stop() instead which also clears the status bar.
+        CRITICAL: We must use ``shiboken.delete()`` to explicitly destroy
+        QTimer objects, NOT ``deleteLater()``.  ``deleteLater()`` schedules
+        deletion for the next event loop iteration, but the event loop isn't
+        running during atexit.  This causes Python's GC to try to finalize
+        the PySide wrapper, which triggers Qt's ``disconnectNotify`` callback
+        into partially-finalized Python, causing a crash.
+
+        This atexit handler **must** run before ``Py_FinalizeEx``.  It is
+        called unconditionally by ``_cleanup_all_servers``—even when
+        ``_running`` is False—to handle timers left over from failed startups.
+        It is safe to call multiple times.
+
+        This method is called by the atexit handler.  For normal shutdown, use
+        ``stop()`` instead which also clears the status bar.
         """
         self._running = False
 
@@ -524,7 +548,16 @@ class FreecadMCPPlugin:
     # =========================================================================
 
     def _start_status_updates(self) -> None:
-        """Start periodic status bar updates in GUI mode."""
+        """Start periodic status bar updates in GUI mode.
+
+        Creates a ``QTimer`` that fires every ``STATUS_UPDATE_INTERVAL_MS``
+        to refresh the FreeCAD main-window status bar.  Only runs when
+        ``FreeCAD.GuiUp`` is True; returns immediately in headless mode.
+
+        The timer created here is destroyed during shutdown by
+        ``_cleanup_for_exit`` (via ``shiboken.delete()``) or by
+        ``_stop_status_updates`` (via ``deleteLater()``).
+        """
         QtCore = _get_qt_core()
         if QtCore is None:
             return
@@ -614,7 +647,21 @@ class FreecadMCPPlugin:
     # =========================================================================
 
     def _start_queue_processor(self) -> None:
-        """Start the queue processor on the main GUI thread or as background thread."""
+        """Start the queue processor on the main GUI thread or as background thread.
+
+        In GUI mode (``FreeCAD.GuiUp`` is True) this creates a ``QTimer``
+        that fires every ``QUEUE_POLL_INTERVAL_MS`` to process the request
+        queue on the main thread—required because Qt widgets must only be
+        touched from the thread that owns them.
+
+        In headless mode (``FreeCAD.GuiUp`` is False, or Qt is unavailable)
+        a daemon background thread polls the queue instead.  No QTimer is
+        created, so no timer cleanup is needed at shutdown.
+
+        Note: The timer created here is destroyed during shutdown by
+        ``_cleanup_for_exit`` (via ``shiboken.delete()``) or by ``stop()``
+        (via ``deleteLater()``).
+        """
         # Check if we're in GUI mode using FreeCAD.GuiUp
         # Note: Qt (PySide) may be available even in headless mode, but without
         # a running event loop, Qt timers won't fire. Use GuiUp to detect this.

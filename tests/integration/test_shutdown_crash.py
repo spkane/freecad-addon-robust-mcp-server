@@ -17,6 +17,18 @@ The fix uses shiboken.delete() in the atexit handler to explicitly destroy
 the Qt/C++ objects before Python's GC runs, preventing the crash.
 
 These tests are marked as slow because they start/stop FreeCAD processes.
+
+Run these tests via the repo-standard just commands::
+
+    just testing::integration-gui-release
+
+Or headless::
+
+    just testing::integration-headless-release
+
+To exclude standalone tests from a normal integration run::
+
+    just testing::integration
 """
 
 from __future__ import annotations
@@ -32,16 +44,16 @@ from pathlib import Path
 import pytest
 
 # Signal numbers for crash detection
-SIGSEGV = 11
-SIGABRT = 6
+sigSegv = 11
+sigAbrt = 6
 
 # Exit codes that indicate a crash
 # On Unix, signal exits are typically -signal or 128+signal
-CRASH_EXIT_CODES = {
-    -SIGSEGV,  # Killed by SIGSEGV
-    -SIGABRT,  # Killed by SIGABRT
-    128 + SIGSEGV,  # 139 - shell convention for SIGSEGV
-    128 + SIGABRT,  # 134 - shell convention for SIGABRT
+crashExitCodes = {
+    -sigSegv,  # Killed by SIGSEGV
+    -sigAbrt,  # Killed by SIGABRT
+    128 + sigSegv,  # 139 - shell convention for SIGSEGV
+    128 + sigAbrt,  # 134 - shell convention for SIGABRT
 }
 
 
@@ -137,6 +149,32 @@ def _wait_for_bridge(
     return False
 
 
+def _is_gui_available(host: str = "localhost", port: int = 9875) -> bool:
+    """Check whether the running FreeCAD instance has a GUI.
+
+    Executes ``FreeCAD.GuiUp`` via the bridge and returns the result.
+
+    Args:
+        host: Bridge hostname.
+        port: Bridge XML-RPC port.
+
+    Returns:
+        True if FreeCAD.GuiUp is True, False on any error or if headless.
+    """
+    import xmlrpc.client
+
+    try:
+        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+        result = proxy.execute("_result_ = {'gui_up': bool(FreeCAD.GuiUp)}")
+        if isinstance(result, dict) and result.get("success"):
+            inner = result.get("result")
+            if isinstance(inner, dict):
+                return bool(inner.get("gui_up"))
+    except Exception:
+        pass
+    return False
+
+
 def _send_quit_command(host: str = "localhost", port: int = 9875) -> bool:
     """Send quit command to FreeCAD via the MCP bridge.
 
@@ -153,10 +191,11 @@ def _send_quit_command(host: str = "localhost", port: int = 9875) -> bool:
         proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
         # Use FreeCADGui.getMainWindow().close() for a clean shutdown
         # This triggers the normal Qt close event which will run atexit handlers
+        # Guard FreeCADGui import behind GuiUp check
         proxy.execute(
             """
-import FreeCADGui
 if FreeCAD.GuiUp:
+    import FreeCADGui
     main_window = FreeCADGui.getMainWindow()
     if main_window:
         main_window.close()
@@ -206,11 +245,9 @@ class TestShutdownCrash:
     These tests start their own FreeCAD process and must NOT run while another
     FreeCAD instance with the MCP bridge is running (they would conflict on ports).
 
-    Run these tests separately:
-        uv run pytest tests/integration/test_shutdown_crash.py -v
+    Run via::
 
-    Or exclude them from normal integration test runs:
-        uv run pytest tests/integration -v -m "not standalone_freecad"
+        just testing::integration-gui-release
     """
 
     @pytest.fixture(autouse=True)
@@ -219,8 +256,7 @@ class TestShutdownCrash:
         if _is_bridge_running():
             pytest.skip(
                 "MCP bridge already running on port 9875. "
-                "These tests must run without an existing FreeCAD/bridge instance. "
-                "Stop FreeCAD and run: uv run pytest tests/integration/test_shutdown_crash.py -v"
+                "These tests must run without an existing FreeCAD/bridge instance."
             )
 
     def test_gui_shutdown_no_crash(
@@ -228,16 +264,7 @@ class TestShutdownCrash:
         freecad_binary: str,
         startup_script: str,
     ) -> None:
-        """Test that FreeCAD GUI shuts down cleanly with MCP bridge running.
-
-        This test:
-        1. Starts FreeCAD in GUI mode with the MCP bridge
-        2. Waits for the bridge to be ready
-        3. Sends a quit command via XML-RPC
-        4. Verifies FreeCAD exits with code 0 (not a crash)
-
-        A crash would result in exit code 139 (SIGSEGV) or 134 (SIGABRT).
-        """
+        """Test that FreeCAD GUI exits with code 0 when quit via MCP bridge."""
         # Start FreeCAD with the bridge startup script
         env = os.environ.copy()
         # Set testing mode so the bridge prints its instance ID
@@ -257,36 +284,42 @@ class TestShutdownCrash:
             # Wait for bridge to be ready
             bridge_ready = _wait_for_bridge(timeout=60.0)
             if not bridge_ready:
-                # Kill the process and fail
                 proc.terminate()
                 proc.wait(timeout=10)
                 pytest.fail("MCP bridge did not become available within timeout")
 
+            # Verify the GUI is actually available before proceeding
+            if not _is_gui_available():
+                proc.terminate()
+                proc.wait(timeout=10)
+                pytest.skip("FreeCAD GUI not available; skipping GUI shutdown test")
+
             # Give FreeCAD a moment to fully stabilize
             time.sleep(2)
 
-            # Send quit command
+            # Send quit command — fail immediately if it cannot be sent
             quit_sent = _send_quit_command()
             if not quit_sent:
-                # Try to terminate gracefully
                 proc.terminate()
+                proc.wait(timeout=10)
+                pytest.fail("Failed to send quit command to FreeCAD via MCP bridge")
 
             # Wait for FreeCAD to exit
             try:
                 exit_code = proc.wait(timeout=30)
             except subprocess.TimeoutExpired:
-                # Force kill if it doesn't exit
                 proc.kill()
-                exit_code = proc.wait(timeout=10)
+                proc.wait(timeout=10)
+                pytest.fail("FreeCAD did not exit within 30 seconds after quit command")
 
             # Check for crash exit codes
-            if exit_code in CRASH_EXIT_CODES:
+            if exit_code in crashExitCodes:
                 # Get stderr for debugging
                 _, stderr = proc.communicate(timeout=5)
                 stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
 
                 crash_signal = (
-                    "SIGSEGV" if exit_code in (-SIGSEGV, 128 + SIGSEGV) else "SIGABRT"
+                    "SIGSEGV" if exit_code in (-sigSegv, 128 + sigSegv) else "SIGABRT"
                 )
                 pytest.fail(
                     f"FreeCAD crashed during shutdown with {crash_signal} "
@@ -297,7 +330,7 @@ class TestShutdownCrash:
 
             # Exit code 0 or small positive values are acceptable
             # Some GUI frameworks return 1 on close, which is not a crash
-            assert exit_code not in CRASH_EXIT_CODES, (
+            assert exit_code not in crashExitCodes, (
                 f"FreeCAD exited with crash-like code {exit_code}"
             )
 
@@ -316,11 +349,7 @@ class TestShutdownCrash:
         freecad_binary: str,
         startup_script: str,
     ) -> None:
-        """Test that FreeCAD handles SIGTERM gracefully with MCP bridge.
-
-        This tests the scenario where FreeCAD is terminated by a signal
-        (e.g., from a process manager or IDE).
-        """
+        """Test that FreeCAD handles SIGTERM without crashing."""
         if platform.system() == "Windows":
             pytest.skip("SIGTERM test not applicable on Windows")
 
@@ -354,11 +383,12 @@ class TestShutdownCrash:
                 exit_code = proc.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 proc.kill()
-                exit_code = proc.wait(timeout=10)
+                proc.wait(timeout=10)
+                pytest.fail("FreeCAD did not exit within 30 seconds after SIGTERM")
 
             # SIGTERM should result in clean exit or -SIGTERM
             # It should NOT result in SIGSEGV or SIGABRT
-            if exit_code in (-SIGSEGV, 128 + SIGSEGV, -SIGABRT, 128 + SIGABRT):
+            if exit_code in (-sigSegv, 128 + sigSegv, -sigAbrt, 128 + sigAbrt):
                 _, stderr = proc.communicate(timeout=5)
                 stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
                 pytest.fail(
@@ -438,7 +468,7 @@ if __name__ == "__main__":
 
     print(f"Exit code: {exit_code}")
 
-    if exit_code in CRASH_EXIT_CODES:
+    if exit_code in crashExitCodes:
         print("CRASH DETECTED!")
         _, stderr = proc.communicate(timeout=5)
         if stderr:

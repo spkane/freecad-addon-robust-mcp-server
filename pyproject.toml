@@ -224,6 +224,10 @@ ignore_missing_imports = true
 # Required for namespace packages (freecad/) to prevent "found twice" errors
 explicit_package_bases = true
 namespace_packages = true
+# Tell mypy that src/ is a source root, not a package directory.
+# Without this, `uv run mypy src/` creates "src.freecad_mcp._version" which
+# conflicts with the installed "freecad_mcp._version".
+mypy_path = "src"
 
 [[tool.mypy.overrides]]
 module = "tests.*"
