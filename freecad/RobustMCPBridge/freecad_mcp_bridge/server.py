@@ -41,18 +41,53 @@ _active_servers: weakref.WeakSet[FreecadMCPPlugin] = weakref.WeakSet()
 _atexit_registered = False
 
 
+def _get_shiboken_delete() -> Any:
+    """Get the shiboken delete function for explicit Qt object destruction.
+
+    Returns:
+        The shiboken delete function, or None if not available.
+    """
+    # Try shiboken6 first (PySide6), then shiboken2 (PySide2)
+    with contextlib.suppress(ImportError):
+        import shiboken6
+
+        return shiboken6.delete
+
+    with contextlib.suppress(ImportError):
+        import shiboken2
+
+        return shiboken2.delete
+
+    return None
+
+
 def _cleanup_all_servers() -> None:
     """Clean up all active MCP servers before Python exits.
 
     This is registered with atexit to ensure QTimer objects are properly
-    stopped and deleted before Python's garbage collector runs during
-    Py_FinalizeEx, which would otherwise cause crashes when Qt tries to
-    disconnect signals from partially-destroyed Python objects.
+    destroyed BEFORE Python's garbage collector runs during Py_FinalizeEx.
+
+    The key insight is that deleteLater() doesn't work during shutdown because:
+    1. deleteLater() schedules deletion for the next event loop iteration
+    2. The event loop isn't running during atexit
+    3. So Python's GC tries to finalize the PySide wrapper objects
+    4. The PySide destructor triggers Qt's disconnectNotify callback
+    5. disconnectNotify tries to do Python operations → crash
+
+    The fix is to use shiboken.delete() to explicitly destroy the Qt/C++
+    object immediately, which marks the PySide wrapper as invalid so Python's
+    GC won't try to destroy it again.
+
+    IMPORTANT: This runs during Python finalization when Qt GUI elements
+    (like QMainWindow) may already be destroyed. We must NOT access any
+    GUI elements here - only stop timers and threads.
     """
     for server in list(_active_servers):
         try:
             if server._running:
-                server.stop()
+                # Use _cleanup_for_exit instead of stop() to avoid
+                # accessing destroyed GUI elements
+                server._cleanup_for_exit()
         except Exception:
             # Ignore errors during cleanup - we're shutting down anyway
             pass
@@ -366,6 +401,72 @@ class FreecadMCPPlugin:
 
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
+
+    def _cleanup_for_exit(self) -> None:
+        """Clean up server resources during Python exit (atexit handler).
+
+        This is a minimal cleanup that ONLY stops timers and threads without
+        accessing any GUI elements. During Python finalization, Qt GUI objects
+        like QMainWindow may already be destroyed, so accessing them would crash.
+
+        CRITICAL: We must use shiboken.delete() to explicitly destroy QTimer
+        objects, NOT deleteLater(). deleteLater() schedules deletion for the
+        next event loop iteration, but the event loop isn't running during
+        atexit. This causes Python's GC to try to finalize the PySide wrapper,
+        which triggers Qt's disconnectNotify callback into partially-finalized
+        Python, causing a crash.
+
+        This method is called by the atexit handler. For normal shutdown, use
+        stop() instead which also clears the status bar.
+        """
+        self._running = False
+
+        # Get shiboken delete function for explicit Qt object destruction
+        shiboken_delete = _get_shiboken_delete()
+
+        # Stop queue processor timer - use shiboken.delete() for immediate destruction
+        if self._timer:
+            timer = self._timer
+            self._timer = None  # Clear reference first
+            with contextlib.suppress(Exception):
+                timer.stop()
+            with contextlib.suppress(Exception):
+                timer.timeout.disconnect()
+            # Explicitly delete the C++ object to prevent GC crash
+            if shiboken_delete is not None:
+                with contextlib.suppress(Exception):
+                    shiboken_delete(timer)
+
+        # Stop status timer - use shiboken.delete() for immediate destruction
+        if self._status_timer:
+            timer = self._status_timer
+            self._status_timer = None  # Clear reference first
+            with contextlib.suppress(Exception):
+                timer.stop()
+            with contextlib.suppress(Exception):
+                timer.timeout.disconnect()
+            # Explicitly delete the C++ object to prevent GC crash
+            if shiboken_delete is not None:
+                with contextlib.suppress(Exception):
+                    shiboken_delete(timer)
+
+        # Stop XML-RPC server
+        if self._xmlrpc_server:
+            with contextlib.suppress(Exception):
+                self._xmlrpc_server.socket.close()
+
+        # Stop socket server
+        if self._socket_loop and self._socket_server:
+            with contextlib.suppress(Exception):
+                self._socket_loop.call_soon_threadsafe(self._socket_server.close)
+                self._socket_loop.call_soon_threadsafe(self._socket_loop.stop)
+
+        # Don't wait for threads during exit - they're daemon threads
+        # and will be killed anyway. Waiting can cause hangs.
+        self._queue_thread = None
+        self._socket_thread = None
+        self._xmlrpc_thread = None
+        self._xmlrpc_server = None
 
     def run_forever(self) -> None:
         """Run the server indefinitely.

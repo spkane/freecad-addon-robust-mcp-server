@@ -164,6 +164,9 @@ def pytest_collection_modifyitems(
 
     This runs once during test collection. If the bridge is not available,
     this raises a hard error instead of skipping tests.
+
+    Exception: Tests marked with `standalone_freecad` start their own FreeCAD
+    process and don't require a pre-existing bridge connection.
     """
     global _connection_checked
 
@@ -173,6 +176,18 @@ def pytest_collection_modifyitems(
     ]
 
     if not integration_tests:
+        return
+
+    # Check if all tests are standalone (they start their own FreeCAD)
+    # These tests don't need a pre-existing bridge connection
+    non_standalone_tests = [
+        item
+        for item in integration_tests
+        if not any(mark.name == "standalone_freecad" for mark in item.iter_markers())
+    ]
+
+    # If all tests are standalone, skip the bridge check entirely
+    if not non_standalone_tests:
         return
 
     # Check bridge connection once

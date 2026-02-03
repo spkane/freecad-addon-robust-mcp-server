@@ -454,9 +454,9 @@ integration-headless-release:
     echo "FreeCAD Robust MCP Bridge is ready! (headless mode)"
     echo ""
 
-    # Run integration tests
+    # Run integration tests (excluding standalone tests that require GUI mode)
     TEST_EXIT_CODE=0
-    uv run pytest "{{project_root}}/tests/integration" -v || TEST_EXIT_CODE=$?
+    uv run pytest "{{project_root}}/tests/integration" -v -m "not standalone_freecad" || TEST_EXIT_CODE=$?
 
     # Cleanup handled by trap
     rm -f "$FREECAD_LOG" 2>/dev/null || true
@@ -544,11 +544,29 @@ integration-gui-release:
     echo "FreeCAD Robust MCP Bridge is ready! (GUI mode)"
     echo ""
 
-    # Run integration tests
+    # Run integration tests (excluding standalone tests that need their own FreeCAD)
     TEST_EXIT_CODE=0
-    uv run pytest "{{project_root}}/tests/integration" -v || TEST_EXIT_CODE=$?
+    echo "Running GUI integration tests..."
+    uv run pytest "{{project_root}}/tests/integration" -v -m "not standalone_freecad" || TEST_EXIT_CODE=$?
 
-    # Cleanup handled by trap
+    # Stop FreeCAD before running standalone tests
+    echo ""
+    echo "Stopping FreeCAD for standalone tests..."
+    cleanup
+    STARTED_FREECAD=false  # Prevent double cleanup
+    sleep 3  # Give FreeCAD time to fully exit
+
+    # Run standalone tests (shutdown crash detection) - these manage their own FreeCAD
+    if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+        echo ""
+        echo "Running standalone FreeCAD tests (shutdown crash detection)..."
+        uv run pytest "{{project_root}}/tests/integration/test_shutdown_crash.py" -v || TEST_EXIT_CODE=$?
+    else
+        echo ""
+        echo "Skipping standalone tests due to earlier failures"
+    fi
+
+    # Cleanup handled by trap (but we already stopped FreeCAD)
     rm -f "$FREECAD_LOG" 2>/dev/null || true
     exit $TEST_EXIT_CODE
 

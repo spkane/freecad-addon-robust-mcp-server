@@ -221,6 +221,9 @@ warn_unused_ignores = false
 warn_no_return = true
 follow_imports = "silent"
 ignore_missing_imports = true
+# Required for namespace packages (freecad/) to prevent "found twice" errors
+explicit_package_bases = true
+namespace_packages = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -287,6 +290,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks integration tests requiring FreeCAD",
     "gui: marks tests requiring FreeCAD GUI mode (not headless)",
+    "standalone_freecad: marks tests that start/stop their own FreeCAD process (run separately)",
 ]
 
 [tool.coverage.run]
