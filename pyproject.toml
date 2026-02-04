@@ -67,6 +67,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest-timeout>=2.3.0",
     "pytest-watch>=4.2.0",
+    "psutil>=5.9.0",
     # Linting and formatting
     "mypy>=1.14.0",
     "ruff>=0.8.0",

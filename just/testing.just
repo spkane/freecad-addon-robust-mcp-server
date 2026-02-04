@@ -198,6 +198,16 @@ release-test:
     # Source shared bridge helpers for wait_for_ports_free / wait_for_freecad_exit
     . "{{project_root}}/scripts/bridge-helpers.sh"
 
+    # Helper: wait for FreeCAD to fully exit between release-test steps.
+    # Calls wait_for_ports_free and wait_for_freecad_exit with || true so
+    # set -e does not abort the script if the wait times out.
+    wait_between_steps() {
+        echo "Waiting for FreeCAD cleanup between steps..."
+        wait_for_ports_free 30 || true
+        wait_for_freecad_exit 30 || true
+        echo ""
+    }
+
     echo "============================================================"
     echo "  RELEASE TEST SUITE"
     echo "  All tests must pass before creating a release"
@@ -265,12 +275,7 @@ release-test:
     fi
     echo ""
 
-    # Wait for FreeCAD from Step 2 to fully exit before Step 3 starts another.
-    # || true prevents set -e from aborting the script if the wait times out.
-    echo "Waiting for FreeCAD cleanup between steps..."
-    wait_for_ports_free 30 || true
-    wait_for_freecad_exit 30 || true
-    echo ""
+    wait_between_steps
 
     # -------------------------------------------------------------------------
     # Step 3: GUI Integration Tests
@@ -290,13 +295,7 @@ release-test:
     fi
     echo ""
 
-    # Wait for FreeCAD from Step 3 (including standalone shutdown test) to
-    # fully exit before Step 5 tries to start a fresh FreeCAD instance.
-    # || true prevents set -e from aborting the script if the wait times out.
-    echo "Waiting for FreeCAD cleanup between steps..."
-    wait_for_ports_free 30 || true
-    wait_for_freecad_exit 30 || true
-    echo ""
+    wait_between_steps
 
     # -------------------------------------------------------------------------
     # Step 4: Docker Integration Test
@@ -316,14 +315,7 @@ release-test:
     fi
     echo ""
 
-    # Wait for FreeCAD from Step 4 (docker::test starts FreeCAD on the host
-    # and its cleanup only kills the `just` PID — the child freecadcmd process
-    # can survive as an orphan holding bridge ports).
-    # || true prevents set -e from aborting the script if the wait times out.
-    echo "Waiting for FreeCAD cleanup between steps..."
-    wait_for_ports_free 30 || true
-    wait_for_freecad_exit 30 || true
-    echo ""
+    wait_between_steps
 
     # -------------------------------------------------------------------------
     # Step 5: Just Command Tests

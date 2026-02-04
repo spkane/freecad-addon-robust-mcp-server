@@ -133,7 +133,8 @@ wait_for_freecad_exit() {
         sleep 1
     fi
 
-    if pgrep -i "freecad" > /dev/null 2>&1; then
+    # shellcheck disable=SC2009  # Intentionally using ps+grep for portability (pgrep may not exist)
+    if ps -eo comm= 2>/dev/null | grep -iq "freecad"; then
         echo "ERROR: Could not stop FreeCAD process"
         return 1
     fi

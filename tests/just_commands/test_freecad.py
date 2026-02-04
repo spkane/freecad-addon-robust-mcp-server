@@ -40,17 +40,26 @@ def _is_port_in_use(port: int) -> bool:
 
 
 def _is_freecad_process_running() -> bool:
-    """Check if any FreeCAD process is currently running."""
+    """Check if any FreeCAD process is currently running.
+
+    Uses ``ps aux`` instead of ``pgrep`` for portability across
+    systems that may not ship GNU/BSD pgrep.
+    """
     try:
         result = subprocess.run(
-            ["pgrep", "-i", "freecad"],  # noqa: S607
+            ["ps", "aux"],  # noqa: S607
             capture_output=True,
+            text=True,
             timeout=5,
             check=False,
         )
-        return result.returncode == 0
+        for line in result.stdout.lower().splitlines():
+            # Skip the ps/grep header or our own grep invocation
+            if "freecad" in line and "grep" not in line:
+                return True
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+        pass
+    return False
 
 
 def _kill_freecad_processes() -> None:
@@ -82,16 +91,32 @@ def _kill_freecad_processes() -> None:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
-    # Kill any remaining FreeCAD processes by name
-    try:
-        subprocess.run(
-            ["pkill", "-9", "-i", "freecad"],  # noqa: S607
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    # Kill any remaining FreeCAD processes by name.
+    # Prefer pkill when available; fall back to psutil for portability.
+    if shutil.which("pkill"):
+        try:
+            subprocess.run(
+                ["pkill", "-9", "-i", "freecad"],  # noqa: S607
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    else:
+        try:
+            import psutil
+
+            for proc in psutil.process_iter(["name", "cmdline"]):
+                try:
+                    procName = (proc.info.get("name") or "").lower()
+                    cmdline = " ".join(proc.info.get("cmdline") or []).lower()
+                    if "freecad" in procName or "freecad" in cmdline:
+                        proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except ImportError:
+            pass
 
     # Brief pause to let the OS release ports
     time.sleep(1)
