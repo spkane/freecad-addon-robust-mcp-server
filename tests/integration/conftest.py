@@ -219,8 +219,14 @@ def pytest_terminal_summary(
     This provides clear visibility into which mode was used and confirms
     successful connection.
     """
-    # Only show summary if we ran integration tests
+    # Only show summary if we ran integration tests that needed the bridge.
+    # _connection_checked is set when non-standalone tests required a bridge;
+    # _bridge_available is None when no check was performed at all.
+    # When only standalone_freecad tests ran, skip the summary to avoid a
+    # misleading "FAILED" message (standalone tests manage their own FreeCAD).
     if _bridge_available is None:
+        return
+    if not _connection_checked and not _bridge_available:
         return
 
     # Build the summary message
@@ -235,7 +241,7 @@ def pytest_terminal_summary(
     else:
         terminalreporter.write_line("  Connection: FAILED")
         if _bridge_error:
-            terminalreporter.write_line(f"  Error:      {_bridge_error}")
+            terminalreporter.write_line(f"  Warning:    {_bridge_error}")
 
     terminalreporter.write_line("")
 

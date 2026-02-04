@@ -129,9 +129,19 @@ def _auto_start_bridge() -> None:
 # will see GuiUp=False and use a background thread. Later, code executed on that
 # thread will try to do Qt operations, causing crashes (SIGABRT in QCocoaWindow).
 try:
+    import os
+
     from preferences import get_auto_start
 
-    _auto_start_enabled = get_auto_start()
+    # In testing mode, skip auto-start so the test controls bridge lifecycle
+    # via startup_bridge.py (same guard as in init_gui.py).
+    if os.environ.get("FREECAD_MCP_TESTING"):
+        _auto_start_enabled = False
+        FreeCAD.Console.PrintMessage(
+            "Robust MCP Bridge: Auto-start skipped (FREECAD_MCP_TESTING set)\n"
+        )
+    else:
+        _auto_start_enabled = get_auto_start()
     FreeCAD.Console.PrintMessage(
         f"Robust MCP Bridge: Auto-start preference = {_auto_start_enabled}\n"
     )

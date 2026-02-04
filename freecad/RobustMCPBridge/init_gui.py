@@ -271,10 +271,20 @@ try:
 
             FreeCAD.Console.PrintError(traceback.format_exc())
 
-    # Check if auto-start is enabled before scheduling
+    # Check if auto-start is enabled before scheduling.
+    # In testing mode (FREECAD_MCP_TESTING=1), skip auto-start so the test
+    # controls bridge lifecycle via startup_bridge.py.  Without this guard,
+    # the auto-start timer and startup_bridge.py race to start the bridge,
+    # which can cause port conflicts or duplicate initialisation.
+    import os
+
     from preferences import get_auto_start
 
-    if get_auto_start():
+    if os.environ.get("FREECAD_MCP_TESTING"):
+        FreeCAD.Console.PrintMessage(
+            "Robust MCP Bridge: Auto-start skipped (FREECAD_MCP_TESTING set)\n"
+        )
+    elif get_auto_start():
         # Schedule auto-start after a delay to ensure GUI is fully ready.
         # InitGui.py module-level code runs early in FreeCAD startup, so we
         # need to defer the bridge start to avoid race conditions.

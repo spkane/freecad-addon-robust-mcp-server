@@ -57,6 +57,30 @@ crashExitCodes = {
 }
 
 
+def _is_freecad_process_running() -> bool:
+    """Check if any FreeCAD process is currently running.
+
+    Uses pgrep to match process names (not full command lines) to avoid
+    false positives from unrelated processes whose arguments or working
+    directory contain "freecad".
+
+    Returns:
+        True if a FreeCAD process is found, False otherwise.
+    """
+    try:
+        # pgrep -i (case-insensitive) WITHOUT -f (no full command line match).
+        # This matches executable basenames: freecad, FreeCAD, freecadcmd, etc.
+        result = subprocess.run(
+            ["pgrep", "-i", "freecad"],  # noqa: S607
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 def _is_bridge_running(host: str = "localhost", port: int = 9875) -> bool:
     """Check if an MCP bridge is already running on the given port.
 
@@ -251,8 +275,13 @@ class TestShutdownCrash:
     """
 
     @pytest.fixture(autouse=True)
-    def check_no_existing_bridge(self):
-        """Skip if a bridge is already running (would conflict on ports)."""
+    def check_no_existing_freecad(self):
+        """Skip if FreeCAD is already running (would cause initApplication crash)."""
+        if _is_freecad_process_running():
+            pytest.skip(
+                "A FreeCAD process is already running. "
+                "These tests must run without an existing FreeCAD instance."
+            )
         if _is_bridge_running():
             pytest.skip(
                 "MCP bridge already running on port 9875. "
