@@ -82,3 +82,69 @@ class TestTestingRuntime:
             env={"PYTEST_ADDOPTS": "--collect-only -q"},
         )
         assert_command_executed(result, "testing::quick")
+
+    @pytest.mark.just_runtime
+    def test_gui_release_sequencing(self, just: JustRunner) -> None:
+        """Verify integration-gui-release shutdown sequencing and standalone test selection."""
+        dryRunResult = just.dry_run("testing::integration-gui-release")
+        assert dryRunResult.success, (
+            f"Dry-run failed for integration-gui-release: {dryRunResult.stderr}"
+        )
+
+        # just --dry-run writes the expanded script to stderr
+        scriptText = dryRunResult.output
+
+        # --- Verify first pytest run filters out standalone tests ---
+        assert '-m "not standalone_freecad"' in scriptText, (
+            "First pytest run must exclude standalone_freecad tests"
+        )
+
+        # --- Verify shutdown sequence order ---
+        # Find positions of critical operations after stopping FreeCAD.
+        # Use the "Stopping FreeCAD" marker to anchor past the function
+        # definition, trap registrations, and comments that also mention cleanup.
+        stopMarker = "Stopping FreeCAD for standalone tests"
+        stopPos = scriptText.find(stopMarker)
+        assert stopPos != -1, "Recipe must log 'Stopping FreeCAD for standalone tests'"
+
+        cleanupPos = scriptText.find("cleanup", stopPos)
+        assert cleanupPos != -1, "cleanup call not found after stop marker"
+
+        startedFalsePos = scriptText.find("STARTED_FREECAD=false", stopPos)
+        assert startedFalsePos != -1, (
+            "STARTED_FREECAD=false not found after stop marker"
+        )
+
+        portsPos = scriptText.find("wait_for_ports_free", stopPos)
+        assert portsPos != -1, "wait_for_ports_free not found after stop marker"
+
+        exitPos = scriptText.find("wait_for_freecad_exit", stopPos)
+        assert exitPos != -1, "wait_for_freecad_exit not found after stop marker"
+
+        assert cleanupPos < startedFalsePos, (
+            "cleanup must be called before STARTED_FREECAD=false"
+        )
+        assert startedFalsePos < portsPos, (
+            "STARTED_FREECAD=false must be set before wait_for_ports_free"
+        )
+        assert portsPos < exitPos, (
+            "wait_for_ports_free must be called before wait_for_freecad_exit"
+        )
+
+        # --- Verify standalone tests are conditional on prior success ---
+        standaloneGuard = 'if [ "$TEST_EXIT_CODE" -eq 0 ]'
+        assert standaloneGuard in scriptText, (
+            "Standalone tests must be guarded by TEST_EXIT_CODE == 0 check"
+        )
+
+        # The standalone pytest must target test_shutdown_crash.py specifically
+        assert "test_shutdown_crash.py" in scriptText, (
+            "Standalone pytest must target test_shutdown_crash.py"
+        )
+
+        # The guard must appear after wait_for_freecad_exit
+        guardPos = scriptText.find(standaloneGuard)
+        assert guardPos != -1, "TEST_EXIT_CODE guard not found in scriptText"
+        assert guardPos > exitPos, (
+            "Standalone test guard must come after wait_for_freecad_exit"
+        )

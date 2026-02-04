@@ -117,7 +117,7 @@ Thumbs.db
 *.FCStd
 *.FCStd1
 *.FCBak
-freecad-headless.log
+*.log
 
 # Local configuration
 .mcp.json

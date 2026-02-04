@@ -160,9 +160,10 @@ jobs:
 
               echo "FreeCAD GUI mode confirmed!"
 
-              # Run GUI integration tests
+              # Run GUI integration tests (excluding standalone tests)
               echo "Running GUI integration tests..."
               uv run pytest tests/integration/test_gui_mode.py -v --tb=short -x \
+                -m "not standalone_freecad" \
                 --junit-xml=/test-output/gui-test-results.xml \
                 || TEST_EXIT=$?
 
@@ -170,9 +171,22 @@ jobs:
               cp /tmp/*.png /test-output/ 2>/dev/null || true
               cp /tmp/*.FCStd /test-output/ 2>/dev/null || true
 
-              # Cleanup
+              # Cleanup - stop the FreeCAD process that was running for GUI tests
+              echo "Stopping FreeCAD for GUI tests..."
               kill $XDOT_PID 2>/dev/null || true
               kill $FREECAD_PID 2>/dev/null || true
+              sleep 2  # Give it time to shut down
+
+              # Now run standalone tests (shutdown crash tests) - these manage their own FreeCAD
+              if [ "${TEST_EXIT:-0}" -eq 0 ]; then
+                echo ""
+                echo "Running standalone FreeCAD tests (shutdown crash detection)..."
+                uv run pytest tests/integration/test_shutdown_crash.py -v --tb=short \
+                  --junit-xml=/test-output/shutdown-test-results.xml \
+                  || TEST_EXIT=$?
+              else
+                echo "Skipping standalone tests due to earlier failures"
+              fi
 
               exit ${TEST_EXIT:-0}
             '

@@ -20,13 +20,16 @@ Example:
 
 from importlib.metadata import PackageNotFoundError, version
 
+__version__: str
 try:
     __version__ = version("freecad-robust-mcp")
 except PackageNotFoundError:
     # Package is not installed (running from source without pip install -e)
     # Fall back to the generated _version.py if available
     try:
-        from freecad_mcp._version import __version__
+        from freecad_mcp._version import __version__ as _v
+
+        __version__ = _v
     except ImportError:
         __version__ = "0.0.0.dev0+unknown"
 

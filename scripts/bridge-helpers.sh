@@ -56,3 +56,68 @@ graceful_kill_bridge_ports() {
     kill_port 9875 -9
     kill_port 9876 -9
 }
+
+# Check if a port is in use (has a process listening on it)
+# Returns 0 (true) if port is in use, 1 (false) otherwise
+# Usage: is_port_in_use PORT
+is_port_in_use() {
+    local port=$1
+    if command -v lsof &>/dev/null; then
+        lsof -ti:"$port" &>/dev/null
+    elif command -v fuser &>/dev/null; then
+        fuser "$port/tcp" &>/dev/null
+    elif command -v ss &>/dev/null; then
+        ss -tlnp "sport = :${port}" 2>/dev/null | grep -q "$port"
+    else
+        # Fall back to attempting a connection
+        (echo >/dev/tcp/localhost/"$port") 2>/dev/null
+    fi
+}
+
+# Wait until the bridge ports are free (no process listening)
+# Usage: wait_for_ports_free [TIMEOUT_SECONDS]
+wait_for_ports_free() {
+    local timeout=${1:-30}
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        if ! is_port_in_use 9875 && ! is_port_in_use 9876; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ $((elapsed % 5)) -eq 0 ]; then
+            echo "  Waiting for bridge ports to be free... ($elapsed/${timeout}s)"
+        fi
+    done
+    echo "WARNING: Bridge ports still in use after ${timeout}s timeout"
+    return 1
+}
+
+# Wait until no FreeCAD processes are running.
+# On macOS, FreeCAD's GUI process can linger after releasing ports
+# (saving preferences, tearing down 3D viewer, deregistering from app services).
+# Starting a new FreeCAD before the old one fully exits causes:
+#   "Tried to run Gui::Application::initApplication() twice!" → SIGSEGV
+# Usage: wait_for_freecad_exit [TIMEOUT_SECONDS]
+wait_for_freecad_exit() {
+    local timeout=${1:-30}
+    local elapsed=0
+
+    # Match by process name only (pgrep -i, without -f).
+    # -f would match the full command line, falsely catching unrelated
+    # processes whose arguments or cwd contain "freecad" (e.g. the calling
+    # just recipe, shell scripts, or pytest).  Without -f, pgrep checks only
+    # the executable basename: "freecad", "freecadcmd", "FreeCADCmd", etc.
+    while [ $elapsed -lt $timeout ]; do
+        if ! pgrep -i "freecad" > /dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ $((elapsed % 5)) -eq 0 ]; then
+            echo "  Waiting for FreeCAD process to exit... ($elapsed/${timeout}s)"
+        fi
+    done
+    echo "WARNING: FreeCAD process still running after ${timeout}s timeout"
+    return 1
+}

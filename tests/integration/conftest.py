@@ -164,6 +164,9 @@ def pytest_collection_modifyitems(
 
     This runs once during test collection. If the bridge is not available,
     this raises a hard error instead of skipping tests.
+
+    Exception: Tests marked with `standalone_freecad` start their own FreeCAD
+    process and don't require a pre-existing bridge connection.
     """
     global _connection_checked
 
@@ -173,6 +176,18 @@ def pytest_collection_modifyitems(
     ]
 
     if not integration_tests:
+        return
+
+    # Check if all tests are standalone (they start their own FreeCAD)
+    # These tests don't need a pre-existing bridge connection
+    nonStandaloneTests = [
+        item
+        for item in integration_tests
+        if not any(mark.name == "standalone_freecad" for mark in item.iter_markers())
+    ]
+
+    # If all tests are standalone, skip the bridge check entirely
+    if not nonStandaloneTests:
         return
 
     # Check bridge connection once
@@ -204,8 +219,14 @@ def pytest_terminal_summary(
     This provides clear visibility into which mode was used and confirms
     successful connection.
     """
-    # Only show summary if we ran integration tests
+    # Only show summary if we ran integration tests that needed the bridge.
+    # _connection_checked is set when non-standalone tests required a bridge;
+    # _bridge_available is None when no check was performed at all.
+    # When only standalone_freecad tests ran, skip the summary to avoid a
+    # misleading "FAILED" message (standalone tests manage their own FreeCAD).
     if _bridge_available is None:
+        return
+    if not _connection_checked and not _bridge_available:
         return
 
     # Build the summary message
@@ -220,7 +241,7 @@ def pytest_terminal_summary(
     else:
         terminalreporter.write_line("  Connection: FAILED")
         if _bridge_error:
-            terminalreporter.write_line(f"  Error:      {_bridge_error}")
+            terminalreporter.write_line(f"  Warning:    {_bridge_error}")
 
     terminalreporter.write_line("")
 
