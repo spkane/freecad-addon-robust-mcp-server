@@ -173,6 +173,9 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Source shared bridge helper functions (for graceful_kill_bridge_ports)
+    . "{{project_root}}/scripts/bridge-helpers.sh"
+
     # Initialize variables for cleanup
     STARTED_FREECAD=false
     FREECAD_PID=""
@@ -183,8 +186,11 @@ test:
     cleanup() {
         [ -n "${MCP_INPUT:-}" ] && rm -f "$MCP_INPUT" 2>/dev/null || true
         [ -n "${FREECAD_LOG:-}" ] && rm -f "$FREECAD_LOG" 2>/dev/null || true
-        if [ "$STARTED_FREECAD" = true ] && [ -n "${FREECAD_PID:-}" ]; then
-            kill "$FREECAD_PID" 2>/dev/null || true
+        if [ "$STARTED_FREECAD" = true ]; then
+            # Kill the just process (may not forward signals to freecadcmd child)
+            [ -n "${FREECAD_PID:-}" ] && kill "$FREECAD_PID" 2>/dev/null || true
+            # Kill by port to catch the orphaned freecadcmd process
+            graceful_kill_bridge_ports
         fi
     }
     trap cleanup EXIT INT TERM
