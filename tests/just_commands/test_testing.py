@@ -104,14 +104,22 @@ class TestTestingRuntime:
         # Use the "Stopping FreeCAD" marker to anchor past the function
         # definition, trap registrations, and comments that also mention cleanup.
         stopMarker = "Stopping FreeCAD for standalone tests"
-        assert stopMarker in script, (
-            "Recipe must log 'Stopping FreeCAD for standalone tests'"
+        stopPos = script.find(stopMarker)
+        assert stopPos != -1, "Recipe must log 'Stopping FreeCAD for standalone tests'"
+
+        cleanupPos = script.find("cleanup", stopPos)
+        assert cleanupPos != -1, "cleanup call not found after stop marker"
+
+        startedFalsePos = script.find("STARTED_FREECAD=false", stopPos)
+        assert startedFalsePos != -1, (
+            "STARTED_FREECAD=false not found after stop marker"
         )
-        stopPos = script.index(stopMarker)
-        cleanupPos = script.index("cleanup", stopPos)
-        startedFalsePos = script.index("STARTED_FREECAD=false", stopPos)
-        portsPos = script.index("wait_for_ports_free", stopPos)
-        exitPos = script.index("wait_for_freecad_exit", stopPos)
+
+        portsPos = script.find("wait_for_ports_free", stopPos)
+        assert portsPos != -1, "wait_for_ports_free not found after stop marker"
+
+        exitPos = script.find("wait_for_freecad_exit", stopPos)
+        assert exitPos != -1, "wait_for_freecad_exit not found after stop marker"
 
         assert cleanupPos < startedFalsePos, (
             "cleanup must be called before STARTED_FREECAD=false"
@@ -135,7 +143,8 @@ class TestTestingRuntime:
         )
 
         # The guard must appear after wait_for_freecad_exit
-        guardPos = script.index(standaloneGuard)
+        guardPos = script.find(standaloneGuard)
+        assert guardPos != -1, "TEST_EXIT_CODE guard not found in script"
         assert guardPos > exitPos, (
             "Standalone test guard must come after wait_for_freecad_exit"
         )
