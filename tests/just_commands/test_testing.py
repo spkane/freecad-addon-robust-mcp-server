@@ -85,17 +85,7 @@ class TestTestingRuntime:
 
     @pytest.mark.just_runtime
     def test_gui_release_sequencing(self, just: JustRunner) -> None:
-        """integration-gui-release recipe follows the correct shutdown sequence.
-
-        After stopping FreeCAD, the recipe must:
-        1. Call cleanup (graceful_kill_bridge_ports)
-        2. Set STARTED_FREECAD=false
-        3. Call wait_for_ports_free
-        4. Call wait_for_freecad_exit
-        5. Only run standalone tests when TEST_EXIT_CODE is 0
-        6. Target test_shutdown_crash.py specifically for standalone tests
-        7. Use -m "not standalone_freecad" for the first pytest run
-        """
+        """Verify integration-gui-release shutdown sequencing and standalone test selection."""
         result = just.dry_run("testing::integration-gui-release")
         assert result.success, (
             f"Dry-run failed for integration-gui-release: {result.stderr}"
