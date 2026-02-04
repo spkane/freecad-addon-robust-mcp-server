@@ -124,9 +124,9 @@ def _find_freecad_binary() -> str | None:
         # Also check PATH
         import shutil
 
-        freecad_in_path = shutil.which("freecad") or shutil.which("FreeCAD")
-        if freecad_in_path:
-            paths.insert(0, freecad_in_path)
+        freecadInPath = shutil.which("freecad") or shutil.which("FreeCAD")
+        if freecadInPath:
+            paths.insert(0, freecadInPath)
     else:
         # Windows
         paths = [
@@ -158,10 +158,10 @@ def _wait_for_bridge(
     """
     import xmlrpc.client
 
-    start_time = time.time()
+    startTime = time.time()
     proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
 
-    while time.time() - start_time < timeout:
+    while time.time() - startTime < timeout:
         try:
             result = proxy.ping()
             if isinstance(result, dict) and result.get("pong"):
@@ -189,7 +189,9 @@ def _is_gui_available(host: str = "localhost", port: int = 9875) -> bool:
 
     try:
         proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
-        result = proxy.execute("_result_ = {'gui_up': bool(FreeCAD.GuiUp)}")
+        result = proxy.execute(
+            "import FreeCAD\n_result_ = {'gui_up': bool(FreeCAD.GuiUp)}"
+        )
         if isinstance(result, dict) and result.get("success"):
             inner = result.get("result")
             if isinstance(inner, dict):
@@ -218,11 +220,12 @@ def _send_quit_command(host: str = "localhost", port: int = 9875) -> bool:
         # Guard FreeCADGui import behind GuiUp check
         proxy.execute(
             """
+import FreeCAD
 if FreeCAD.GuiUp:
     import FreeCADGui
-    main_window = FreeCADGui.getMainWindow()
-    if main_window:
-        main_window.close()
+    mainWindow = FreeCADGui.getMainWindow()
+    if mainWindow:
+        mainWindow.close()
 """
         )
         return True
@@ -244,21 +247,21 @@ def freecad_binary() -> str:
 def startup_script() -> str:
     """Get the path to the bridge startup script."""
     # Find the project root
-    tests_dir = Path(__file__).parent
-    project_root = tests_dir.parent.parent
+    testsDir = Path(__file__).parent
+    projectRoot = testsDir.parent.parent
 
-    script_path = (
-        project_root
+    scriptPath = (
+        projectRoot
         / "freecad"
         / "RobustMCPBridge"
         / "freecad_mcp_bridge"
         / "startup_bridge.py"
     )
 
-    if not script_path.exists():
-        pytest.skip(f"Startup script not found: {script_path}")
+    if not scriptPath.exists():
+        pytest.skip(f"Startup script not found: {scriptPath}")
 
-    return str(script_path)
+    return str(scriptPath)
 
 
 @pytest.mark.standalone_freecad
@@ -275,7 +278,7 @@ class TestShutdownCrash:
     """
 
     @pytest.fixture(autouse=True)
-    def check_no_existing_freecad(self):
+    def check_no_existing_freecad(self) -> None:
         """Skip if FreeCAD is already running (would cause initApplication crash)."""
         if _is_freecad_process_running():
             pytest.skip(
@@ -311,8 +314,8 @@ class TestShutdownCrash:
 
         try:
             # Wait for bridge to be ready
-            bridge_ready = _wait_for_bridge(timeout=60.0)
-            if not bridge_ready:
+            bridgeReady = _wait_for_bridge(timeout=60.0)
+            if not bridgeReady:
                 proc.terminate()
                 proc.wait(timeout=10)
                 pytest.fail("MCP bridge did not become available within timeout")
@@ -327,40 +330,40 @@ class TestShutdownCrash:
             time.sleep(2)
 
             # Send quit command — fail immediately if it cannot be sent
-            quit_sent = _send_quit_command()
-            if not quit_sent:
+            quitSent = _send_quit_command()
+            if not quitSent:
                 proc.terminate()
                 proc.wait(timeout=10)
                 pytest.fail("Failed to send quit command to FreeCAD via MCP bridge")
 
             # Wait for FreeCAD to exit
             try:
-                exit_code = proc.wait(timeout=30)
+                exitCode = proc.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=10)
                 pytest.fail("FreeCAD did not exit within 30 seconds after quit command")
 
             # Check for crash exit codes
-            if exit_code in crashExitCodes:
+            if exitCode in crashExitCodes:
                 # Get stderr for debugging
                 _, stderr = proc.communicate(timeout=5)
-                stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+                stderrText = stderr.decode("utf-8", errors="replace") if stderr else ""
 
-                crash_signal = (
-                    "SIGSEGV" if exit_code in (-sigSegv, 128 + sigSegv) else "SIGABRT"
+                crashSignal = (
+                    "SIGSEGV" if exitCode in (-sigSegv, 128 + sigSegv) else "SIGABRT"
                 )
                 pytest.fail(
-                    f"FreeCAD crashed during shutdown with {crash_signal} "
-                    f"(exit code {exit_code}).\n"
+                    f"FreeCAD crashed during shutdown with {crashSignal} "
+                    f"(exit code {exitCode}).\n"
                     f"This indicates the QTimer cleanup fix may not be working.\n"
-                    f"stderr: {stderr_text[:1000]}"
+                    f"stderr: {stderrText[:1000]}"
                 )
 
             # Exit code 0 or small positive values are acceptable
             # Some GUI frameworks return 1 on close, which is not a crash
-            assert exit_code not in crashExitCodes, (
-                f"FreeCAD exited with crash-like code {exit_code}"
+            assert exitCode not in crashExitCodes, (
+                f"FreeCAD exited with crash-like code {exitCode}"
             )
 
         finally:
@@ -395,8 +398,8 @@ class TestShutdownCrash:
 
         try:
             # Wait for bridge to be ready
-            bridge_ready = _wait_for_bridge(timeout=60.0)
-            if not bridge_ready:
+            bridgeReady = _wait_for_bridge(timeout=60.0)
+            if not bridgeReady:
                 proc.terminate()
                 proc.wait(timeout=10)
                 pytest.fail("MCP bridge did not become available within timeout")
@@ -409,7 +412,7 @@ class TestShutdownCrash:
 
             # Wait for exit
             try:
-                exit_code = proc.wait(timeout=30)
+                exitCode = proc.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=10)
@@ -417,12 +420,12 @@ class TestShutdownCrash:
 
             # SIGTERM should result in clean exit or -SIGTERM
             # It should NOT result in SIGSEGV or SIGABRT
-            if exit_code in (-sigSegv, 128 + sigSegv, -sigAbrt, 128 + sigAbrt):
+            if exitCode in (-sigSegv, 128 + sigSegv, -sigAbrt, 128 + sigAbrt):
                 _, stderr = proc.communicate(timeout=5)
-                stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+                stderrText = stderr.decode("utf-8", errors="replace") if stderr else ""
                 pytest.fail(
-                    f"FreeCAD crashed during SIGTERM shutdown (exit code {exit_code}).\n"
-                    f"stderr: {stderr_text[:1000]}"
+                    f"FreeCAD crashed during SIGTERM shutdown (exit code {exitCode}).\n"
+                    f"stderr: {stderrText[:1000]}"
                 )
 
         finally:
@@ -447,10 +450,10 @@ if __name__ == "__main__":
         print("ERROR: FreeCAD binary not found")
         sys.exit(1)
 
-    tests_dir = Path(__file__).parent
-    project_root = tests_dir.parent.parent
+    testsDir = Path(__file__).parent
+    projectRoot = testsDir.parent.parent
     script = str(
-        project_root
+        projectRoot
         / "freecad"
         / "RobustMCPBridge"
         / "freecad_mcp_bridge"
@@ -489,15 +492,15 @@ if __name__ == "__main__":
 
     print("Waiting for FreeCAD to exit...")
     try:
-        exit_code = proc.wait(timeout=30)
+        exitCode = proc.wait(timeout=30)
     except subprocess.TimeoutExpired:
         print("Timeout - killing process")
         proc.kill()
-        exit_code = proc.wait()
+        exitCode = proc.wait()
 
-    print(f"Exit code: {exit_code}")
+    print(f"Exit code: {exitCode}")
 
-    if exit_code in crashExitCodes:
+    if exitCode in crashExitCodes:
         print("CRASH DETECTED!")
         _, stderr = proc.communicate(timeout=5)
         if stderr:

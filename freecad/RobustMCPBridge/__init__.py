@@ -136,17 +136,17 @@ try:
     # In testing mode, skip auto-start so the test controls bridge lifecycle
     # via startup_bridge.py (same guard as in init_gui.py).
     if os.environ.get("FREECAD_MCP_TESTING"):
-        _auto_start_enabled = False
+        _autoStartEnabled = False
         FreeCAD.Console.PrintMessage(
             "Robust MCP Bridge: Auto-start skipped (FREECAD_MCP_TESTING set)\n"
         )
     else:
-        _auto_start_enabled = get_auto_start()
+        _autoStartEnabled = get_auto_start()
     FreeCAD.Console.PrintMessage(
-        f"Robust MCP Bridge: Auto-start preference = {_auto_start_enabled}\n"
+        f"Robust MCP Bridge: Auto-start preference = {_autoStartEnabled}\n"
     )
 
-    if _auto_start_enabled:
+    if _autoStartEnabled:
         # Try to import Qt and check for running QApplication
         import contextlib
 
