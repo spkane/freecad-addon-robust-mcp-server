@@ -195,11 +195,36 @@ release-test:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Source shared bridge helpers for wait_for_ports_free / wait_for_freecad_exit
+    . "{{project_root}}/scripts/bridge-helpers.sh"
+
+    # Helper: wait for FreeCAD to fully exit between release-test steps.
+    # Calls wait_for_ports_free and wait_for_freecad_exit with || true so
+    # set -e does not abort the script if the wait times out.
+    wait_between_steps() {
+        echo "Waiting for FreeCAD cleanup between steps..."
+        wait_for_ports_free 30 || true
+        wait_for_freecad_exit 30 || true
+        echo ""
+    }
+
     echo "============================================================"
     echo "  RELEASE TEST SUITE"
     echo "  All tests must pass before creating a release"
     echo "============================================================"
     echo ""
+
+    # --- Upfront cleanup ---
+    # Kill any existing FreeCAD / bridge before we start.  The user may have
+    # FreeCAD running with auto-start preferences, or a previous test run may
+    # have left a lingering process.  Without this, Step 2 immediately fails
+    # with "A FreeCAD Robust MCP Bridge is already running on port 9875."
+    if is_port_in_use 9875 || is_port_in_use 9876 || pgrep -i "freecad" > /dev/null 2>&1; then
+        echo "Existing FreeCAD / bridge detected — stopping before release tests..."
+        graceful_kill_bridge_ports
+        wait_for_freecad_exit 30 || true
+        echo ""
+    fi
 
     # Track overall test results
     TESTS_PASSED=true
@@ -250,6 +275,8 @@ release-test:
     fi
     echo ""
 
+    wait_between_steps
+
     # -------------------------------------------------------------------------
     # Step 3: GUI Integration Tests
     # -------------------------------------------------------------------------
@@ -268,6 +295,8 @@ release-test:
     fi
     echo ""
 
+    wait_between_steps
+
     # -------------------------------------------------------------------------
     # Step 4: Docker Integration Test
     # -------------------------------------------------------------------------
@@ -285,6 +314,8 @@ release-test:
         record_failure "Docker integration test" "just docker::test"
     fi
     echo ""
+
+    wait_between_steps
 
     # -------------------------------------------------------------------------
     # Step 5: Just Command Tests

@@ -98,6 +98,7 @@ wait_for_ports_free() {
 # (saving preferences, tearing down 3D viewer, deregistering from app services).
 # Starting a new FreeCAD before the old one fully exits causes:
 #   "Tried to run Gui::Application::initApplication() twice!" → SIGSEGV
+# If the process is still alive after the timeout, send SIGTERM then SIGKILL.
 # Usage: wait_for_freecad_exit [TIMEOUT_SECONDS]
 wait_for_freecad_exit() {
     local timeout=${1:-30}
@@ -118,6 +119,24 @@ wait_for_freecad_exit() {
             echo "  Waiting for FreeCAD process to exit... ($elapsed/${timeout}s)"
         fi
     done
-    echo "WARNING: FreeCAD process still running after ${timeout}s timeout"
-    return 1
+
+    # Timed out — force-stop the lingering process.  This handles the case
+    # where blocking_bridge.py releases its ports (so graceful_kill_bridge_ports
+    # can no longer find it via lsof) but freecadcmd itself hasn't exited.
+    echo "WARNING: FreeCAD process still running after ${timeout}s, sending SIGTERM..."
+    pkill -i "freecad" 2>/dev/null || true
+    sleep 2
+
+    if pgrep -i "freecad" > /dev/null 2>&1; then
+        echo "WARNING: FreeCAD still alive after SIGTERM, sending SIGKILL..."
+        pkill -9 -i "freecad" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # shellcheck disable=SC2009  # Intentionally using ps+grep for portability (pgrep may not exist)
+    if ps -eo comm= 2>/dev/null | grep -iq "freecad"; then
+        echo "ERROR: Could not stop FreeCAD process"
+        return 1
+    fi
+    return 0
 }
