@@ -185,13 +185,13 @@ try:
             # If no app at all, assume early GUI startup (will use GuiWaiter)
 
     FreeCAD.Console.PrintMessage(
-        f"Startup Bridge: GuiUp={FreeCAD.GuiUp}, "
+        f"Startup Bridge: GuiUp={getattr(FreeCAD, 'GuiUp', False)}, "
         f"QtCore={'available' if QtCore else 'unavailable'}, "
         f"QApp={'running' if _has_qapp else 'none'}, "
         f"headless={_is_true_headless}\n"
     )
 
-    if FreeCAD.GuiUp:
+    if getattr(FreeCAD, "GuiUp", False):
         # GUI is already up - start bridge directly
         FreeCAD.Console.PrintMessage("Startup Bridge: GUI already up, starting...\n")
         _start_bridge()
