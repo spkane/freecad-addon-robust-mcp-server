@@ -22,6 +22,8 @@ class PreferencesDict(TypedDict):
     """Type definition for the preferences dictionary."""
 
     auto_start: bool
+    auto_start_headless: bool
+    auto_start_headless_batch: bool
     status_bar_enabled: bool
     xmlrpc_port: int
     socket_port: int
@@ -32,6 +34,8 @@ PARAM_PATH = "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
 
 # Default values
 DEFAULT_AUTO_START = False
+DEFAULT_AUTO_START_HEADLESS = True
+DEFAULT_AUTO_START_HEADLESS_BATCH = False
 DEFAULT_STATUS_BAR_ENABLED = True
 DEFAULT_XMLRPC_PORT = 9875
 DEFAULT_SOCKET_PORT = 9876
@@ -59,6 +63,54 @@ def set_auto_start(enabled: bool) -> None:
         enabled: True to enable auto-start, False to disable.
     """
     get_param().SetBool("AutoStart", enabled)
+
+
+def get_auto_start_headless() -> bool:
+    """Get whether the bridge auto-starts in console FreeCAD (freecadcmd).
+
+    Only consulted for the console binary, where an MCP client attaches to a
+    long-lived session.  Batch runs are controlled separately by
+    ``AutoStartHeadlessBatch``.
+
+    Returns:
+        True if the bridge should auto-start in console FreeCAD.
+        Default: True
+    """
+    return get_param().GetBool("AutoStartHeadless", DEFAULT_AUTO_START_HEADLESS)
+
+
+def set_auto_start_headless(enabled: bool) -> None:
+    """Set whether the bridge auto-starts in console FreeCAD (freecadcmd).
+
+    Args:
+        enabled: True to enable, False to disable.
+    """
+    get_param().SetBool("AutoStartHeadless", enabled)
+
+
+def get_auto_start_headless_batch() -> bool:
+    """Get whether the bridge also auto-starts for console *batch* runs.
+
+    A batch run is a console invocation that was given something to process
+    (``freecadcmd script.py``, ``freecadcmd -c "..."``): it is short-lived, so
+    starting a server there mostly contends for the bridge ports.
+
+    Returns:
+        True if the bridge should also auto-start in batch runs.
+        Default: False
+    """
+    return get_param().GetBool(
+        "AutoStartHeadlessBatch", DEFAULT_AUTO_START_HEADLESS_BATCH
+    )
+
+
+def set_auto_start_headless_batch(enabled: bool) -> None:
+    """Set whether the bridge also auto-starts for console batch runs.
+
+    Args:
+        enabled: True to enable, False to disable.
+    """
+    get_param().SetBool("AutoStartHeadlessBatch", enabled)
 
 
 def get_status_bar_enabled() -> bool:
@@ -136,6 +188,8 @@ def get_all_preferences() -> PreferencesDict:
     """
     return {
         "auto_start": get_auto_start(),
+        "auto_start_headless": get_auto_start_headless(),
+        "auto_start_headless_batch": get_auto_start_headless_batch(),
         "status_bar_enabled": get_status_bar_enabled(),
         "xmlrpc_port": get_xmlrpc_port(),
         "socket_port": get_socket_port(),
@@ -145,6 +199,8 @@ def get_all_preferences() -> PreferencesDict:
 def reset_to_defaults() -> None:
     """Reset all preferences to their default values."""
     set_auto_start(DEFAULT_AUTO_START)
+    set_auto_start_headless(DEFAULT_AUTO_START_HEADLESS)
+    set_auto_start_headless_batch(DEFAULT_AUTO_START_HEADLESS_BATCH)
     set_status_bar_enabled(DEFAULT_STATUS_BAR_ENABLED)
     set_xmlrpc_port(DEFAULT_XMLRPC_PORT)
     set_socket_port(DEFAULT_SOCKET_PORT)
