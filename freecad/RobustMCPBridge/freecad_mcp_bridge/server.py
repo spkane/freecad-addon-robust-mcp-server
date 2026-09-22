@@ -113,6 +113,19 @@ try:
 except ImportError:
     FREECAD_AVAILABLE = False
 
+
+def _freecad_gui_up() -> bool:
+    """Return True when FreeCAD is present and its GUI is up.
+
+    ``FreeCAD.GuiUp`` does not exist until FreeCAD's application object has
+    finished initializing.  The bridge can legitimately be auto-started from a
+    workbench ``Init.py``, which runs *before* that point in the console
+    (headless) binary, so the attribute has to be read defensively -- reading
+    it directly raised ``AttributeError: module 'FreeCAD' has no attribute
+    'GuiUp'`` and aborted the headless auto-start.
+    """
+    return bool(getattr(FreeCAD, "GuiUp", False)) if FREECAD_AVAILABLE else False
+
 # Default configuration
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_XMLRPC_PORT = 9875
@@ -130,7 +143,7 @@ def _get_qt_core() -> Any:
     Returns:
         The QtCore module if available in GUI mode, None otherwise.
     """
-    if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+    if not _freecad_gui_up():
         return None
 
     # Try PySide2 first, then PySide6
@@ -585,12 +598,12 @@ class FreecadMCPPlugin:
             self._status_timer = None
 
         # Clear status bar message
-        if FREECAD_AVAILABLE and FreeCAD.GuiUp:
+        if _freecad_gui_up():
             self._set_status_bar("")
 
     def _update_status_bar(self) -> None:
         """Update the FreeCAD status bar with MCP bridge status."""
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        if not _freecad_gui_up():
             return
 
         # Build status message
@@ -620,7 +633,7 @@ class FreecadMCPPlugin:
         Args:
             message: Message to display in status bar.
         """
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        if not _freecad_gui_up():
             return
 
         try:
@@ -665,7 +678,7 @@ class FreecadMCPPlugin:
         # Check if we're in GUI mode using FreeCAD.GuiUp
         # Note: Qt (PySide) may be available even in headless mode, but without
         # a running event loop, Qt timers won't fire. Use GuiUp to detect this.
-        gui_available = FREECAD_AVAILABLE and FreeCAD.GuiUp
+        gui_available = _freecad_gui_up()
 
         if gui_available:
             # GUI mode: use Qt timer for thread-safe GUI operations
