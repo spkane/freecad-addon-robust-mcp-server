@@ -128,10 +128,63 @@ def _auto_start_bridge() -> None:
 # in GUI mode. If we start when GuiUp is False, the bridge's _start_queue_processor()
 # will see GuiUp=False and use a background thread. Later, code executed on that
 # thread will try to do Qt operations, causing crashes (SIGABRT in QCocoaWindow).
+# Command-line options that consume the following argument ("-u cfg", ...).
+_CONSOLE_OPTIONS_WITH_VALUE = {
+    "-u",
+    "--user-cfg",
+    "-s",
+    "--system-cfg",
+    "-t",
+    "--run-test",
+    "-r",
+    "--run-open",
+    "-M",
+    "--module-path",
+    "-E",
+    "--macro-path",
+    "-P",
+    "--python-path",
+    "--disable-addon",
+    "--log-file",
+    "--response-file",
+    "--get-config",
+    "--set-config",
+}
+
+
+def _console_batch_run() -> bool:
+    """True when console FreeCAD was given a script, command or document.
+
+    ``freecadcmd`` with no positional argument is a long-lived session, which
+    is where an MCP client attaches, so the bridge auto-starts there.  A batch
+    run (``freecadcmd script.py``, ``freecadcmd -c "..."``) exits as soon as the
+    work is done, so starting a server would mostly contend for the bridge
+    ports; it is skipped unless AutoStartHeadlessBatch is enabled.
+    """
+    import sys
+
+    skip_next = False
+    for token in sys.argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in _CONSOLE_OPTIONS_WITH_VALUE:
+            skip_next = True
+            continue
+        if token.startswith("-"):
+            continue
+        return True
+    return False
+
+
 try:
     import os
 
-    from preferences import get_auto_start
+    from preferences import (
+        get_auto_start,
+        get_auto_start_headless,
+        get_auto_start_headless_batch,
+    )
 
     # In testing mode, skip auto-start so the test controls bridge lifecycle
     # via startup_bridge.py (same guard as in init_gui.py).
@@ -183,6 +236,7 @@ try:
         _exe_name = os.path.basename(sys.executable or "") or os.path.basename(
             sys.argv[0] or ""
         )
+        _batch_run = _console_batch_run()
         if _console_override is not None:
             _is_console = _console_override.strip().lower() in (
                 "1",
@@ -216,7 +270,8 @@ try:
             f"Robust MCP Bridge: GuiUp={getattr(FreeCAD, 'GuiUp', False)}, "
             f"QtCore={'available' if QtCore else 'unavailable'}, "
             f"QApp={'running' if _has_qapp else 'none'}, "
-            f"headless={_is_true_headless}, bin={_exe_name or 'unknown'}\n"
+            f"headless={_is_true_headless}, bin={_exe_name or 'unknown'}, "
+            f"batch={_batch_run}\n"
         )
 
         if getattr(FreeCAD, "GuiUp", False):
@@ -233,13 +288,27 @@ try:
                 # GUI is up but Qt import failed - start directly
                 _auto_start_bridge()
         elif _is_true_headless:
-            # True headless mode - console FreeCAD, no GUI event loop. Start the
-            # bridge directly; it uses a background thread for queue processing.
-            FreeCAD.Console.PrintMessage(
-                "Robust MCP Bridge: True headless mode (console FreeCAD), "
-                "starting directly...\n"
-            )
-            _auto_start_bridge()
+            # Console FreeCAD, no GUI event loop.  Start the bridge for a
+            # long-lived session (that is where an MCP client attaches) and use
+            # a background thread for queue processing.  Short-lived batch runs
+            # are skipped - they would only contend for the bridge ports.
+            if not get_auto_start_headless():
+                FreeCAD.Console.PrintMessage(
+                    "Robust MCP Bridge: headless auto-start disabled "
+                    "(AutoStartHeadless=False)\n"
+                )
+            elif _batch_run and not get_auto_start_headless_batch():
+                FreeCAD.Console.PrintMessage(
+                    "Robust MCP Bridge: batch console run (script/command given) "
+                    "- skipping auto-start (set AutoStartHeadlessBatch to "
+                    "enable)\n"
+                )
+            else:
+                FreeCAD.Console.PrintMessage(
+                    "Robust MCP Bridge: True headless mode (console FreeCAD), "
+                    "starting directly...\n"
+                )
+                _auto_start_bridge()
         elif QtCore is not None:
             # GUI not ready yet (either QApplication exists or no app yet)
             # Use GuiWaiter to wait for GuiUp to become True before starting
