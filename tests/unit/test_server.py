@@ -48,14 +48,14 @@ class TestGetInstanceId:
 class TestGetPackageVersion:
     """Tests for package version metadata."""
 
-    def test_returns_distribution_version(self):
+    def test_returns_distribution_version(self) -> None:
         """Installed distribution metadata should supply the server version."""
         import freecad_mcp.server as server_module
 
         with patch.object(server_module, "distribution_version", return_value="0.7.0"):
             assert server_module.get_package_version() == "0.7.0"
 
-    def test_returns_source_fallback_without_metadata(self):
+    def test_returns_source_fallback_without_metadata(self) -> None:
         """A source checkout without metadata should still report a version."""
         import freecad_mcp.server as server_module
 
@@ -235,7 +235,7 @@ class TestLifespan:
 class TestRegisterAllComponents:
     """Tests for register_all_components function."""
 
-    def test_registers_tools(self):
+    def test_registers_tools(self) -> None:
         """Should register all tool categories."""
         from freecad_mcp.server import mcp
 
@@ -247,7 +247,7 @@ class TestRegisterAllComponents:
 
     @pytest.mark.asyncio
     @pytest.mark.timeout(3)
-    async def test_first_tool_call_completes(self):
+    async def test_first_tool_call_completes(self) -> None:
         """The first registered tool call should complete without hanging."""
         import freecad_mcp.server as server_module
 
@@ -271,7 +271,7 @@ class TestRegisterAllComponents:
 class TestMain:
     """Tests for main function."""
 
-    def test_main_prints_instance_id(self):
+    def test_main_prints_instance_id(self) -> None:
         """Main should print instance ID on startup when FREECAD_MCP_TESTING is set."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -305,7 +305,9 @@ class TestMain:
             )
             assert instance_id_call.kwargs.get("file") == sys.stderr
 
-    def test_main_prints_package_version(self, capsys: pytest.CaptureFixture[str]):
+    def test_main_prints_package_version(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """The version command should report the installed distribution."""
         import freecad_mcp.server as server_module
 
@@ -350,7 +352,7 @@ class TestMain:
             print_calls = [str(call) for call in mock_print.call_args_list]
             assert not any("FREECAD_MCP_INSTANCE_ID=" in call for call in print_calls)
 
-    def test_main_http_transport(self):
+    def test_main_http_transport(self) -> None:
         """Main should start HTTP transport when configured."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -359,7 +361,10 @@ class TestMain:
         mock_config.log_level = "INFO"
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "127.0.0.1"
         mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = ["127.0.0.1:*"]
+        mock_config.http_allowed_origins = ["http://127.0.0.1:*"]
 
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
@@ -373,7 +378,13 @@ class TestMain:
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args.kwargs
             assert call_kwargs.get("transport") == "streamable-http"
+            assert call_kwargs.get("host") == "127.0.0.1"
             assert call_kwargs.get("port") == 8080
+            security = call_kwargs.get("transport_security")
+            assert security is not None
+            assert security.enable_dns_rebinding_protection is True
+            assert security.allowed_hosts == ["127.0.0.1:*"]
+            assert security.allowed_origins == ["http://127.0.0.1:*"]
 
     def test_main_stdio_transport(self):
         """Main should start stdio transport by default."""

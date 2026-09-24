@@ -63,7 +63,72 @@ def _server_environment(xmlrpc_port: int) -> dict[str, str]:
         "FREECAD_MODE": "xmlrpc",
         "FREECAD_SOCKET_HOST": "127.0.0.1",
         "FREECAD_XMLRPC_PORT": str(xmlrpc_port),
+        "FREECAD_TRANSPORT": "stdio",
     }
+
+
+def _available_tcp_port() -> int:
+    """Ask the operating system for a currently available loopback port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_socket:
+        port_socket.bind(("127.0.0.1", 0))
+        return cast("int", port_socket.getsockname()[1])
+
+
+async def _stop_process(process: asyncio.subprocess.Process) -> None:
+    """Stop a protocol-test server process without leaving a child behind."""
+    if process.returncode is not None:
+        await process.wait()
+        return
+
+    process.terminate()
+    try:
+        await asyncio.wait_for(process.wait(), timeout=2)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+
+
+async def _start_streamable_http_server(
+    xmlrpc_port: int,
+) -> tuple[asyncio.subprocess.Process, int]:
+    """Start the HTTP test server, retrying an early port-bind failure."""
+    attempts = 3
+    return_codes: list[int] = []
+
+    for _ in range(attempts):
+        http_port = _available_tcp_port()
+        environment = {
+            **_server_environment(xmlrpc_port),
+            "FREECAD_TRANSPORT": "http",
+            "FREECAD_HTTP_PORT": str(http_port),
+        }
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "freecad_mcp.server",
+            env=environment,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        for _ in range(50):
+            if process.returncode is not None:
+                return_codes.append(process.returncode)
+                await process.wait()
+                break
+            try:
+                with socket.create_connection(("127.0.0.1", http_port), timeout=0.1):
+                    return process, http_port
+            except OSError:
+                await asyncio.sleep(0.1)
+        else:
+            await _stop_process(process)
+            pytest.fail("Streamable HTTP server did not start")
+
+    raise AssertionError(
+        "Streamable HTTP server exited before readiness after "
+        f"{attempts} port-allocation attempts (return codes: {return_codes})"
+    )
 
 
 @pytest.mark.asyncio
@@ -94,23 +159,7 @@ async def test_stdio_first_tool_call_completes() -> None:
 async def test_streamable_http_first_tool_call_completes() -> None:
     """Initialize, list tools, and complete a first call over Streamable HTTP."""
     with _fake_xmlrpc_server() as xmlrpc_port:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_socket:
-            port_socket.bind(("127.0.0.1", 0))
-            http_port = port_socket.getsockname()[1]
-
-        environment = {
-            **_server_environment(xmlrpc_port),
-            "FREECAD_TRANSPORT": "http",
-            "FREECAD_HTTP_PORT": str(http_port),
-        }
-        process = await asyncio.create_subprocess_exec(
-            sys.executable,
-            "-m",
-            "freecad_mcp.server",
-            env=environment,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        process, http_port = await _start_streamable_http_server(xmlrpc_port)
 
         try:
             for _ in range(50):
@@ -138,9 +187,4 @@ async def test_streamable_http_first_tool_call_completes() -> None:
             )
             assert call_result.is_error is False
         finally:
-            process.terminate()
-            try:
-                await asyncio.wait_for(process.wait(), timeout=2)
-            except TimeoutError:
-                process.kill()
-                await process.wait()
+            await _stop_process(process)

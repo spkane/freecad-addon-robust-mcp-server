@@ -43,8 +43,9 @@ from importlib.metadata import version as distribution_version
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 
-from freecad_mcp.config import FreecadMode, TransportType, get_config
+from freecad_mcp.config import FreecadMode, ServerConfig, TransportType, get_config
 
 if TYPE_CHECKING:
     from freecad_mcp.bridge.base import FreecadBridge
@@ -96,6 +97,24 @@ def get_package_version() -> str:
         return distribution_version("freecad-robust-mcp")
     except PackageNotFoundError:
         return "0.0.0.dev0+unknown"
+
+
+def build_http_transport_security(
+    config: ServerConfig,
+) -> TransportSecuritySettings:
+    """Build DNS-rebinding protection from the configured HTTP allowlists.
+
+    Args:
+        config: Validated server configuration.
+
+    Returns:
+        Transport security settings for the MCP HTTP server.
+    """
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=config.http_allowed_hosts,
+        allowed_origins=config.http_allowed_origins,
+    )
 
 
 @asynccontextmanager
@@ -319,7 +338,12 @@ Environment Variables:
   FREECAD_SOCKET_PORT    Port for socket connection (default: 9876)
   FREECAD_XMLRPC_PORT    Port for XML-RPC connection (default: 9875)
   FREECAD_TRANSPORT      Transport type: stdio or http (default: stdio)
+  FREECAD_HTTP_HOST      Bind address for HTTP transport (default: 127.0.0.1)
   FREECAD_HTTP_PORT      Port for HTTP transport (default: 8000)
+  FREECAD_HTTP_ALLOWED_HOSTS
+                         JSON array of accepted Host values
+  FREECAD_HTTP_ALLOWED_ORIGINS
+                         JSON array of accepted browser Origin values
   FREECAD_LOG_LEVEL      Logging level: DEBUG, INFO, WARNING, ERROR
                          (default: INFO)
 
@@ -330,7 +354,7 @@ Examples:
   # Use socket mode
   FREECAD_MODE=socket freecad-mcp
 
-  # Use HTTP transport for remote access
+  # Use local HTTP transport
   FREECAD_TRANSPORT=http FREECAD_HTTP_PORT=8080 freecad-mcp
 
   # Connect to remote FreeCAD instance
@@ -437,11 +461,14 @@ def main() -> None:
 
     # Run the server
     if config.transport == TransportType.HTTP:
-        logger.info("Starting HTTP transport on port %d", config.http_port)
+        logger.info(
+            "Starting HTTP transport on %s:%d", config.http_host, config.http_port
+        )
         mcp.run(
             transport="streamable-http",
-            host="0.0.0.0",  # noqa: S104
+            host=config.http_host,
             port=config.http_port,
+            transport_security=build_http_transport_security(config),
         )
     else:
         logger.info("Starting stdio transport")

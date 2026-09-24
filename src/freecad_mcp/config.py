@@ -42,7 +42,10 @@ class ServerConfig(BaseSettings):
         timeout_ms: Default execution timeout in milliseconds.
         max_output_size: Maximum output size in bytes.
         transport: MCP transport type.
+        http_host: Bind address for HTTP transport.
         http_port: Port for HTTP transport.
+        http_allowed_hosts: Accepted HTTP Host header values.
+        http_allowed_origins: Accepted browser Origin header values.
         log_level: Logging level.
     """
 
@@ -89,10 +92,26 @@ class ServerConfig(BaseSettings):
 
     # MCP transport settings
     transport: TransportType = TransportType.STDIO
+    http_host: Annotated[
+        str,
+        Field(description="HTTP server bind address"),
+    ] = "127.0.0.1"
     http_port: Annotated[
         int,
         Field(ge=1, le=65535, description="HTTP server port"),
     ] = 8000
+    http_allowed_hosts: list[str] = Field(
+        default_factory=lambda: ["127.0.0.1:*", "localhost:*", "[::1]:*"],
+        description="Allowed HTTP Host header values",
+    )
+    http_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://[::1]:*",
+        ],
+        description="Allowed browser Origin header values",
+    )
 
     # Logging
     log_level: str = "INFO"
