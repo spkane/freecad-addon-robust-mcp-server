@@ -214,7 +214,7 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is a standa
 │                         MCP Server Layer                                 │
 │                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                     FastMCP Application                             │ │
+│  │                    MCPServer Application                            │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐           │ │
 │  │  │ Tool     │  │ Resource │  │ Prompt   │  │ Lifecycle│           │ │
 │  │  │ Registry │  │ Registry │  │ Registry │  │ Manager  │           │ │
@@ -290,40 +290,37 @@ freecad_mcp/
 
 ### 1. MCP Server (`server.py`)
 
-The main entry point using FastMCP from the official MCP Python SDK.
+The main entry point uses MCPServer from the official MCP Python SDK 2.x.
 
 ```python
 """FreeCAD Robust MCP Server - Main entry point."""
 
-from mcp.server.fastmcp import FastMCP
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
 
-from freecad_mcp.config import ServerConfig
-from freecad_mcp.bridge import create_bridge
-from freecad_mcp.tools import register_all_tools
-from freecad_mcp.resources import register_all_resources
-from freecad_mcp.prompts import register_all_prompts
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP(
-    name="freecad-mcp",
-    version="0.1.0",
-    description="MCP server for FreeCAD integration with AI assistants"
-)
-
-# Bridge instance (initialized on startup)
 bridge = None
 
-@mcp.on_startup
-async def startup():
-    """Initialize FreeCAD bridge on server startup."""
+@asynccontextmanager
+async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
+    """Connect the configured FreeCAD bridge for the server lifetime."""
     global bridge
-    config = ServerConfig.from_env()
-    bridge = await create_bridge(config)
+    bridge = build_bridge_from_config()
+    await bridge.connect()
+    try:
+        yield
+    finally:
+        await bridge.disconnect()
 
-@mcp.on_shutdown
-async def shutdown():
-    """Clean up FreeCAD bridge on server shutdown."""
-    if bridge:
-        await bridge.close()
+mcp = MCPServer(
+    name="freecad-mcp",
+    title="FreeCAD Robust MCP Server",
+    description="Connect AI assistants to FreeCAD through a robust bridge.",
+    version=get_package_version(),
+    lifespan=lifespan,
+)
 ```
 
 ### 2. Bridge Interface (`bridge/base.py`)

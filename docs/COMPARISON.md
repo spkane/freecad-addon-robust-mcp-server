@@ -10,7 +10,7 @@ This document analyzes existing FreeCAD Robust MCP server implementations to ide
 
 - XML-RPC server running inside FreeCAD (port 9875)
 - Queue-based GUI communication for thread safety
-- FastMCP-based MCP server connecting via XML-RPC
+- MCPServer-based MCP server connecting via XML-RPC
 
 **Key Features:**
 

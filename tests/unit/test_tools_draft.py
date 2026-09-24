@@ -24,7 +24,7 @@ class TestDraftTools:
     def mock_mcp(self) -> MagicMock:
         """Create a mock MCP server that captures tool registrations.
 
-        Creates a MagicMock that simulates the FastMCP server's tool
+        Creates a MagicMock that simulates the MCP server's tool
         registration mechanism, storing registered tools in _registered_tools.
 
         Returns:

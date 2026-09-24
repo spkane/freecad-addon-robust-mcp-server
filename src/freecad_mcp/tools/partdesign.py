@@ -17,7 +17,7 @@ def register_partdesign_tools(
     """Register PartDesign-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
+        mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
     """
 

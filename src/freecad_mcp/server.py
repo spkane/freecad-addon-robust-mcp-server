@@ -38,11 +38,14 @@ import sys
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as distribution_version
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 
-from freecad_mcp.config import FreecadMode, TransportType, get_config
+from freecad_mcp.config import FreecadMode, ServerConfig, TransportType, get_config
 
 if TYPE_CHECKING:
     from freecad_mcp.bridge.base import FreecadBridge
@@ -83,15 +86,46 @@ async def get_bridge() -> "FreecadBridge":
     return _bridge
 
 
+def get_package_version() -> str:
+    """Return the installed package version for MCP server metadata.
+
+    Returns:
+        The installed distribution version, or a source-tree fallback when the
+        package metadata is unavailable.
+    """
+    try:
+        return distribution_version("freecad-robust-mcp")
+    except PackageNotFoundError:
+        return "0.0.0.dev0+unknown"
+
+
+def build_http_transport_security(
+    config: ServerConfig,
+) -> TransportSecuritySettings:
+    """Build DNS-rebinding protection from the configured HTTP allowlists.
+
+    Args:
+        config: Validated server configuration.
+
+    Returns:
+        Transport security settings for the MCP HTTP server.
+    """
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=config.http_allowed_hosts,
+        allowed_origins=config.http_allowed_origins,
+    )
+
+
 @asynccontextmanager
-async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
+async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
     """Manage FreeCAD bridge lifecycle.
 
     This async context manager initializes the FreeCAD bridge on startup
     and disconnects it on shutdown.
 
     Args:
-        _server: The FastMCP server instance (unused).
+        _server: The MCP server instance (unused).
 
     Yields:
         None - the bridge is stored in the global _bridge variable.
@@ -156,8 +190,11 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
 
 
 # Create the Robust MCP Server instance with lifespan
-mcp = FastMCP(
+mcp = MCPServer(
     name="freecad-mcp",
+    title="FreeCAD Robust MCP Server",
+    description="Connect AI assistants to FreeCAD through a robust bridge.",
+    version=get_package_version(),
     lifespan=lifespan,
 )
 
@@ -301,7 +338,12 @@ Environment Variables:
   FREECAD_SOCKET_PORT    Port for socket connection (default: 9876)
   FREECAD_XMLRPC_PORT    Port for XML-RPC connection (default: 9875)
   FREECAD_TRANSPORT      Transport type: stdio or http (default: stdio)
+  FREECAD_HTTP_HOST      Bind address for HTTP transport (default: 127.0.0.1)
   FREECAD_HTTP_PORT      Port for HTTP transport (default: 8000)
+  FREECAD_HTTP_ALLOWED_HOSTS
+                         JSON array of accepted Host values
+  FREECAD_HTTP_ALLOWED_ORIGINS
+                         JSON array of accepted browser Origin values
   FREECAD_LOG_LEVEL      Logging level: DEBUG, INFO, WARNING, ERROR
                          (default: INFO)
 
@@ -312,7 +354,7 @@ Examples:
   # Use socket mode
   FREECAD_MODE=socket freecad-mcp
 
-  # Use HTTP transport for remote access
+  # Use local HTTP transport
   FREECAD_TRANSPORT=http FREECAD_HTTP_PORT=8080 freecad-mcp
 
   # Connect to remote FreeCAD instance
@@ -384,13 +426,7 @@ def main() -> None:
 
     # Handle --version
     if args.version:
-        try:
-            from importlib.metadata import version
-
-            ver = version("freecad-mcp")
-        except Exception:
-            ver = "unknown"
-        print(f"freecad-mcp {ver}")
+        print(f"freecad-mcp {get_package_version()}")
         print(f"Instance ID: {INSTANCE_ID}")
         sys.exit(0)
 
@@ -425,11 +461,14 @@ def main() -> None:
 
     # Run the server
     if config.transport == TransportType.HTTP:
-        logger.info("Starting HTTP transport on port %d", config.http_port)
-        mcp.run(  # type: ignore[call-arg]
+        logger.info(
+            "Starting HTTP transport on %s:%d", config.http_host, config.http_port
+        )
+        mcp.run(
             transport="streamable-http",
-            host="0.0.0.0",  # noqa: S104
+            host=config.http_host,
             port=config.http_port,
+            transport_security=build_http_transport_security(config),
         )
     else:
         logger.info("Starting stdio transport")

@@ -14,7 +14,7 @@ The FreeCAD Robust MCP Server follows a **Bridge with Adapter** pattern:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         MCP Server Layer                                 │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                     FastMCP Application                             │ │
+│  │                    MCPServer Application                            │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐           │ │
 │  │  │  Tools   │  │ Resources│  │  Prompts │  │ Lifecycle│           │ │
 │  │  │ (150+)   │  │          │  │          │  │ Manager  │           │ │

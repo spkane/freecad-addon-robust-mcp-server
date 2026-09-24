@@ -27,7 +27,7 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
     """Register FreeCAD resources with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
+        mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
     """
 

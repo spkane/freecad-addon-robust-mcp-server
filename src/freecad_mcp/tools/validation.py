@@ -17,7 +17,7 @@ def register_validation_tools(
     """Register validation-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
+        mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
     """
 

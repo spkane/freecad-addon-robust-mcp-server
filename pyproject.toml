@@ -54,7 +54,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.29.1,<2",
+    "mcp>=2.2.0,<3",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
 ]
@@ -158,7 +158,7 @@ ignore = [
     "D104",   # Missing docstring in public package - __init__.py often just imports
     "D107",   # Missing docstring in __init__ - class docstring covers this
     "ANN401", # Allow Any in type annotations - FreeCAD types are dynamic
-    "ANN001", # Allow missing type annotations - FastMCP doesn't export types
+    "ANN001", # Allow registration functions to stay decoupled from MCPServer types
     "PLR0913",# Too many arguments - CAD APIs have many params
     "PLR0915",# Too many statements - registration functions are long
     "PLC0415",# Allow imports in functions - FreeCAD must be imported lazily
@@ -209,7 +209,7 @@ convention = "google"
 
 [tool.mypy]
 python_version = "3.11"
-# Not using strict mode due to FastMCP lacking type stubs
+# Strict mode remains incremental while bridge and registration types are refined
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -330,7 +330,6 @@ exclude_dirs = ["tests", "docs"]
 skips = [
     "B101",  # Allow asserts
     "B102",  # exec is required for FreeCAD Python execution
-    "B104",  # Binding to 0.0.0.0 is intentional for container/network access
     "B110",  # try-except-pass used for optional cleanup
     "B112",  # try-except-continue used for iterating over faces safely
     "B411",  # XML-RPC is required for FreeCAD compatibility

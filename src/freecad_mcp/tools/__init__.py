@@ -48,7 +48,7 @@ def register_all_tools(mcp: Any, get_bridge_func: Callable[[], Awaitable[Any]]) 
     """Register all FreeCAD tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance (Any due to lack of stubs).
+        mcp: The MCPServer instance (Any to keep registration modules decoupled).
         get_bridge_func: Async function returning the active bridge connection.
     """
     register_execution_tools(mcp, get_bridge_func)

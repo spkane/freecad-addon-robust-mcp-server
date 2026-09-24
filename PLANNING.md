@@ -1,6 +1,7 @@
 # FreeCAD Robust MCP Suite Release Plan
 
 **Audit date:** 2026-09-05  
+**MCP migration update:** 2026-09-14
 **Repository snapshot:** `d9a3711` on `main`  
 **Intended reader:** The maintainer returning to the project after time away  
 **Intended outcome:** Execute a secure, tested, repeatable public release of the
@@ -17,16 +18,13 @@ The practical problem is therefore not a first release. It is repairing a
 partially released product whose distribution channels, dependency constraints,
 security model, and repository metadata have diverged.
 
-Use two releases:
-
-1. **`0.6.3` maintenance release:** Restore installability and make the existing
-   v1 architecture safe enough to distribute. Pin the MCP SDK below 2, repair
-   packaging and versioning, authenticate the local bridge, close the exposed
-   HTTP defaults, update repository metadata, and verify all release paths.
-2. **`0.7.0` modernization release:** Migrate to MCP Python SDK 2.x and the
-   2026-07-28 protocol, reorganize the oversized tool catalog into capability
-   profiles, add complete risk annotations and task-oriented evaluations, and
-   publish to the official MCP Registry.
+Target a **`0.7.0` release candidate** rather than publishing another v1-based
+maintenance release. The source and lockfile now migrate directly to MCP Python
+SDK 2.2.0, and stdio, Streamable HTTP, first-tool-call, unit, and headless
+FreeCAD integration tests pass. Complete the remaining security, packaging, GUI,
+and clean-install gates before publishing the candidate. Follow with tool-catalog
+profiles, complete risk annotations, task-oriented evaluations, and MCP Registry
+publication.
 
 Do not call either release `1.0`. A `1.0.0` release should follow at least one
 release-candidate cycle and a short compatibility soak across supported FreeCAD,
@@ -36,7 +34,7 @@ Python, operating-system, and MCP-client combinations.
 
 | Priority | Blocker                                                         | Why it blocks release                                                                                                     | Required result                                                                                              |
 | -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| P0       | MCP dependency admits incompatible 2.x                          | `mcp>=1.25.0` now resolves MCP SDK 2.x, but the server imports the removed `mcp.server.fastmcp` path                      | For `0.6.3`, require the latest supported 1.x release with `<2`; migrate separately for `0.7.0`              |
+| P0       | MCP 2.2 migration needs final release certification             | The code migration and first-call regressions pass, but GUI and clean unlocked-install matrices are not yet complete      | Verify the wheel through stdio and HTTP on supported Python/FreeCAD/client combinations                      |
 | P0       | Unauthenticated code execution bridge                           | Any process able to reach ports 9875 or 9876 can submit Python that runs inside FreeCAD with the user's privileges        | Per-launch authentication, loopback-only binding, bounded requests, and an explicit unsafe-code policy       |
 | P0       | HTTP transport listens on all interfaces                        | Streamable HTTP binds `0.0.0.0` without application authentication or explicit Origin policy                              | Bind to `127.0.0.1` by default; require deliberate remote configuration, authentication, and TLS termination |
 | P0       | Workbench release archive cannot be built                       | The workflow copies `LICENSE`, but only `LICENSE-CODE` and `LICENSE-ICON` exist                                           | Archive job passes and manifest/archive license names agree                                                  |
@@ -44,6 +42,100 @@ Python, operating-system, and MCP-client combinations.
 | P0       | Runtime default contradicts documentation                       | Configuration defaults to embedded mode, while the CLI and docs say XML-RPC; embedded mode can crash on macOS             | Make XML-RPC or socket the single default everywhere; make embedded explicitly opt-in and Linux-only         |
 | P0       | Published identity is split across old and new repository names | Package URLs, docs, Docker labels, and PyPI provenance still reference `freecad-robust-mcp-and-more`                      | All live metadata points to `freecad-addon-robust-mcp-server`; PyPI Trusted Publishing is reconfigured       |
 | P0       | Real FreeCAD integration has not been re-certified              | Unit tests cannot establish that GUI-thread, transport, file import/export, and shutdown behavior work in current FreeCAD | Required headless and GUI integration matrices pass against supported stable FreeCAD versions                |
+
+## Live issue and pull-request triage
+
+**Triage date:** 2026-09-13
+
+**Live inventory:** 15 open issues and 11 open pull requests
+
+**Remote `main` at triage:** `bde407c`
+
+This queue combines user impact, release risk, ease, and whether a usable pull
+request already exists. Effort is estimated for one maintainer who knows the
+repository and includes focused tests and documentation:
+
+- **XS:** less than half a day
+- **S:** one to two days
+- **M:** three to five days
+- **L:** one to two weeks
+- **XL:** a multi-week design or migration
+
+### Recommended implementation order
+
+| Order | Priority | Effort | Work item                                                                   | Issue or PR disposition                                                                                                                                                                                                                                                                                                                                                                              | Why this position                                                                                                                                                                                                                                                                                                          |
+| ---:  | :---:    | :---:  | ---                                                                         | ---                                                                                                                                                                                                                                                                                                                                                                                                  | ---                                                                                                                                                                                                                                                                                                                        |
+| 1     | P0       | S      | Complete MCP 2.2 migration certification                                    | Finish [PR #122](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/122); [#107](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/107), [#119](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/119), and [PR #117](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/117) are closed as resolved or superseded                             | The direct MCP 2.2.0 migration now passes bounded stdio and HTTP `initialize`/`tools/list`/first `tools/call` tests, all unit tests, and the headless FreeCAD suite. Finish the unlocked wheel and GUI/client matrix before merging.                                                                                       |
+| 2     | P0       | XS     | Stop unrelated `.env` files from crashing startup                           | Implement [#105](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/105) directly                                                                                                                                                                                                                                                                                                      | It is a small, well-diagnosed startup failure common to MCP hosts that launch from another project's directory. Prefer eliminating implicit current-directory `.env` loading; if compatibility requires it, ignore unrelated entries and test both paths.                                                                  |
+| 3     | P0       | S      | Fix symmetric Pad, Revolution, and Groove across supported FreeCAD versions | Ask the author to revise/rebase [PR #100](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/100), then merge and close [#94](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/94)                                                                                                                                                                                       | Core Part Design operations fail on FreeCAD 1.1.x. The PR preserves the public `symmetric` argument and has the correct `SideType`/`Midplane` compatibility direction; only test-quality and rebase work remains.                                                                                                          |
+| 4     | P0       | S      | Fix external-geometry counting                                              | Ask the author to revise/rebase [PR #101](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/101), then merge and close [#95](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/95)                                                                                                                                                                                       | `get_sketch_info` and `add_external_geometry` fail on FreeCAD 1.1.x. The proposed subelement sum is materially better than the tempting but incorrect `len(ExternalGeometry)` replacement.                                                                                                                                 |
+| 5     | P0       | S-M    | Repair STL, 3MF, and OBJ tessellation/export                                | Keep [#96](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/96) canonical; close [#121](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/121) as a duplicate                                                                                                                                                                                                         | This blocks a primary deliverable: exported models. Fix all three formats together, preferably through one shared `MeshPart.meshFromShape` helper, with curved, filleted, fused, and multiple-object regressions.                                                                                                          |
+| 6     | P0       | M      | Consolidate screenshot correctness into one safe PR                         | Revise [PR #102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102) to absorb closed PR #106; close [#120](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/120) as a duplicate of [#82](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/82); close #82 and [#92](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/92) after merge | There are two distinct defects: fragile FreeCAD proxy type inspection crashes, and capture can produce a background-only image. The consolidated fix needs duck-typed view capability checks, render flush/framing, camera restoration and temporary-file cleanup in `finally`, and live XML-RPC/socket coverage.          |
+| 7     | P0       | M      | Detect subtractive features that changed no geometry                        | Implement [#99](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/99)                                                                                                                                                                                                                                                                                                                 | Silent success can produce a valid-looking printable model with missing holes. Return pre/post volume and a clear `no_material_removed` warning or error with a reversed-direction suggestion; do not silently reverse a user-requested operation. Extend the postcondition pattern to Groove and other subtractive tools. |
+| 8     | P0       | S-M    | Fix HTTP startup without reopening network exposure                         | Close [PR #84](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/84) as superseded; implement its HTTP settings concept separately                                                                                                                                                                                                                                                      | PR #84 mixes a useful SDK compatibility fix with a breaking Part Design API change and retains `0.0.0.0`. Implement against the selected MCP version with `127.0.0.1` as the default, an explicit bind option, Origin validation, and tests.                                                                               |
+| 9     | P0       | M      | Publish the MCP 2.2 and compatibility fixes as `0.7.0`                      | Keep [#87](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/87) open as the release-verification issue                                                                                                                                                                                                                                                                               | Users on PyPI 0.6.1 do not receive fixes already present on `main`. Close this only after a clean `uv tool install` from PyPI passes initialization and representative tool calls against FreeCAD 1.1.3.                                                                                                                   |
+| 10    | P1       | XS     | Correct Addon Manager and Windows installation documentation now            | Consolidate [#104](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/104) into [#73](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/73); implement the documentation half of [#97](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/97)                                                                                                             | This is the easiest high-impact user improvement: state that the addon is not yet indexed, provide exact manual/custom-repository steps, distinguish the Rust `just` utility from the Python package, and document the current Git Bash limitation.                                                                        |
+| 11    | P1       | S-M    | Make the installer genuinely cross-platform                                 | Continue [#97](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/97) as an implementation issue                                                                                                                                                                                                                                                                                       | Detect `python3` or `python`, support PowerShell without `cygpath`, discover versioned FreeCAD user directories, and add Windows CI tests. Once this works, `just` can remain a developer convenience rather than an end-user prerequisite.                                                                                |
+| 12    | P1       | S-M    | Serialize or isolate XML-RPC client calls                                   | Create a focused issue from the concurrency report in #107                                                                                                                                                                                                                                                                                                                                           | `xmlrpc.client.ServerProxy` is not thread-safe; concurrent tool calls can raise `CannotSendRequest`. Use an async lock around one proxy or a per-call proxy with bounded concurrency, then add a concurrent-call regression.                                                                                               |
+| 13    | P1       | L      | Resubmit to the FreeCAD Addon Index                                         | Keep #73 canonical; close [#19](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/19) because its original wiki-source defect was fixed                                                                                                                                                                                                                                               | The prior FreeCAD submission PR #528 was closed without merge. Resubmit only after security defaults, packaging, license metadata, install layout, and FreeCAD 1.1.3 compatibility are release-ready.                                                                                                                      |
+| 14    | P2       | XS     | Take the lowest-risk dependency automation update                           | Review and merge [PR #114](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/114) first                                                                                                                                                                                                                                                                                                 | The Trivy action patch is isolated and its checks are green. It is a useful test of the dependency-update path before larger action majors.                                                                                                                                                                                |
+| 15    | P2       | S-M    | Consolidate GitHub Action major updates                                     | Batch [#113](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/113), [#116](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/116), and [#118](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/118); handle [#115](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/115) separately                                                           | Setup Python, checkout, and metadata action updates have green checks but cross several workflows. Buildx changes affect container behavior and deserve a separate build/push smoke test. Prefer one maintained dependency branch and close superseded bot PRs.                                                            |
+| 16    | P2       | XL     | Extract the task-oriented MCP redesign into reviewable changes              | Do not merge [PR #112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112) as-is                                                                                                                                                                                                                                                                                                     | The direction matches the `0.7.0` plan, but the PR is conflicting and changes 118 files with roughly 18,500 additions and 21,900 deletions. Treat it as a tested prototype and design source, not a merge unit.                                                                                                            |
+
+### Acceptance criteria for the first nine items
+
+The first maintenance-release queue is complete only when all of these are true:
+
+1. A clean, unlocked installation resolves MCP 2.2.x and performs `initialize`,
+   `tools/list`, and at least one real `tools/call` over stdio and Streamable HTTP
+   without relying on the repository lockfile.
+2. Starting from a directory containing unrelated secret-shaped `.env` entries
+   neither crashes nor reads those entries into the configuration model.
+3. Pad, Revolution, Groove, external geometry, curved/multi-object export,
+   screenshot, and pocket regressions run against FreeCAD 1.1.3, not only mocks
+   of generated Python strings.
+4. Screenshot tests cover supported and unsupported active views, non-empty image
+   data, preserved camera state, and cleanup after a forced `saveImage` failure.
+5. Subtractive operations report a measurable postcondition, including a
+   distinct no-change result.
+6. HTTP listens only on loopback unless a user explicitly changes the bind
+   address; its startup test targets the actual selected MCP SDK.
+7. The exact wheel intended for PyPI passes the same clean-install and real tool
+   call test on Linux, macOS, and Windows.
+
+### Pull-request disposition summary
+
+| Pull request | Recommended action | Merge condition |
+| --- | --- | --- |
+| [#100](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/100) | Revise, rebase, merge | Name/annotate helpers and assert every property fallback plus the single bound symmetry value |
+| [#101](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/101) | Revise, rebase, merge | Address review feedback and verify the real FreeCAD 1.x `ExternalGeometry` shape |
+| [#102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102) | Expand, rebase, merge | Incorporate duck typing from #106 and use exception-safe camera/temp-file cleanup |
+| [#84](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/84) | Close as superseded | Reimplement only the HTTP concept with loopback-safe defaults; #100 replaces its Part Design change |
+| [#112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112) | Park or close after extracting design notes | Replace with small RFC-backed slices; no direct merge of the 118-file branch |
+| [#117](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/117) | Close as superseded | The direct migration updates the SDK API, metadata, lockfile, docs, and protocol regressions rather than only widening the dependency range |
+| [#114](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/114) | Merge after normal review | Green security/pre-commit checks and no Trivy behavior regression |
+| #113, #116, #118 | Consolidate | One cross-workflow validation run on the combined action-major update |
+| [#115](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/115) | Review separately | Local and CI multi-architecture container build and smoke test pass |
+
+### Decompose PR #112 into `0.7.0` slices
+
+Preserve the contributor's real-world local-model results, but separate the
+architecture decisions from the deletion of the existing catalog:
+
+1. **S, high value:** Add task-completion evaluations and retain the current
+   catalog unchanged. This creates a baseline for comparing designs.
+2. **M, high value:** Add an opt-in parametric profile alongside the existing
+   profile. Measure tool-selection accuracy and context size.
+3. **M, high value:** Introduce shared structured postconditions and FreeCAD
+   diagnostics for recompute, constraint, transaction, and mutation failures.
+4. **M-L, high risk:** Move transaction ownership to one executor boundary with
+   rollback integration tests.
+5. **S-M, medium value:** Add progressive guides as on-demand MCP resources.
+6. **L, breaking:** Remove or rename legacy tools only after profile comparison,
+   deprecation, migration documentation, and a `0.7.0` release candidate.
+
+This ordering lets the project measure whether the redesign improves task
+completion before accepting its largest compatibility cost.
 
 ## Codebase map
 
@@ -148,11 +240,11 @@ planning, not a release certificate.
 | Bandit                      | Passed for server and workbench when invoked directly              | Configuration skips the exact arbitrary-execution and XML-RPC rules central to this product                            |
 | Lockfile check              | Passed                                                             | The checked-in lock is internally consistent                                                                           |
 | Python package build        | Passed                                                             | Produced a development wheel and source archive                                                                        |
-| Package metadata check      | Failed                                                             | Twine 6.2 rejects Metadata 2.5                                                                                         |
-| CLI version                 | Failed behaviorally                                                | `freecad-mcp --version` prints `unknown` because it queries distribution `freecad-mcp` instead of `freecad-robust-mcp` |
+| Package metadata check      | Current lock fails; Twine 7 passes                                 | The MCP 2.2 wheel and sdist build; locked Twine 6.2 rejects Metadata 2.5 while an isolated Twine 7 check passes        |
+| CLI version                 | Corrected in MCP 2.2 migration                                     | CLI and server metadata now query the `freecad-robust-mcp` distribution                                                |
 | Safety scan                 | Inconclusive                                                       | Account is authenticated, but the scan did not return and was stopped                                                  |
-| Dependency inventory        | Completed                                                          | Many updates are available; MCP 2.x is the only immediate runtime-major incompatibility identified                     |
-| Real FreeCAD integration    | Not run in this audit                                              | Must be a release gate, not inferred from unit tests                                                                   |
+| Dependency inventory        | MCP runtime major resolved locally                                 | MCP 2.2.0 is locked and passes protocol and unit checks; unrelated updates remain                                      |
+| Real FreeCAD integration    | Headless passed; GUI pending                                       | 46 passed and 17 GUI-only tests skipped against FreeCAD 26.3; run the isolated GUI suite before release                |
 
 The local `uv` environment ran tests with Python 3.13.11 even though development
 configuration and FreeCAD compatibility guidance call for Python 3.11. This is a
@@ -242,7 +334,7 @@ them.
 **Exploit:** An operator believes network access is disabled and sandboxing is
 active, while submitted Python still receives normal builtins and process
 permissions.  
-**Remediation:** Remove the flags for `0.6.3` or implement hard enforcement. Do
+**Remediation:** Remove the flags for `0.7.0` or implement hard enforcement. Do
 not promise an in-process Python sandbox. A genuine arbitrary-code sandbox needs
 OS-level process isolation, a constrained filesystem, resource limits, and a
 network policy. Use explicit capability profiles for application-level controls.
@@ -338,31 +430,24 @@ execution.
 
 ## Modern MCP plan
 
-### Repair the SDK boundary first
+### Complete the MCP 2.2 boundary
 
-MCP Python SDK 2.x is now the default installed by `pip install mcp`. The current
-SDK documentation explicitly recommends either migrating or adding a `<2` upper
-bound. The present server uses the v1 `FastMCP` import, which raises
-`ModuleNotFoundError` on 2.x.
+The runtime now uses MCP Python SDK 2.2.0 and `MCPServer`, with the dependency
+range aligned across project and MyPy environments. The server publishes its
+name, human title, description, and actual installed package version. Bounded
+protocol regressions now perform `initialize`, `tools/list`, and the first
+`tools/call` over both stdio and Streamable HTTP; this directly covers the hang
+reported against MCP 1.29.1. All unit tests and the headless FreeCAD 26.3
+integration suite pass on Python 3.11.
 
-For `0.6.3`:
+Before `0.7.0`:
 
-- Change the runtime dependency to a tested interval such as
-  `mcp>=1.29.1,<2`, using the exact latest supported 1.x maintenance version at
-  implementation time.
-- Apply the same upper bound to pre-commit's MyPy environment and every example
-  or optional dependency group.
 - Add a clean-environment installation test that resolves from `pyproject.toml`
   without the project lockfile. This is what PyPI users experience.
-- Test initialization and representative tool/resource/prompt calls through
-  stdio and Streamable HTTP using supported 2025 protocol revisions.
-
-For `0.7.0`:
-
-- Migrate `FastMCP` to `MCPServer` and follow the official v1-to-v2 migration
-  guide rather than using compatibility shims indefinitely.
-- Pass server `name`, human title, description, instructions, website, icon, and
-  the package's real version explicitly. Use keyword arguments after `name`.
+- Run the GUI integration suite and representative calls from the supported
+  desktop MCP clients.
+- Add server instructions, website URL, and icon metadata once the canonical
+  release URLs and final icon asset are settled.
 - Replace raw handler exceptions with safe `ToolError` or `ResourceError`
   messages where the caller can act; let unexpected exceptions stay local.
 - Verify structured outputs after v2's content-block behavior changes.
@@ -449,10 +534,12 @@ Batch by risk and run the full relevant verification after each batch.
 
 ### Batch A: Emergency runtime compatibility
 
-- Constrain MCP to the latest 1.x maintenance line with `<2`.
-- Refresh the lockfile under Python 3.11.
+- Keep MCP on the migrated `>=2.2.0,<3` line and refresh the lockfile under
+  Python 3.11.
 - Verify clean PyPI-style resolution on Python 3.11, 3.12, and 3.13.
-- Run unit, integration, build, and Inspector smoke tests.
+- Preserve bounded stdio and Streamable HTTP first-call regressions.
+- Run GUI integration, build, and Inspector smoke tests; unit and headless
+  integration checks already pass.
 
 ### Batch B: Packaging and security tooling
 
@@ -481,11 +568,13 @@ Batch by risk and run the full relevant verification after each batch.
 - Bring the docs workflow's setup-uv action onto the same reviewed release as the
   other workflows.
 
-### Batch D: MCP SDK 2.x migration
+### Batch D: MCP SDK 2.2 certification
 
-- Upgrade only MCP and its required runtime dependency changes in this batch.
-- Apply the official migration guide, then run every server, schema, transport,
-  security, Inspector, conformance, and integration test.
+- Keep the MCP 2.2 migration and its required runtime dependency changes isolated
+  from unrelated tool behavior changes.
+- Validate clean unlocked installation from the built wheel, then run every
+  server, schema, transport-security, Inspector, conformance, and integration
+  test.
 - Follow with an explicit catalog/annotation change rather than mixing 152 tool
   behavior edits into the SDK migration commit.
 
@@ -518,7 +607,7 @@ Adopt this policy:
 - Keep the workbench independently versioned, but generate or validate its Python
   `__version__`, `package.xml`, archive names, and release notes from one value.
 - Add a release consistency test before tag creation and again in CI.
-- Do not reuse or move published tags. Use `0.6.3` for the next repair release.
+- Do not reuse or move published tags. Use `0.7.0` for the MCP 2.2 release.
 
 ### License repair
 
@@ -665,7 +754,8 @@ tag candidate
 **Goal:** Make product boundaries and trust assumptions explicit before changing
 code.
 
-- Approve the two-release strategy (`0.6.3`, then `0.7.0`).
+- Approve `0.7.0` as the next release because the MCP 2.2 migration is a breaking
+  runtime change.
 - Decide whether arbitrary Python remains a supported feature and, if so, require
   explicit enablement.
 - Decide whether XML-RPC remains compatibility-only and when it can be deprecated.
@@ -676,12 +766,12 @@ code.
 **Exit gate:** A maintainer can state exactly who is trusted, what privileges the
 server grants, and which combinations are supported.
 
-### Phase 1: Make `0.6.3` installable and internally consistent
+### Phase 1: Make `0.7.0` installable and internally consistent
 
-**Goal:** Repair the existing v1 product without mixing in the SDK 2 migration.
+**Goal:** Finish certification of the MCP 2.2 migration and release packaging.
 
-- Pin MCP 1.x with `<2` and update the lock.
-- Fix CLI/server version identity.
+- Keep the tested MCP 2.2 range, lockfile, and protocol-level first-call tests.
+- Preserve the corrected CLI/server version identity.
 - Make XML-RPC or authenticated socket mode the consistent default.
 - Repair license files and the workbench archive job.
 - Upgrade package verification for Metadata 2.5.
@@ -708,7 +798,7 @@ run `--version`, initialize over stdio, and see correct current metadata.
 **Exit gate:** No unauthenticated caller can execute code or mutate a document,
 and published configuration cannot accidentally expose that capability on a LAN.
 
-### Phase 3: Certify `0.6.3` release candidates
+### Phase 3: Certify `0.7.0` release candidates
 
 **Goal:** Test the exact artifacts users will receive.
 
@@ -716,13 +806,13 @@ and published configuration cannot accidentally expose that capability on a LAN.
 - Run stable FreeCAD GUI and headless integration on all supported platforms.
 - Test PyPI-style wheel install, Docker-to-host bridge, manual workbench archive,
   and Addon Manager developer installation.
-- Publish `0.6.3-rc1` to TestPyPI and a GitHub prerelease; test from clean systems.
+- Publish `0.7.0rc1` to TestPyPI and a GitHub prerelease; test from clean systems.
 - Resolve all critical/high security findings and all release workflow failures.
 
 **Exit gate:** Release checklist is green using immutable candidate artifacts and
 recorded digests.
 
-### Phase 4: Publish and verify `0.6.3`
+### Phase 4: Publish and verify `0.7.0`
 
 **Goal:** Restore a trustworthy public stable release.
 
@@ -734,16 +824,15 @@ recorded digests.
 **Exit gate:** Every advertised channel serves the same expected version and all
 critical user paths pass.
 
-### Phase 5: Build `0.7.0` MCP modernization
+### Phase 5: Continue post-release MCP modernization
 
-**Goal:** Adopt SDK 2.x without hiding behavior changes inside a patch release.
+**Goal:** Improve tool safety and discoverability after the SDK 2.2 release.
 
-- Migrate to `MCPServer` and protocol 2026-07-28.
-- Add server identity, safe errors, tool annotations, and capability profiles.
+- Expand safe errors, tool annotations, and capability profiles.
 - Add Inspector, conformance, and ten-plus task-completion evaluations.
 - Add and validate MCP Registry metadata.
-- Publish `0.7.0rc1`, test older clients through negotiation, and document the
-  `0.6.x` migration.
+- Test older clients through protocol negotiation and maintain the `0.6.x`
+  migration guide.
 
 **Exit gate:** At least 80% of the end-to-end evaluation set completes without
 manual tool selection, protocol conformance passes, and default sessions do not
@@ -811,22 +900,25 @@ contract is explicit, and no P0/P1 release findings remain.
 - [ ] Post-publication verification passes on every channel.
 - [ ] Partial-release recovery runbook has been exercised in a dry run.
 
-## Recommended first work session
+## Recommended next work session
 
-Keep the first implementation session intentionally narrow:
+Keep the next implementation session intentionally narrow:
 
-1. Create a release-fix branch.
-2. Add the MCP `<2` upper bound and update to the latest 1.x maintenance release.
-3. Add a clean, unlocked installation test that would have caught the 2.x break.
-4. Fix `--version` and assert it against built wheel metadata.
-5. Repair the license/archive mismatch and Metadata 2.5 verification.
-6. Make XML-RPC the documented and actual temporary default.
-7. Run unit, `just` syntax, build, package verification, and one real FreeCAD
-   integration flow before taking on the larger security transport change.
+1. Finish review of the MCP 2.2 migration on PR #122.
+2. Build the wheel and verify that a clean, unlocked installation resolves the
+   supported MCP 2.2 range without using the repository lockfile.
+3. Run bounded first-tool-call regressions over stdio and Streamable HTTP,
+   including HTTP Host and Origin allowlist coverage.
+4. Run MCP Inspector and conformance checks across the supported protocol/client
+   matrix.
+5. Assert `--version` and MCP server identity against built wheel metadata.
+6. Repair the license/archive mismatch and Metadata 2.5 verification.
+7. Run unit, `just` syntax, build, package verification, and real FreeCAD GUI and
+   headless integration flows before cutting `0.7.0rc1`.
 
-This creates a small, reviewable foundation. The next work session should focus
-only on bridge authentication and unsafe-code policy, because that work deserves
-its own threat model, tests, and review.
+This completes the release-candidate evidence for the migrated runtime. The
+following work session should focus only on bridge authentication and unsafe-code
+policy, because that work deserves its own threat model, tests, and review.
 
 ## Authoritative references
 
