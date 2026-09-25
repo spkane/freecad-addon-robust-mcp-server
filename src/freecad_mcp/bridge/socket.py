@@ -702,8 +702,10 @@ view = FreeCADGui.ActiveDocument.ActiveView
 if view is None:
     raise ValueError("No active view")
 
-# Check view type
-view_type = view.__class__.__name__
+# Check if this is a 3D view (not TechDraw, Spreadsheet, etc.)
+# Note: Use type() instead of __class__ because FreeCAD's View3DInventor
+# has a broken __class__ attribute that returns a dict of methods.
+view_type = type(view).__name__
 if view_type not in ["View3DInventor", "View3DInventorPy"]:
     raise ValueError(f"Cannot capture screenshot from {{view_type}} view")
 

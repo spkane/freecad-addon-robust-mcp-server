@@ -342,6 +342,7 @@ _result_ = {{
         type: str = "Length",
         name: str | None = None,
         doc_name: str | None = None,
+        reversed: bool = False,
     ) -> dict[str, Any]:
         """Create a Pocket (cut extrusion) from a sketch.
 
@@ -351,12 +352,21 @@ _result_ = {{
             type: Pocket type: "Length", "ThroughAll", "UpToFirst", "UpToFace".
             name: Pocket feature name. Auto-generated if None.
             doc_name: Document containing the sketch. Uses active document if None.
+            reversed: Flip the cut direction. Use True when the default
+                direction points away from the material and removes nothing.
+                Defaults to False. Kept last so existing positional calls that
+                pass name before this option keep working.
 
         Returns:
             Dictionary with created pocket information:
                 - name: Pocket name
                 - label: Pocket label
                 - type_id: Object type
+                - volume_before: Body volume before the pocket
+                - volume_after: Body volume after the pocket
+                - volume_removed: Material removed (volume_before - volume_after)
+                - warning: Present only when the pocket removed no material, so a
+                    caller can tell a no-op cut from a real one
         """
         bridge = await get_bridge()
 
@@ -377,14 +387,21 @@ for obj in doc.Objects:
 if body is None:
     raise ValueError("Sketch must be inside a PartDesign Body for Pocket operation")
 
-# Wrap in transaction for undo support
+# Wrap in transaction for undo support. The baseline recompute and read happen
+# inside the transaction so a failure there aborts cleanly instead of leaving a
+# half-applied recompute behind, and the baseline still reflects any pending
+# changes to the body or its dependencies.
 doc.openTransaction("Pocket Sketch")
 try:
+    doc.recompute()
+    volume_before = body.Shape.Volume if hasattr(body, "Shape") else 0.0
+
     pocket_name = {name!r} or "Pocket"
     pocket = body.newObject("PartDesign::Pocket", pocket_name)
     pocket.Profile = sketch
     pocket.Length = {length}
     pocket.Type = {type!r}
+    pocket.Reversed = {reversed}
 
     doc.recompute()
     doc.commitTransaction()
@@ -392,11 +409,23 @@ except Exception:
     doc.abortTransaction()
     raise
 
+volume_after = body.Shape.Volume if hasattr(body, "Shape") else 0.0
+volume_removed = volume_before - volume_after
+
 _result_ = {{
     "name": pocket.Name,
     "label": pocket.Label,
     "type_id": pocket.TypeId,
+    "volume_before": volume_before,
+    "volume_after": volume_after,
+    "volume_removed": volume_removed,
 }}
+if abs(volume_removed) < 1e-6:
+    _result_["warning"] = (
+        "Pocket removed no material. The cut direction likely points away from "
+        "the solid. Try reversed=True, or place the profile sketch on the face "
+        "where the material is."
+    )
 """
         result = await bridge.execute_python(code)
         if result.success:

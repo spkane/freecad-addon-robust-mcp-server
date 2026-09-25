@@ -59,6 +59,33 @@ class TestServerConfig:
 
         assert isinstance(config, ServerConfig)
 
+    def test_ignores_unrelated_keys_in_dotenv(self, tmp_path, monkeypatch):
+        """A shared .env with non-FREECAD keys must not crash startup.
+
+        Regression test for the extra_forbidden crash when the working
+        directory holds a .env with unrelated variables (e.g. a token).
+        """
+        (tmp_path / ".env").write_text(
+            "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_dummy\nSOME_OTHER=1\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            config = ServerConfig()
+
+        assert config.mode == FreecadMode.EMBEDDED
+
+    def test_reads_freeCAD_keys_from_dotenv(self, tmp_path, monkeypatch):
+        """FREECAD_-prefixed keys in .env should still be applied."""
+        (tmp_path / ".env").write_text(
+            "FREECAD_MODE=socket\nUNRELATED=x\n", encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            config = ServerConfig()
+
+        assert config.mode == FreecadMode.SOCKET
+
 
 class TestFreecadMode:
     """Tests for FreecadMode enum."""

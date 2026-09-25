@@ -87,6 +87,121 @@ class TestPartDesignTools:
         mock_bridge.execute_python.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_pocket_sketch_reversed_default_false(
+        self, register_tools, mock_bridge
+    ):
+        """pocket_sketch should set pocket.Reversed = False by default."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Pocket",
+                    "label": "Pocket",
+                    "type_id": "PartDesign::Pocket",
+                    "volume_before": 2000.0,
+                    "volume_after": 1937.168,
+                    "volume_removed": 62.832,
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        pocket = register_tools["pocket_sketch"]
+        await pocket(sketch_name="S2", length=10)
+
+        code = mock_bridge.execute_python.call_args[0][0]
+        assert "pocket.Reversed = False" in code
+
+    @pytest.mark.asyncio
+    async def test_pocket_sketch_reversed_true(self, register_tools, mock_bridge):
+        """pocket_sketch(reversed=True) should set pocket.Reversed = True."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Pocket",
+                    "label": "Pocket",
+                    "type_id": "PartDesign::Pocket",
+                    "volume_before": 2000.0,
+                    "volume_after": 1937.168,
+                    "volume_removed": 62.832,
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        pocket = register_tools["pocket_sketch"]
+        await pocket(sketch_name="S2", length=10, reversed=True)
+
+        code = mock_bridge.execute_python.call_args[0][0]
+        assert "pocket.Reversed = True" in code
+
+    @pytest.mark.asyncio
+    async def test_pocket_sketch_reports_volume_removed(
+        self, register_tools, mock_bridge
+    ):
+        """Generated code must report volume_removed and warn on a no-op cut."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Pocket",
+                    "label": "Pocket",
+                    "type_id": "PartDesign::Pocket",
+                    "volume_before": 2000.0,
+                    "volume_after": 2000.0,
+                    "volume_removed": 0.0,
+                    "warning": "Pocket removed no material.",
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        pocket = register_tools["pocket_sketch"]
+        result = await pocket(sketch_name="S2", length=10)
+
+        code = mock_bridge.execute_python.call_args[0][0]
+        assert "volume_removed = volume_before - volume_after" in code
+        assert "if abs(volume_removed) < 1e-6:" in code
+        # The no-op signal reaches the caller.
+        assert result["volume_removed"] == 0.0
+        assert "warning" in result
+
+    @pytest.mark.asyncio
+    async def test_pocket_sketch_generated_code_compiles(
+        self, register_tools, mock_bridge
+    ):
+        """The generated pocket source must be valid Python."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "name": "Pocket",
+                    "label": "Pocket",
+                    "type_id": "PartDesign::Pocket",
+                    "volume_before": 2000.0,
+                    "volume_after": 1937.168,
+                    "volume_removed": 62.832,
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=10.0,
+            )
+        )
+
+        pocket = register_tools["pocket_sketch"]
+        await pocket(sketch_name="S2", length=10, reversed=True)
+
+        code = mock_bridge.execute_python.call_args[0][0]
+        compile(code, "<mcp>", "exec")
+
+    @pytest.mark.asyncio
     async def test_add_sketch_rectangle(self, register_tools, mock_bridge):
         """add_sketch_rectangle should add a rectangle via execute_python."""
         mock_bridge.execute_python = AsyncMock(

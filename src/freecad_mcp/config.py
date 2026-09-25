@@ -51,6 +51,10 @@ class ServerConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # Ignore unrelated keys from a shared .env in the working directory
+        # (e.g. GITHUB_PERSONAL_ACCESS_TOKEN) instead of crashing with
+        # extra_forbidden at startup.
+        extra="ignore",
     )
 
     # FreeCAD connection settings
