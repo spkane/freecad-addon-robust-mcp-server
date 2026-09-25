@@ -58,22 +58,54 @@ docker build -t freecad-robust-mcp .
 
 The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection point for the Robust MCP Server.
 
-### Via FreeCAD Addon Manager (Recommended)
+> **Not in the Addon Manager.** The workbench is not in the FreeCAD Addon
+> Manager catalog yet. Searching for "Robust MCP" there returns nothing. Use
+> one of the methods below.
 
-1. Open FreeCAD
-1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD Robust MCP Suite" or "Robust MCP Bridge"
-1. Click **Install**
-1. Restart FreeCAD
+### With `just` (recommended)
 
-### Manual Installation
+From a clone of this repository:
 
-1. Download the latest release from [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
-1. Extract to your FreeCAD Mod directory:
-   - **Linux:** `~/.local/share/FreeCAD/Mod/`
-   - **macOS:** `~/Library/Application Support/FreeCAD/Mod/`
-   - **Windows:** `%APPDATA%\FreeCAD\Mod\`
-1. Restart FreeCAD
+```bash
+just install::mcp-bridge-workbench
+```
+
+This copies the workbench into the correct `Mod/RobustMCPBridge/` location and
+generates its `package.xml`. Restart FreeCAD, then pick **Robust MCP Bridge**
+from the workbench dropdown.
+
+### Manual installation
+
+1. Download the latest release archive from
+   [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases).
+1. Extract the release archive so the workbench lands at the new-style namespace layout `Mod/RobustMCPBridge/freecad/RobustMCPBridge/`. The archive ships the package as `freecad/RobustMCPBridge`, so place that folder under `Mod/RobustMCPBridge/`, not directly in `Mod`:
+   - **Linux:** `~/.local/share/FreeCAD/Mod/RobustMCPBridge/`
+   - **macOS:** `~/Library/Application Support/FreeCAD/Mod/RobustMCPBridge/`
+   - **Windows:** `%APPDATA%\FreeCAD\<version>\Mod\RobustMCPBridge\` (where `<version>` is your FreeCAD version directory: `v1-1`, `v1-2`, `v2-0`, ...)
+1. Restart FreeCAD.
+
+> Do **not** copy the whole repository into `Mod`. The installer builds the
+> correct namespace layout and a standalone `package.xml`; a raw copy does not
+> produce a working workbench.
+
+### Windows notes
+
+- **Install the Rust `just`, not the Python one.** `uv tool install just`
+  installs an unrelated Python package that fails with
+  `ModuleNotFoundError: No module named 'dateutil'`. Install the real `just`
+  (the Rust task runner) with a package manager, for example:
+
+  ```bash
+  choco install just      # Chocolatey
+  ```
+
+- **Use Git Bash, not PowerShell.** The install recipes need a Unix-like
+  shell. In PowerShell you may see `could not find cygpath executable`. Run
+  the `just install::...` commands inside Git Bash (or MSYS2).
+
+- **`python3` may be missing.** The installer calls `python3`. On Windows you
+  often have only `python`. Add a `python3` wrapper on your `PATH`, or run
+  the install from a shell where `python3` resolves.
 
 ---
 

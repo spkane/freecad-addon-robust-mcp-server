@@ -244,11 +244,25 @@ Before your AI assistant can connect, you need to start the MCP bridge inside Fr
 
 ##### Option A: Using the Workbench (Recommended)
 
-1. Install the Robust MCP Bridge workbench via FreeCAD's Addon Manager:
+1. Install the Robust MCP Bridge workbench.
 
-   - **Edit -> Preferences -> Addon Manager**
-   - Search for "Robust MCP Bridge"
-   - Install and restart FreeCAD
+   > **Not in the Addon Manager.** The workbench is not in the FreeCAD Addon
+   > Manager catalog yet. Do not search for it there — the search returns
+   > nothing. Install it with one of these methods instead:
+
+   - **With `just`** (from a clone of this repository):
+
+     ```bash
+     just install::mcp-bridge-workbench
+     ```
+
+   - **Manual:** download the latest release archive and extract the
+     `RobustMCPBridge` folder into your FreeCAD `Mod` directory:
+     - **Linux:** `~/.local/share/FreeCAD/Mod/`
+     - **macOS:** `~/Library/Application Support/FreeCAD/Mod/`
+     - **Windows:** `%APPDATA%\FreeCAD\v1-1\Mod\`
+
+   Then restart FreeCAD.
 
 1. Start the bridge:
 
@@ -280,11 +294,14 @@ After starting the bridge, start/restart your MCP client (Claude Code, etc.) - i
 
 To uninstall the Robust MCP Bridge workbench:
 
-1. Open FreeCAD
-1. Go to **Edit -> Preferences -> Addon Manager**
-1. Find "Robust MCP Bridge" in the list
-1. Click **Uninstall**
-1. Restart FreeCAD
+- **With `just`:**
+
+  ```bash
+  just install::uninstall-mcp-bridge-workbench
+  ```
+
+- **Manual:** delete the `RobustMCPBridge` folder from your FreeCAD `Mod`
+  directory, then restart FreeCAD.
 
 ##### Checking for Legacy Components
 

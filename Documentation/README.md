@@ -15,24 +15,34 @@ The FreeCAD Robust MCP Suite consists of two components:
 
 ### 1. Install the MCP Bridge in FreeCAD
 
-#### Option A: FreeCAD Addon Manager (Recommended)
+> **Not in the Addon Manager.** The workbench is not in the FreeCAD Addon
+> Manager catalog yet. Searching for "Robust MCP Bridge" there returns
+> nothing. Use one of the methods below.
 
-1. Open FreeCAD
-2. Go to **Tools → Addon Manager**
-3. Search for "Robust MCP Bridge"
-4. Click **Install**
-5. Restart FreeCAD
+#### Option A: With `just` (recommended)
 
-#### Option B: Manual Installation
+From a clone of this repository:
 
 ```bash
-# Clone the repository
-git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
-cd freecad-robust-mcp-and-more
-
-# Install the workbench
 just install::mcp-bridge-workbench
 ```
+
+This installs the workbench to `Mod/RobustMCPBridge/` and generates its
+`package.xml`. Restart FreeCAD, then pick **Robust MCP Bridge** from the
+workbench dropdown.
+
+#### Option B: Manual installation
+
+Download the latest release archive from
+[GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
+and extract the `RobustMCPBridge` folder into your FreeCAD `Mod` directory:
+
+- **Linux:** `~/.local/share/FreeCAD/Mod/RobustMCPBridge/`
+- **macOS:** `~/Library/Application Support/FreeCAD/Mod/RobustMCPBridge/`
+- **Windows:** `%APPDATA%\FreeCAD\v1-1\Mod\RobustMCPBridge\`
+
+Do **not** extract to `Mod/freecad/RobustMCPBridge/` — that is the wrong
+namespace layout and FreeCAD will not load it.
 
 ### 2. Start the MCP Bridge
 

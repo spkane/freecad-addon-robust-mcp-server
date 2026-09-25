@@ -20,14 +20,14 @@ Before starting, ensure you have:
 
 1. Open FreeCAD
 1. Switch to the **Robust MCP Bridge** workbench
-1. Click **Start Bridge** in the toolbar
+1. Click **Start MCP Bridge** in the toolbar
 1. You should see: "MCP Bridge started! XML-RPC: localhost:9875, Socket: localhost:9876"
 
 ### Option B: Headless Mode (For automation)
 
 ```bash
-# If installed via Addon Manager (Linux)
-FreeCADCmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+# If installed into the Mod directory (Linux)
+FreeCADCmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 
 # If working from source
 just freecad::run-headless

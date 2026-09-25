@@ -10,7 +10,9 @@ to interact with FreeCAD through the Model Context Protocol (MCP).
 ### Robust MCP Bridge (Workbench)
 
 A FreeCAD workbench that exposes FreeCAD's functionality via XML-RPC and
-JSON-RPC protocols. Install via the FreeCAD Addon Manager.
+JSON-RPC protocols. It is not in the FreeCAD Addon Manager yet; install it
+from a clone of this repository with `just install::mcp-bridge-workbench` or by extracting the release
+archive into your FreeCAD `Mod/RobustMCPBridge/` directory.
 
 **Features:**
 
@@ -34,7 +36,7 @@ Install via `pip install freecad-robust-mcp` or `uv tool install freecad-robust-
 
 ## Quick Start
 
-1. Install the Robust MCP Bridge workbench via FreeCAD Addon Manager
+1. Install the Robust MCP Bridge workbench from a clone of this repository (`just install::mcp-bridge-workbench`, or extract the release archive into `Mod/RobustMCPBridge/`)
 2. Start FreeCAD (bridge starts automatically if enabled)
 3. Install the MCP server: `pip install freecad-robust-mcp`
 4. Configure your AI assistant to use `freecad-mcp --mode xmlrpc`

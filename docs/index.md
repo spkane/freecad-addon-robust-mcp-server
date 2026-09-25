@@ -21,11 +21,13 @@ This project provides an [MCP (Model Context Protocol)](https://modelcontextprot
 # Install the Robust MCP Server
 pip install freecad-robust-mcp
 
-# Install the workbench via FreeCAD Addon Manager
-# (search for "Robust MCP" - the package is "FreeCAD Robust MCP Suite")
+# Install the workbench. It is NOT in the Addon Manager, so do not search
+# there. From a clone of this repo:
+just install::mcp-bridge-workbench
+# ...or extract the release archive into your FreeCAD Mod directory.
 
-# Start FreeCAD and switch to the "Robust MCP Bridge" workbench
-# Click "Start Bridge" in the toolbar
+# Start FreeCAD, switch to the "Robust MCP Bridge" workbench,
+# and click "Start MCP Bridge" in the toolbar.
 
 # Configure your MCP client and start building!
 ```

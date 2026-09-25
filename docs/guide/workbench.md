@@ -18,21 +18,34 @@ The workbench provides:
 
 ## Installation
 
-### Via FreeCAD Addon Manager (Recommended)
+> **Not in the Addon Manager.** The workbench is not in the FreeCAD Addon
+> Manager catalog yet. Searching for "Robust MCP" there returns nothing. Use
+> one of the methods below.
 
-1. Open FreeCAD
-1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD Robust MCP Suite" or "Robust MCP Bridge"
-1. Click **Install**
-1. Restart FreeCAD
+### With `just` (recommended)
 
-### Manual Installation
+From a clone of this repository:
 
-Download from [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases) and extract to your FreeCAD Mod directory:
+```bash
+just install::mcp-bridge-workbench
+```
 
-- **Linux:** `~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/`
-- **macOS:** `~/Library/Application Support/FreeCAD/Mod/freecad/RobustMCPBridge/`
-- **Windows:** `%APPDATA%\FreeCAD\Mod\freecad\RobustMCPBridge\`
+This installs the workbench to `Mod/RobustMCPBridge/` and generates its
+`package.xml`. Restart FreeCAD, then pick **Robust MCP Bridge** from the
+workbench dropdown.
+
+### Manual installation
+
+Download the latest release archive from
+[GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
+and extract the `RobustMCPBridge` folder into your FreeCAD `Mod` directory:
+
+- **Linux:** `~/.local/share/FreeCAD/Mod/RobustMCPBridge/`
+- **macOS:** `~/Library/Application Support/FreeCAD/Mod/RobustMCPBridge/`
+- **Windows:** `%APPDATA%\FreeCAD\v1-1\Mod\RobustMCPBridge\`
+
+Do **not** extract to `Mod/freecad/RobustMCPBridge/` — that is the wrong
+namespace layout and FreeCAD will not load it.
 
 ---
 
@@ -75,14 +88,14 @@ The workbench includes a blocking bridge script for running in server mode (keep
 **Linux:**
 
 ```bash
-freecadcmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **macOS:**
 
 ```bash
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    ~/Library/Application\ Support/FreeCAD/Mod/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **Using just commands (from source):**
