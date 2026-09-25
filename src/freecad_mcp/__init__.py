@@ -36,6 +36,13 @@ except PackageNotFoundError:
 __author__ = "Sean P. Kane"
 __email__ = "spkane@gmail.com"
 
-from freecad_mcp.server import mcp
+from freecad_mcp.server import get_mcp, mcp
 
-__all__ = ["__version__", "mcp"]
+__all__ = ["__version__", "get_mcp", "mcp"]
+
+# ``mcp`` is None until ``server.main()`` creates the FastMCP instance, and
+# returns to None once the transport stops. A ``from freecad_mcp import mcp``
+# performed before startup captures that None binding and keeps it even after
+# main() assigns the real instance.
+# Use ``get_mcp()`` instead: it resolves the binding at call time and
+# returns the running instance (or raises RuntimeError if not started yet).

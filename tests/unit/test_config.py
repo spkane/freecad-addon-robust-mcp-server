@@ -22,6 +22,7 @@ class TestServerConfig:
         assert config.timeout_ms == 30000
         assert config.max_output_size == 1_000_000
         assert config.transport == TransportType.STDIO
+        assert config.http_host == "127.0.0.1"
         assert config.http_port == 8000
         assert config.log_level == "INFO"
         assert config.enable_sandbox is True
@@ -46,6 +47,13 @@ class TestServerConfig:
             config = ServerConfig()
 
         assert config.transport == TransportType.HTTP
+
+    def test_http_host_from_env(self) -> None:
+        """Configuration should read HTTP bind host from environment."""
+        with mock.patch.dict(os.environ, {"FREECAD_HTTP_HOST": "0.0.0.0"}):  # noqa: S104
+            config = ServerConfig()
+
+        assert config.http_host == "0.0.0.0"  # noqa: S104
 
     def test_invalid_port_raises_error(self):
         """Invalid port should raise validation error."""

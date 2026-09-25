@@ -32,6 +32,7 @@ Example:
 """
 
 import argparse
+import ipaddress
 import logging
 import os
 import sys
@@ -41,11 +42,13 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from freecad_mcp.config import FreecadMode, TransportType, get_config
 
 if TYPE_CHECKING:
     from freecad_mcp.bridge.base import FreecadBridge
+    from freecad_mcp.config import ServerConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +69,124 @@ def get_instance_id() -> str:
         The UUID string that uniquely identifies this server instance.
     """
     return INSTANCE_ID
+
+
+def is_loopback_host(host: str) -> bool:
+    """Check whether a host binds only to loopback interfaces.
+
+    Args:
+        host: The bind address to check.
+
+    Returns:
+        True for the ``localhost`` hostname and for any address in the
+        IPv4 (``127.0.0.0/8``) or IPv6 (``::1/128``) loopback ranges,
+        False for any other address or hostname.
+    """
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _format_host(host: str) -> str:
+    """Bracket an IPv6 address for use in HTTP authority strings.
+
+    IPv6 addresses in HTTP headers and URLs must be enclosed in square brackets
+    (e.g. ``[::1]``) to avoid ambiguity with the colon-separated port syntax.
+    IPv4 addresses, hostnames, and explicit ``host:port`` values are returned
+    unchanged.
+
+    Args:
+        host: A hostname, IPv4 address, bare IPv6 address, or host:port string.
+
+    Returns:
+        The formatted host string with brackets around IPv6 addresses.
+    """
+    if _is_ipv6(host) and not host.startswith("["):
+        return f"[{host}]"
+    return host
+
+
+def _is_ipv6(host: str) -> bool:
+    """Detect whether a host string is a bare IPv6 address.
+
+    Detection uses :mod:`ipaddress` validation instead of checking for a
+    colon, so explicit ``host:port`` values (e.g. ``mcp.example.com:443``)
+    are not misclassified as IPv6 and wrapped in brackets. Already-bracketed
+    addresses (e.g. ``[::1]``) are **not** detected as IPv6 by this helper;
+    use :func:`_format_host` to apply brackets when needed.
+
+    Args:
+        host: A hostname, IP address, or ``host:port`` string.
+
+    Returns:
+        ``True`` if *host* is an unbracketed IPv6 address, ``False``
+        otherwise (including hostnames, IPv4 addresses, ``host:port``
+        values, and anything that does not parse as an IP address).
+    """
+    try:
+        return ipaddress.ip_address(host).version == 6
+    except ValueError:
+        return False
+
+
+def _build_transport_security(config: "ServerConfig") -> TransportSecuritySettings:
+    """Build transport security settings from configuration.
+
+    Args:
+        config: The server configuration.
+
+    Returns:
+        TransportSecuritySettings with explicit allowlist for both
+        loopback and non-loopback binds.
+
+    Raises:
+        ValueError: If http_host is non-loopback and http_allowed_hosts is empty.
+    """
+    if is_loopback_host(config.http_host):
+        host = _format_host(config.http_host)
+        # Both the bare value and the port-wildcard form are required: MCP
+        # matches allowlist entries exactly, and clients omit the port for
+        # the default ports (80/443), so "host:*" alone rejects those
+        # requests with HTTP 421.
+        return TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=[host, f"{host}:*"],
+            allowed_origins=[f"http://{host}", f"http://{host}:*"],
+        )
+
+    # Non-loopback: require explicit allowlist
+    if not config.http_allowed_hosts:
+        raise ValueError(
+            f"http_allowed_hosts is required when binding to non-loopback "
+            f"host '{config.http_host}'. Set FREECAD_HTTP_ALLOWED_HOSTS to a "
+            f"comma-separated list of allowed hosts."
+        )
+
+    raw_hosts = [h.strip() for h in config.http_allowed_hosts.split(",") if h.strip()]
+    if not raw_hosts:
+        raise ValueError(
+            "http_allowed_hosts is empty after parsing. Provide at least one "
+            "host in FREECAD_HTTP_ALLOWED_HOSTS."
+        )
+
+    # Emit both the bare authority and the port-wildcard form for each host:
+    # MCP matches allowlist entries exactly, and "host:*" only matches Host
+    # headers that carry a port (see mcp.server.transport_security).
+    allowed_hosts: list[str] = []
+    allowed_origins: list[str] = []
+    for raw_host in raw_hosts:
+        formatted = _format_host(raw_host)
+        allowed_hosts.extend([formatted, f"{formatted}:*"])
+        allowed_origins.extend([f"http://{formatted}", f"http://{formatted}:*"])
+
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
 
 
 async def get_bridge() -> "FreecadBridge":
@@ -155,33 +276,60 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
             _bridge = None
 
 
-# Create the Robust MCP Server instance with lifespan
-mcp = FastMCP(
-    name="freecad-mcp",
-    lifespan=lifespan,
-)
+# Will be created in main() with full configuration.
+# None until main() runs.
+mcp: FastMCP | None = None
 
 
-def register_all_components() -> None:
-    """Register all MCP components (tools, resources, prompts)."""
+def get_mcp() -> FastMCP:
+    """Return the live FastMCP instance created by :func:`main`.
+
+    The package-level ``mcp`` name is ``None`` until ``main()`` creates the
+    server, and back to ``None`` once the transport stops. A
+    ``from freecad_mcp import mcp`` performed before startup captures that
+    ``None`` binding and keeps it even after ``main()`` assigns the real
+    instance, so importing the name directly can leave callers with a stale
+    value. This accessor resolves the module-level binding at call time
+    instead, so it returns the running instance whenever the server is up.
+
+    Returns:
+        The FastMCP server instance.
+
+    Raises:
+        RuntimeError: If ``main()`` has not created the instance yet.
+
+    Example:
+        >>> from freecad_mcp import get_mcp
+        >>> mcp = get_mcp()  # only after main() starts; RuntimeError before
+    """
+    if mcp is None:
+        raise RuntimeError(
+            "MCP server not initialized yet: freecad_mcp.server.mcp is None "
+            "until main() creates the FastMCP instance."
+        )
+    return mcp
+
+
+def register_all_components(fastmcp: FastMCP) -> None:
+    """Register all MCP components (tools, resources, prompts).
+
+    Args:
+        fastmcp: The FastMCP instance to register components on.
+    """
     # Register tools
     from freecad_mcp.tools import register_all_tools
 
-    register_all_tools(mcp, get_bridge)
+    register_all_tools(fastmcp, get_bridge)
 
     # Register resources
     from freecad_mcp.resources import register_resources
 
-    register_resources(mcp, get_bridge)
+    register_resources(fastmcp, get_bridge)
 
     # Register prompts
     from freecad_mcp.prompts import register_prompts
 
-    register_prompts(mcp, get_bridge)
-
-
-# Register all components
-register_all_components()
+    register_prompts(fastmcp, get_bridge)
 
 
 async def check_freecad_connection(
@@ -277,6 +425,8 @@ def apply_cli_args_to_env(args: argparse.Namespace) -> None:
             os.environ["FREECAD_XMLRPC_PORT"] = str(args.port)
         else:
             os.environ["FREECAD_SOCKET_PORT"] = str(args.port)
+    if args.http_host:
+        os.environ["FREECAD_HTTP_HOST"] = args.http_host
     if args.http_port:
         os.environ["FREECAD_HTTP_PORT"] = str(args.http_port)
     if args.log_level:
@@ -301,7 +451,14 @@ Environment Variables:
   FREECAD_SOCKET_PORT    Port for socket connection (default: 9876)
   FREECAD_XMLRPC_PORT    Port for XML-RPC connection (default: 9875)
   FREECAD_TRANSPORT      Transport type: stdio or http (default: stdio)
+  FREECAD_HTTP_HOST      Host to bind for HTTP transport (default: 127.0.0.1)
+                         Binding to a non-loopback address exposes the MCP
+                         server remotely: put it behind authentication, TLS
+                         or a trusted reverse proxy.
   FREECAD_HTTP_PORT      Port for HTTP transport (default: 8000)
+  FREECAD_HTTP_ALLOWED_HOSTS
+                         Comma-separated allowlist of Host/Origin values,
+                         required when FREECAD_HTTP_HOST is non-loopback
   FREECAD_LOG_LEVEL      Logging level: DEBUG, INFO, WARNING, ERROR
                          (default: INFO)
 
@@ -312,8 +469,13 @@ Examples:
   # Use socket mode
   FREECAD_MODE=socket freecad-mcp
 
-  # Use HTTP transport for remote access
+  # Use HTTP transport for local access (binds 127.0.0.1 only)
   FREECAD_TRANSPORT=http FREECAD_HTTP_PORT=8080 freecad-mcp
+
+  # Use HTTP transport for remote access (non-loopback bind needs an
+  # explicit host allowlist; see the security note on FREECAD_HTTP_HOST)
+  FREECAD_TRANSPORT=http FREECAD_HTTP_HOST=0.0.0.0 FREECAD_HTTP_PORT=8080 \\
+    FREECAD_HTTP_ALLOWED_HOSTS=mcp.example.com freecad-mcp
 
   # Connect to remote FreeCAD instance
   FREECAD_SOCKET_HOST=192.168.1.100 freecad-mcp
@@ -363,6 +525,12 @@ Prerequisites:
     )
 
     parser.add_argument(
+        "--http-host",
+        help="Host/address for HTTP transport to bind to "
+        "(overrides FREECAD_HTTP_HOST; default: 127.0.0.1)",
+    )
+
+    parser.add_argument(
         "--http-port",
         type=int,
         help="Port for HTTP transport (overrides FREECAD_HTTP_PORT)",
@@ -379,6 +547,8 @@ Prerequisites:
 
 def main() -> None:
     """Run the FreeCAD Robust MCP Server."""
+    global mcp
+
     # Parse arguments first - this handles --help without connecting to FreeCAD
     args = parse_args()
 
@@ -423,23 +593,62 @@ def main() -> None:
     logger.info("Mode: %s", config.mode.value)
     logger.info("Transport: %s", config.transport.value)
 
-    # Run the server
+    # Build transport security ONLY for HTTP transport
+    transport_security = None
     if config.transport == TransportType.HTTP:
-        logger.info("Starting HTTP transport on port %d", config.http_port)
-        mcp.run(  # type: ignore[call-arg]
-            transport="streamable-http",
-            host="0.0.0.0",  # noqa: S104
-            port=config.http_port,
-        )
-    else:
-        logger.info("Starting stdio transport")
-        logger.info(
-            "Waiting for MCP client connection (FreeCAD connection tested on first request)..."
-        )
-        logger.info(
-            "Tip: Use 'freecad-mcp --check' to test FreeCAD connection directly"
-        )
-        mcp.run()
+        transport_security = _build_transport_security(config)
+        if not is_loopback_host(config.http_host):
+            logger.warning(
+                "HTTP transport bound to '%s' - remote MCP access is exposed "
+                "without authentication. Secure it with auth, TLS or a trusted "
+                "reverse proxy.",
+                config.http_host,
+            )
+
+    # Create FastMCP with full configuration (including security).
+    # Keep it local until components are registered so that a registration
+    # failure never publishes a partially initialized instance.
+    server = FastMCP(
+        name="freecad-mcp",
+        lifespan=lifespan,
+        host=config.http_host,
+        port=config.http_port,
+        log_level=config.log_level,  # type: ignore[arg-type]
+        transport_security=transport_security,
+    )
+
+    register_all_components(server)
+
+    # Publish the package-level export only after registration succeeded so
+    # that ``import freecad_mcp; freecad_mcp.mcp`` returns the live instance.
+    # Callers that imported ``mcp`` before startup still hold the None
+    # binding; they should use get_mcp() to resolve it at call time.
+    import freecad_mcp
+
+    mcp = server
+    freecad_mcp.mcp = server
+
+    # Run the server; clear both bindings when the transport ends (normal
+    # shutdown or failure) so get_mcp() never returns a stopped instance.
+    try:
+        if config.transport == TransportType.HTTP:
+            logger.info(
+                "Starting HTTP transport on %s:%d", config.http_host, config.http_port
+            )
+            server.run(transport="streamable-http")
+        else:
+            logger.info("Starting stdio transport")
+            logger.info(
+                "Waiting for MCP client connection (FreeCAD connection tested "
+                "on first request)..."
+            )
+            logger.info(
+                "Tip: Use 'freecad-mcp --check' to test FreeCAD connection directly"
+            )
+            server.run()
+    finally:
+        mcp = None
+        freecad_mcp.mcp = None
 
 
 if __name__ == "__main__":

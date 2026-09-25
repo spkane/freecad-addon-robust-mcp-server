@@ -45,6 +45,195 @@ class TestGetInstanceId:
         assert id1 == id2
 
 
+class TestIsLoopbackHost:
+    """Tests for is_loopback_host helper."""
+
+    @pytest.mark.parametrize(
+        "host,expected",
+        [
+            ("127.0.0.1", True),
+            ("127.0.0.2", True),
+            ("localhost", True),
+            ("::1", True),
+            ("0.0.0.0", False),  # noqa: S104
+            ("192.168.1.100", False),
+            ("mcp.example.com", False),
+        ],
+    )
+    def test_loopback_classification(self, host: str, expected: bool) -> None:
+        from freecad_mcp.server import is_loopback_host
+
+        assert is_loopback_host(host) is expected
+
+
+class TestFormatHost:
+    """Tests for _format_host / _is_ipv6 helpers."""
+
+    @pytest.mark.parametrize(
+        "host,expected_ipv6",
+        [
+            ("::1", True),
+            ("::2", True),
+            ("2001:db8::1", True),
+            ("mcp.example.com", False),
+            ("mcp.example.com:443", False),
+            ("192.168.1.100", False),
+            ("192.168.1.100:8080", False),
+            ("[::1]", False),
+        ],
+    )
+    def test_is_ipv6_detection(self, host: str, expected_ipv6: bool) -> None:
+        """IPv6 detection must validate the address, not look for a colon."""
+        from freecad_mcp.server import _is_ipv6
+
+        assert _is_ipv6(host) is expected_ipv6
+
+    @pytest.mark.parametrize(
+        "host,expected",
+        [
+            ("::1", "[::1]"),
+            ("::2", "[::2]"),
+            ("mcp.example.com", "mcp.example.com"),
+            # Explicit port values must not be wrapped in brackets:
+            # wrapping breaks the exact Host match in the MCP allowlist.
+            ("mcp.example.com:443", "mcp.example.com:443"),
+            ("192.168.1.100:8080", "192.168.1.100:8080"),
+            ("192.168.1.100", "192.168.1.100"),
+            # Already bracketed input is returned unchanged.
+            ("[::1]", "[::1]"),
+        ],
+    )
+    def test_format_host(self, host: str, expected: str) -> None:
+        """Only bare IPv6 addresses get brackets; host:port stays as-is."""
+        from freecad_mcp.server import _format_host
+
+        assert _format_host(host) == expected
+
+
+class TestGetMcp:
+    """Tests for the get_mcp accessor."""
+
+    def test_raises_before_initialization(self) -> None:
+        """Should raise RuntimeError while server.mcp is None."""
+        import freecad_mcp.server as server_module
+
+        original = server_module.mcp
+        try:
+            server_module.mcp = None
+            with pytest.raises(RuntimeError, match="not initialized yet"):
+                server_module.get_mcp()
+        finally:
+            server_module.mcp = original
+
+    def test_returns_live_instance_after_initialization(self) -> None:
+        """Should resolve the module binding at call time, not import time."""
+        import freecad_mcp.server as server_module
+
+        original = server_module.mcp
+        try:
+            server_module.mcp = None
+            # Resolve before initialization -> RuntimeError
+            with pytest.raises(RuntimeError):
+                server_module.get_mcp()
+            # Simulate main() creating the instance
+            sentinel = MagicMock()
+            server_module.mcp = sentinel
+            # Same caller, called again, now gets the live instance
+            assert server_module.get_mcp() is sentinel
+        finally:
+            server_module.mcp = original
+
+    def test_package_reexports_get_mcp(self) -> None:
+        """freecad_mcp.get_mcp must be the server accessor."""
+        import freecad_mcp
+        from freecad_mcp.server import get_mcp
+
+        assert freecad_mcp.get_mcp is get_mcp
+
+    def test_main_publishes_binding_only_after_registration(self) -> None:
+        """A registration failure must leave the mcp binding unpublished."""
+        import freecad_mcp
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.STDIO
+        mock_config.http_host = "127.0.0.1"
+
+        # Start from a clean slate and restore afterwards, so the assertions
+        # do not depend on what other tests left behind.
+        original_server_mcp = server_module.mcp
+        original_package_mcp = freecad_mcp.mcp
+        server_module.mcp = None
+        freecad_mcp.mcp = None
+        try:
+            with (
+                patch.object(sys, "argv", DEFAULT_ARGV),
+                patch.object(server_module, "get_config", return_value=mock_config),
+                patch.object(server_module, "FastMCP", return_value=MagicMock()),
+                patch.object(
+                    server_module,
+                    "register_all_components",
+                    side_effect=RuntimeError("registration failed"),
+                ),
+                patch("builtins.print"),
+            ):
+                with pytest.raises(RuntimeError, match="registration failed"):
+                    server_module.main()
+
+            assert server_module.mcp is None
+            assert freecad_mcp.mcp is None
+        finally:
+            server_module.mcp = original_server_mcp
+            freecad_mcp.mcp = original_package_mcp
+
+    def test_main_clears_bindings_after_shutdown(self) -> None:
+        """Both bindings must be None once the transport run() returns."""
+        import freecad_mcp
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.STDIO
+        mock_config.http_host = "127.0.0.1"
+
+        mock_mcp_instance = MagicMock()
+
+        # Capture the binding while run() is executing (before the finally
+        # block clears it).
+        captured: list[object] = []
+
+        def _capture_binding(*_args: object, **_kwargs: object) -> None:
+            captured.append(server_module.mcp)
+
+        mock_mcp_instance.run.side_effect = _capture_binding
+
+        # Restore whatever the bindings held before the test, including when an
+        # assertion below fails, so later tests do not depend on execution order.
+        original_server_mcp = server_module.mcp
+        original_package_mcp = freecad_mcp.mcp
+        try:
+            with (
+                patch.object(sys, "argv", DEFAULT_ARGV),
+                patch.object(server_module, "get_config", return_value=mock_config),
+                patch.object(server_module, "FastMCP", return_value=mock_mcp_instance),
+                patch("builtins.print"),
+            ):
+                server_module.main()
+
+            # Published while the transport ran, cleared after shutdown
+            assert captured and captured[0] is mock_mcp_instance
+            assert server_module.mcp is None
+            assert freecad_mcp.mcp is None
+        finally:
+            server_module.mcp = original_server_mcp
+            freecad_mcp.mcp = original_package_mcp
+
+
 class TestGetBridge:
     """Tests for get_bridge function."""
 
@@ -213,20 +402,45 @@ class TestLifespan:
 class TestRegisterAllComponents:
     """Tests for register_all_components function."""
 
-    def test_registers_tools(self):
-        """Should register all tool categories."""
-        from freecad_mcp.server import mcp
+    def test_registers_tools(self) -> None:
+        """Should register tools, resources and prompts on the instance."""
+        from freecad_mcp.server import register_all_components
 
-        # The function is called at module load, but we can verify
-        # that the mcp instance exists and has tools registered
-        assert mcp is not None
-        assert mcp.name == "freecad-mcp"
+        mock_mcp = MagicMock()
+        register_all_components(mock_mcp)
+        assert mock_mcp.tool.called
+        assert mock_mcp.resource.called
+        assert mock_mcp.prompt.called
+
+
+class TestApplyCliArgsToEnv:
+    """Tests for CLI argument to environment mapping."""
+
+    def test_http_host_maps_to_env(self) -> None:
+        """--http-host should set FREECAD_HTTP_HOST."""
+        from argparse import Namespace
+
+        import freecad_mcp.server as server_module
+
+        args = Namespace(
+            mode=None,
+            transport=None,
+            host=None,
+            port=None,
+            http_host="0.0.0.0",  # noqa: S104
+            http_port=None,
+            log_level=None,
+        )
+
+        with patch.dict(os.environ, {}, clear=True):
+            server_module.apply_cli_args_to_env(args)
+            assert os.environ["FREECAD_HTTP_HOST"] == "0.0.0.0"  # noqa: S104
 
 
 class TestMain:
     """Tests for main function."""
 
-    def test_main_prints_instance_id(self):
+    def test_main_prints_instance_id(self) -> None:
         """Main should print instance ID on startup when FREECAD_MCP_TESTING is set."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -235,17 +449,17 @@ class TestMain:
         mock_config.log_level = "INFO"
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.transport = TransportType.STDIO
+        mock_config.http_host = "127.0.0.1"
+
+        mock_mcp_instance = MagicMock()
 
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
-            patch.object(server_module.mcp, "run") as mock_run,
+            patch.object(server_module, "FastMCP", return_value=mock_mcp_instance),
             patch("builtins.print") as mock_print,
             patch.dict(os.environ, {"FREECAD_MCP_TESTING": "1"}),
         ):
-            # Mock run to exit immediately
-            mock_run.return_value = None
-
             server_module.main()
 
             # Check that instance ID was printed to stderr (not stdout, to avoid
@@ -260,7 +474,7 @@ class TestMain:
             )
             assert instance_id_call.kwargs.get("file") == sys.stderr
 
-    def test_main_no_instance_id_without_testing_env(self):
+    def test_main_no_instance_id_without_testing_env(self) -> None:
         """Main should NOT print instance ID when FREECAD_MCP_TESTING is unset."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -269,29 +483,29 @@ class TestMain:
         mock_config.log_level = "INFO"
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.transport = TransportType.STDIO
+        mock_config.http_host = "127.0.0.1"
 
         # Ensure FREECAD_MCP_TESTING is not set
         env_without_testing = {
             k: v for k, v in os.environ.items() if k != "FREECAD_MCP_TESTING"
         }
 
+        mock_mcp_instance = MagicMock()
+
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
-            patch.object(server_module.mcp, "run") as mock_run,
+            patch.object(server_module, "FastMCP", return_value=mock_mcp_instance),
             patch("builtins.print") as mock_print,
             patch.dict(os.environ, env_without_testing, clear=True),
         ):
-            # Mock run to exit immediately
-            mock_run.return_value = None
-
             server_module.main()
 
             # Check that instance ID was NOT printed
             print_calls = [str(call) for call in mock_print.call_args_list]
             assert not any("FREECAD_MCP_INSTANCE_ID=" in call for call in print_calls)
 
-    def test_main_http_transport(self):
+    def test_main_http_transport(self) -> None:
         """Main should start HTTP transport when configured."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -300,23 +514,239 @@ class TestMain:
         mock_config.log_level = "INFO"
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "127.0.0.1"
         mock_config.http_port = 8080
+
+        mock_mcp_instance = MagicMock()
 
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
-            patch.object(server_module.mcp, "run") as mock_run,
+            patch.object(
+                server_module, "FastMCP", return_value=mock_mcp_instance
+            ) as mock_fastmcp,
             patch("builtins.print"),
         ):
             server_module.main()
 
-            # Should call run with HTTP transport settings
-            mock_run.assert_called_once()
-            call_kwargs = mock_run.call_args.kwargs
-            assert call_kwargs.get("transport") == "streamable-http"
-            assert call_kwargs.get("port") == 8080
+            # Verify FastMCP was constructed with correct params
+            mock_fastmcp.assert_called_once()
+            call_kwargs = mock_fastmcp.call_args.kwargs
+            assert call_kwargs["host"] == "127.0.0.1"
+            assert call_kwargs["port"] == 8080
+            assert call_kwargs["log_level"] == "INFO"
 
-    def test_main_stdio_transport(self):
+            # Verify transport_security for loopback
+            ts = call_kwargs["transport_security"]
+            assert ts is not None
+            assert ts.enable_dns_rebinding_protection is True
+            assert "127.0.0.1:*" in ts.allowed_hosts
+            assert "127.0.0.1" in ts.allowed_hosts
+            assert "http://127.0.0.1:*" in ts.allowed_origins
+            assert "http://127.0.0.1" in ts.allowed_origins
+
+            # Verify run() was called with HTTP transport
+            mock_mcp_instance.run.assert_called_once_with(transport="streamable-http")
+
+    def test_main_http_transport_remote_host_widens_security(self) -> None:
+        """A non-loopback bind with explicit allowlist must use allowlist entries."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "0.0.0.0"  # noqa: S104
+        mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = "192.168.1.100,10.0.0.1"
+
+        mock_mcp_instance = MagicMock()
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module, "FastMCP", return_value=mock_mcp_instance
+            ) as mock_fastmcp,
+            patch.object(server_module.logger, "warning") as mock_warning,
+            patch("builtins.print"),
+        ):
+            server_module.main()
+
+            call_kwargs = mock_fastmcp.call_args.kwargs
+            ts = call_kwargs["transport_security"]
+            assert ts is not None
+            assert ts.enable_dns_rebinding_protection is True
+            assert "192.168.1.100:*" in ts.allowed_hosts
+            assert "192.168.1.100" in ts.allowed_hosts
+            assert "10.0.0.1:*" in ts.allowed_hosts
+            assert "10.0.0.1" in ts.allowed_hosts
+            assert "http://192.168.1.100:*" in ts.allowed_origins
+            assert "http://192.168.1.100" in ts.allowed_origins
+            assert "http://10.0.0.1:*" in ts.allowed_origins
+            assert "http://10.0.0.1" in ts.allowed_origins
+
+            mock_warning.assert_called_once()
+            mock_mcp_instance.run.assert_called_once_with(transport="streamable-http")
+
+    def test_main_http_transport_ipv6_allowed_hosts(self) -> None:
+        """IPv6 loopback bind must bracket the host in allowlists."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "::1"
+        mock_config.http_port = 8080
+
+        mock_mcp_instance = MagicMock()
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module, "FastMCP", return_value=mock_mcp_instance
+            ) as mock_fastmcp,
+            patch("builtins.print"),
+        ):
+            server_module.main()
+
+            call_kwargs = mock_fastmcp.call_args.kwargs
+            ts = call_kwargs["transport_security"]
+            assert ts is not None
+            assert ts.enable_dns_rebinding_protection is True
+            # Loopback bind: IPv6 must be bracketed
+            assert "[::1]:*" in ts.allowed_hosts
+            assert "[::1]" in ts.allowed_hosts
+            assert "http://[::1]:*" in ts.allowed_origins
+            assert "http://[::1]" in ts.allowed_origins
+
+            mock_mcp_instance.run.assert_called_once_with(transport="streamable-http")
+
+    def test_main_http_transport_non_loopback_ipv6_hosts(self) -> None:
+        """Non-loopback bind with IPv6 in http_allowed_hosts must bracket them."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "0.0.0.0"  # noqa: S104
+        mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = "192.168.1.100,::2"
+
+        mock_mcp_instance = MagicMock()
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module, "FastMCP", return_value=mock_mcp_instance
+            ) as mock_fastmcp,
+            patch("builtins.print"),
+        ):
+            server_module.main()
+
+            call_kwargs = mock_fastmcp.call_args.kwargs
+            ts = call_kwargs["transport_security"]
+            assert ts is not None
+            # IPv4 host
+            assert "192.168.1.100:*" in ts.allowed_hosts
+            assert "192.168.1.100" in ts.allowed_hosts
+            assert "http://192.168.1.100:*" in ts.allowed_origins
+            assert "http://192.168.1.100" in ts.allowed_origins
+            # IPv6 host must be bracketed
+            assert "[::2]:*" in ts.allowed_hosts
+            assert "[::2]" in ts.allowed_hosts
+            assert "http://[::2]:*" in ts.allowed_origins
+            assert "http://[::2]" in ts.allowed_origins
+
+            mock_mcp_instance.run.assert_called_once_with(transport="streamable-http")
+
+    def test_main_http_transport_explicit_port_allowed_hosts(self) -> None:
+        """Explicit host:port allowlist values must not be bracketed as IPv6."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "0.0.0.0"  # noqa: S104
+        mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = "mcp.example.com:443"
+
+        mock_mcp_instance = MagicMock()
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module, "FastMCP", return_value=mock_mcp_instance
+            ) as mock_fastmcp,
+            patch("builtins.print"),
+        ):
+            server_module.main()
+
+            call_kwargs = mock_fastmcp.call_args.kwargs
+            ts = call_kwargs["transport_security"]
+            assert ts is not None
+            # Exact value preserved: brackets would never match the Host header
+            assert "mcp.example.com:443" in ts.allowed_hosts
+            assert "http://mcp.example.com:443" in ts.allowed_origins
+            assert "[mcp.example.com:443]" not in ts.allowed_hosts
+
+            mock_mcp_instance.run.assert_called_once_with(transport="streamable-http")
+
+    def test_main_http_transport_non_loopback_requires_allowed_hosts(self) -> None:
+        """A non-loopback bind without http_allowed_hosts must raise ValueError."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "0.0.0.0"  # noqa: S104
+        mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = None
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch("builtins.print"),
+        ):
+            with pytest.raises(ValueError, match="http_allowed_hosts is required"):
+                server_module.main()
+
+    def test_main_http_transport_non_loopback_empty_after_parse(self) -> None:
+        """Whitespace-only http_allowed_hosts must raise ValueError."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "0.0.0.0"  # noqa: S104
+        mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = " , "  # whitespace-only
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch("builtins.print"),
+        ):
+            with pytest.raises(
+                ValueError, match="http_allowed_hosts is empty after parsing"
+            ):
+                server_module.main()
+
+    def test_main_stdio_transport(self) -> None:
         """Main should start stdio transport by default."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -325,17 +755,44 @@ class TestMain:
         mock_config.log_level = "INFO"
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.transport = TransportType.STDIO
+        mock_config.http_host = "127.0.0.1"
+
+        mock_mcp_instance = MagicMock()
 
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
-            patch.object(server_module.mcp, "run") as mock_run,
+            patch.object(server_module, "FastMCP", return_value=mock_mcp_instance),
             patch("builtins.print"),
         ):
             server_module.main()
 
             # Should call run without transport arguments (stdio is default)
-            mock_run.assert_called_once_with()
+            mock_mcp_instance.run.assert_called_once_with()
+
+    def test_main_stdio_transport_non_loopback_no_validation(self) -> None:
+        """Stdio transport should not validate http_allowed_hosts."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        mock_config = MagicMock()
+        mock_config.log_level = "INFO"
+        mock_config.mode = FreecadMode.EMBEDDED
+        mock_config.transport = TransportType.STDIO
+        mock_config.http_host = "0.0.0.0"  # noqa: S104
+        mock_config.http_allowed_hosts = None
+
+        mock_mcp_instance = MagicMock()
+
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(server_module, "FastMCP", return_value=mock_mcp_instance),
+            patch("builtins.print"),
+        ):
+            server_module.main()
+
+            mock_mcp_instance.run.assert_called_once_with()
 
 
 class TestStdioProtocolCleanliness:
