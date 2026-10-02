@@ -13,8 +13,19 @@ must run on the main thread.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Add the workbench directory to sys.path so the sibling modules (preferences,
+# commands, freecad_mcp_bridge, etc.) can be imported by their bare names.
+# FreeCAD loads this file as the namespace package freecad.RobustMCPBridge and
+# only puts Mod/RobustMCPBridge on sys.path, not this directory.
+_workbench_dir = str(Path(__file__).resolve().parent)
+if _workbench_dir not in sys.path:
+    sys.path.insert(0, _workbench_dir)
+
 # Import FreeCAD first so we can log early
-import FreeCAD
+import FreeCAD  # noqa: E402
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init.py loaded\n")
 

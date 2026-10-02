@@ -126,6 +126,27 @@ class TestAddonMetadata:
         code = init_file.read_text()
         assert "import FreeCAD" in code
 
+    def test_init_py_adds_workbench_dir_to_sys_path_before_sibling_imports(
+        self,
+    ) -> None:
+        """__init__.py should add its directory to sys.path before sibling imports.
+
+        FreeCAD loads the workbench as the namespace package
+        freecad.RobustMCPBridge, so the workbench directory is not on sys.path
+        and bare imports such as ``from preferences import ...`` fail unless
+        __init__.py adds the directory first.
+        """
+        init_file = ADDON_DIR / "__init__.py"
+        code = init_file.read_text()
+        assert "sys.path.insert(0, _workbench_dir)" in code
+        path_setup = code.index("sys.path.insert(0, _workbench_dir)")
+        for sibling_import in (
+            "from preferences import",
+            "from commands import",
+            "from freecad_mcp_bridge",
+        ):
+            assert path_setup < code.index(sibling_import)
+
     def test_init_gui_py_has_workbench_class(self) -> None:
         """init_gui.py should define the workbench class."""
         init_gui_file = ADDON_DIR / "init_gui.py"
