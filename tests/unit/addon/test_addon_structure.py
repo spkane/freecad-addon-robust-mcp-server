@@ -138,8 +138,8 @@ class TestAddonMetadata:
         """
         init_file = ADDON_DIR / "__init__.py"
         code = init_file.read_text()
-        assert "sys.path.insert(0, _workbench_dir)" in code
-        path_setup = code.index("sys.path.insert(0, _workbench_dir)")
+        assert "sys.path.insert(0, _workbenchDir)" in code
+        path_setup = code.index("sys.path.insert(0, _workbenchDir)")
         for sibling_import in (
             "from preferences import",
             "from commands import",

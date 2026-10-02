@@ -20,9 +20,9 @@ from pathlib import Path
 # commands, freecad_mcp_bridge, etc.) can be imported by their bare names.
 # FreeCAD loads this file as the namespace package freecad.RobustMCPBridge and
 # only puts Mod/RobustMCPBridge on sys.path, not this directory.
-_workbench_dir = str(Path(__file__).resolve().parent)
-if _workbench_dir not in sys.path:
-    sys.path.insert(0, _workbench_dir)
+_workbenchDir = str(Path(__file__).resolve().parent)
+if _workbenchDir not in sys.path:
+    sys.path.insert(0, _workbenchDir)
 
 # Import FreeCAD first so we can log early
 import FreeCAD  # noqa: E402
