@@ -207,11 +207,15 @@ class TestPartDesignTools:
         )
 
         pad_sketch = register_tools["pad_sketch"]
-        result = await pad_sketch(sketch_name="Sketch", length=10)
+        result = await pad_sketch(sketch_name="Sketch", length=10, symmetric=True)
 
         assert result["name"] == "Pad"
         assert result["type_id"] == "PartDesign::Pad"
         mock_bridge.execute_python.assert_called_once()
+        code = mock_bridge.execute_python.call_args.args[0]
+        assert "SideType" in code
+        assert "pad.Symmetric = " not in code
+        assert "Midplane" in code
 
     @pytest.mark.asyncio
     async def test_pocket_sketch(self, register_tools, mock_bridge):
@@ -254,10 +258,13 @@ class TestPartDesignTools:
         )
 
         revolution = register_tools["revolution_sketch"]
-        result = await revolution(sketch_name="Sketch", angle=360)
+        result = await revolution(sketch_name="Sketch", angle=360, symmetric=True)
 
         assert result["name"] == "Revolution"
         mock_bridge.execute_python.assert_called_once()
+        code = mock_bridge.execute_python.call_args.args[0]
+        assert "Midplane" in code
+        assert "rev.Symmetric = " not in code
 
     @pytest.mark.asyncio
     async def test_groove_sketch(self, register_tools, mock_bridge):
@@ -277,10 +284,13 @@ class TestPartDesignTools:
         )
 
         groove = register_tools["groove_sketch"]
-        result = await groove(sketch_name="Sketch", angle=180)
+        result = await groove(sketch_name="Sketch", angle=180, symmetric=True)
 
         assert result["name"] == "Groove"
         mock_bridge.execute_python.assert_called_once()
+        code = mock_bridge.execute_python.call_args.args[0]
+        assert "Midplane" in code
+        assert "groove.Symmetric = " not in code
 
     @pytest.mark.asyncio
     async def test_fillet_edges(self, register_tools, mock_bridge):

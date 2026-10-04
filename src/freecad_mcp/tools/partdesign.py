@@ -315,7 +315,15 @@ try:
     pad = body.newObject("PartDesign::Pad", pad_name)
     pad.Profile = sketch
     pad.Length = {length}
-    pad.Symmetric = {symmetric}
+    # FreeCAD 1.1+: Pad uses SideType; older builds used Midplane.
+    # There is no pad.Symmetric property (AttributeError on FC 1.1).
+    _sym = {symmetric}
+    if hasattr(pad, "SideType"):
+        pad.SideType = "Symmetric" if _sym else "One side"
+    elif hasattr(pad, "Midplane"):
+        pad.Midplane = bool(_sym)
+    elif hasattr(pad, "Symmetric"):
+        pad.Symmetric = bool(_sym)
     pad.Reversed = {reversed}
 
     doc.recompute()
@@ -633,7 +641,12 @@ try:
     rev = body.newObject("PartDesign::Revolution", rev_name)
     rev.Profile = sketch
     rev.Angle = {angle}
-    rev.Symmetric = {symmetric}
+    # FreeCAD 1.1 PartDesign features: prefer Midplane; avoid bare .Symmetric.
+    _sym = {symmetric}
+    if hasattr(rev, "Midplane"):
+        rev.Midplane = bool(_sym)
+    elif hasattr(rev, "Symmetric"):
+        rev.Symmetric = bool(_sym)
     rev.Reversed = {reversed}
 
     # Set axis reference
@@ -724,7 +737,12 @@ try:
     groove = body.newObject("PartDesign::Groove", groove_name)
     groove.Profile = sketch
     groove.Angle = {angle}
-    groove.Symmetric = {symmetric}
+    # FreeCAD 1.1 PartDesign features: prefer Midplane; avoid bare .Symmetric.
+    _sym = {symmetric}
+    if hasattr(groove, "Midplane"):
+        groove.Midplane = bool(_sym)
+    elif hasattr(groove, "Symmetric"):
+        groove.Symmetric = bool(_sym)
     groove.Reversed = {reversed}
 
     # Set axis reference
