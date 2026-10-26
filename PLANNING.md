@@ -118,8 +118,9 @@ The first maintenance-release queue is complete only when all of these are true:
 2. Starting from a directory containing unrelated secret-shaped `.env` entries
    neither crashes nor reads those entries into the configuration model.
 3. Pad, Revolution, Groove, external geometry, curved/multi-object export,
-   screenshot, and pocket regressions run against FreeCAD 1.1.3, not only mocks
-   of generated Python strings.
+   screenshot, and pocket regressions run in the required FreeCAD 1.0.2/Qt5 and
+   dynamically resolved latest-stable/Qt6 lanes, not only mocks of generated
+   Python strings.
 4. Screenshot tests cover supported and unsupported active views, non-empty image
    data, preserved camera state, and cleanup after a forced `saveImage` failure.
 5. Subtractive operations report a measurable postcondition, including a

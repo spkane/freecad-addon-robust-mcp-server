@@ -20,6 +20,8 @@ def setup_environment(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     appimage_dir.mkdir()
     command_dir = tmp_path / "bin"
     command_dir.mkdir()
+    wrapper_dir = tmp_path / "wrappers"
+    wrapper_dir.mkdir()
 
     flock = command_dir / "flock"
     flock.write_text("#!/bin/sh\nexit 0\n")
@@ -30,14 +32,31 @@ def setup_environment(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     uname.chmod(0o755)
 
     environment = os.environ.copy()
+    for variable in (
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "TRAVIS",
+        "CIRCLECI",
+        "JENKINS_URL",
+        "BUILDKITE",
+    ):
+        environment.pop(variable, None)
     environment.update(
         {
             "APPIMAGE_DIR": str(appimage_dir),
+            "FREECAD_BIN_DIR": str(wrapper_dir),
             "FREECAD_TAG": "test-release",
             "PATH": f"{command_dir}{os.pathsep}{environment['PATH']}",
         }
     )
     return appimage_dir, environment
+
+
+def _write_command(path: Path, content: str) -> None:
+    """Write an executable command stub."""
+    path.write_text(content)
+    path.chmod(0o755)
 
 
 def _write_cached_setup(appimage_dir: Path, content: bytes) -> tuple[Path, Path]:
@@ -113,3 +132,77 @@ def test_matching_marker_without_cached_appimage_reinstalls(
     assert "will reinstall" in result.stdout
     assert "already set up" not in result.stdout
     assert not marker.exists()
+
+
+def test_ci_rejects_digestless_cached_appimage(
+    setup_environment: tuple[Path, dict[str, str]],
+) -> None:
+    """CI must reject a cached AppImage when no expected digest is supplied."""
+    appimage_dir, environment = setup_environment
+    _write_cached_setup(appimage_dir, b"unverified content")
+    environment["CI"] = "true"
+
+    result = _run_setup(environment)
+
+    assert result.returncode != 0
+    assert "A SHA256 digest is required in CI environments" in result.stdout
+    assert "already set up" not in result.stdout
+
+
+def test_digest_mismatch_reinstalls_and_marks_complete_setup(
+    setup_environment: tuple[Path, dict[str, str]],
+) -> None:
+    """A bad cache must be replaced, verified, extracted, and marked complete."""
+    appimage_dir, environment = setup_environment
+    _write_cached_setup(appimage_dir, b"unexpected cached content")
+    command_dir = Path(environment["PATH"].split(os.pathsep, maxsplit=1)[0])
+    _write_command(command_dir / "uname", "#!/bin/sh\nprintf 'x86_64\\n'\n")
+
+    fake_appimage = appimage_dir.parent / "verified-source.AppImage"
+    _write_command(
+        fake_appimage,
+        """#!/bin/sh
+if [ "${1:-}" = "--appimage-extract" ]; then
+    mkdir -p squashfs-root/usr/bin
+    printf '#!/bin/sh\\nexit 0\\n' > squashfs-root/usr/bin/freecadcmd
+    printf '#!/bin/sh\\nexit 0\\n' > squashfs-root/usr/bin/freecad
+    chmod +x squashfs-root/usr/bin/freecadcmd squashfs-root/usr/bin/freecad
+fi
+""",
+    )
+    _write_command(
+        command_dir / "curl",
+        """#!/bin/sh
+destination=''
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-o" ]; then
+        shift
+        destination="$1"
+    fi
+    shift
+done
+cp "$FAKE_APPIMAGE_SOURCE" "$destination"
+""",
+    )
+    environment.update(
+        {
+            "CI": "true",
+            "FAKE_APPIMAGE_SOURCE": str(fake_appimage),
+            "FREECAD_APPIMAGE_SHA256": hashlib.sha256(
+                fake_appimage.read_bytes()
+            ).hexdigest(),
+            "FREECAD_APPIMAGE_URL": (
+                "https://github.com/FreeCAD/FreeCAD/releases/download/"
+                "test-release/FreeCAD-Linux-x86_64.AppImage"
+            ),
+        }
+    )
+
+    result = _run_setup(environment)
+
+    marker = appimage_dir / ".freecad_installed"
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Cached FreeCAD AppImage failed verification" in result.stdout
+    assert "SHA256 checksum verified successfully" in result.stdout
+    assert marker.read_text() == "test-release\n"
+    assert (Path(environment["FREECAD_BIN_DIR"]) / "freecadcmd").is_file()

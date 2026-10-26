@@ -5,6 +5,7 @@ set -euo pipefail
 # Validate required variables have safe defaults
 FREECAD_TAG="${FREECAD_TAG:-1.0.2}"
 APPIMAGE_DIR="${APPIMAGE_DIR:-$HOME/freecad-appimage}"
+FREECAD_BIN_DIR="${FREECAD_BIN_DIR:-/usr/local/bin}"
 FREECAD_APPIMAGE_URL="${FREECAD_APPIMAGE_URL:-}"
 # Optional SHA256 checksum for verification (if provided, download will be verified)
 APPIMAGE_SHA256="${FREECAD_APPIMAGE_SHA256:-${APPIMAGE_SHA256:-}}"
@@ -12,6 +13,11 @@ APPIMAGE_SHA256="${FREECAD_APPIMAGE_SHA256:-${APPIMAGE_SHA256:-}}"
 # Validate APPIMAGE_DIR is set and non-empty after defaults
 if [[ -z "$APPIMAGE_DIR" ]]; then
     echo "ERROR: APPIMAGE_DIR is empty - cannot determine installation path"
+    exit 1
+fi
+
+if [[ -z "$FREECAD_BIN_DIR" ]]; then
+    echo "ERROR: FREECAD_BIN_DIR is empty - cannot determine wrapper path"
     exit 1
 fi
 
@@ -89,6 +95,14 @@ if ! flock -n 200; then
     flock 200
 fi
 
+# CI must never accept or install an AppImage that cannot be authenticated.
+# Checked-in CI callers resolve the digest before invoking this script; local
+# callers may still resolve it from the release API below.
+if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
+    echo "ERROR: A SHA256 digest is required in CI environments"
+    exit 1
+fi
+
 # Check for complete setup using marker file. This also re-checks after waiting
 # for the lock, because another process may have completed the installation.
 if [[ -f "$MARKER_FILE" ]]; then
@@ -110,10 +124,10 @@ fi
 
 # Check for and clean up partial installations
 PARTIAL_INSTALL=false
-if [[ -f "/usr/local/bin/freecad" ]] && [[ ! -f "/usr/local/bin/freecadcmd" ]]; then
+if [[ -f "$FREECAD_BIN_DIR/freecad" ]] && [[ ! -f "$FREECAD_BIN_DIR/freecadcmd" ]]; then
     echo "Warning: Partial installation detected (freecad exists but freecadcmd missing)"
     PARTIAL_INSTALL=true
-elif [[ ! -f "/usr/local/bin/freecad" ]] && [[ -f "/usr/local/bin/freecadcmd" ]]; then
+elif [[ ! -f "$FREECAD_BIN_DIR/freecad" ]] && [[ -f "$FREECAD_BIN_DIR/freecadcmd" ]]; then
     echo "Warning: Partial installation detected (freecadcmd exists but freecad missing)"
     PARTIAL_INSTALL=true
 fi
@@ -121,10 +135,10 @@ fi
 if [[ "$PARTIAL_INSTALL" == "true" ]]; then
     echo "Cleaning up partial installation..."
     # Remove wrapper scripts if they exist (use sudo if needed)
-    if [[ $EUID -ne 0 ]] && command -v sudo &>/dev/null; then
-        sudo rm -f /usr/local/bin/freecad /usr/local/bin/freecadcmd 2>/dev/null || true
+    if [[ ! -w "$FREECAD_BIN_DIR" ]] && command -v sudo &>/dev/null; then
+        sudo rm -f "$FREECAD_BIN_DIR/freecad" "$FREECAD_BIN_DIR/freecadcmd" 2>/dev/null || true
     else
-        rm -f /usr/local/bin/freecad /usr/local/bin/freecadcmd 2>/dev/null || true
+        rm -f "$FREECAD_BIN_DIR/freecad" "$FREECAD_BIN_DIR/freecadcmd" 2>/dev/null || true
     fi
     # Remove marker file to force full reinstall
     rm -f "$MARKER_FILE" 2>/dev/null || true
@@ -171,11 +185,6 @@ if [[ ! "$APPIMAGE_URL" =~ ^https://github.com/FreeCAD/FreeCAD/releases/download
     exit 1
 fi
 
-# In CI, require the workflow-provided or release-API digest.
-if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
-    echo "ERROR: A SHA256 digest is required in CI environments"
-    exit 1
-fi
 # APPIMAGE_PATH is defined earlier for use in cleanup_on_error trap
 
 echo "FreeCAD release: $FREECAD_TAG"
@@ -249,19 +258,19 @@ echo "Creating wrapper scripts..."
 APPDIR_PATH="$APPIMAGE_DIR/squashfs-root"
 
 # Helper function to install wrapper script
-# Uses sudo only if necessary (not root and sudo exists)
+# Uses sudo only when the selected wrapper directory is not writable.
 install_wrapper() {
     local wrapper_name="$1"
     local wrapper_content="$2"
-    local wrapper_path="/usr/local/bin/$wrapper_name"
+    local wrapper_path="$FREECAD_BIN_DIR/$wrapper_name"
     local temp_file
 
     temp_file=$(mktemp)
     echo "$wrapper_content" > "$temp_file"
     chmod +x "$temp_file"
 
-    # Install with sudo if not root and sudo is available
-    if [[ $EUID -ne 0 ]]; then
+    # Use direct writes for root or an explicitly writable test/install path.
+    if [[ ! -w "$FREECAD_BIN_DIR" ]]; then
         if command -v sudo &>/dev/null; then
             sudo mv "$temp_file" "$wrapper_path"
             sudo chmod +x "$wrapper_path"
@@ -292,32 +301,32 @@ exec \"\$APPDIR/usr/bin/freecad\" \"\$@\""
 
 install_wrapper "freecad" "$FREECAD_WRAPPER"
 
-echo "Wrapper scripts created at /usr/local/bin/freecad{,cmd}"
+echo "Wrapper scripts created at $FREECAD_BIN_DIR/freecad{,cmd}"
 
 # Verify installation - fail the script if verification fails
 # Use explicit paths to avoid PATH resolution issues
 echo "=== Verifying FreeCAD installation ==="
 
 # Check wrapper exists before running
-if [[ ! -x /usr/local/bin/freecadcmd ]]; then
-    echo "ERROR: freecadcmd wrapper not found or not executable at /usr/local/bin/freecadcmd"
+if [[ ! -x "$FREECAD_BIN_DIR/freecadcmd" ]]; then
+    echo "ERROR: freecadcmd wrapper not found or not executable at $FREECAD_BIN_DIR/freecadcmd"
     exit 1
 fi
 
 echo "--- freecadcmd --version ---"
-if ! /usr/local/bin/freecadcmd --version; then
+if ! "$FREECAD_BIN_DIR/freecadcmd" --version; then
     echo "ERROR: freecadcmd version check failed"
     exit 1
 fi
 
 echo "--- freecadcmd Python test ---"
-if ! /usr/local/bin/freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.version}')"; then
+if ! "$FREECAD_BIN_DIR/freecadcmd" -c "import sys; print(f'FreeCAD Python: {sys.version}')"; then
     echo "ERROR: FreeCAD Python test failed"
     exit 1
 fi
 
 echo "--- FreeCAD module import test ---"
-if ! /usr/local/bin/freecadcmd -c "import FreeCAD; print(f'FreeCAD version: {FreeCAD.Version()}')"; then
+if ! "$FREECAD_BIN_DIR/freecadcmd" -c "import FreeCAD; print(f'FreeCAD version: {FreeCAD.Version()}')"; then
     echo "ERROR: FreeCAD module import failed - FreeCAD bindings may be missing or corrupted"
     exit 1
 fi
