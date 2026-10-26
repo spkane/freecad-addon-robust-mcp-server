@@ -1074,9 +1074,14 @@ If you put auto-start logic in `Init.py`, it will only run when the user manuall
 ```python
 # Module-level code - runs at FreeCAD GUI startup
 try:
-    from PySide2 import QtCore
-except ImportError:
     from PySide6 import QtCore
+except (ImportError, NameError):
+    try:
+        from PySide2 import QtCore
+    except (ImportError, NameError) as error:
+        raise RuntimeError(
+            "Neither PySide6 nor PySide2 QtCore could be loaded."
+        ) from error
 
 def _auto_start_bridge() -> None:
     """Auto-start bridge after GUI is fully ready."""
@@ -1543,7 +1548,7 @@ This project uses component-specific release workflows along with CI/CD pipeline
 | Workflow          | Trigger                       | Purpose                                                   |
 | ----------------- | ----------------------------- | --------------------------------------------------------- |
 | `test.yaml`       | Push, PR                      | Runs unit tests and integration tests on Ubuntu and macOS |
-| `test-gui.yaml`   | Push, PR                      | Runs GUI integration tests using Docker + Xvfb            |
+| `test-gui.yaml`   | Push, PR, scheduled           | Runs the Qt5, Qt6 stable, and Qt6 canary GUI matrix       |
 | `pre-commit.yaml` | Push, PR                      | Runs all pre-commit hooks for code quality                |
 | `docker.yaml`     | Push, PR                      | Builds Docker image to verify Dockerfile works            |
 | `codeql.yaml`     | Push, PR, scheduled           | GitHub CodeQL security analysis                           |
@@ -1561,15 +1566,24 @@ You do NOT need to manually start FreeCAD when the CI workflow runs. The workflo
 
 **IMPORTANT - test-gui.yaml Workflow**: The `test-gui.yaml` workflow runs **GUI integration tests** using Docker and Xvfb. It:
 
-1. Builds the `tests/ci-test/Dockerfile.gui-test` image (with caching)
-2. Starts Xvfb (virtual framebuffer) and openbox (window manager)
-3. Starts FreeCAD GUI mode with the MCP bridge
-4. Uses xdotool to send synthetic mouse/keyboard events (helps GUI initialization)
-5. Verifies `FreeCAD.GuiUp == True` before running tests
-6. Runs `tests/integration/test_gui_mode.py` for GUI-specific tests
-7. Collects artifacts (screenshots, logs, test results) for debugging
+1. Resolves and verifies the official FreeCAD AppImage for each matrix lane
+2. Builds the `tests/ci-test/Dockerfile.gui-test` image (with per-lane caching)
+3. Starts Xvfb (virtual framebuffer) and openbox (window manager)
+4. Starts FreeCAD GUI mode with the MCP bridge
+5. Uses xdotool to send synthetic mouse/keyboard events (helps GUI initialization)
+6. Verifies `FreeCAD.GuiUp == True` before running tests
+7. Verifies the selected PySide binding and Qt major version
+8. Runs the integration suite, including all GUI-specific tests
+9. Collects artifacts (screenshots, logs, test results) for debugging
 
-This workflow tests GUI-only features like screenshots, visibility, display modes, and camera operations that cannot be tested in headless mode.
+The required matrix lanes use FreeCAD 1.0.2 with Qt5/PySide2 and the latest
+stable FreeCAD release with Qt6/PySide6. A third lane follows the latest weekly
+Qt6/PySide6 snapshot. The weekly lane runs on pushes, pull requests, manual
+dispatches, and the weekly schedule; failures produce a warning and job summary
+but do not block the workflow.
+
+This workflow tests GUI-only features like screenshots, visibility, display
+modes, and camera operations that cannot be tested in headless mode.
 
 ### Release Workflows
 

@@ -161,10 +161,10 @@ try:
     _is_true_headless = False
 
     try:
-        from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
+        from PySide6 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
     except (ImportError, NameError):
         with contextlib.suppress(ImportError, NameError):
-            from PySide6 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
+            from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
 
     # Detect GUI mode vs true headless mode
     # - True headless (freecadcmd): QCoreApplication exists but NOT QApplication
@@ -195,7 +195,7 @@ try:
         if QtCore is None:
             # Never start a GUI bridge without a main-thread Qt timer.
             FreeCAD.Console.PrintError(
-                "Startup Bridge: GUI is ready, but neither PySide2 nor PySide6 "
+                "Startup Bridge: GUI is ready, but neither PySide6 nor PySide2 "
                 "could be loaded. Startup was stopped.\n"
             )
         else:

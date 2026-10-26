@@ -96,13 +96,20 @@ COPY .mise.toml /workspace/.mise.toml
 # hadolint ignore=DL3059
 RUN mise trust /workspace/.mise.toml && mise install uv && mise reshim
 
+# Select the exact release artifact in CI. Local builds retain the Qt5 baseline.
+ARG FREECAD_TAG=1.0.2
+ARG FREECAD_APPIMAGE_URL=""
+ARG FREECAD_APPIMAGE_SHA256=""
+
 # Environment variables for GUI testing
 ENV DISPLAY=:99 \
     QT_QPA_PLATFORM=xcb \
     LIBGL_ALWAYS_SOFTWARE=1 \
     FONTCONFIG_FILE=/etc/fonts/fonts.conf \
     FONTCONFIG_PATH=/etc/fonts \
-    FREECAD_TAG=1.0.2
+    FREECAD_TAG="${FREECAD_TAG}" \
+    FREECAD_APPIMAGE_URL="${FREECAD_APPIMAGE_URL}" \
+    FREECAD_APPIMAGE_SHA256="${FREECAD_APPIMAGE_SHA256}"
 
 # Script to setup FreeCAD AppImage
 COPY tests/ci-test/setup-freecad.sh /usr/local/bin/setup-freecad.sh

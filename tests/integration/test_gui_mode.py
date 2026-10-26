@@ -13,6 +13,7 @@ To run these tests:
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -65,6 +66,72 @@ _result_ = {"gui_up": FreeCAD.GuiUp}
         )
         # In GUI mode, GuiUp should be True (1)
         assert result["result"]["gui_up"] == 1 or result["result"]["gui_up"] is True
+
+    def test_expected_qt_binding(self, xmlrpc_proxy: xmlrpc.client.ServerProxy) -> None:
+        """Verify the bridge selected the expected real FreeCAD Qt binding."""
+        result = execute_code(
+            xmlrpc_proxy,
+            """
+import FreeCAD
+from freecad_mcp_bridge.server import _get_qt_core
+
+qt_core = _get_qt_core()
+if qt_core is None:
+    raise RuntimeError("The GUI bridge did not resolve a QtCore module")
+
+_result_ = {
+    "binding": qt_core.__name__.split(".", 1)[0],
+    "qt_version": qt_core.qVersion(),
+    "freecad_version": ".".join(str(part) for part in FreeCAD.Version()[:3]),
+}
+""",
+        )
+        binding = result["result"]["binding"]
+        qt_version = result["result"]["qt_version"]
+        freecad_version = result["result"]["freecad_version"]
+
+        assert binding in {"PySide2", "PySide6"}
+        expected_qt_major = {"PySide2": "5", "PySide6": "6"}[binding]
+        assert qt_version.split(".", 1)[0] == expected_qt_major
+
+        expected_binding = os.environ.get("EXPECTED_QT_BINDING")
+        if expected_binding:
+            assert binding == expected_binding
+
+        expected_release = os.environ.get("FREECAD_TEST_RELEASE", "")
+        if expected_release and expected_release[0].isdigit():
+            assert freecad_version == expected_release
+
+    def test_workbench_qt_widgets(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy
+    ) -> None:
+        """Create the workbench preferences page and status widget."""
+        result = execute_code(
+            xmlrpc_proxy,
+            """
+from Qt.preferences_page import MCPBridgePreferencesPage
+from Qt.status_widget import MCPStatusWidget
+
+preferences_page = MCPBridgePreferencesPage()
+status_widget = MCPStatusWidget()
+status_installed = status_widget.install()
+
+_result_ = {
+    "preferences_title": preferences_page.windowTitle(),
+    "status_installed": status_installed,
+    "status_widget_created": status_widget._widget is not None,
+}
+
+status_widget.remove()
+preferences_page.deleteLater()
+""",
+        )
+
+        assert result["result"] == {
+            "preferences_title": "General",
+            "status_installed": True,
+            "status_widget_created": True,
+        }
 
 
 class TestGUIObjectCreation:

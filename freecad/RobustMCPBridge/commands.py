@@ -367,11 +367,14 @@ class MCPBridgePreferencesCommand:
         # Import QtWidgets with fallback for different PySide versions
         try:
             from PySide6 import QtWidgets
-        except ImportError:
+        except (ImportError, NameError):
             try:
                 from PySide2 import QtWidgets  # type: ignore[no-redef]
-            except ImportError:
-                from PySide import QtWidgets  # type: ignore[import-not-found,no-redef]
+            except (ImportError, NameError) as error:
+                raise RuntimeError(
+                    "MCP Bridge Preferences requires PySide6 or PySide2, but "
+                    "neither Qt binding could be loaded."
+                ) from error
 
         # Create the dialog
         dialog = QtWidgets.QDialog(FreeCADGui.getMainWindow())

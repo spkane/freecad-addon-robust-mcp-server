@@ -217,7 +217,7 @@ Example MCP client configuration with custom ports:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The workbench uses a **queue-based thread safety system** to ensure FreeCAD operations run on the main GUI thread, preventing crashes from thread-unsafe operations. It supports both PySide2/Qt5 and PySide6/Qt6 FreeCAD builds. If a GUI session cannot load either Qt binding, the bridge refuses to start instead of moving GUI work to a background thread. Genuine headless sessions continue to use the background queue processor.
+The workbench uses a **queue-based thread safety system** to ensure FreeCAD operations run on the main GUI thread, preventing crashes from thread-unsafe operations. It prefers PySide6/Qt6 and falls back to PySide2/Qt5 for older FreeCAD builds. If a GUI session cannot load either Qt binding, the bridge refuses to start instead of moving GUI work to a background thread. Genuine headless sessions continue to use the background queue processor.
 
 ---
 
@@ -233,7 +233,7 @@ The workbench uses a **queue-based thread safety system** to ensure FreeCAD oper
 1. Ensure no other process is using ports 9875/9876
 1. Try restarting FreeCAD
 
-If the console reports that neither PySide2 nor PySide6 could be loaded, verify that the FreeCAD installation includes its expected Qt binding. This is a FreeCAD runtime problem; do not install PySide separately with `pip`, because its Qt and Python ABI may not match FreeCAD.
+If the console reports that neither PySide6 nor PySide2 could be loaded, verify that the FreeCAD installation includes its expected Qt binding. This is a FreeCAD runtime problem; do not install PySide separately with `pip`, because its Qt and Python ABI may not match FreeCAD.
 
 ### Connection Refused from Robust MCP Server
 

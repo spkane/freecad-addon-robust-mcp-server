@@ -265,7 +265,15 @@ doc.recompute()
 print("Created sketch with rectangle")
 """,
             "gui": """
-from PySide2 import QtWidgets
+try:
+    from PySide6 import QtWidgets
+except (ImportError, NameError):
+    try:
+        from PySide2 import QtWidgets
+    except (ImportError, NameError) as error:
+        raise RuntimeError(
+            "This macro requires PySide6 or PySide2, but neither Qt binding could be loaded."
+        ) from error
 
 class MacroDialog(QtWidgets.QDialog):
     def __init__(self):

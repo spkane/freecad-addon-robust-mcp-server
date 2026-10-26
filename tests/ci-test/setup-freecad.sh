@@ -5,8 +5,9 @@ set -euo pipefail
 # Validate required variables have safe defaults
 FREECAD_TAG="${FREECAD_TAG:-1.0.2}"
 APPIMAGE_DIR="${APPIMAGE_DIR:-$HOME/freecad-appimage}"
+FREECAD_APPIMAGE_URL="${FREECAD_APPIMAGE_URL:-}"
 # Optional SHA256 checksum for verification (if provided, download will be verified)
-APPIMAGE_SHA256="${APPIMAGE_SHA256:-}"
+APPIMAGE_SHA256="${FREECAD_APPIMAGE_SHA256:-${APPIMAGE_SHA256:-}}"
 
 # Validate APPIMAGE_DIR is set and non-empty after defaults
 if [[ -z "$APPIMAGE_DIR" ]]; then
@@ -48,13 +49,6 @@ is_ci_environment() {
     [[ -n "${JENKINS_URL:-}" ]] || \
     [[ -n "${BUILDKITE:-}" ]]
 }
-
-# In CI, require SHA256 checksum for security
-if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
-    echo "ERROR: APPIMAGE_SHA256 is required in CI environments for security verification"
-    echo "Set the APPIMAGE_SHA256 environment variable to the expected checksum"
-    exit 1
-fi
 
 echo "=== Setting up FreeCAD $FREECAD_TAG ==="
 
@@ -123,10 +117,36 @@ case "$ARCH" in
 esac
 echo "Detected architecture: $ARCH -> Linux-$ARCH_SUFFIX"
 
-# Use direct download URL to avoid GitHub API rate limits
-# Format: FreeCAD_1.0.2-conda-Linux-aarch64-py311.AppImage
-APPIMAGE_URL="https://github.com/FreeCAD/FreeCAD/releases/download/${FREECAD_TAG}/FreeCAD_${FREECAD_TAG}-conda-Linux-${ARCH_SUFFIX}-py311.AppImage"
-APPIMAGE_NAME="FreeCAD_${FREECAD_TAG}-conda-Linux-${ARCH_SUFFIX}-py311.AppImage"
+# CI supplies the release URL and digest resolved by the workflow. Local builds
+# resolve the asset from the official release API so both legacy ``conda-``
+# names and current stable/weekly names are supported.
+if [[ -z "$FREECAD_APPIMAGE_URL" ]]; then
+    RELEASE_INFO=$(curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors \
+        "https://api.github.com/repos/FreeCAD/FreeCAD/releases/tags/${FREECAD_TAG}")
+    ASSET=$(jq -c --arg arch "$ARCH_SUFFIX" \
+        '[.assets[] | select(.name | test("Linux-" + $arch + ".*\\.AppImage$"))][0]' \
+        <<< "$RELEASE_INFO")
+    FREECAD_APPIMAGE_URL=$(jq -r '.browser_download_url' <<< "$ASSET")
+    ASSET_DIGEST=$(jq -r '.digest' <<< "$ASSET")
+
+    if [[ -z "$APPIMAGE_SHA256" && "$ASSET_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+        APPIMAGE_SHA256="${ASSET_DIGEST#sha256:}"
+    fi
+fi
+
+APPIMAGE_URL="$FREECAD_APPIMAGE_URL"
+APPIMAGE_NAME=$(basename "$APPIMAGE_URL")
+
+if [[ ! "$APPIMAGE_URL" =~ ^https://github.com/FreeCAD/FreeCAD/releases/download/ ]]; then
+    echo "ERROR: Could not resolve an official FreeCAD AppImage for $FREECAD_TAG"
+    exit 1
+fi
+
+# In CI, require the workflow-provided or release-API digest.
+if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
+    echo "ERROR: A SHA256 digest is required in CI environments"
+    exit 1
+fi
 # APPIMAGE_PATH is defined earlier for use in cleanup_on_error trap
 
 echo "FreeCAD release: $FREECAD_TAG"

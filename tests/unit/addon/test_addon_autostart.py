@@ -397,15 +397,16 @@ class TestAutoStartCodePaths:
         found = sum(1 for pattern in log_patterns if pattern in init_code)
         assert found >= 4, f"Expected 4 code paths with logging, found {found}"
 
-    def test_pyside_fallback_from_2_to_6(self, init_code: str) -> None:
-        """Should try PySide2 first, then fall back to PySide6."""
+    def test_pyside_fallback_from_6_to_2(self, init_code: str) -> None:
+        """Should try PySide6 first, then fall back to PySide2."""
         # Check for both imports
         assert "PySide2" in init_code
         assert "PySide6" in init_code
-        # PySide2 should be tried first (common pattern)
-        pyside2_pos = init_code.find("PySide2")
-        pyside6_pos = init_code.find("PySide6")
-        assert pyside2_pos < pyside6_pos, "Should try PySide2 before PySide6"
+        pyside6_pos = init_code.find("from PySide6 import QtCore, QtWidgets")
+        pyside2_pos = init_code.find("from PySide2 import")
+        assert pyside6_pos != -1
+        assert pyside2_pos != -1
+        assert pyside6_pos < pyside2_pos, "Should try PySide6 before PySide2"
 
     def test_gui_without_qt_fails_closed(self, init_code: str) -> None:
         """A ready GUI without Qt bindings must not start the bridge directly."""

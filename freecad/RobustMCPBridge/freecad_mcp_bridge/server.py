@@ -125,7 +125,7 @@ def _get_qt_core() -> Any:
     """Get the QtCore module if GUI mode is available.
 
     This helper checks if FreeCAD is available with GUI enabled and
-    attempts to import QtCore from PySide2 or PySide6.
+    attempts to import QtCore from PySide6 or PySide2.
 
     Returns:
         The QtCore module if available in GUI mode, None otherwise.
@@ -133,14 +133,14 @@ def _get_qt_core() -> Any:
     if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
         return None
 
-    # Try PySide2 first, then PySide6
+    # Prefer modern Qt6 builds, then fall back to Qt5 compatibility.
     with contextlib.suppress(ImportError, NameError):
-        from PySide2 import QtCore
+        from PySide6 import QtCore
 
         return QtCore
 
     with contextlib.suppress(ImportError, NameError):
-        from PySide6 import QtCore
+        from PySide2 import QtCore
 
         return QtCore
 
@@ -685,7 +685,7 @@ class FreecadMCPPlugin:
             if QtCore is None:
                 message = (
                     "MCP Bridge cannot start in GUI mode because neither "
-                    "PySide2 nor PySide6 QtCore could be loaded. Refusing "
+                    "PySide6 nor PySide2 QtCore could be loaded. Refusing "
                     "unsafe background queue processing."
                 )
                 FreeCAD.Console.PrintError(f"{message}\n")

@@ -11,6 +11,9 @@ outputs:
   freecad-tag:
     description: The FreeCAD release tag that was installed
     value: ${{ steps.freecad-release.outputs.tag }}
+  appimage-sha256:
+    description: SHA256 digest of the installed AppImage
+    value: ${{ steps.freecad-release.outputs.sha256 }}
 
 runs:
   using: composite
@@ -94,15 +97,22 @@ runs:
 
         echo "AppImage URL: $APPIMAGE_URL"
         echo "AppImage name: $APPIMAGE_NAME"
+        APPIMAGE_DIGEST=$(echo "$RELEASE_INFO" | jq -r --arg name "$APPIMAGE_NAME" \
+            '.assets[] | select(.name == $name) | .digest')
+        if [[ ! "$APPIMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: Release asset does not provide a valid SHA256 digest"
+            exit 1
+        fi
         echo "url=$APPIMAGE_URL" >> "$GITHUB_OUTPUT"
         echo "name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
+        echo "sha256=${APPIMAGE_DIGEST#sha256:}" >> "$GITHUB_OUTPUT"
 
     - name: Cache FreeCAD AppImage
       id: cache-freecad
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/freecad-appimage
-        key: ${{ runner.os }}-${{ steps.freecad-release.outputs.arch }}-freecad-appimage-${{ steps.freecad-release.outputs.tag }}
+        key: ${{ runner.os }}-${{ steps.freecad-release.outputs.arch }}-freecad-appimage-${{ steps.freecad-release.outputs.tag }}-${{ steps.freecad-release.outputs.sha256 }}
 
     - name: Download FreeCAD AppImage
       if: steps.cache-freecad.outputs.cache-hit != 'true'
@@ -115,6 +125,12 @@ runs:
             -f -o ~/freecad-appimage/FreeCAD.AppImage \
             "${{ steps.freecad-release.outputs.url }}"
         chmod +x ~/freecad-appimage/FreeCAD.AppImage
+
+    - name: Verify FreeCAD AppImage digest
+      shell: bash
+      run: |
+        echo "${{ steps.freecad-release.outputs.sha256 }}  $HOME/freecad-appimage/FreeCAD.AppImage" \
+            | sha256sum --check --strict
 
     - name: Setup FreeCAD AppImage
       shell: bash

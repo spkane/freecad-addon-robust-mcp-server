@@ -1,19 +1,18 @@
-"""Regression tests for the PySide2 -> PySide6 import fallbacks.
+"""Regression tests for the PySide6 -> PySide2 import fallbacks.
 
-The bundled bridge server and ``init_gui.py`` import ``QtCore`` from PySide2
-first and fall back to PySide6.  A partially initialised PySide2 installation
-can raise ``NameError`` (not just ``ImportError``) during that import, which
-previously aborted the fallback.
+The bundled bridge server and ``init_gui.py`` prefer PySide6 and fall back to
+PySide2 for older FreeCAD builds. A partially initialized binding can raise
+``NameError`` (not just ``ImportError``) during import, so both failures must
+reach the fallback or produce a clear error.
 
 These tests cover:
 
-* ``_get_qt_core``: PySide2 ``NameError`` falls back to PySide6, and both
-  failures return ``None``.
-* ``_start_queue_processor``: PySide2 ``NameError`` falls back to the Qt
+* ``_get_qt_core``: PySide6 is preferred, its failure falls back to PySide2,
+  and both failures return ``None``.
+* ``_start_queue_processor``: PySide6 failure falls back to the PySide2 Qt
   timer, while both failures make GUI startup fail closed.
-* ``init_gui.py``: a PySide2 ``NameError`` reaches the PySide6 fallback, and
-  failure of both imports reaches the existing startup fallback (the warning
-  logged by the outer ``except`` block).
+* ``init_gui.py``: a PySide6 failure reaches the PySide2 fallback, and failure
+  of both imports logs a clear warning through the outer ``except`` block.
 """
 
 from __future__ import annotations
@@ -33,14 +32,19 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPBridge"
+ADDON_INIT_PATH = ADDON_DIR / "__init__.py"
+BRIDGE_UTILS_PATH = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
+COMMANDS_PATH = ADDON_DIR / "commands.py"
 INIT_GUI_PATH = ADDON_DIR / "init_gui.py"
+PREFERENCES_PAGE_PATH = ADDON_DIR / "Qt" / "preferences_page.py"
 STARTUP_BRIDGE_PATH = ADDON_DIR / "freecad_mcp_bridge" / "startup_bridge.py"
+STATUS_WIDGET_PATH = ADDON_DIR / "Qt" / "status_widget.py"
 
 
 class _NameErrorModule(types.ModuleType):
     """Module whose ``Qt*`` attributes raise ``NameError`` on access.
 
-    This mimics a PySide2 shim that exists in ``sys.modules`` but has not yet
+    This mimics a PySide shim that exists in ``sys.modules`` but has not yet
     finished binding its submodules.
     """
 
@@ -54,7 +58,7 @@ class _NameErrorModule(types.ModuleType):
             Never returns; the method always raises.
 
         Raises:
-            NameError: If ``name`` starts with ``Qt``, mimicking a PySide2
+            NameError: If ``name`` starts with ``Qt``, mimicking a PySide
                 shim whose submodules are not bound yet.
             AttributeError: For any other attribute name.
         """
@@ -63,20 +67,20 @@ class _NameErrorModule(types.ModuleType):
         raise AttributeError(name)
 
 
-def _pyside_module(qtcore: Any) -> types.ModuleType:
+def _pyside_module(name: str, qtcore: Any) -> types.ModuleType:
     """Build a fake PySide module exposing ``QtCore``."""
-    module = types.ModuleType("PySide6")
+    module = types.ModuleType(name)
     module.QtCore = qtcore  # type: ignore[attr-defined]
     return module
 
 
-def _pyside2_nameerror() -> types.ModuleType:
-    """Fake PySide2 whose ``QtCore`` access raises ``NameError``."""
-    return _NameErrorModule("PySide2")
+def _binding_nameerror(name: str) -> types.ModuleType:
+    """Build a fake binding whose ``QtCore`` access raises ``NameError``."""
+    return _NameErrorModule(name)
 
 
-def _pyside2_importerror() -> Any:
-    """Make ``from PySide2 import ...`` raise ``ImportError``."""
+def _binding_importerror() -> Any:
+    """Make ``from PySide import ...`` raise ``ImportError``."""
     return None
 
 
@@ -125,17 +129,42 @@ def _enable_gui(
 class TestGetQtCore:
     """Tests for the ``_get_qt_core`` import fallback."""
 
-    def test_nameerror_falls_back_to_pyside6(
+    def test_pyside6_is_preferred_when_both_are_available(
         self,
         server_mod: Any,
         monkeypatch: pytest.MonkeyPatch,
         fake_freecad: Any,
     ) -> None:
-        """A PySide2 ``NameError`` should fall back to PySide6."""
+        """Modern FreeCAD builds should select PySide6 before PySide2."""
+        _enable_gui(server_mod, monkeypatch, fake_freecad)
+        pyside6_qtcore = MagicMock()
+        pyside2_qtcore = MagicMock()
+        monkeypatch.setitem(
+            sys.modules, "PySide6", _pyside_module("PySide6", pyside6_qtcore)
+        )
+        monkeypatch.setitem(
+            sys.modules, "PySide2", _pyside_module("PySide2", pyside2_qtcore)
+        )
+
+        assert server_mod._get_qt_core() is pyside6_qtcore
+
+    @pytest.mark.parametrize(
+        "failed_binding",
+        [lambda: _binding_nameerror("PySide6"), _binding_importerror],
+        ids=["nameerror", "importerror"],
+    )
+    def test_pyside6_failure_falls_back_to_pyside2(
+        self,
+        server_mod: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_freecad: Any,
+        failed_binding: Any,
+    ) -> None:
+        """Either supported PySide6 import failure should reach PySide2."""
         _enable_gui(server_mod, monkeypatch, fake_freecad)
         qtcore = MagicMock()
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module(qtcore))
+        monkeypatch.setitem(sys.modules, "PySide6", failed_binding())
+        monkeypatch.setitem(sys.modules, "PySide2", _pyside_module("PySide2", qtcore))
 
         assert server_mod._get_qt_core() is qtcore
 
@@ -147,24 +176,10 @@ class TestGetQtCore:
     ) -> None:
         """If both bindings fail the helper should return ``None``."""
         _enable_gui(server_mod, monkeypatch, fake_freecad)
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
+        monkeypatch.setitem(sys.modules, "PySide6", _binding_nameerror("PySide6"))
+        monkeypatch.setitem(sys.modules, "PySide2", _binding_nameerror("PySide2"))
 
         assert server_mod._get_qt_core() is None
-
-    def test_importerror_still_falls_back_to_pyside6(
-        self,
-        server_mod: Any,
-        monkeypatch: pytest.MonkeyPatch,
-        fake_freecad: Any,
-    ) -> None:
-        """The pre-existing ``ImportError`` fallback must keep working."""
-        _enable_gui(server_mod, monkeypatch, fake_freecad)
-        qtcore = MagicMock()
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_importerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module(qtcore))
-
-        assert server_mod._get_qt_core() is qtcore
 
     def test_returns_none_without_gui(
         self,
@@ -176,8 +191,7 @@ class TestGetQtCore:
         fake_freecad.GuiUp = False
         _enable_gui(server_mod, monkeypatch, fake_freecad)
         qtcore = MagicMock()
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module(qtcore))
+        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module("PySide6", qtcore))
 
         assert server_mod._get_qt_core() is None
 
@@ -212,19 +226,25 @@ class TestStartQueueProcessor:
         monkeypatch.setattr("threading.Thread", _FakeThread)
         return created
 
-    def test_nameerror_falls_back_to_qt_timer(
+    @pytest.mark.parametrize(
+        "failed_binding",
+        [lambda: _binding_nameerror("PySide6"), _binding_importerror],
+        ids=["nameerror", "importerror"],
+    )
+    def test_pyside6_failure_falls_back_to_pyside2_qt_timer(
         self,
         server_mod: Any,
         monkeypatch: pytest.MonkeyPatch,
         fake_freecad: Any,
+        failed_binding: Any,
     ) -> None:
-        """A PySide2 ``NameError`` should still create the PySide6 timer."""
+        """A PySide6 failure should still create the PySide2 timer."""
         _enable_gui(server_mod, monkeypatch, fake_freecad)
         timer = MagicMock()
         qtcore = MagicMock()
         qtcore.QTimer.return_value = timer
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module(qtcore))
+        monkeypatch.setitem(sys.modules, "PySide6", failed_binding())
+        monkeypatch.setitem(sys.modules, "PySide2", _pyside_module("PySide2", qtcore))
         threads = self._fake_thread(monkeypatch)
 
         plugin = self._plugin(server_mod)
@@ -238,7 +258,7 @@ class TestStartQueueProcessor:
 
     @pytest.mark.parametrize(
         "failed_binding",
-        [_pyside2_nameerror, _pyside2_importerror],
+        [lambda: _binding_nameerror("PySide6"), _binding_importerror],
         ids=["nameerror", "importerror"],
     )
     def test_gui_mode_without_qt_fails_closed(
@@ -250,8 +270,8 @@ class TestStartQueueProcessor:
     ) -> None:
         """GUI mode must not fall back to unsafe background processing."""
         _enable_gui(server_mod, monkeypatch, fake_freecad)
-        monkeypatch.setitem(sys.modules, "PySide2", failed_binding())
-        monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
+        monkeypatch.setitem(sys.modules, "PySide6", failed_binding())
+        monkeypatch.setitem(sys.modules, "PySide2", _NameErrorModule("PySide2"))
         threads = self._fake_thread(monkeypatch)
 
         plugin = self._plugin(server_mod)
@@ -272,8 +292,8 @@ class TestStartQueueProcessor:
     ) -> None:
         """A failed GUI queue setup must leave the plugin fully stopped."""
         _enable_gui(server_mod, monkeypatch, fake_freecad)
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
         monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
+        monkeypatch.setitem(sys.modules, "PySide2", _NameErrorModule("PySide2"))
 
         plugin = server_mod.FreecadMCPPlugin(enable_xmlrpc=True)
         with pytest.raises(RuntimeError, match="Refusing unsafe background"):
@@ -294,8 +314,8 @@ class TestStartQueueProcessor:
         """Headless sessions never create a Qt timer."""
         fake_freecad.GuiUp = False
         _enable_gui(server_mod, monkeypatch, fake_freecad)
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
         monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
+        monkeypatch.setitem(sys.modules, "PySide2", _NameErrorModule("PySide2"))
         threads = self._fake_thread(monkeypatch)
 
         plugin = self._plugin(server_mod)
@@ -358,14 +378,41 @@ def _warnings(freecad: Any) -> list[str]:
 class TestInitGuiQtFallback:
     """Tests for the PySide import fallback in ``init_gui.py``."""
 
-    def test_nameerror_falls_back_to_pyside6(
+    def test_pyside6_is_preferred_when_both_are_available(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A PySide2 ``NameError`` should reach the PySide6 code path."""
+        """Status-bar scheduling should prefer PySide6 when both exist."""
+        freecad = _install_init_gui_stubs(monkeypatch)
+        pyside6_qtcore = MagicMock()
+        pyside2_qtcore = MagicMock()
+        monkeypatch.setitem(
+            sys.modules, "PySide6", _pyside_module("PySide6", pyside6_qtcore)
+        )
+        monkeypatch.setitem(
+            sys.modules, "PySide2", _pyside_module("PySide2", pyside2_qtcore)
+        )
+
+        runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
+
+        assert pyside6_qtcore.QTimer.singleShot.call_count >= 1
+        assert pyside2_qtcore.QTimer.singleShot.call_count == 0
+        assert not any(
+            "Could not schedule status bar sync" in msg for msg in _warnings(freecad)
+        )
+
+    @pytest.mark.parametrize(
+        "failed_binding",
+        [lambda: _binding_nameerror("PySide6"), _binding_importerror],
+        ids=["nameerror", "importerror"],
+    )
+    def test_pyside6_failure_falls_back_to_pyside2(
+        self, monkeypatch: pytest.MonkeyPatch, failed_binding: Any
+    ) -> None:
+        """Supported PySide6 failures should reach the PySide2 code path."""
         freecad = _install_init_gui_stubs(monkeypatch)
         qtcore = MagicMock()
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module(qtcore))
+        monkeypatch.setitem(sys.modules, "PySide6", failed_binding())
+        monkeypatch.setitem(sys.modules, "PySide2", _pyside_module("PySide2", qtcore))
 
         runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
 
@@ -374,43 +421,35 @@ class TestInitGuiQtFallback:
             "Could not schedule status bar sync" in msg for msg in _warnings(freecad)
         )
 
-    def test_nameerror_on_both_hits_startup_fallback(
+    def test_nameerror_on_both_logs_clear_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """If both bindings fail the existing startup fallback runs."""
+        """If both bindings fail, the warning should identify both bindings."""
         freecad = _install_init_gui_stubs(monkeypatch)
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_nameerror())
         monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
+        monkeypatch.setitem(sys.modules, "PySide2", _NameErrorModule("PySide2"))
 
         runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
 
         warnings = _warnings(freecad)
         assert any("Could not schedule status bar sync" in msg for msg in warnings)
-        assert any("is not defined" in msg for msg in warnings)
-
-    def test_importerror_still_falls_back_to_pyside6(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """The pre-existing ``ImportError`` fallback must keep working."""
-        freecad = _install_init_gui_stubs(monkeypatch)
-        qtcore = MagicMock()
-        monkeypatch.setitem(sys.modules, "PySide2", _pyside2_importerror())
-        monkeypatch.setitem(sys.modules, "PySide6", _pyside_module(qtcore))
-
-        runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
-
-        assert qtcore.QTimer.singleShot.call_count >= 1
-        assert not any(
-            "Could not schedule status bar sync" in msg for msg in _warnings(freecad)
+        assert any(
+            "Neither PySide6 nor PySide2 QtCore could be loaded" in msg
+            for msg in warnings
         )
 
 
-def test_startup_script_handles_partially_initialized_pyside2() -> None:
-    """The integration script should support Qt6 and fail closed without Qt."""
+def test_startup_script_prefers_pyside6_and_fails_closed() -> None:
+    """The integration script should prefer Qt6 and fail closed without Qt."""
     startup_code = STARTUP_BRIDGE_PATH.read_text()
 
     assert "except (ImportError, NameError)" in startup_code
     assert "suppress(ImportError, NameError)" in startup_code
+    pyside6_pos = startup_code.find("from PySide6 import QtCore, QtWidgets")
+    pyside2_pos = startup_code.find("from PySide2 import QtCore, QtWidgets")
+    assert pyside6_pos != -1
+    assert pyside2_pos != -1
+    assert pyside6_pos < pyside2_pos
 
     tree = ast.parse(startup_code)
     gui_up_branch = next(
@@ -432,3 +471,76 @@ def test_startup_script_handles_partially_initialized_pyside2() -> None:
 
     assert "headless mode could not be confirmed" in fallback_code
     assert "_start_bridge()" not in fallback_code
+
+
+@pytest.mark.parametrize(
+    ("path", "pyside6_import", "pyside2_import"),
+    [
+        (
+            ADDON_INIT_PATH,
+            "from PySide6 import QtCore, QtWidgets",
+            "from PySide2 import (",
+        ),
+        (
+            STARTUP_BRIDGE_PATH,
+            "from PySide6 import QtCore, QtWidgets",
+            "from PySide2 import QtCore, QtWidgets",
+        ),
+        (
+            BRIDGE_UTILS_PATH,
+            "from PySide6 import QtCore",
+            "from PySide2 import QtCore",
+        ),
+        (
+            INIT_GUI_PATH,
+            "from PySide6 import QtCore",
+            "from PySide2 import QtCore",
+        ),
+        (
+            STATUS_WIDGET_PATH,
+            "from PySide6 import QtCore, QtWidgets",
+            "from PySide2 import QtCore, QtWidgets",
+        ),
+        (
+            PREFERENCES_PAGE_PATH,
+            "from PySide6 import QtCore, QtWidgets",
+            "from PySide2 import QtCore, QtWidgets",
+        ),
+        (
+            COMMANDS_PATH,
+            "from PySide6 import QtWidgets",
+            "from PySide2 import QtWidgets",
+        ),
+    ],
+)
+def test_runtime_qt_probes_prefer_pyside6(
+    path: Path, pyside6_import: str, pyside2_import: str
+) -> None:
+    """Every runtime compatibility probe should try PySide6 first."""
+    source = path.read_text()
+    pyside6_pos = source.find(pyside6_import)
+    pyside2_pos = source.find(pyside2_import)
+
+    assert pyside6_pos != -1
+    assert pyside2_pos != -1
+    assert pyside6_pos < pyside2_pos
+
+
+@pytest.mark.parametrize(
+    ("path", "failure_text"),
+    [
+        (ADDON_INIT_PATH, "Auto-start was stopped"),
+        (STARTUP_BRIDGE_PATH, "Startup was stopped"),
+        (BRIDGE_UTILS_PATH, "Cannot wait for GUI"),
+        (INIT_GUI_PATH, "status-bar synchronization cannot be scheduled"),
+        (COMMANDS_PATH, "neither Qt binding could be loaded"),
+        (PREFERENCES_PAGE_PATH, "MCP Bridge Preferences requires"),
+        (STATUS_WIDGET_PATH, "MCP status widget requires"),
+    ],
+)
+def test_dual_binding_failure_is_clear(path: Path, failure_text: str) -> None:
+    """User-facing import failures should name both supported bindings."""
+    source = path.read_text()
+    assert "PySide6" in source
+    assert "PySide2" in source
+    assert failure_text in source

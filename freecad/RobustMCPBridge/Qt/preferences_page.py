@@ -12,7 +12,16 @@ the actual preference storage. This module only handles the UI.
 
 from __future__ import annotations
 
-from PySide import QtCore, QtWidgets  # type: ignore[import-not-found]
+try:
+    from PySide6 import QtCore, QtWidgets
+except (ImportError, NameError):
+    try:
+        from PySide2 import QtCore, QtWidgets  # type: ignore[no-redef]
+    except (ImportError, NameError) as error:
+        raise RuntimeError(
+            "MCP Bridge Preferences requires PySide6 or PySide2, but neither "
+            "Qt binding could be loaded."
+        ) from error
 
 
 class MCPBridgePreferencesPage(QtWidgets.QWidget):

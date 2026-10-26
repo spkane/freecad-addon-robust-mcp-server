@@ -152,9 +152,15 @@ FreeCADGui.addWorkbench(FreecadRobustMCPBridgeWorkbench())
 # This runs on the main thread (InitGui.py is executed on main thread)
 try:
     try:
-        from PySide2 import QtCore
-    except (ImportError, NameError):
         from PySide6 import QtCore
+    except (ImportError, NameError):
+        try:
+            from PySide2 import QtCore  # type: ignore[no-redef]
+        except (ImportError, NameError) as error:
+            raise RuntimeError(
+                "Neither PySide6 nor PySide2 QtCore could be loaded; "
+                "status-bar synchronization cannot be scheduled."
+            ) from error
 
     def _deferred_status_bar_sync() -> None:
         """Sync status bar with bridge state after GUI is ready."""

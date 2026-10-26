@@ -829,7 +829,15 @@ class FreecadMCPPlugin:
 
         # Schedule execution in FreeCAD's main thread
         # Use FreeCAD's timer mechanism for thread safety
-        from PySide2 import QtCore
+        try:
+            from PySide6 import QtCore
+        except (ImportError, NameError):
+            try:
+                from PySide2 import QtCore
+            except (ImportError, NameError) as error:
+                raise RuntimeError(
+                    "Neither PySide6 nor PySide2 QtCore could be loaded."
+                ) from error
 
         event = threading.Event()
 

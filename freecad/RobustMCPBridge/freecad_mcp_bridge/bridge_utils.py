@@ -74,7 +74,7 @@ class GuiWaiter:
         self.max_retries = max_retries
         self.timeout_error_extra = timeout_error_extra
 
-        # Timer references use Any since they could be from PySide2 or PySide6
+        # Timer references use Any since they could be from PySide6 or PySide2
         self._check_timer: Any | None = None
         self._defer_timer: Any | None = None
         self._retry_count: int = 0
@@ -91,13 +91,13 @@ class GuiWaiter:
 
         # Resolve QtCore once and store for later use
         try:
-            from PySide2 import QtCore  # type: ignore[import]
-        except ImportError:
+            from PySide6 import QtCore  # type: ignore[import]
+        except (ImportError, NameError):
             try:
-                from PySide6 import QtCore  # type: ignore[import]
-            except ImportError:
+                from PySide2 import QtCore  # type: ignore[import]
+            except (ImportError, NameError):
                 FreeCAD.Console.PrintError(
-                    f"{self.log_prefix}: Neither PySide2 nor PySide6 is available. "
+                    f"{self.log_prefix}: Neither PySide6 nor PySide2 is available. "
                     "Cannot wait for GUI - Qt is required for timer-based waiting.\n"
                 )
                 return
