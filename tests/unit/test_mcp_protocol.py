@@ -100,7 +100,10 @@ async def _start_streamable_http_server(
         environment = {
             **_server_environment(xmlrpc_port),
             "FREECAD_TRANSPORT": "http",
+            "FREECAD_HTTP_HOST": "127.0.0.1",
             "FREECAD_HTTP_PORT": str(http_port),
+            "FREECAD_HTTP_ALLOWED_HOSTS": '["127.0.0.1:*"]',
+            "FREECAD_HTTP_ALLOWED_ORIGINS": '["http://127.0.0.1:*"]',
         }
         process = await asyncio.create_subprocess_exec(
             sys.executable,
