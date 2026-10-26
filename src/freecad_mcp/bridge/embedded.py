@@ -433,7 +433,7 @@ _result_ = {{
             FileNotFoundError: If file doesn't exist.
             ValueError: If file is not a valid FreeCAD document.
         """
-        if not Path(path).exists():
+        if not await asyncio.to_thread(Path(path).exists):
             msg = f"File not found: {path}"
             raise FileNotFoundError(msg)
 

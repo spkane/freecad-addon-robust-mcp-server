@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.32.4", "hatch-vcs>=0.5.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -54,48 +54,47 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=2.2.0,<3",
-    "pydantic>=2.10.0",
-    "pydantic-settings>=2.7.0",
+    "mcp>=2.3.0,<3",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     # Testing
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.25.0",
-    "pytest-cov>=6.0.0",
-    "pytest-timeout>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.1",
+    "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
     "pytest-watch>=4.2.0",
-    "psutil>=5.9.0",
+    "psutil>=7.2.2",
     # Linting and formatting
-    "mypy>=1.14.0",
-    "ruff>=0.8.0",
+    "mypy>=2.4.0",
+    "ruff>=0.17.2",
     # Type stubs for FreeCAD/Qt development
     "freecad-stubs>=1.0.21",
-    "PySide6-stubs>=6.7.0",
+    "PySide6-stubs>=6.7.3.0",
     # Security scanning
-    "bandit[toml]>=1.8.0",
-    "safety>=3.2.0",
+    "bandit[toml]>=1.9.4",
     "detect-secrets>=1.5.0",
     # Pre-commit and commit conventions
-    "pre-commit>=4.0.0",
-    "commitizen>=4.1.0",
+    "pre-commit>=4.7.0",
+    "commitizen>=4.19.3",
     # Documentation
-    "mkdocs>=1.6.0",
-    "mkdocs-material>=9.7.1",
-    "mkdocstrings[python]>=0.27.0",
-    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.8.0",
+    "mkdocstrings[python]>=1.0.8",
+    "mkdocs-git-revision-date-localized-plugin>=1.6.1",
     "mkdocs-minify-plugin>=0.8.0",
-    "mkdocs-redirects>=1.2.0",
-    "mkdocs-glightbox>=0.4.0",
-    "mkdocs-macros-plugin>=1.0.0",
-    "mike>=2.1.0",
-    "md-toc>=9.0.0",
-    "codespell>=2.3.0",
+    "mkdocs-redirects>=1.2.3",
+    "mkdocs-glightbox>=0.5.3",
+    "mkdocs-macros-plugin>=1.5.0",
+    "mike>=2.2.0",
+    "md-toc>=9.1.0",
+    "codespell>=2.4.3",
     # Publishing
-    "twine>=6.0.0",
-    "build>=1.2.0",
+    "twine>=7.0.0",
+    "build>=1.6.1",
 ]
 
 [project.scripts]
@@ -160,6 +159,7 @@ ignore = [
     "ANN401", # Allow Any in type annotations - FreeCAD types are dynamic
     "ANN001", # Allow registration functions to stay decoupled from MCPServer types
     "PLR0913",# Too many arguments - CAD APIs have many params
+    "PLR0917",# Too many positional arguments - MCP tool schemas expose named CAD params
     "PLR0915",# Too many statements - registration functions are long
     "PLC0415",# Allow imports in functions - FreeCAD must be imported lazily
     "PLR2004",# Allow magic numbers in comparisons - CAD dimensions
@@ -168,6 +168,7 @@ ignore = [
     "RUF022", # Don't sort __all__ - prefer logical grouping
     "S110",   # Allow try-except-pass for optional operations
     "ARG002", # Allow unused arguments - needed for interface compliance
+    "UP042",  # Keep str/Enum behavior stable for public configuration values
 ]
 
 [tool.ruff.lint.pydocstyle]

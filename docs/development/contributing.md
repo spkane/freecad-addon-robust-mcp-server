@@ -33,13 +33,16 @@ This project uses [Safety CLI](https://safetycli.com/) for dependency vulnerabil
 
 ```bash
 # Register for a free account (interactive)
-uv run safety auth
+uvx --python 3.11 --from safety==3.8.1 safety auth
 
 # Or login if you already have an account
-uv run safety auth --login
+uvx --python 3.11 --from safety==3.8.1 safety auth login
 ```
 
-**Note:** Authentication is stored locally and only needs to be done once per machine. If you skip this step, the `safety` pre-commit hook will fail with an authentication prompt.
+**Note:** Safety runs in an isolated `uvx` environment to avoid dependency
+conflicts with the MCP runtime. Authentication is stored locally and only needs
+to be done once per machine. If you skip this step, the `safety` pre-commit hook
+will fail with an authentication prompt.
 
 **CI/CD:** Safety runs in CI using the `SAFETY_API_KEY` repository secret.
 

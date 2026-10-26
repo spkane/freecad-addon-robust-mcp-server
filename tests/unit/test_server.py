@@ -435,7 +435,7 @@ class TestStdioProtocolCleanliness:
 
         # Start the MCP server process
         # Use a non-existent FreeCAD host so it won't actually connect
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             [
                 sys.executable,
                 "-m",
@@ -527,7 +527,7 @@ class TestStdioProtocolCleanliness:
         import subprocess
         import time
 
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             [
                 sys.executable,
                 "-m",

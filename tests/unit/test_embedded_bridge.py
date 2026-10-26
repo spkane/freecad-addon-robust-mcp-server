@@ -151,3 +151,12 @@ class TestEmbeddedBridgeDocuments:
 
         # Since we're not mocking exec properly, we expect empty
         assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_open_document_rejects_missing_path(self, tmp_path):
+        """open_document should reject a missing document before execution."""
+        bridge = EmbeddedBridge()
+        missing_path = tmp_path / "missing.FCStd"
+
+        with pytest.raises(FileNotFoundError, match="File not found"):
+            await bridge.open_document(str(missing_path))

@@ -48,7 +48,7 @@ repos:
   # Python - Linting and Formatting
   # ==========================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.11
+    rev: v0.17.2
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -62,13 +62,13 @@ repos:
   # Python - Type Checking
   # ==========================================================================
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+    rev: v2.4.0
     hooks:
       - id: mypy
         additional_dependencies:
-          - pydantic>=2.10.0
-          - pydantic-settings>=2.7.0
-          - mcp>=2.2.0,<3
+          - pydantic>=2.14.1
+          - pydantic-settings>=2.16.1
+          - mcp>=2.3.0,<3
         # Note: mypy doesn't natively support .FCMacro, so we skip those files
         # FCMacro files are checked by ruff and bandit instead
         args: [--config-file=pyproject.toml]
@@ -77,7 +77,7 @@ repos:
   # Python - Security Scanning
   # ==========================================================================
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.9.2
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: [-c, pyproject.toml, -r, src, macros]
@@ -87,14 +87,15 @@ repos:
 
   # Safety - Dependency vulnerability scanning
   # Checks installed packages against known security vulnerabilities
-  # Local: Requires free safetycli.com account. Run `uv run safety auth` first.
+  # Local: Requires free safetycli.com account. Authenticate with the isolated
+  # Safety environment documented in AGENTS.md.
   # CI: Uses SAFETY_API_KEY secret passed via environment variable.
   # Config: .safety-policy.yml (excludes .venv, node_modules, etc.)
   - repo: local
     hooks:
       - id: safety
         name: safety (dependency vulnerabilities)
-        entry: uv run safety scan --policy-file .safety-policy.yml --detailed-output
+        entry: uvx --python 3.11 --from safety==3.8.1 safety scan --policy-file .safety-policy.yml --detailed-output
         language: system
         pass_filenames: false
         files: ^(pyproject\.toml|uv\.lock|\.safety-policy\.yml)$
@@ -141,7 +142,7 @@ repos:
   # It's skipped in CI (via SKIP env var) but runs locally.
   # See: https://github.com/trufflesecurity/trufflehog/issues/3321
   - repo: https://github.com/trufflesecurity/trufflehog
-    rev: v3.92.4
+    rev: v3.99.7
     hooks:
       - id: trufflehog
         name: trufflehog (verified secrets scan)
@@ -156,7 +157,7 @@ repos:
   # markdownlint-cli2 - Comprehensive markdown linter with auto-fix
   # Config: .markdownlint.yaml
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.20.0
+    rev: v0.24.0
     hooks:
       - id: markdownlint-cli2
         name: markdownlint (linter)
@@ -165,7 +166,7 @@ repos:
   # Tertiary: md-toc - Table of contents generator
   # Automatically updates TOC between <!--TOC--> markers
   - repo: https://github.com/frnmst/md-toc
-    rev: 9.0.0
+    rev: 9.1.0
     hooks:
       - id: md-toc
         name: md-toc (table of contents)
@@ -176,7 +177,7 @@ repos:
   # Spell Checking
   # ==========================================================================
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
         additional_dependencies:
@@ -191,12 +192,12 @@ repos:
   # Configuration Validation
   # ==========================================================================
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.24.1
+    rev: v0.27
     hooks:
       - id: validate-pyproject
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.36.0
+    rev: 0.38.2
     hooks:
       - id: check-github-workflows
         name: validate GitHub workflows
@@ -207,7 +208,7 @@ repos:
   # GitHub Actions Linting
   # ==========================================================================
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.10
+    rev: v1.7.12
     hooks:
       - id: actionlint
         name: actionlint (GitHub Actions linter)
@@ -216,7 +217,7 @@ repos:
   # Shell Script Linting
   # ==========================================================================
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
         name: shellcheck (shell linter)
@@ -228,7 +229,7 @@ repos:
   # hadolint-py: Python wrapper that auto-downloads hadolint binary
   # No Docker or system installation required
   - repo: https://github.com/AleksaC/hadolint-py
-    rev: v2.14.0
+    rev: v2.15.1
     hooks:
       - id: hadolint
 
@@ -270,7 +271,7 @@ repos:
   # Commit Message Linting
   # ==========================================================================
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.11.1
+    rev: v4.19.3
     hooks:
       - id: commitizen
         name: commitizen (commit format)

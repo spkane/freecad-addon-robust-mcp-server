@@ -105,12 +105,13 @@ ENV PATH="/opt/venv/bin:$PATH" \
     FREECAD_TIMEOUT_MS="30000"
 
 # Switch to non-root user
+# hadolint ignore=DL3066
 USER mcpuser
 WORKDIR /home/mcpuser
 
 # Health check - verify the server can start
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import freecad_mcp; print('ok')" || exit 1
+    CMD ["python", "-c", "import freecad_mcp; print('ok')"]
 
 # Default command - run the MCP server in stdio mode
 ENTRYPOINT ["freecad-mcp"]
