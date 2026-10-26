@@ -504,7 +504,7 @@ def test_startup_script_prefers_pyside6_and_fails_closed() -> None:
     )
     branch_code = "\n".join(ast.unparse(node) for node in gui_up_branch.body)
 
-    assert "if QtCore is None" in branch_code
+    assert "if QtCore is None or QtWidgets is None" in branch_code
     assert "Startup was stopped" in branch_code
     assert branch_code.count("_start_bridge()") == 1
 

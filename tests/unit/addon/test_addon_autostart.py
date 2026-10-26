@@ -413,6 +413,7 @@ class TestAutoStartCodePaths:
         )
         branch_code = "\n".join(ast.unparse(node) for node in gui_up_branch.body)
 
+        assert "QtCore is not None and QtWidgets is not None" in branch_code
         assert "Auto-start was stopped" in branch_code
         assert branch_code.count("_auto_start_bridge()") == 0
 

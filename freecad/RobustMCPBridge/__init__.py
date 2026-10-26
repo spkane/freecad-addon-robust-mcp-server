@@ -195,7 +195,7 @@ try:
             FreeCAD.Console.PrintMessage(
                 "Robust MCP Bridge: GUI already up, scheduling deferred start...\n"
             )
-            if QtCore is not None:
+            if QtCore is not None and QtWidgets is not None:
                 _auto_start_timer = QtCore.QTimer()
                 _auto_start_timer.setSingleShot(True)
                 _auto_start_timer.timeout.connect(_auto_start_bridge)
@@ -214,7 +214,7 @@ try:
                 "starting directly...\n"
             )
             _auto_start_bridge()
-        elif QtCore is not None:
+        elif QtCore is not None and QtWidgets is not None:
             # GUI not ready yet (either QApplication exists or no app yet)
             # Use GuiWaiter to wait for GuiUp to become True before starting
             # This ensures the bridge uses Qt timer (not background thread) for queue

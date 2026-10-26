@@ -194,7 +194,7 @@ try:
     )
 
     if FreeCAD.GuiUp:
-        if QtCore is None:
+        if QtCore is None or QtWidgets is None:
             # Never start a GUI bridge without a main-thread Qt timer.
             FreeCAD.Console.PrintError(
                 "Startup Bridge: GUI is ready, but neither PySide6 nor PySide2 "
@@ -214,7 +214,7 @@ try:
             "starting directly...\n"
         )
         _start_bridge()
-    elif QtCore is not None:
+    elif QtCore is not None and QtWidgets is not None:
         # GUI not ready yet (either QApplication exists or no app yet)
         # Use GuiWaiter to wait for GuiUp to become True before starting
         # This ensures the bridge uses Qt timer (not background thread) for queue
