@@ -70,7 +70,27 @@ def _write_wrappers(environment: dict[str, str]) -> None:
 
 def _write_extracted_tree(appimage_dir: Path) -> None:
     """Write the minimum extracted AppImage directory required for a cache hit."""
-    (appimage_dir / "squashfs-root" / "usr" / "bin").mkdir(parents=True)
+    binary_dir = appimage_dir / "squashfs-root" / "usr" / "bin"
+    binary_dir.mkdir(parents=True)
+    for name in ("freecad", "freecadcmd"):
+        _write_command(binary_dir / name, "#!/bin/sh\nexit 0\n")
+
+
+def _configure_supported_cached_install(
+    environment: dict[str, str], content: bytes
+) -> None:
+    """Configure a supported architecture, official URL, and fixture digest."""
+    command_dir = Path(environment["PATH"].split(os.pathsep, maxsplit=1)[0])
+    _write_command(command_dir / "uname", "#!/bin/sh\nprintf 'x86_64\\n'\n")
+    environment.update(
+        {
+            "FREECAD_APPIMAGE_SHA256": hashlib.sha256(content).hexdigest(),
+            "FREECAD_APPIMAGE_URL": (
+                "https://github.com/FreeCAD/FreeCAD/releases/download/"
+                "test-release/FreeCAD-Linux-x86_64.AppImage"
+            ),
+        }
+    )
 
 
 def _write_cached_setup(appimage_dir: Path, content: bytes) -> tuple[Path, Path]:
@@ -132,16 +152,18 @@ def test_valid_cache_without_wrappers_continues_setup(
     """A valid AppImage alone must not be accepted as a complete installation."""
     appimage_dir, environment = setup_environment
     content = b"verified FreeCAD AppImage without wrappers"
-    _write_cached_setup(appimage_dir, content)
+    _, marker = _write_cached_setup(appimage_dir, content)
     _write_extracted_tree(appimage_dir)
-    environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
+    _configure_supported_cached_install(environment, content)
 
     result = _run_setup(environment)
 
-    assert result.returncode != 0
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "SHA256 checksum verified successfully" in result.stdout
     assert "installation is incomplete, will repair" in result.stdout
     assert "already set up" not in result.stdout
+    assert marker.read_text() == "test-release\n"
+    assert (Path(environment["FREECAD_BIN_DIR"]) / "freecadcmd").is_file()
 
 
 def test_valid_cache_without_extracted_tree_continues_setup(
@@ -149,17 +171,26 @@ def test_valid_cache_without_extracted_tree_continues_setup(
 ) -> None:
     """A valid image and wrappers still require the extracted application tree."""
     appimage_dir, environment = setup_environment
-    content = b"verified FreeCAD AppImage without extracted tree"
-    _write_cached_setup(appimage_dir, content)
+    content = b"""#!/bin/sh
+if [ "${1:-}" = "--appimage-extract" ]; then
+    mkdir -p squashfs-root/usr/bin
+    printf '#!/bin/sh\\nexit 0\\n' > squashfs-root/usr/bin/freecadcmd
+    printf '#!/bin/sh\\nexit 0\\n' > squashfs-root/usr/bin/freecad
+    chmod +x squashfs-root/usr/bin/freecadcmd squashfs-root/usr/bin/freecad
+fi
+"""
+    _, marker = _write_cached_setup(appimage_dir, content)
     _write_wrappers(environment)
-    environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
+    _configure_supported_cached_install(environment, content)
 
     result = _run_setup(environment)
 
-    assert result.returncode != 0
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "SHA256 checksum verified successfully" in result.stdout
     assert "installation is incomplete, will repair" in result.stdout
     assert "already set up" not in result.stdout
+    assert (appimage_dir / "squashfs-root" / "usr" / "bin").is_dir()
+    assert marker.read_text() == "test-release\n"
 
 
 def test_local_cache_without_digest_continues_to_release_resolution(
