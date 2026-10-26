@@ -97,7 +97,11 @@ If installed from source with mise/uv:
 }
 ```
 
-### Docker Configuration
+### Docker Desktop Configuration
+
+This configuration is supported on Docker Desktop for macOS and Windows.
+Docker Desktop forwards `host.docker.internal` to services listening on the
+host loopback interface.
 
 ```json
 {
@@ -114,6 +118,23 @@ If installed from source with mise/uv:
   }
 }
 ```
+
+!!! danger "Do not expose the FreeCAD bridge"
+    The bridge accepts unauthenticated Python execution inside FreeCAD and must
+    remain loopback-only. Do not rebind ports 9875 or 9876 to `0.0.0.0` or a
+    LAN address.
+
+### Linux Docker Engine
+
+The container-to-host setup is not currently supported with Docker Engine on
+Linux. `host-gateway` resolves to the host's container-bridge address, but the
+FreeCAD bridge listens on loopback. Consequently, adding
+`host.docker.internal:host-gateway` does not make the bridge reachable.
+
+Run `freecad-mcp` directly on the Linux host when connecting to a FreeCAD GUI
+session. `FREECAD_SOCKET_HOST` selects the address that the MCP server dials; it
+does not change the bridge's listening address. Protected remote transport is
+required before non-loopback listening can be supported safely.
 
 ---
 

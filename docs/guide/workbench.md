@@ -243,7 +243,14 @@ If the console reports that FreeCAD's matching PySide binding could not be loade
 
 1. Verify the bridge is running (green status indicator)
 1. Check that ports match between workbench and Robust MCP Server config
-1. If using Docker, ensure you're using `host.docker.internal` as the host
+1. On Docker Desktop, verify that `FREECAD_SOCKET_HOST` is set to
+   `host.docker.internal`
+1. On Docker Engine for Linux, run the MCP server directly on the host; its
+   container gateway cannot reach the bridge's loopback-only listener
+
+Do not rebind the bridge to `0.0.0.0` to resolve this error. The bridge accepts
+unauthenticated Python execution, so non-loopback access is unsafe until
+protected remote transport is implemented.
 
 ### Headless Mode Hangs
 
