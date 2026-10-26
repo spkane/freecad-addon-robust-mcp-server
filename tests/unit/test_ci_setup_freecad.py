@@ -40,6 +40,8 @@ def setup_environment(tmp_path: Path) -> tuple[Path, dict[str, str]]:
         "CIRCLECI",
         "JENKINS_URL",
         "BUILDKITE",
+        "FREECAD_APPIMAGE_SHA256",
+        "APPIMAGE_SHA256",
     ):
         environment.pop(variable, None)
     environment.update(
@@ -57,6 +59,13 @@ def _write_command(path: Path, content: str) -> None:
     """Write an executable command stub."""
     path.write_text(content)
     path.chmod(0o755)
+
+
+def _write_wrappers(environment: dict[str, str]) -> None:
+    """Write executable FreeCAD wrapper placeholders for cache-hit tests."""
+    wrapper_dir = Path(environment["FREECAD_BIN_DIR"])
+    for name in ("freecad", "freecadcmd"):
+        _write_command(wrapper_dir / name, "#!/bin/sh\nexit 0\n")
 
 
 def _write_cached_setup(appimage_dir: Path, content: bytes) -> tuple[Path, Path]:
@@ -86,6 +95,7 @@ def test_matching_marker_verifies_cached_appimage_before_skipping(
     appimage_dir, environment = setup_environment
     content = b"verified FreeCAD AppImage fixture"
     appimage, marker = _write_cached_setup(appimage_dir, content)
+    _write_wrappers(environment)
     environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
 
     result = _run_setup(environment)
@@ -95,6 +105,36 @@ def test_matching_marker_verifies_cached_appimage_before_skipping(
     assert "already set up" in result.stdout
     assert appimage.exists()
     assert marker.exists()
+
+
+def test_explicitly_empty_wrapper_directory_is_rejected(
+    setup_environment: tuple[Path, dict[str, str]],
+) -> None:
+    """An explicit empty wrapper path must not fall back to the system path."""
+    _, environment = setup_environment
+    environment["FREECAD_BIN_DIR"] = ""
+
+    result = _run_setup(environment)
+
+    assert result.returncode != 0
+    assert "FREECAD_BIN_DIR is empty" in result.stdout
+
+
+def test_valid_cache_without_wrappers_continues_setup(
+    setup_environment: tuple[Path, dict[str, str]],
+) -> None:
+    """A valid AppImage alone must not be accepted as a complete installation."""
+    appimage_dir, environment = setup_environment
+    content = b"verified FreeCAD AppImage without wrappers"
+    _write_cached_setup(appimage_dir, content)
+    environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
+
+    result = _run_setup(environment)
+
+    assert result.returncode != 0
+    assert "SHA256 checksum verified successfully" in result.stdout
+    assert "wrappers are missing, will recreate" in result.stdout
+    assert "already set up" not in result.stdout
 
 
 def test_digest_mismatch_removes_cached_setup_instead_of_skipping(

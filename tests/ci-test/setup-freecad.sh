@@ -5,7 +5,7 @@ set -euo pipefail
 # Validate required variables have safe defaults
 FREECAD_TAG="${FREECAD_TAG:-1.0.2}"
 APPIMAGE_DIR="${APPIMAGE_DIR:-$HOME/freecad-appimage}"
-FREECAD_BIN_DIR="${FREECAD_BIN_DIR:-/usr/local/bin}"
+FREECAD_BIN_DIR="${FREECAD_BIN_DIR-/usr/local/bin}"
 FREECAD_APPIMAGE_URL="${FREECAD_APPIMAGE_URL:-}"
 # Optional SHA256 checksum for verification (if provided, download will be verified)
 APPIMAGE_SHA256="${FREECAD_APPIMAGE_SHA256:-${APPIMAGE_SHA256:-}}"
@@ -109,12 +109,17 @@ if [[ -f "$MARKER_FILE" ]]; then
     # Verify marker file contains expected version
     if grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
         if verify_appimage_checksum; then
-            echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
-            exit 0
+            if [[ -x "$FREECAD_BIN_DIR/freecad" ]] \
+                && [[ -x "$FREECAD_BIN_DIR/freecadcmd" ]]; then
+                echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
+                exit 0
+            fi
+            echo "Cached FreeCAD AppImage verified but wrappers are missing, will recreate"
+        else
+            echo "Cached FreeCAD AppImage failed verification, will reinstall"
+            rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
+            rm -rf "$APPIMAGE_DIR/squashfs-root"
         fi
-        echo "Cached FreeCAD AppImage failed verification, will reinstall"
-        rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
-        rm -rf "$APPIMAGE_DIR/squashfs-root"
     else
         echo "Different FreeCAD version detected, will reinstall"
         rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
