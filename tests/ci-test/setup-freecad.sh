@@ -50,6 +50,32 @@ is_ci_environment() {
     [[ -n "${BUILDKITE:-}" ]]
 }
 
+# Verify the cached AppImage when a digest is available. Callers decide whether
+# a mismatch should trigger reinstall or stop the setup.
+verify_appimage_checksum() {
+    if [[ ! -f "$APPIMAGE_PATH" ]]; then
+        echo "ERROR: AppImage not found at $APPIMAGE_PATH"
+        return 1
+    fi
+
+    if [[ -z "$APPIMAGE_SHA256" ]]; then
+        echo "Note: No APPIMAGE_SHA256 provided, skipping checksum verification"
+        return 0
+    fi
+
+    echo "Verifying SHA256 checksum..."
+    local computed_sha256
+    computed_sha256=$(sha256sum "$APPIMAGE_PATH" | awk '{print $1}')
+    if [[ "$computed_sha256" != "$APPIMAGE_SHA256" ]]; then
+        echo "ERROR: SHA256 checksum mismatch!"
+        echo "  Expected: $APPIMAGE_SHA256"
+        echo "  Computed: $computed_sha256"
+        return 1
+    fi
+
+    echo "SHA256 checksum verified successfully"
+}
+
 echo "=== Setting up FreeCAD $FREECAD_TAG ==="
 
 # Create directory for lock file
@@ -61,19 +87,20 @@ exec 200>"$LOCK_FILE"
 if ! flock -n 200; then
     echo "Another installation is in progress, waiting for lock..."
     flock 200
-    # Re-check marker file after acquiring lock (another process may have completed)
-    if [[ -f "$MARKER_FILE" ]] && grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
-        echo "FreeCAD $FREECAD_TAG already set up by another process, skipping"
-        exit 0
-    fi
 fi
 
-# Check for complete setup using marker file
+# Check for complete setup using marker file. This also re-checks after waiting
+# for the lock, because another process may have completed the installation.
 if [[ -f "$MARKER_FILE" ]]; then
     # Verify marker file contains expected version
     if grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
-        echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
-        exit 0
+        if verify_appimage_checksum; then
+            echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
+            exit 0
+        fi
+        echo "Cached FreeCAD AppImage failed verification, will reinstall"
+        rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
+        rm -rf "$APPIMAGE_DIR/squashfs-root"
     else
         echo "Different FreeCAD version detected, will reinstall"
         rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
@@ -169,22 +196,13 @@ if [ ! -f "$APPIMAGE_PATH" ]; then
         exit 1
     fi
 
-    # Verify SHA256 checksum if provided
-    if [[ -n "$APPIMAGE_SHA256" ]]; then
-        echo "Verifying SHA256 checksum..."
-        COMPUTED_SHA256=$(sha256sum "$APPIMAGE_PATH" | awk '{print $1}')
-        if [[ "$COMPUTED_SHA256" != "$APPIMAGE_SHA256" ]]; then
-            echo "ERROR: SHA256 checksum mismatch!"
-            echo "  Expected: $APPIMAGE_SHA256"
-            echo "  Computed: $COMPUTED_SHA256"
-            echo "Removing corrupted/tampered download..."
-            rm -f "$APPIMAGE_PATH"
-            exit 1
-        fi
-        echo "SHA256 checksum verified successfully"
-    else
-        echo "Note: No APPIMAGE_SHA256 provided, skipping checksum verification"
-    fi
+fi
+
+# Verify both fresh downloads and pre-existing files from partial setups.
+if ! verify_appimage_checksum; then
+    echo "Removing corrupted/tampered AppImage..."
+    rm -f "$APPIMAGE_PATH"
+    exit 1
 fi
 chmod +x "$APPIMAGE_PATH"
 

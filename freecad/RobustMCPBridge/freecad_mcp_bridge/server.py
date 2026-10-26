@@ -134,8 +134,8 @@ HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
 def _get_qt_core() -> Any:
     """Get the QtCore module if GUI mode is available.
 
-    This helper checks if FreeCAD is available with GUI enabled and
-    attempts to import QtCore from PySide6 or PySide2.
+    This helper checks if FreeCAD is available with GUI enabled and loads
+    QtCore from the PySide binding compatible with FreeCAD's Qt runtime.
 
     Returns:
         The QtCore module if available in GUI mode, None otherwise.
@@ -685,8 +685,8 @@ class FreecadMCPPlugin:
             QtCore = _get_qt_core()
             if QtCore is None:
                 message = (
-                    "MCP Bridge cannot start in GUI mode because neither "
-                    "PySide6 nor PySide2 QtCore could be loaded. Refusing "
+                    "MCP Bridge cannot start in GUI mode because a PySide binding "
+                    "matching FreeCAD's Qt version could not provide QtCore. Refusing "
                     "unsafe background queue processing."
                 )
                 FreeCAD.Console.PrintError(f"{message}\n")

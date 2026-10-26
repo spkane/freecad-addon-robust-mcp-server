@@ -203,8 +203,9 @@ try:
             else:
                 # Never start a GUI bridge without a main-thread Qt timer.
                 FreeCAD.Console.PrintError(
-                    "Robust MCP Bridge: GUI is ready, but neither PySide6 nor "
-                    "PySide2 could be loaded. Auto-start was stopped.\n"
+                    "Robust MCP Bridge: GUI is ready, but a PySide binding matching "
+                    "FreeCAD's Qt version could not provide QtCore and QtWidgets. "
+                    "Auto-start was stopped.\n"
                 )
         elif _is_true_headless:
             # True headless mode - QCoreApplication exists but not QApplication

@@ -197,8 +197,9 @@ try:
         if QtCore is None or QtWidgets is None:
             # Never start a GUI bridge without a main-thread Qt timer.
             FreeCAD.Console.PrintError(
-                "Startup Bridge: GUI is ready, but neither PySide6 nor PySide2 "
-                "could be loaded. Startup was stopped.\n"
+                "Startup Bridge: GUI is ready, but a PySide binding matching "
+                "FreeCAD's Qt version could not provide QtCore and QtWidgets. "
+                "Startup was stopped.\n"
             )
         else:
             # GUI is already up - start bridge directly
