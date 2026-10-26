@@ -996,8 +996,9 @@ rollback reasoning.
   penetration test.
 - Local Qt6 GUI and headless integration passed after PR #147. The GUI workflow
   now defines required FreeCAD 1.0.2/Qt5 and latest-stable/Qt6 lanes plus a
-  non-blocking latest-weekly/Qt6 canary, but their first remote matrix run and
-  the local release-artifact matrix remain release gates.
+  non-blocking latest-weekly/Qt6 canary. The first remote runs of the two
+  required stable lanes and the local release-artifact matrix remain release
+  gates; the weekly canary is early-warning evidence only.
 - External registries and release pages were checked on the audit date and may
   change later.
 - Safety 3.8.1 and Trivy 0.76.1 passed on the PR #147 dependency refresh. These

@@ -35,6 +35,14 @@ import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Any
 
+if __package__:
+    from .qt_compat import get_host_qt_binding, load_qt_core
+else:
+    from qt_compat import (  # type: ignore[import-not-found, no-redef]
+        get_host_qt_binding,
+        load_qt_core,
+    )
+
 # Global registry of active servers for cleanup on Python exit
 # Uses weak references to avoid preventing garbage collection
 _activeServers: weakref.WeakSet[FreecadMCPPlugin] = weakref.WeakSet()
@@ -47,16 +55,18 @@ def _get_shiboken_delete() -> Any:
     Returns:
         The shiboken delete function, or None if not available.
     """
-    # Try shiboken6 first (PySide6), then shiboken2 (PySide2)
-    with contextlib.suppress(ImportError):
-        import shiboken6
-
-        return shiboken6.delete
-
-    with contextlib.suppress(ImportError):
-        import shiboken2
-
-        return shiboken2.delete
+    host_binding = get_host_qt_binding()
+    candidates = (
+        ("shiboken6",)
+        if host_binding == "PySide6"
+        else ("shiboken2",)
+        if host_binding == "PySide2"
+        else ("shiboken6", "shiboken2")
+    )
+    for module_name in candidates:
+        with contextlib.suppress(ImportError):
+            shiboken = __import__(module_name)
+            return shiboken.delete
 
     return None
 
@@ -133,17 +143,8 @@ def _get_qt_core() -> Any:
     if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
         return None
 
-    # Prefer modern Qt6 builds, then fall back to Qt5 compatibility.
-    with contextlib.suppress(ImportError, NameError):
-        from PySide6 import QtCore
-
-        return QtCore
-
-    with contextlib.suppress(ImportError, NameError):
-        from PySide2 import QtCore
-
-        return QtCore
-
+    with contextlib.suppress(RuntimeError):
+        return load_qt_core()
     return None
 
 

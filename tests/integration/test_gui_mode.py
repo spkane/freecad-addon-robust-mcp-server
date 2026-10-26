@@ -14,6 +14,7 @@ To run these tests:
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -105,7 +106,9 @@ _result_ = {
             assert binding == expected_binding
 
         expected_release = os.environ.get("FREECAD_TEST_RELEASE", "")
-        if expected_release and expected_release[0].isdigit():
+        if expected_release.startswith("weekly-"):
+            assert re.fullmatch(r"weekly-\d{4}\.\d{2}\.\d{2}", expected_release)
+        elif expected_release:
             assert freecad_version == expected_release
 
     def test_workbench_qt_widgets(

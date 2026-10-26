@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+if __package__:
+    from .qt_compat import load_qt_core
+else:
+    from qt_compat import load_qt_core  # type: ignore[import-not-found, no-redef]
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
@@ -91,16 +96,13 @@ class GuiWaiter:
 
         # Resolve QtCore once and store for later use
         try:
-            from PySide6 import QtCore  # type: ignore[import]
-        except (ImportError, NameError):
-            try:
-                from PySide2 import QtCore  # type: ignore[import]
-            except (ImportError, NameError):
-                FreeCAD.Console.PrintError(
-                    f"{self.log_prefix}: Neither PySide6 nor PySide2 is available. "
-                    "Cannot wait for GUI - Qt is required for timer-based waiting.\n"
-                )
-                return
+            QtCore = load_qt_core()
+        except RuntimeError as error:
+            FreeCAD.Console.PrintError(
+                f"{self.log_prefix}: {error} Cannot wait for GUI - Qt is required "
+                "for timer-based waiting.\n"
+            )
+            return
 
         self._qtcore = QtCore
         self._check_timer = QtCore.QTimer()

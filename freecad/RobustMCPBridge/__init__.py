@@ -23,6 +23,13 @@ from typing import TYPE_CHECKING, Any  # noqa: E402
 if TYPE_CHECKING:
     from freecad_mcp_bridge.bridge_utils import GuiWaiter
 
+try:
+    from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+except ImportError:
+    # Repository tests import this module through freecad.RobustMCPBridge, while
+    # FreeCAD installs freecad_mcp_bridge as a top-level package.
+    from .freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
 
 # Global reference to GuiWaiter and auto-start timer to prevent garbage collection
@@ -155,14 +162,8 @@ try:
         _has_qapp = False
         _is_true_headless = False
 
-        try:
-            from PySide6 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
-        except (ImportError, NameError):
-            with contextlib.suppress(ImportError, NameError):
-                from PySide2 import (  # type: ignore[assignment, no-redef]
-                    QtCore,
-                    QtWidgets,
-                )
+        with contextlib.suppress(RuntimeError):
+            QtCore, QtWidgets = load_qt_core_widgets()
 
         # Detect GUI mode vs true headless mode
         # - True headless (freecadcmd): QCoreApplication exists but NOT QApplication

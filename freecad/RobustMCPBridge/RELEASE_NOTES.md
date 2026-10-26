@@ -8,7 +8,7 @@
 
 ### Fixed
 
-- **Qt binding selection**: The bridge now prefers PySide6 for current Qt 6 FreeCAD builds, falls back to PySide2 for Qt 5 compatibility, and reports a clear error if neither binding can be loaded.
+- **Qt binding selection**: The bridge now selects PySide6 for Qt 6 FreeCAD builds and PySide2 for Qt 5 builds, prefers PySide6 only when the host version cannot be detected, and refuses unsafe cross-major fallback.
 - **GUI thread safety during startup**: A GUI bridge now refuses to start if neither supported Qt binding can provide the main-thread queue timer. Background queue processing remains limited to genuine headless sessions.
 
 ## Version 0.6.2 (2026-01-18)

@@ -29,6 +29,11 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from .qt_compat import load_qt_core_widgets
+else:
+    from qt_compat import load_qt_core_widgets  # type: ignore[import-not-found, no-redef]
+
 # Add the script's directory to sys.path so we can import the server module
 script_dir = str(Path(__file__).resolve().parent)
 if script_dir not in sys.path:
@@ -160,11 +165,8 @@ try:
     _has_qapp = False
     _is_true_headless = False
 
-    try:
-        from PySide6 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
-    except (ImportError, NameError):
-        with contextlib.suppress(ImportError, NameError):
-            from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
+    with contextlib.suppress(RuntimeError):
+        QtCore, QtWidgets = load_qt_core_widgets()
 
     # Detect GUI mode vs true headless mode
     # - True headless (freecadcmd): QCoreApplication exists but NOT QApplication

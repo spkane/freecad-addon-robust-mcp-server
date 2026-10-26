@@ -37,6 +37,7 @@ BRIDGE_UTILS_PATH = ADDON_DIR / "freecad_mcp_bridge" / "bridge_utils.py"
 COMMANDS_PATH = ADDON_DIR / "commands.py"
 INIT_GUI_PATH = ADDON_DIR / "init_gui.py"
 PREFERENCES_PAGE_PATH = ADDON_DIR / "Qt" / "preferences_page.py"
+QT_COMPAT_PATH = ADDON_DIR / "freecad_mcp_bridge" / "qt_compat.py"
 STARTUP_BRIDGE_PATH = ADDON_DIR / "freecad_mcp_bridge" / "startup_bridge.py"
 STATUS_WIDGET_PATH = ADDON_DIR / "Qt" / "status_widget.py"
 
@@ -82,6 +83,12 @@ def _binding_nameerror(name: str) -> types.ModuleType:
 def _binding_importerror() -> Any:
     """Make ``from PySide import ...`` raise ``ImportError``."""
     return None
+
+
+@pytest.fixture(autouse=True)
+def _hide_host_pyside(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default tests to an unknown host so PySide6-first fallback is exercised."""
+    monkeypatch.setitem(sys.modules, "PySide", None)
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +154,50 @@ class TestGetQtCore:
         )
 
         assert server_mod._get_qt_core() is pyside6_qtcore
+
+    def test_qt5_host_selects_pyside2_when_both_are_available(
+        self,
+        server_mod: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_freecad: Any,
+    ) -> None:
+        """A Qt5 FreeCAD process must never load the available PySide6 binding."""
+        _enable_gui(server_mod, monkeypatch, fake_freecad)
+        host_qtcore = MagicMock()
+        host_qtcore.qVersion.return_value = "5.15.18"
+        pyside6_qtcore = MagicMock()
+        pyside2_qtcore = MagicMock()
+        monkeypatch.setitem(
+            sys.modules, "PySide", _pyside_module("PySide", host_qtcore)
+        )
+        monkeypatch.setitem(
+            sys.modules, "PySide6", _pyside_module("PySide6", pyside6_qtcore)
+        )
+        monkeypatch.setitem(
+            sys.modules, "PySide2", _pyside_module("PySide2", pyside2_qtcore)
+        )
+
+        assert server_mod._get_qt_core() is pyside2_qtcore
+
+    def test_qt5_host_does_not_cross_fallback_to_pyside6(
+        self,
+        server_mod: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_freecad: Any,
+    ) -> None:
+        """A broken PySide2 host must fail closed instead of mixing in Qt6."""
+        _enable_gui(server_mod, monkeypatch, fake_freecad)
+        host_qtcore = MagicMock()
+        host_qtcore.qVersion.return_value = "5.15.18"
+        monkeypatch.setitem(
+            sys.modules, "PySide", _pyside_module("PySide", host_qtcore)
+        )
+        monkeypatch.setitem(sys.modules, "PySide2", None)
+        monkeypatch.setitem(
+            sys.modules, "PySide6", _pyside_module("PySide6", MagicMock())
+        )
+
+        assert server_mod._get_qt_core() is None
 
     @pytest.mark.parametrize(
         "failed_binding",
@@ -333,6 +384,7 @@ class TestStartQueueProcessor:
 
 def _install_init_gui_stubs(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Install the fake FreeCAD/Qt modules required by ``init_gui.py``."""
+    monkeypatch.syspath_prepend(str(ADDON_DIR))
     freecad = types.ModuleType("FreeCAD")
     freecad.GuiUp = True  # type: ignore[attr-defined]
     freecad.Console = MagicMock()  # type: ignore[attr-defined]
@@ -433,23 +485,14 @@ class TestInitGuiQtFallback:
 
         warnings = _warnings(freecad)
         assert any("Could not schedule status bar sync" in msg for msg in warnings)
-        assert any(
-            "Neither PySide6 nor PySide2 QtCore could be loaded" in msg
-            for msg in warnings
-        )
+        assert any("Neither PySide6 nor PySide2" in msg for msg in warnings)
 
 
 def test_startup_script_prefers_pyside6_and_fails_closed() -> None:
     """The integration script should prefer Qt6 and fail closed without Qt."""
     startup_code = STARTUP_BRIDGE_PATH.read_text()
 
-    assert "except (ImportError, NameError)" in startup_code
-    assert "suppress(ImportError, NameError)" in startup_code
-    pyside6_pos = startup_code.find("from PySide6 import QtCore, QtWidgets")
-    pyside2_pos = startup_code.find("from PySide2 import QtCore, QtWidgets")
-    assert pyside6_pos != -1
-    assert pyside2_pos != -1
-    assert pyside6_pos < pyside2_pos
+    assert "load_qt_core_widgets" in startup_code
 
     tree = ast.parse(startup_code)
     gui_up_branch = next(
@@ -474,73 +517,30 @@ def test_startup_script_prefers_pyside6_and_fails_closed() -> None:
 
 
 @pytest.mark.parametrize(
-    ("path", "pyside6_import", "pyside2_import"),
+    ("path", "loader"),
     [
-        (
-            ADDON_INIT_PATH,
-            "from PySide6 import QtCore, QtWidgets",
-            "from PySide2 import (",
-        ),
-        (
-            STARTUP_BRIDGE_PATH,
-            "from PySide6 import QtCore, QtWidgets",
-            "from PySide2 import QtCore, QtWidgets",
-        ),
-        (
-            BRIDGE_UTILS_PATH,
-            "from PySide6 import QtCore",
-            "from PySide2 import QtCore",
-        ),
-        (
-            INIT_GUI_PATH,
-            "from PySide6 import QtCore",
-            "from PySide2 import QtCore",
-        ),
-        (
-            STATUS_WIDGET_PATH,
-            "from PySide6 import QtCore, QtWidgets",
-            "from PySide2 import QtCore, QtWidgets",
-        ),
-        (
-            PREFERENCES_PAGE_PATH,
-            "from PySide6 import QtCore, QtWidgets",
-            "from PySide2 import QtCore, QtWidgets",
-        ),
-        (
-            COMMANDS_PATH,
-            "from PySide6 import QtWidgets",
-            "from PySide2 import QtWidgets",
-        ),
+        (ADDON_INIT_PATH, "load_qt_core_widgets"),
+        (STARTUP_BRIDGE_PATH, "load_qt_core_widgets"),
+        (BRIDGE_UTILS_PATH, "load_qt_core"),
+        (INIT_GUI_PATH, "load_qt_core"),
+        (STATUS_WIDGET_PATH, "load_qt_core_widgets"),
+        (PREFERENCES_PAGE_PATH, "load_qt_core_widgets"),
+        (COMMANDS_PATH, "load_qt_modules"),
     ],
 )
-def test_runtime_qt_probes_prefer_pyside6(
-    path: Path, pyside6_import: str, pyside2_import: str
+def test_runtime_qt_probes_use_host_compatible_loader(path: Path, loader: str) -> None:
+    """Every runtime Qt probe should use the host-compatible loader."""
+    source = path.read_text()
+    assert loader in source
+
+
+def test_qt_compat_reports_clear_dual_binding_failure(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Every runtime compatibility probe should try PySide6 first."""
-    source = path.read_text()
-    pyside6_pos = source.find(pyside6_import)
-    pyside2_pos = source.find(pyside2_import)
+    """An unknown host should report both failed fallback bindings."""
+    namespace = runpy.run_path(str(QT_COMPAT_PATH))
+    monkeypatch.setitem(sys.modules, "PySide6", None)
+    monkeypatch.setitem(sys.modules, "PySide2", None)
 
-    assert pyside6_pos != -1
-    assert pyside2_pos != -1
-    assert pyside6_pos < pyside2_pos
-
-
-@pytest.mark.parametrize(
-    ("path", "failure_text"),
-    [
-        (ADDON_INIT_PATH, "Auto-start was stopped"),
-        (STARTUP_BRIDGE_PATH, "Startup was stopped"),
-        (BRIDGE_UTILS_PATH, "Cannot wait for GUI"),
-        (INIT_GUI_PATH, "status-bar synchronization cannot be scheduled"),
-        (COMMANDS_PATH, "neither Qt binding could be loaded"),
-        (PREFERENCES_PAGE_PATH, "MCP Bridge Preferences requires"),
-        (STATUS_WIDGET_PATH, "MCP status widget requires"),
-    ],
-)
-def test_dual_binding_failure_is_clear(path: Path, failure_text: str) -> None:
-    """User-facing import failures should name both supported bindings."""
-    source = path.read_text()
-    assert "PySide6" in source
-    assert "PySide2" in source
-    assert failure_text in source
+    with pytest.raises(RuntimeError, match="Neither PySide6 nor PySide2"):
+        namespace["load_qt_modules"]("QtCore")

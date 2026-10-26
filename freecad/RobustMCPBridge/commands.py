@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 import FreeCAD
+from freecad_mcp_bridge.qt_compat import load_qt_modules
 from path_utils import get_addon_path, get_icon_path
 
 # FreeCADGui is imported lazily in methods that need it, as this module
@@ -364,17 +365,7 @@ class MCPBridgePreferencesCommand:
             set_xmlrpc_port,
         )
 
-        # Import QtWidgets with fallback for different PySide versions
-        try:
-            from PySide6 import QtWidgets
-        except (ImportError, NameError):
-            try:
-                from PySide2 import QtWidgets  # type: ignore[no-redef]
-            except (ImportError, NameError) as error:
-                raise RuntimeError(
-                    "MCP Bridge Preferences requires PySide6 or PySide2, but "
-                    "neither Qt binding could be loaded."
-                ) from error
+        (QtWidgets,) = load_qt_modules("QtWidgets")
 
         # Create the dialog
         dialog = QtWidgets.QDialog(FreeCADGui.getMainWindow())

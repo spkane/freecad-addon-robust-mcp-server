@@ -76,6 +76,8 @@ if [[ -f "$MARKER_FILE" ]]; then
         exit 0
     else
         echo "Different FreeCAD version detected, will reinstall"
+        rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
+        rm -rf "$APPIMAGE_DIR/squashfs-root"
     fi
 fi
 

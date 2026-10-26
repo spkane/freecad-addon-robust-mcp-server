@@ -1073,15 +1073,9 @@ If you put auto-start logic in `Init.py`, it will only run when the user manuall
 
 ```python
 # Module-level code - runs at FreeCAD GUI startup
-try:
-    from PySide6 import QtCore
-except (ImportError, NameError):
-    try:
-        from PySide2 import QtCore
-    except (ImportError, NameError) as error:
-        raise RuntimeError(
-            "Neither PySide6 nor PySide2 QtCore could be loaded."
-        ) from error
+from freecad_mcp_bridge.qt_compat import load_qt_core
+
+QtCore = load_qt_core()
 
 def _auto_start_bridge() -> None:
     """Auto-start bridge after GUI is fully ready."""
