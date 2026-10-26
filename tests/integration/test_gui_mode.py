@@ -115,6 +115,19 @@ _result_ = {
         result = execute_code(
             xmlrpc_proxy,
             """
+import sys
+from pathlib import Path
+
+bridge_server = sys.modules.get("server") or sys.modules.get(
+    "freecad_mcp_bridge.server"
+)
+if bridge_server is None:
+    raise RuntimeError("The active bridge server module could not be identified")
+
+workbench_root = str(Path(bridge_server.__file__).resolve().parent.parent)
+if workbench_root not in sys.path:
+    sys.path.insert(0, workbench_root)
+
 from Qt.preferences_page import MCPBridgePreferencesPage
 from Qt.status_widget import MCPStatusWidget
 
