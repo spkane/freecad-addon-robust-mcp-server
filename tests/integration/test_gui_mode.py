@@ -73,9 +73,15 @@ _result_ = {"gui_up": FreeCAD.GuiUp}
             xmlrpc_proxy,
             """
 import FreeCAD
-from freecad_mcp_bridge.server import _get_qt_core
+import sys
 
-qt_core = _get_qt_core()
+bridge_server = sys.modules.get("server") or sys.modules.get(
+    "freecad_mcp_bridge.server"
+)
+if bridge_server is None:
+    raise RuntimeError("The active bridge server module could not be identified")
+
+qt_core = bridge_server._get_qt_core()
 if qt_core is None:
     raise RuntimeError("The GUI bridge did not resolve a QtCore module")
 

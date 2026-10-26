@@ -136,6 +136,7 @@ jobs:
             -e QT_QPA_PLATFORM=xcb \
             -e LIBGL_ALWAYS_SOFTWARE=1 \
             -e XDG_RUNTIME_DIR=/tmp/runtime-root \
+            -e PYTHONPATH=/workspace/freecad/RobustMCPBridge \
             -e EXPECTED_QT_BINDING=${{ matrix.expected_binding }} \
             -e FREECAD_TEST_RELEASE=${{ steps.freecad-release.outputs.tag }} \
             freecad-gui-test:${{ matrix.id }} \
