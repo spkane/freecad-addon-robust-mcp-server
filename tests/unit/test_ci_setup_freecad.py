@@ -68,6 +68,11 @@ def _write_wrappers(environment: dict[str, str]) -> None:
         _write_command(wrapper_dir / name, "#!/bin/sh\nexit 0\n")
 
 
+def _write_extracted_tree(appimage_dir: Path) -> None:
+    """Write the minimum extracted AppImage directory required for a cache hit."""
+    (appimage_dir / "squashfs-root" / "usr" / "bin").mkdir(parents=True)
+
+
 def _write_cached_setup(appimage_dir: Path, content: bytes) -> tuple[Path, Path]:
     """Write a cached AppImage and matching release marker."""
     appimage = appimage_dir / "FreeCAD.AppImage"
@@ -96,6 +101,7 @@ def test_matching_marker_verifies_cached_appimage_before_skipping(
     content = b"verified FreeCAD AppImage fixture"
     appimage, marker = _write_cached_setup(appimage_dir, content)
     _write_wrappers(environment)
+    _write_extracted_tree(appimage_dir)
     environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
 
     result = _run_setup(environment)
@@ -127,13 +133,48 @@ def test_valid_cache_without_wrappers_continues_setup(
     appimage_dir, environment = setup_environment
     content = b"verified FreeCAD AppImage without wrappers"
     _write_cached_setup(appimage_dir, content)
+    _write_extracted_tree(appimage_dir)
     environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
 
     result = _run_setup(environment)
 
     assert result.returncode != 0
     assert "SHA256 checksum verified successfully" in result.stdout
-    assert "wrappers are missing, will recreate" in result.stdout
+    assert "installation is incomplete, will repair" in result.stdout
+    assert "already set up" not in result.stdout
+
+
+def test_valid_cache_without_extracted_tree_continues_setup(
+    setup_environment: tuple[Path, dict[str, str]],
+) -> None:
+    """A valid image and wrappers still require the extracted application tree."""
+    appimage_dir, environment = setup_environment
+    content = b"verified FreeCAD AppImage without extracted tree"
+    _write_cached_setup(appimage_dir, content)
+    _write_wrappers(environment)
+    environment["FREECAD_APPIMAGE_SHA256"] = hashlib.sha256(content).hexdigest()
+
+    result = _run_setup(environment)
+
+    assert result.returncode != 0
+    assert "SHA256 checksum verified successfully" in result.stdout
+    assert "installation is incomplete, will repair" in result.stdout
+    assert "already set up" not in result.stdout
+
+
+def test_local_cache_without_digest_continues_to_release_resolution(
+    setup_environment: tuple[Path, dict[str, str]],
+) -> None:
+    """A local cache must not exit successfully before resolving its digest."""
+    appimage_dir, environment = setup_environment
+    _write_cached_setup(appimage_dir, b"unverified local cache")
+    _write_wrappers(environment)
+    _write_extracted_tree(appimage_dir)
+
+    result = _run_setup(environment)
+
+    assert result.returncode != 0
+    assert "has no digest, will resolve and verify" in result.stdout
     assert "already set up" not in result.stdout
 
 

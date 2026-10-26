@@ -108,13 +108,21 @@ fi
 if [[ -f "$MARKER_FILE" ]]; then
     # Verify marker file contains expected version
     if grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
-        if verify_appimage_checksum; then
+        if [[ ! -f "$APPIMAGE_PATH" ]]; then
+            echo "ERROR: AppImage not found at $APPIMAGE_PATH"
+            echo "Cached FreeCAD AppImage failed verification, will reinstall"
+            rm -f "$MARKER_FILE"
+            rm -rf "$APPIMAGE_DIR/squashfs-root"
+        elif [[ -z "$APPIMAGE_SHA256" ]]; then
+            echo "Cached FreeCAD AppImage has no digest, will resolve and verify"
+        elif verify_appimage_checksum; then
             if [[ -x "$FREECAD_BIN_DIR/freecad" ]] \
-                && [[ -x "$FREECAD_BIN_DIR/freecadcmd" ]]; then
+                && [[ -x "$FREECAD_BIN_DIR/freecadcmd" ]] \
+                && [[ -d "$APPIMAGE_DIR/squashfs-root/usr/bin" ]]; then
                 echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
                 exit 0
             fi
-            echo "Cached FreeCAD AppImage verified but wrappers are missing, will recreate"
+            echo "Cached FreeCAD AppImage verified but installation is incomplete, will repair"
         else
             echo "Cached FreeCAD AppImage failed verification, will reinstall"
             rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
