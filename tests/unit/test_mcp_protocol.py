@@ -1,20 +1,28 @@
 """Protocol-level regression tests for the MCP server."""
 
 import asyncio
+import hashlib
+import importlib
 import os
 import socket
 import sys
 import tempfile
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, cast
-from xmlrpc.server import SimpleXMLRPCServer
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+TEST_SERVER = PROJECT_ROOT / "tests" / "fixtures" / "authenticated_mcp_server.py"
 
 
 def _execute_freecad_code(code: str) -> dict[str, Any]:
@@ -39,21 +47,42 @@ def _execute_freecad_code(code: str) -> dict[str, Any]:
 @contextmanager
 def _fake_xmlrpc_server() -> Iterator[int]:
     """Run a minimal local XML-RPC bridge and yield its assigned port."""
-    server = SimpleXMLRPCServer(
-        ("127.0.0.1", 0),
-        allow_none=True,
-        logRequests=False,
+    addon_dir = str(PROJECT_ROOT / "freecad" / "RobustMCPBridge")
+    sys.path.insert(0, addon_dir)
+    try:
+        auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
+        server_module = importlib.import_module("freecad_mcp_bridge.server")
+    finally:
+        sys.path.remove(addon_dir)
+    public_key = (
+        Ed25519PrivateKey.from_private_bytes(b"\x01" * 32)
+        .public_key()
+        .public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     )
-    server.register_function(cast("Any", _execute_freecad_code), "execute")
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    fingerprint = hashlib.sha256(public_key).hexdigest()
+    verifier = auth_module.create_ed25519_verifier({fingerprint: public_key}.get)
+    plugin = server_module.FreecadMCPPlugin(
+        host="127.0.0.1",
+        xmlrpc_port=0,
+        authenticator=auth_module.BridgeAuthenticator(verifier),
+    )
+    plugin._execute_via_queue = lambda code, _timeout: _execute_freecad_code(code)
+    plugin._running = True
+    thread = threading.Thread(target=plugin._run_xmlrpc_server, daemon=True)
     thread.start()
 
     try:
-        yield server.server_address[1]
+        deadline = time.monotonic() + 5
+        while plugin._xmlrpc_server is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert plugin._xmlrpc_server is not None
+        yield plugin._xmlrpc_server.server_address[1]
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
+        plugin._running = False
+        thread.join(timeout=3)
+        if plugin._xmlrpc_server is not None:
+            plugin._xmlrpc_server.server_close()
+        assert not thread.is_alive()
 
 
 def _server_environment(xmlrpc_port: int) -> dict[str, str]:
@@ -107,8 +136,7 @@ async def _start_streamable_http_server(
         }
         process = await asyncio.create_subprocess_exec(
             sys.executable,
-            "-m",
-            "freecad_mcp.server",
+            str(TEST_SERVER),
             env=environment,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
@@ -141,7 +169,7 @@ async def test_stdio_first_tool_call_completes() -> None:
     with _fake_xmlrpc_server() as xmlrpc_port:
         server_parameters = StdioServerParameters(
             command=sys.executable,
-            args=["-m", "freecad_mcp.server"],
+            args=[str(TEST_SERVER)],
             env=_server_environment(xmlrpc_port),
         )
         with tempfile.TemporaryFile(mode="w+") as stderr:
