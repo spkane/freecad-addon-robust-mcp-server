@@ -11,8 +11,10 @@
   response, select current streams only while holding the request lock, and do
   not send work whose execution deadline expired while queued. Socket recovery
   also runs outside the request lock to avoid reconnect deadlocks, and pre-send
-  deadline failures explicitly report that code was not executed. XML-RPC
-  retains execution compatibility with older workbenches that expose only the
+  deadline failures explicitly report that code was not executed. Socket write
+  backpressure and response reads share one bounded deadline, while the public
+  constructor retains its positional `auto_reconnect` argument. XML-RPC retains
+  execution compatibility with older workbenches that expose only the
   one-argument `execute(code)` method.
 
 ## Version 0.6.2 (2026-01-18)

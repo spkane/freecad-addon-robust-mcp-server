@@ -75,8 +75,9 @@ class SocketBridge(FreecadBridge):
         host: str = DEFAULT_SOCKET_HOST,
         port: int = DEFAULT_SOCKET_PORT,
         timeout: float = DEFAULT_TIMEOUT,
-        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
         auto_reconnect: bool = True,
+        *,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
     ) -> None:
         """Initialize the socket bridge.
 
@@ -84,8 +85,8 @@ class SocketBridge(FreecadBridge):
             host: Socket server hostname.
             port: Socket server port.
             timeout: Connection and request timeout in seconds.
-            execution_timeout_ms: Default execution timeout in milliseconds.
             auto_reconnect: Whether to automatically reconnect on connection loss.
+            execution_timeout_ms: Default execution timeout in milliseconds.
         """
         self._host = host
         self._port = port
@@ -234,13 +235,10 @@ class SocketBridge(FreecadBridge):
         """
         try:
             request_data = json.dumps(request).encode("utf-8") + b"\n"
-            writer.write(request_data)
-            await writer.drain()
-
-            response_data = await asyncio.wait_for(
-                reader.readline(),
-                timeout=response_timeout,
-            )
+            async with asyncio.timeout(response_timeout):
+                writer.write(request_data)
+                await writer.drain()
+                response_data = await reader.readline()
         except TimeoutError:
             self._discard_request_streams(writer)
             raise

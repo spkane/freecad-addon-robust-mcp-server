@@ -29,6 +29,14 @@ class TestSocketBridge:
         assert bridge._host == "192.168.1.1"
         assert bridge._port == 12345
 
+    def test_initialization_preserves_positional_auto_reconnect(self):
+        """The historical fourth positional argument should disable reconnects."""
+        bridge = SocketBridge("192.168.1.1", 12345, 5.0, False)
+
+        assert bridge._timeout == 5.0
+        assert bridge._auto_reconnect is False
+        assert bridge._execution_timeout_ms == 30000
+
     @pytest.mark.asyncio
     async def test_is_connected_before_connect(self):
         """is_connected should return False before connect."""
@@ -212,6 +220,35 @@ class TestSocketBridgeCommunication:
         assert bridge._reader is None
         assert bridge._writer is None
         assert bridge._connected is False
+
+    @pytest.mark.asyncio
+    async def test_drain_timeout_discards_connection_and_releases_lock(
+        self,
+        mock_streams,
+    ) -> None:
+        """A stalled socket write should time out and release request state."""
+        reader, writer = mock_streams
+
+        async def stalled_drain() -> None:
+            await asyncio.Event().wait()
+
+        writer.drain.side_effect = stalled_drain
+        bridge = SocketBridge(timeout=0.01)
+        bridge._reader = reader
+        bridge._writer = writer
+        bridge._connected = True
+
+        with pytest.raises(TimeoutError) as error:
+            await bridge._send_request("execute", {"code": "possibly_sent"})
+
+        assert not isinstance(error.value, RequestNotSentError)
+        writer.write.assert_called_once()
+        reader.readline.assert_not_awaited()
+        writer.close.assert_called_once_with()
+        assert bridge._reader is None
+        assert bridge._writer is None
+        assert bridge._connected is False
+        assert bridge._lock.locked() is False
 
     @pytest.mark.asyncio
     async def test_request_timeout_includes_waiting_for_lock(
