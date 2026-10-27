@@ -36,6 +36,7 @@ from __future__ import annotations
 import os
 import platform
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -81,24 +82,23 @@ def _is_freecad_process_running() -> bool:
         return False
 
 
-def _is_bridge_running(host: str = "localhost", port: int = 9875) -> bool:
-    """Check if an MCP bridge is already running on the given port.
+def _is_port_occupied(host: str = "127.0.0.1", port: int = 9875) -> bool:
+    """Check whether a bridge port is unavailable for binding.
 
     Args:
         host: Bridge hostname.
-        port: Bridge XML-RPC port.
+        port: Bridge port.
 
     Returns:
-        True if a bridge is responding, False otherwise.
+        True if binding fails for any reason, False otherwise. Failing closed
+        also protects listeners that cannot accept another connection.
     """
-    import xmlrpc.client
-
     try:
-        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
-        result = proxy.ping()
-        return isinstance(result, dict) and bool(result.get("pong"))
-    except Exception:
-        return False
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind((host, port))
+    except OSError:
+        return True
+    return False
 
 
 def _find_freecad_binary() -> str | None:
@@ -285,10 +285,10 @@ class TestShutdownCrash:
                 "A FreeCAD process is already running. "
                 "These tests must run without an existing FreeCAD instance."
             )
-        if _is_bridge_running():
+        if _is_port_occupied(port=9875) or _is_port_occupied(port=9876):
             pytest.skip(
-                "MCP bridge already running on port 9875. "
-                "These tests must run without an existing FreeCAD/bridge instance."
+                "A bridge port is already occupied. "
+                "These tests must run without an existing listener on ports 9875 or 9876."
             )
 
     def test_gui_shutdown_no_crash(
