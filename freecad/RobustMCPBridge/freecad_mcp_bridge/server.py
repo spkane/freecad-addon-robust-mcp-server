@@ -35,7 +35,10 @@ import uuid
 import weakref
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .authentication import BridgeAuthenticator
 
 if __package__:
     from .qt_compat import get_host_qt_binding, load_qt_core
@@ -297,6 +300,7 @@ class FreecadMCPPlugin:
         port: int = DEFAULT_SOCKET_PORT,
         xmlrpc_port: int = DEFAULT_XMLRPC_PORT,
         enable_xmlrpc: bool = True,
+        authenticator: BridgeAuthenticator | None = None,
     ) -> None:
         """Initialize the plugin.
 
@@ -305,6 +309,7 @@ class FreecadMCPPlugin:
             port: Port for JSON-RPC socket server.
             xmlrpc_port: Port for XML-RPC server.
             enable_xmlrpc: Whether to enable XML-RPC server.
+            authenticator: Request verifier supplied by the trusted key provider.
         """
         # Generate unique instance ID for this server
         self._instance_id = str(uuid.uuid4())
@@ -313,6 +318,7 @@ class FreecadMCPPlugin:
         self._port = port
         self._xmlrpc_port = xmlrpc_port
         self._enable_xmlrpc = enable_xmlrpc
+        self._authenticator = authenticator
 
         # Server instances
         self._socket_server: asyncio.Server | None = None
@@ -1151,6 +1157,7 @@ class FreecadMCPPlugin:
 
     def _run_xmlrpc_server(self) -> None:
         """Run the XML-RPC server."""
+        authenticator = self._authenticator
 
         # Custom request handler that silently handles GET requests
         # instead of logging "Unsupported method ('GET')" errors
@@ -1197,8 +1204,13 @@ class FreecadMCPPlugin:
                 super().do_POST()
 
             def decode_request_content(self, data: bytes) -> bytes | None:
-                """Refuse XML declarations that can trigger entity expansion."""
+                """Authenticate bounded bytes before inspecting or parsing XML."""
                 self._read_timer.cancel()
+                if authenticator is None or not authenticator.verify_xmlrpc_headers(
+                    self.headers, data
+                ):
+                    self.send_error(401, "Bridge authentication required")
+                    return None
                 try:
                     text = data.decode("utf-8")
                 except UnicodeDecodeError:
@@ -1233,6 +1245,22 @@ class FreecadMCPPlugin:
                         # Returns: FreeCAD MCP Bridge - XML-RPC endpoint (POST only)
                 """
                 self._read_timer.cancel()
+                if self.path == "/challenge":
+                    if authenticator is None:
+                        self.send_error(503, "Bridge authentication unavailable")
+                        return
+                    try:
+                        response = authenticator.issue_challenge().encode("ascii")
+                    except RuntimeError:
+                        self.send_error(503, "Bridge challenge unavailable")
+                        return
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/plain")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(response)))
+                    self.end_headers()
+                    self.wfile.write(response)
+                    return
                 response = b"FreeCAD MCP Bridge - XML-RPC endpoint (POST only)"
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hmac
 import http.client
 import importlib
 import socket
@@ -179,6 +181,8 @@ def test_xmlrpc_rejects_unsafe_framing_and_xml(
     """The real listener rejects oversized, compressed and DTD requests."""
     monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", False)
     plugin = server_mod.FreecadMCPPlugin(host="127.0.0.1", xmlrpc_port=0)
+    plugin._authenticator = MagicMock()
+    plugin._authenticator.verify_xmlrpc_headers.return_value = True
     plugin._running = True
     thread = threading.Thread(target=plugin._run_xmlrpc_server)
     thread.start()
@@ -205,6 +209,71 @@ def test_xmlrpc_rejects_unsafe_framing_and_xml(
         assert post(ping, {"Content-Encoding": "gzip"}) == 400
         assert post(b'<!DOCTYPE x [<!ENTITY x "bad">]><methodCall/>') == 400
         assert post(b"\xff\xfe") == 400
+    finally:
+        plugin._running = False
+        thread.join(timeout=3)
+        if plugin._xmlrpc_server is not None:
+            plugin._xmlrpc_server.server_close()
+        assert not thread.is_alive()
+
+
+def test_xmlrpc_listener_authenticates_before_dispatch(server_mod: Any) -> None:
+    """The actual listener rejects missing, altered, and replayed request proofs."""
+    auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
+    key = b"unit-test-only-key"
+
+    def verify(client: str, message: bytes, proof: bytes) -> bool:
+        return client == "paired" and hmac.compare_digest(
+            hmac.digest(key, message, "sha256"), proof
+        )
+
+    auth = auth_module.BridgeAuthenticator(verify)
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", xmlrpc_port=0, authenticator=auth
+    )
+    plugin._running = True
+    thread = threading.Thread(target=plugin._run_xmlrpc_server)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 5
+        while plugin._xmlrpc_server is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert plugin._xmlrpc_server is not None
+        port = plugin._xmlrpc_server.server_address[1]
+
+        def request(
+            method: str, path: str, body: bytes = b"", **headers: str
+        ) -> tuple[int, bytes]:
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+            try:
+                connection.request(method, path, body=body, headers=headers)
+                response = connection.getresponse()
+                return response.status, response.read()
+            finally:
+                connection.close()
+
+        body = xmlrpc.client.dumps((), methodname="ping").encode()
+        assert request("POST", "/RPC2", body)[0] == 401
+        status, challenge_bytes = request("GET", "/challenge")
+        assert status == 200
+        challenge = challenge_bytes.decode("ascii")
+        message = auth_module.request_proof_message("paired", challenge, "xmlrpc", body)
+        proof = base64.b64encode(hmac.digest(key, message, "sha256")).decode()
+        headers = {
+            "X-FreeCAD-Client": "paired",
+            "X-FreeCAD-Challenge": challenge,
+            "X-FreeCAD-Proof": proof,
+        }
+        assert request("POST", "/RPC2", body, **headers)[0] == 200
+        assert request("POST", "/RPC2", body, **headers)[0] == 401
+        _, challenge_bytes = request("GET", "/challenge")
+        challenge = challenge_bytes.decode("ascii")
+        message = auth_module.request_proof_message("paired", challenge, "xmlrpc", body)
+        headers["X-FreeCAD-Challenge"] = challenge
+        headers["X-FreeCAD-Proof"] = base64.b64encode(
+            hmac.digest(key, message, "sha256")
+        ).decode()
+        assert request("POST", "/RPC2", body + b" ", **headers)[0] == 401
     finally:
         plugin._running = False
         thread.join(timeout=3)
@@ -261,6 +330,8 @@ def test_xmlrpc_can_bind_ipv6_loopback_when_available(
 
     monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", False)
     plugin = server_mod.FreecadMCPPlugin(host="::1", xmlrpc_port=0)
+    plugin._authenticator = MagicMock()
+    plugin._authenticator.verify_xmlrpc_headers.return_value = True
     plugin._running = True
     thread = threading.Thread(target=plugin._run_xmlrpc_server)
     thread.start()
