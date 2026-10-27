@@ -38,6 +38,9 @@ DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_TIMEOUT = 30.0
 EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
+# Two 1 MB captured streams can expand substantially when JSON escapes control
+# characters. Bound the wire frame while allowing both streams to be returned.
+MAX_SOCKET_RESPONSE_BYTES = 16 * 1024 * 1024
 
 
 class JsonRpcError(Exception):
@@ -133,7 +136,9 @@ class SocketBridge(FreecadBridge):
     async def _open_streams(self) -> None:
         """Open socket streams without issuing a nested request."""
         self._reader, self._writer = await asyncio.wait_for(
-            asyncio.open_connection(self._host, self._port),
+            asyncio.open_connection(
+                self._host, self._port, limit=MAX_SOCKET_RESPONSE_BYTES
+            ),
             timeout=self._timeout,
         )
         self._connected = True
@@ -252,7 +257,7 @@ class SocketBridge(FreecadBridge):
             async with asyncio.timeout(response_timeout):
                 writer.write(b'{"type":"challenge"}\n')
                 await writer.drain()
-                challenge_data = await reader.readline()
+                challenge_data = await self._read_response_line(reader, writer)
                 try:
                     challenge_response = json.loads(challenge_data)
                     challenge = challenge_response["challenge"]
@@ -275,7 +280,7 @@ class SocketBridge(FreecadBridge):
                 }
                 writer.write(json.dumps(envelope).encode("utf-8") + b"\n")
                 await writer.drain()
-                response_data = await reader.readline()
+                response_data = await self._read_response_line(reader, writer)
         except TimeoutError:
             self._discard_request_streams(writer)
             raise
@@ -302,6 +307,16 @@ class SocketBridge(FreecadBridge):
             )
 
         return response.get("result")
+
+    async def _read_response_line(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> bytes:
+        """Read a bounded response and discard an oversized stream."""
+        try:
+            return await reader.readline()
+        except ValueError as e:
+            self._discard_request_streams(writer)
+            raise ConnectionError("Bridge response exceeds the socket limit") from e
 
     def _discard_request_streams(self, writer: asyncio.StreamWriter) -> None:
         """Close and clear a failed stream pair.

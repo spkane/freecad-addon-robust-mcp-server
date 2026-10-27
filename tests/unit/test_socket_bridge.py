@@ -274,6 +274,21 @@ class TestSocketBridgeCommunication:
         assert bridge._connected is False
 
     @pytest.mark.asyncio
+    async def test_oversized_response_discards_connection(self, mock_streams) -> None:
+        """An oversized response must close the stream and report a clear error."""
+        reader, writer = mock_streams
+        reader.readline.side_effect = [
+            json.dumps({"challenge": "A" * 43}).encode() + b"\n",
+            ValueError("response exceeds limit"),
+        ]
+        bridge = SocketBridge()
+        bridge._reader, bridge._writer, bridge._connected = reader, writer, True
+        with pytest.raises(ConnectionError, match="response exceeds the socket limit"):
+            await bridge._send_request("execute", {"code": "pass"})
+        writer.close.assert_called_once()
+        assert bridge._reader is None and bridge._writer is None
+
+    @pytest.mark.asyncio
     async def test_drain_timeout_discards_connection_and_releases_lock(
         self,
         mock_streams,

@@ -50,6 +50,9 @@ workbench, and trust store; credential protection by itself is insufficient.
 - Captured stdout and stderr are each limited to 1,000,000 UTF-8 bytes and
   marked when truncated. This does not yet bound returned result objects or
   tracebacks; those remain release verification and implementation work.
+- The socket client accepts response frames up to 16 MiB, including JSON
+  escaping, and closes the connection on larger frames. This client-side limit
+  does not prevent a server from allocating an oversized result before sending.
 - Keep private keys out of repository files, command-line arguments, logs, and
   model-visible output. Revoke clients independently and document rotation.
 - Do not silently connect to an older, unauthenticated bridge.

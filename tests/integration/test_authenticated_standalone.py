@@ -85,6 +85,17 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                     )
                     assert result.success
                     assert result.result == pytest.approx(24.0)
+                    output = await bridge.execute_python("print('x' * 100000, end='')")
+                    assert output.success
+                    assert len(output.stdout) == 100000
+                    output = await bridge.execute_python(
+                        "import sys\nprint('é' * 600000)\n"
+                        "print('x' * 1100000, file=sys.stderr)"
+                    )
+                    assert output.success
+                    for text in (output.stdout, output.stderr):
+                        assert len(text.encode("utf-8")) <= 1_000_000
+                        assert text.endswith("\n[output truncated]\n")
                 finally:
                     await bridge.disconnect()
         finally:
