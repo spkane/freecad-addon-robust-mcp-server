@@ -121,6 +121,14 @@ compatible provider or an explicitly packaged dependency; availability in the
 server environment is not evidence that the workbench can import it. This is an
 observation about that installation, not a claim about every FreeCAD release.
 
+On 2026-10-27, a headless FreeCAD 27.1 development process was exercised with
+the workbench source, a temporary Python 3.13-compatible crypto dependency, and
+an in-memory test trust store. Signed XML-RPC and socket clients both created a
+2 × 3 × 4 box and returned its volume; a different private key claiming the same
+client ID was rejected on each transport. This manual probe did not test a GUI,
+production credential storage, pairing, or same-account isolation. The
+temporary dependency and test credential are not a deployment mechanism.
+
 The same local macOS development installation has a Developer ID signature and
 the hardened-runtime flag, but its entitlements include
 `com.apple.security.cs.disable-library-validation` and
