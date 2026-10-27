@@ -40,6 +40,7 @@ class ChallengeStore:
         if (
             type(max_pending) is not int
             or max_pending <= 0
+            or type(lifetime_seconds) not in (int, float)
             or not math.isfinite(lifetime_seconds)
             or lifetime_seconds <= 0
         ):
@@ -68,11 +69,12 @@ class ChallengeStore:
             }
             if len(self._pending) >= self._max_pending:
                 raise RuntimeError("Too many pending bridge challenges")
-            challenge = secrets.token_urlsafe(32)
-            while challenge in self._pending:
+            for _ in range(3):
                 challenge = secrets.token_urlsafe(32)
-            self._pending[challenge] = now + self._lifetime_seconds
-            return challenge
+                if challenge not in self._pending:
+                    self._pending[challenge] = now + self._lifetime_seconds
+                    return challenge
+            raise RuntimeError("Could not issue a unique bridge challenge")
 
     def consume(self, challenge: object) -> bool:
         """Consume a challenge atomically and report whether it was valid.

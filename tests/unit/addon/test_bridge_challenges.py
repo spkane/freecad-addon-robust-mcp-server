@@ -56,9 +56,26 @@ def test_concurrent_consumers_cannot_replay(challenges: Any) -> None:
     assert outcomes.count(False) == 31
 
 
+def test_repeated_random_collision_fails_closed(
+    challenges: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken random source cannot trap a listener in an endless loop."""
+    monkeypatch.setattr(challenges.secrets, "token_urlsafe", lambda _: "a" * 43)
+    store = challenges.ChallengeStore()
+    store.issue()
+    with pytest.raises(RuntimeError, match="unique"):
+        store.issue()
+
+
 @pytest.mark.parametrize(
     "kwargs",
-    [{"max_pending": 0}, {"lifetime_seconds": 0}, {"lifetime_seconds": float("nan")}],
+    [
+        {"max_pending": 0},
+        {"lifetime_seconds": 0},
+        {"lifetime_seconds": float("nan")},
+        {"lifetime_seconds": True},
+        {"lifetime_seconds": "invalid"},
+    ],
 )
 def test_invalid_limits_are_rejected(challenges: Any, kwargs: dict[str, Any]) -> None:
     """Challenge capacity and lifetime must be positive."""

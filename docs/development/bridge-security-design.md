@@ -25,6 +25,10 @@ states that applications using the same user credentials can access protected
 data. On macOS, [keychain ACLs](https://developer.apple.com/documentation/security/access-control-lists)
 can restrict keychain operations to trusted applications or require user consent,
 but the identity and signing of the actual Python executable matter.
+An attacker that can change the installed workbench code or its approved-client
+list can bypass application-level authentication altogether. Defending against
+that attacker requires an OS-enforced isolation boundary for the FreeCAD process,
+workbench, and trust store; credential protection by itself is insufficient.
 
 ## Protocol requirements
 
