@@ -91,13 +91,32 @@ The verifier resolves the approved key for each request,
 checks that its fingerprint matches, and delegates signature validation to a
 provider. Revocation prevents later lookups; it does not cancel an already
 authorized request. Both signature verifiers require the `cryptography` package
-inside FreeCAD and fails closed if it is unavailable. This fingerprint check does not make the
-underlying lookup or signature provider trustworthy on its own.
+inside FreeCAD and fail closed if it is unavailable. This fingerprint check does
+not make the underlying lookup or signature provider trustworthy on its own.
 
 P-256 is needed for the macOS Secure Enclave candidate: Apple documents that
 [Secure Enclave signing uses P-256 keys](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave).
 Support for the algorithm does not demonstrate that a signing identity or its
 trust store is isolated; those remain platform verification gates.
+
+### Deployment decision
+
+None of the following options currently satisfies the selected threat model
+without additional protections and platform testing:
+
+| Candidate | What it can protect | Remaining requirement |
+| --------- | ------------------- | --------------------- |
+| Signed macOS helper and protected app container | Helper identity, key access, and container data, subject to OS policy | Protect the FreeCAD process, its loaded add-ons, and the approved-client store; authenticate callers to the helper. A signing identity and distribution process are required. |
+| Administrator-managed separate OS identity | Files and processes from an ordinary desktop-user identity, when OS permissions enforce separation | Provide usable GUI, document access, updates, and a verified IPC boundary for that identity on each supported platform. |
+| Hardware key with user approval | The private key and, depending on device policy, each signing operation | Protect the workbench and trust store independently; prevent an unpaired process from using the signer as an unrestricted signing service. |
+
+The implementation cannot treat a signed helper or hardware key alone as proof
+that the same-user boundary holds. In particular, third-party code loaded inside
+the FreeCAD process shares that process's authority. A viable deployment must
+define which add-ons can run, where the verifier and approved-client store live,
+how a client is identified at signing time, and how enrollment and revocation
+remain protected. Existing user-writable workbench installations do not provide
+those guarantees. The developer's choice of deployment model is pending.
 
 ### Platform feasibility gates
 
