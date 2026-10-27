@@ -222,6 +222,8 @@ class _BoundedCapture(io.TextIOBase):
         """Capture as much output as fits and report the original write length."""
         if not isinstance(text, str):
             raise TypeError("output must be text")
+        if self.truncated:
+            return len(text)
         remaining = max(0, self._limit - self._size)
         sample = text[:remaining]
         data = sample.encode("utf-8", errors="replace")

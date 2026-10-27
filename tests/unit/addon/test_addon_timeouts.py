@@ -372,6 +372,17 @@ def test_bounded_capture_rejects_seeking(server_mod: Any) -> None:
     assert len(capture.getvalue().encode("utf-8")) <= 32
 
 
+def test_bounded_capture_stops_after_partial_unicode_character(server_mod: Any) -> None:
+    """Later writes cannot fill space left by a truncated multibyte character."""
+    capture = server_mod._BoundedCapture(limit=32)
+    capture.write("a" * 31)
+    capture.write("é")
+    assert capture.truncated
+    capture.write("z")
+    assert "z" not in capture.getvalue()
+    assert capture.getvalue().endswith(server_mod.OUTPUT_TRUNCATION_MARKER)
+
+
 def test_exception_diagnostics_are_bounded(server_mod: Any) -> None:
     """Large exception messages and tracebacks have bounded encoded output."""
     plugin = server_mod.FreecadMCPPlugin()
