@@ -405,8 +405,17 @@ def test_xmlrpc_listener_authenticates_before_dispatch(server_mod: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_xmlrpc_client_signs_requests_for_listener(server_mod: Any) -> None:
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1"])
+async def test_xmlrpc_client_signs_requests_for_listener(
+    server_mod: Any, host: str
+) -> None:
     """The XML-RPC client and real listener agree on request proofs."""
+    if host == "::1":
+        try:
+            with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as probe:
+                probe.bind((host, 0))
+        except OSError:
+            pytest.skip("IPv6 loopback is unavailable")
     auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
     key = b"unit-test-only-key"
 
@@ -417,7 +426,7 @@ async def test_xmlrpc_client_signs_requests_for_listener(server_mod: Any) -> Non
         return client == "paired" and hmac.compare_digest(sign(message), proof)
 
     plugin = server_mod.FreecadMCPPlugin(
-        host="127.0.0.1",
+        host=host,
         xmlrpc_port=0,
         authenticator=auth_module.BridgeAuthenticator(verify),
     )
@@ -434,9 +443,7 @@ async def test_xmlrpc_client_signs_requests_for_listener(server_mod: Any) -> Non
             await asyncio.sleep(0.01)
         assert plugin._xmlrpc_server is not None
         port = plugin._xmlrpc_server.server_address[1]
-        bridge = XmlRpcBridge(
-            host="127.0.0.1", port=port, client_id="paired", signer=sign
-        )
+        bridge = XmlRpcBridge(host=host, port=port, client_id="paired", signer=sign)
         await bridge.connect()
         result = await bridge.execute_python("pass")
         assert result.success is True

@@ -19,6 +19,12 @@ from freecad_mcp.bridge.xmlrpc import (
 )
 
 
+@pytest.mark.parametrize("host", ["::1", "[::1]"])
+def test_xmlrpc_ipv6_loopback_url_is_bracketed(host: str) -> None:
+    """IPv6 literals must be bracketed once when used in HTTP URLs."""
+    assert XmlRpcBridge(host=host)._server_url == "http://[::1]:9875"
+
+
 def test_authenticated_transport_refuses_legacy_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

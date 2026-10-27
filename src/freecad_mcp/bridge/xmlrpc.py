@@ -185,7 +185,10 @@ class XmlRpcBridge(FreecadBridge):
     @property
     def _server_url(self) -> str:
         """Get the XML-RPC server URL."""
-        return f"http://{self._host}:{self._port}"
+        host = self._host
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        return f"http://{host}:{self._port}"
 
     async def connect(self) -> None:
         """Establish connection to FreeCAD XML-RPC server.
