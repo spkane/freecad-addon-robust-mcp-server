@@ -63,6 +63,9 @@ cut.addProperty("App::PropertyLinkList", "Related")
 cut.Related = [box, cylinder]
 cut.addProperty("App::PropertyLinkSub", "EdgeReference")
 cut.EdgeReference = (box, ["Edge1", "Edge2"])
+empty = doc.addObject("Part::Feature", "Empty")
+empty.addProperty("App::PropertyLink", "Related")
+empty.Related = box
 doc.recompute()
 _result_ = True
 """
@@ -78,6 +81,10 @@ _result_ = True
         assert properties["EdgeReference"][0]["name"] == "Block"
         assert properties["EdgeReference"][1] == ["Edge1", "Edge2"]
         assert result["shape_info"]["shape_type"]
+
+        empty = await inspect_object(object_name="Empty", doc_name=doc_name)
+        assert empty["properties"]["Related"]["name"] == "Block"
+        assert "shape_info" not in empty
 
         minimal = await inspect_object(
             object_name="Cut",

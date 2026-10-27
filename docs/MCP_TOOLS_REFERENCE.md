@@ -322,6 +322,8 @@ limited to 512 characters. Truncated collections or strings include a
 `<max depth>`, and an unreadable property is marked `<unreadable>`. Disable
 `include_properties` or `include_shape` to avoid reading those sections in
 FreeCAD.
+Shape details are omitted if the shape is missing, null, or unreadable; other
+object information remains available.
 
 #### create_object
 

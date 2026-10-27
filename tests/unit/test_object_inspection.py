@@ -147,6 +147,47 @@ def test_disabled_properties_and_shape_are_not_read() -> None:
     assert result["shape_info"] is None
 
 
+def test_null_shape_does_not_discard_readable_properties() -> None:
+    """A null FreeCAD shape must not prevent inspection of its link properties."""
+
+    class NullShape:
+        """Represent a FreeCAD null shape whose type cannot be read."""
+
+        def isNull(self) -> bool:
+            """Report the null topology."""
+            return True
+
+        @property
+        def ShapeType(self) -> str:
+            """Fail if shape type is queried."""
+            raise RuntimeError("cannot determine type of null shape")
+
+    result = _execute_inspection(_object(Link=LinkedObject(), Shape=NullShape()))
+    assert result["properties"]["Link"]["name"] == "Box"
+    assert result["shape_info"] is None
+
+
+def test_unreadable_shape_does_not_discard_readable_properties() -> None:
+    """A failing Shape getter must not prevent inspection of other properties."""
+
+    class UnreadableShapeObject:
+        """Represent a FreeCAD object with an unreadable shape."""
+
+        Name = Label = "Object"
+        TypeId = "Part::Feature"
+        PropertiesList = ("Link",)
+        Link = LinkedObject()
+
+        @property
+        def Shape(self) -> object:
+            """Raise the error produced by the shape accessor."""
+            raise RuntimeError("shape is unavailable")
+
+    result = _execute_inspection(UnreadableShapeObject())
+    assert result["properties"]["Link"]["name"] == "Box"
+    assert result["shape_info"] is None
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("bridge_class", [XmlRpcBridge, SocketBridge, EmbeddedBridge])
 async def test_bridge_inspection_uses_common_program_and_propagates_errors(

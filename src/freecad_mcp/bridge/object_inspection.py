@@ -116,18 +116,22 @@ if _include_properties:
             props[prop] = "<unreadable>"
 
 shape_info = None
-if _include_shape and hasattr(obj, "Shape"):
-    shape = obj.Shape
-    shape_info = {
-        "shape_type": shape.ShapeType,
-        "volume": shape.Volume if hasattr(shape, "Volume") else None,
-        "area": shape.Area if hasattr(shape, "Area") else None,
-        "is_valid": shape.isValid(),
-        "is_closed": shape.isClosed() if hasattr(shape, "isClosed") else False,
-        "vertex_count": len(shape.Vertexes) if hasattr(shape, "Vertexes") else 0,
-        "edge_count": len(shape.Edges) if hasattr(shape, "Edges") else 0,
-        "face_count": len(shape.Faces) if hasattr(shape, "Faces") else 0,
-    }
+if _include_shape:
+    try:
+        shape = getattr(obj, "Shape", None)
+        if shape is not None and not (hasattr(shape, "isNull") and shape.isNull()):
+            shape_info = {
+                "shape_type": shape.ShapeType,
+                "volume": shape.Volume if hasattr(shape, "Volume") else None,
+                "area": shape.Area if hasattr(shape, "Area") else None,
+                "is_valid": shape.isValid(),
+                "is_closed": shape.isClosed() if hasattr(shape, "isClosed") else False,
+                "vertex_count": len(shape.Vertexes) if hasattr(shape, "Vertexes") else 0,
+                "edge_count": len(shape.Edges) if hasattr(shape, "Edges") else 0,
+                "face_count": len(shape.Faces) if hasattr(shape, "Faces") else 0,
+            }
+    except Exception:
+        shape_info = None
 
 _result_ = {
     "name": _xml_text(obj.Name),
