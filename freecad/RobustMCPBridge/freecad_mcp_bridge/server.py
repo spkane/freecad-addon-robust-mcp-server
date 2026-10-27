@@ -985,6 +985,17 @@ class FreecadMCPPlugin:
                     f"MCP Bridge: Failed to start JSON-RPC server: {e}\n"
                 )
         finally:
+            if self._socket_server is not None:
+                self._socket_server.close()
+                self._socket_loop.run_until_complete(self._socket_server.wait_closed())
+                self._socket_server = None
+            pending = asyncio.all_tasks(self._socket_loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                self._socket_loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
             self._socket_loop.close()
 
     async def _start_socket_server(self) -> None:

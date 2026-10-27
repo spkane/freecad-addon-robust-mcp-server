@@ -24,6 +24,30 @@ if TYPE_CHECKING:
 ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPBridge"
 
 
+def test_socket_shutdown_releases_active_client_slots(server_mod: Any) -> None:
+    """Stopping a listener with an idle client must release its client slot."""
+    plugin = server_mod.FreecadMCPPlugin(port=0, enable_xmlrpc=False)
+    plugin._running = True
+    plugin._socket_thread = threading.Thread(target=plugin._run_socket_server)
+    plugin._socket_thread.start()
+    client = None
+    try:
+        deadline = time.monotonic() + 5
+        while plugin._socket_server is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert plugin._socket_server is not None
+        port = plugin._socket_server.sockets[0].getsockname()[1]
+        client = socket.create_connection(("127.0.0.1", port), timeout=2)
+        while plugin._socket_client_count == 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert plugin._socket_client_count == 1
+    finally:
+        plugin.stop()
+        if client is not None:
+            client.close()
+    assert plugin._socket_client_count == 0
+
+
 @pytest.fixture
 def server_mod(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """Import the bundled bridge server without importing the FreeCAD addon."""
