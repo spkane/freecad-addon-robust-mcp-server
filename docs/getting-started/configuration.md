@@ -15,6 +15,38 @@ Configure the FreeCAD Robust MCP Server using environment variables and MCP clie
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
+## Pairing the FreeCAD bridge
+
+For XML-RPC and socket modes, create a pairing once under the same user account
+that runs FreeCAD and the MCP server:
+
+```bash
+freecad-mcp --pair-bridge
+```
+
+Then start or restart the FreeCAD bridge and configure the harness to launch the
+MCP server as usual. Both processes load the pairing automatically; the secret
+does not need to appear in the harness configuration. The command refuses to
+replace an existing pairing. If either process cannot load valid credentials,
+the bridge connection fails rather than falling back to unauthenticated access.
+
+On macOS and Linux, the credential is stored in
+`~/.freecad-robust-mcp/bridge-credential.json` inside a user-owned private
+directory. On Windows, the implementation uses a locally persisted generic
+credential named `FreeCADRobustMCPBridge:default` in Windows Credential Manager.
+The Windows implementation still requires verification on Windows before release.
+Both processes must run as the same user and see the same credential store; a
+container or different user account needs separate credential provisioning.
+
+Pairing blocks clients without the credential. It does not isolate FreeCAD from
+malicious software already running as the same user, which may read or use the
+credential or modify the workbench. The bridge can execute Python with the
+FreeCAD user's privileges. Back up the credential only in a secure location.
+
+To replace a compromised pairing, stop the bridge and MCP server, remove the
+existing credential from its store, run `freecad-mcp --pair-bridge`, and restart
+both processes. All clients using the previous credential will stop working.
+
 ## HTTP authentication
 
 The default stdio transport does not use an HTTP API key. When using
