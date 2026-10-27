@@ -27,6 +27,8 @@ from typing import Any
 
 import pytest
 
+from freecad_mcp.bridge.socket import SocketBridge
+
 logger = logging.getLogger(__name__)
 
 
@@ -144,6 +146,30 @@ _result_ = {
 
         assert completed["success"] is True
         assert completed["result"] == "done"
+
+    @pytest.mark.asyncio
+    async def test_socket_per_call_timeout_reaches_freecad_bridge(self) -> None:
+        """Socket timeout overrides should control the workbench queue wait."""
+        bridge = SocketBridge(timeout=5.0)
+        await bridge.connect()
+
+        try:
+            timed_out = await bridge.execute_python(
+                "import time; time.sleep(1.2); _result_ = 'late'",
+                timeout_ms=1000,
+            )
+            completed = await bridge.execute_python(
+                "import time; time.sleep(0.2); _result_ = 'done'",
+                timeout_ms=3000,
+            )
+        finally:
+            await bridge.disconnect()
+
+        assert timed_out.success is False
+        assert timed_out.error_type == "TimeoutError"
+        assert "may continue" in timed_out.stderr
+        assert completed.success is True
+        assert completed.result == "done"
 
     @requires_gui
     def test_gui_mode_executes_on_main_thread(

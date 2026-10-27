@@ -142,7 +142,6 @@ The first maintenance-release queue is complete only when all of these are true:
 | [#124](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/124) | Rebase, validate, merge          | Strict docs/link checks and install/archive path verification pass on current `main`                                      |
 | [#129](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/129) | Request changes                  | Remove the global QTimer sweep, release only owned timers on their owning thread, and complete batch-option coverage      |
 | [#137](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/137) | Request changes                  | Avoid permanent global import-path precedence where possible, restore `snake_case`, and test installed layouts            |
-| [#140](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/140) | Rebase, validate, merge          | Current addon/GUI integration passes; GUI mode fails closed if neither Qt binding can be loaded                           |
 
 ### Completed closure and canonicalization summary
 
@@ -954,7 +953,8 @@ contract is explicit, and no P0/P1 release findings remain.
 
 Keep the next implementation session intentionally narrow:
 
-1. Finish CI and review for PR #152, then merge it and close #143.
+1. Finish CI and review for PR #152, verify #143's configured and per-call
+   timeout criteria in XML-RPC and socket modes, then merge it and close #143.
 2. Consolidate FreeCAD 1.1 compatibility on PRs #100 and #101; close their
    canonical issues only after live compatibility verification.
 3. Implement the bounded property serializer from #142 and finish PR #123's

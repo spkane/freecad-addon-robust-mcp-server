@@ -211,6 +211,76 @@ class TestSocketBridgeCommunication:
         assert bridge._writer is None
         assert bridge._connected is False
 
+    @pytest.mark.asyncio
+    async def test_next_request_reconnects_after_response_timeout(
+        self,
+        mock_streams,
+    ) -> None:
+        """The request after a discarded timed-out stream should reconnect."""
+        timed_out_reader, timed_out_writer = mock_streams
+        timed_out_reader.readline.side_effect = TimeoutError
+        bridge = SocketBridge(timeout=0.01)
+        bridge._reader = timed_out_reader
+        bridge._writer = timed_out_writer
+        bridge._connected = True
+
+        with pytest.raises(TimeoutError):
+            await bridge._send_request("execute", {"code": "first"})
+
+        replacement_reader = mock.AsyncMock(spec=asyncio.StreamReader)
+        replacement_writer = mock.MagicMock(spec=asyncio.StreamWriter)
+        replacement_writer.drain = mock.AsyncMock()
+        replacement_reader.readline.return_value = (
+            json.dumps({"jsonrpc": "2.0", "id": "test-2", "result": "done"}).encode()
+            + b"\n"
+        )
+
+        async def reconnect() -> None:
+            bridge._reader = replacement_reader
+            bridge._writer = replacement_writer
+            bridge._connected = True
+
+        with mock.patch.object(
+            bridge,
+            "connect",
+            new=mock.AsyncMock(side_effect=reconnect),
+        ) as connect:
+            result = await bridge._send_request("execute", {"code": "second"})
+
+        assert result == "done"
+        connect.assert_awaited_once_with()
+        replacement_writer.write.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_streams_do_not_reconnect_when_disabled(self) -> None:
+        """Missing streams should retain the error when reconnect is disabled."""
+        bridge = SocketBridge(auto_reconnect=False)
+
+        with mock.patch.object(
+            bridge,
+            "connect",
+            new=mock.AsyncMock(),
+        ) as connect:
+            with pytest.raises(ConnectionError, match="Not connected"):
+                await bridge._send_request("ping")
+
+        connect.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_failed_missing_stream_reconnect_preserves_error(self) -> None:
+        """A failed automatic reconnect should still report a connection error."""
+        bridge = SocketBridge()
+
+        with mock.patch.object(
+            bridge,
+            "connect",
+            new=mock.AsyncMock(side_effect=ConnectionError("unreachable")),
+        ) as connect:
+            with pytest.raises(ConnectionError, match="Not connected"):
+                await bridge._send_request("ping")
+
+        connect.assert_awaited_once_with()
+
 
 class TestSocketBridgeDocuments:
     """Tests for document handling via socket."""

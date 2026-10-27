@@ -5,13 +5,15 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+import xmlrpc.client
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
 from freecad_mcp.bridge.xmlrpc import (
     EXECUTION_RESPONSE_GRACE_SECONDS,
+    LEGACY_EXECUTE_ARITY_FAULT,
     XmlRpcBridge,
 )
 
@@ -57,6 +59,48 @@ async def test_execute_python_passes_per_call_timeout_to_server() -> None:
         await bridge.disconnect()
 
     proxy.execute.assert_called_once_with("_result_ = 'done'", 60000)
+
+
+@pytest.mark.asyncio
+async def test_execute_python_falls_back_for_legacy_workbench_arity() -> None:
+    """The exact prior workbench arity fault should retry with one argument."""
+    bridge, proxy = _connected_bridge()
+    proxy.execute.side_effect = [
+        xmlrpc.client.Fault(1, LEGACY_EXECUTE_ARITY_FAULT),
+        {"success": True, "result": "legacy"},
+    ]
+
+    try:
+        result = await bridge.execute_python("_result_ = 'legacy'")
+    finally:
+        await bridge.disconnect()
+
+    assert result.success is True
+    assert result.result == "legacy"
+    assert proxy.execute.call_args_list == [
+        call("_result_ = 'legacy'", 30000),
+        call("_result_ = 'legacy'"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_python_does_not_retry_unrelated_xmlrpc_fault() -> None:
+    """An unrelated XML-RPC TypeError must not re-execute user code."""
+    bridge, proxy = _connected_bridge()
+    fault = xmlrpc.client.Fault(
+        1,
+        "<class 'TypeError'>:operation() takes 2 positional arguments but 3 were given",
+    )
+    proxy.execute.side_effect = fault
+
+    try:
+        result = await bridge.execute_python("state_changing_operation()")
+    finally:
+        await bridge.disconnect()
+
+    assert result.success is False
+    assert result.error_type == "Fault"
+    assert proxy.execute.call_args_list == [call("state_changing_operation()", 30000)]
 
 
 @pytest.mark.asyncio

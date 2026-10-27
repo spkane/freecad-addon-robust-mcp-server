@@ -43,6 +43,26 @@ DEFAULT_XMLRPC_HOST = "localhost"
 DEFAULT_XMLRPC_PORT = 9875
 DEFAULT_TIMEOUT = 30.0
 EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
+LEGACY_EXECUTE_ARITY_FAULT = (
+    "<class 'TypeError'>:FreecadMCPPlugin._xmlrpc_execute() takes 2 "
+    "positional arguments but 3 were given"
+)
+
+
+def _is_legacy_execute_arity_fault(error: xmlrpc.client.Fault) -> bool:
+    """Return whether a fault identifies the previous one-argument handler.
+
+    The exact dispatcher fault from this project's previous workbench release is
+    matched so an unrelated ``TypeError`` from a different XML-RPC server cannot
+    cause state-changing Python code to be retried.
+
+    Args:
+        error: XML-RPC fault raised by the remote server.
+
+    Returns:
+        True only for the prior ``FreecadMCPPlugin._xmlrpc_execute`` signature.
+    """
+    return error.faultCode == 1 and error.faultString == LEGACY_EXECUTE_ARITY_FAULT
 
 
 class XmlRpcBridge(FreecadBridge):
@@ -313,10 +333,21 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
         start = time.perf_counter()
 
         try:
-            result = await self._run_proxy_call(
-                lambda proxy: proxy.execute(code, effective_timeout_ms),
-                (effective_timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS),
+            response_timeout = (
+                effective_timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS
             )
+            try:
+                result = await self._run_proxy_call(
+                    lambda proxy: proxy.execute(code, effective_timeout_ms),
+                    response_timeout,
+                )
+            except xmlrpc.client.Fault as e:
+                if not _is_legacy_execute_arity_fault(e):
+                    raise
+                result = await self._run_proxy_call(
+                    lambda proxy: proxy.execute(code),
+                    response_timeout,
+                )
             elapsed = (time.perf_counter() - start) * 1000
 
             # Parse result from XML-RPC server

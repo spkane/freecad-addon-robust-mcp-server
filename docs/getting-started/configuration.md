@@ -31,6 +31,12 @@ milliseconds. XML-RPC sends the effective timeout to the FreeCAD workbench;
 one-argument XML-RPC clients remain supported with the 30000 millisecond
 workbench default.
 
+When connected to an older Robust MCP Bridge workbench that accepts only
+`execute(code)`, the MCP server retries only the specific XML-RPC arity fault
+from that workbench. This preserves execution compatibility, but the older
+workbench still uses its 30000 millisecond timeout. Upgrade the workbench to use
+configured or per-call timeouts longer than 30 seconds.
+
 > **Warning:** A timeout is not process cancellation. The bridge cancels a
 > request that is still waiting in its queue. Python code that has already
 > started inside FreeCAD cannot be interrupted safely and may continue after

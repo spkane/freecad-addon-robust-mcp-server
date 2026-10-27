@@ -141,6 +141,38 @@ class SocketBridge(FreecadBridge):
             self._connected = False
             return False
 
+    async def _get_request_streams(
+        self,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Return request streams, reconnecting them when recovery is enabled.
+
+        Returns:
+            The active reader and writer streams.
+
+        Raises:
+            ConnectionError: If streams are missing and cannot be reconnected.
+        """
+        if self._writer is not None and self._reader is not None:
+            return self._reader, self._writer
+
+        if not self._auto_reconnect:
+            msg = "Not connected to socket server"
+            raise ConnectionError(msg)
+
+        try:
+            await self.disconnect()
+            await self.connect()
+        except ConnectionError as e:
+            await self.disconnect()
+            msg = "Not connected to socket server"
+            raise ConnectionError(msg) from e
+
+        if self._writer is None or self._reader is None:
+            msg = "Not connected to socket server"
+            raise ConnectionError(msg)
+
+        return self._reader, self._writer
+
     async def _send_request(
         self,
         method: str,
@@ -163,7 +195,9 @@ class SocketBridge(FreecadBridge):
             JsonRpcError: If server returns an error.
             TimeoutError: If the response deadline expires.
         """
-        if self._writer is None or self._reader is None:
+        reader, writer = await self._get_request_streams()
+
+        if not self._connected:
             msg = "Not connected to socket server"
             raise ConnectionError(msg)
 
@@ -180,12 +214,12 @@ class SocketBridge(FreecadBridge):
             try:
                 # Send request
                 request_data = json.dumps(request).encode("utf-8") + b"\n"
-                self._writer.write(request_data)
-                await self._writer.drain()
+                writer.write(request_data)
+                await writer.drain()
 
                 # Read response
                 response_data = await asyncio.wait_for(
-                    self._reader.readline(),
+                    reader.readline(),
                     timeout=(
                         self._timeout if response_timeout is None else response_timeout
                     ),
@@ -211,8 +245,7 @@ class SocketBridge(FreecadBridge):
 
             except TimeoutError:
                 self._connected = False
-                if self._writer is not None:
-                    self._writer.close()
+                writer.close()
                 self._reader = None
                 self._writer = None
                 raise

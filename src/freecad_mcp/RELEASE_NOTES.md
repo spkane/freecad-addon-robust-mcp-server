@@ -7,7 +7,9 @@
 - **Execution timeout configuration**: `FREECAD_TIMEOUT_MS` now supplies the
   default in XML-RPC, socket, and embedded modes, while per-call values take
   precedence. XML-RPC proxy access is serialized to avoid concurrent use of
-  its non-thread-safe transport.
+  its non-thread-safe transport. Socket connections recover after a timed-out
+  response, and XML-RPC retains execution compatibility with older workbenches
+  that expose only the one-argument `execute(code)` method.
 
 ## Version 0.6.2 (2026-01-18)
 
