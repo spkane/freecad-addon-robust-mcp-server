@@ -617,6 +617,14 @@ class FreecadMCPPlugin:
             self._running = False
             raise
 
+        # Finish GUI setup before exposing either listener. If setup fails,
+        # stop the queue processor and discard any partially created timers.
+        try:
+            self._start_status_updates()
+        except Exception:
+            self.stop()
+            raise
+
         # Start socket server
         self._socket_thread = threading.Thread(
             target=self._run_socket_server,
@@ -643,9 +651,6 @@ class FreecadMCPPlugin:
                 FreeCAD.Console.PrintMessage(
                     f"  - XML-RPC: {self._host}:{self._xmlrpc_port}\n"
                 )
-
-        # Start status bar updates in GUI mode
-        self._start_status_updates()
 
     def stop(self) -> None:
         """Stop all servers.
@@ -846,7 +851,7 @@ class FreecadMCPPlugin:
         ``_cleanup_for_exit`` (via ``shiboken.delete()``) or by
         ``_stop_status_updates`` (via ``deleteLater()``).
         """
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        if not _freecad_gui_up():
             return
 
         QtCore = _get_qt_core()

@@ -235,6 +235,21 @@ def test_headless_start_does_not_create_gui_status_timer(
     assert plugin._status_timer is None
 
 
+def test_status_timer_handles_freecad_before_guiup_exists(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Early console initialization must not read a missing GuiUp attribute."""
+    freecad = types.ModuleType("FreeCAD")
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    qt_loader = MagicMock()
+    monkeypatch.setattr(server_mod, "_get_qt_core", qt_loader)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._start_status_updates()
+    qt_loader.assert_not_called()
+    assert plugin._status_timer is None
+
+
 def test_permanent_status_widget_warns_that_bridge_accepts_python(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

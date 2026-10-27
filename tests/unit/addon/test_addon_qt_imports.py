@@ -358,6 +358,23 @@ class TestStartQueueProcessor:
         assert plugin._socket_thread is None
         assert plugin._xmlrpc_thread is None
 
+    def test_status_setup_failure_stops_before_listeners(
+        self, server_mod: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Status setup failure cannot leave a running bridge or listener."""
+        plugin = server_mod.FreecadMCPPlugin(authenticator=MagicMock())
+        monkeypatch.setattr(plugin, "_start_queue_processor", MagicMock())
+        monkeypatch.setattr(
+            plugin,
+            "_start_status_updates",
+            MagicMock(side_effect=RuntimeError("status")),
+        )
+        with pytest.raises(RuntimeError, match="status"):
+            plugin.start()
+        assert plugin.is_running is False
+        assert plugin._socket_thread is None
+        assert plugin._xmlrpc_thread is None
+
     def test_ambiguous_early_gui_fails_before_listener_creation(
         self,
         server_mod: Any,
