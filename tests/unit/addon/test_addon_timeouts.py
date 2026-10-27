@@ -398,6 +398,39 @@ def test_unrenderable_exception_still_returns_failure(server_mod: Any) -> None:
     assert "BadError" in result["error_traceback"]
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        "_result_ = 'x' * 1000001",
+        "_result_ = [None] * 100000",
+        "_result_ = []; _result_.append(_result_)",
+        "_result_ = {'bad': float('nan')}",
+        "_result_ = {1: 'non-string key'}",
+        "_result_ = 2 ** 50",
+        "_result_ = object()",
+    ],
+)
+def test_execution_rejects_unbounded_or_nonportable_result(
+    server_mod: Any, code: str
+) -> None:
+    """Results are rejected before serialization, with execution ambiguity explicit."""
+    plugin = server_mod.FreecadMCPPlugin()
+    result = plugin._execute_code_sync(code)
+    assert result["success"] is False
+    assert result["error_type"] == "ResultValidationError"
+    assert "FreeCAD changes may have occurred" in result["error_message"]
+
+
+def test_execution_accepts_portable_nested_result(server_mod: Any) -> None:
+    """Normal nested CAD data is preserved without truncation."""
+    plugin = server_mod.FreecadMCPPlugin()
+    result = plugin._execute_code_sync(
+        "_result_ = {'items': [1, 2.5, 'é', None, True]}"
+    )
+    assert result["success"] is True
+    assert result["result"] == {"items": [1, 2.5, "é", None, True]}
+
+
 def test_xmlrpc_rejects_unsafe_framing_and_xml(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

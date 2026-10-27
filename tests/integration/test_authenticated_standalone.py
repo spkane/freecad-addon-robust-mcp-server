@@ -108,6 +108,10 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                     assert error.error_type == "ValueError"
                     assert error.error_traceback is not None
                     _assert_truncated(error.stderr, error.error_traceback)
+                    oversized = await bridge.execute_python("_result_ = 'x' * 1000001")
+                    assert not oversized.success
+                    assert oversized.error_type == "ResultValidationError"
+                    assert "FreeCAD changes may have occurred" in oversized.stderr
                 finally:
                     await bridge.disconnect()
         finally:

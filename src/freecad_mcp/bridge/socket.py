@@ -38,9 +38,9 @@ DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_TIMEOUT = 30.0
 EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
-# Two 1 MB captured streams can expand substantially when JSON escapes control
-# characters. Bound the wire frame while allowing both streams to be returned.
-MAX_SOCKET_RESPONSE_BYTES = 16 * 1024 * 1024
+# Captured streams, result values, and error diagnostics can expand substantially
+# when JSON escapes control characters. Bound the wire frame while allowing them.
+MAX_SOCKET_RESPONSE_BYTES = 32 * 1024 * 1024
 
 
 class JsonRpcError(Exception):

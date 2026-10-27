@@ -26,6 +26,7 @@ import errno
 import io
 import ipaddress
 import json
+import math
 import os
 import queue
 import socket
@@ -145,6 +146,61 @@ MAX_SOCKET_CLIENTS = 32
 REQUEST_READ_TIMEOUT_SECONDS = 10
 MAX_CAPTURED_OUTPUT_BYTES = 1_000_000
 OUTPUT_TRUNCATION_MARKER = "\n[output truncated]\n"
+MAX_RESULT_BUDGET = 1_000_000
+MAX_RESULT_DEPTH = 64
+
+
+def _validate_result(value: Any) -> None:  # noqa: PLR0912
+    """Validate a bounded result that both bridge serializers can represent.
+
+    Raises:
+        ValueError: If the value is too large, too deep, or not portable.
+    """
+    budget = MAX_RESULT_BUDGET
+    pending: list[tuple[Any, int]] = [(value, 0)]
+    while pending:
+        current, depth = pending.pop()
+        budget -= 16
+        if budget < 0 or depth > MAX_RESULT_DEPTH:
+            raise ValueError("result exceeds the size or nesting limit")
+        kind = type(current)
+        if current is None or kind is bool:
+            continue
+        if kind is str:
+            if len(current) > budget:
+                raise ValueError("result exceeds the size limit")
+            if any(
+                (ord(character) < 32 and character not in "\t\n\r")
+                or character in "\ufffe\uffff"
+                for character in current
+            ):
+                raise ValueError("result contains characters invalid in XML")
+            try:
+                budget -= len(current.encode("utf-8"))
+            except UnicodeEncodeError as e:
+                raise ValueError("result contains invalid Unicode") from e
+            if budget < 0:
+                raise ValueError("result exceeds the size limit")
+        elif kind is int:
+            if not -(2**31) <= current < 2**31:
+                raise ValueError("result contains an integer outside XML-RPC range")
+        elif kind is float:
+            if not math.isfinite(current):
+                raise ValueError("result contains a non-finite number")
+        elif kind in (list, tuple):
+            if len(pending) + len(current) > budget // 16:
+                raise ValueError("result exceeds the item limit")
+            pending.extend((item, depth + 1) for item in current)
+        elif kind is dict:
+            if len(pending) + 2 * len(current) > budget // 16:
+                raise ValueError("result exceeds the item limit")
+            for key, item in current.items():
+                if type(key) is not str:
+                    raise ValueError("result contains a non-string mapping key")
+                pending.append((key, depth + 1))
+                pending.append((item, depth + 1))
+        else:
+            raise ValueError("result contains an unsupported value")
 
 
 class _BoundedCapture(io.TextIOBase):
@@ -1037,9 +1093,24 @@ class FreecadMCPPlugin:
                 exec(compiled, exec_globals)  # noqa: S102
 
             elapsed = (time.perf_counter() - start) * 1000
+            result = exec_globals.get("_result_")
+            try:
+                _validate_result(result)
+            except ValueError as e:
+                return {
+                    "success": False,
+                    "result": None,
+                    "stdout": stdout_capture.getvalue(),
+                    "stderr": stderr_capture.getvalue(),
+                    "execution_time_ms": elapsed,
+                    "error_type": "ResultValidationError",
+                    "error_message": (
+                        f"Code executed, but {e}; FreeCAD changes may have occurred"
+                    ),
+                }
             return {
                 "success": True,
-                "result": exec_globals.get("_result_"),
+                "result": result,
                 "stdout": stdout_capture.getvalue(),
                 "stderr": stderr_capture.getvalue(),
                 "execution_time_ms": elapsed,

@@ -50,10 +50,15 @@ workbench, and trust store; credential protection by itself is insufficient.
 - Captured stdout and stderr are each limited to 1,000,000 UTF-8 bytes and
   marked when truncated. Exception messages, types, and tracebacks use the same
   output limit. Rendering an exception can still allocate memory before the
-  limit is applied, and returned result objects are not yet bounded.
-- The socket client accepts response frames up to 16 MiB, including JSON
+  limit is applied.
+- Result values are checked against a 1,000,000-byte structural budget, a depth
+  limit, and the scalar types shared by XML-RPC and JSON before serialization.
+  Unsupported or oversized results return an explicit error; the submitted code
+  may already have changed FreeCAD. This does not limit allocations made by the
+  submitted code before its result is checked.
+- The socket client accepts response frames up to 32 MiB, including JSON
   escaping, and closes the connection on larger frames. This client-side limit
-  does not prevent a server from allocating an oversized result before sending.
+  does not prevent code from allocating an oversized result before validation.
 - Keep private keys out of repository files, command-line arguments, logs, and
   model-visible output. Revoke clients independently and document rotation.
 - Do not silently connect to an older, unauthenticated bridge.
