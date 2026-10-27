@@ -39,7 +39,7 @@ class TestExecutionTools:
         async def get_bridge():
             return mock_bridge
 
-        register_execution_tools(mock_mcp, get_bridge)
+        register_execution_tools(mock_mcp, get_bridge, allow_unsafe_code=True)
         return mock_mcp._registered_tools
 
     @pytest.mark.asyncio

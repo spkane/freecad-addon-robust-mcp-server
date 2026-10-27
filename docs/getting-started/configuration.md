@@ -15,6 +15,19 @@ Configure the FreeCAD Robust MCP Server using environment variables and MCP clie
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
+## Arbitrary Code Tools
+
+The `FREECAD_ALLOW_UNSAFE_CODE` setting defaults to `false`. The server does not
+expose `execute_python`, `safe_execute`, `run_macro`,
+`create_macro`, or `create_macro_from_template` by default. Set
+`FREECAD_ALLOW_UNSAFE_CODE=true` in the MCP server environment before startup
+to expose them. Restart the server after changing this setting.
+
+This setting controls the MCP tool list; it is not a sandbox or a bridge
+authorization mechanism. Other CAD tools still generate Python for FreeCAD,
+and an authenticated bridge client can submit code directly. Use it together
+with bridge authentication and a trusted client.
+
 ---
 
 ## Execution Timeouts

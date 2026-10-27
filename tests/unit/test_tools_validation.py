@@ -39,7 +39,7 @@ class TestValidationTools:
         async def get_bridge():
             return mock_bridge
 
-        register_validation_tools(mock_mcp, get_bridge)
+        register_validation_tools(mock_mcp, get_bridge, allow_unsafe_code=True)
         return mock_mcp._registered_tools
 
     # ========== validate_object tests ==========
@@ -685,7 +685,7 @@ class TestValidationToolsRegistration:
         async def get_bridge():
             return MagicMock()
 
-        register_validation_tools(mcp, get_bridge)
+        register_validation_tools(mcp, get_bridge, allow_unsafe_code=True)
 
         expected_tools = [
             "validate_object",

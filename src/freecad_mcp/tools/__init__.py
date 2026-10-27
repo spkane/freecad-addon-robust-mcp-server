@@ -44,20 +44,26 @@ __all__ = [
 ]
 
 
-def register_all_tools(mcp: Any, get_bridge_func: Callable[[], Awaitable[Any]]) -> None:
+def register_all_tools(
+    mcp: Any,
+    get_bridge_func: Callable[[], Awaitable[Any]],
+    *,
+    allow_unsafe_code: bool = False,
+) -> None:
     """Register all FreeCAD tools with the Robust MCP Server.
 
     Args:
         mcp: The MCPServer instance (Any to keep registration modules decoupled).
         get_bridge_func: Async function returning the active bridge connection.
+        allow_unsafe_code: Whether to expose tools that execute arbitrary code.
     """
-    register_execution_tools(mcp, get_bridge_func)
+    register_execution_tools(mcp, get_bridge_func, allow_unsafe_code=allow_unsafe_code)
     register_document_tools(mcp, get_bridge_func)
     register_object_tools(mcp, get_bridge_func)
     register_partdesign_tools(mcp, get_bridge_func)
     register_spreadsheet_tools(mcp, get_bridge_func)
     register_draft_tools(mcp, get_bridge_func)
     register_export_tools(mcp, get_bridge_func)
-    register_macro_tools(mcp, get_bridge_func)
+    register_macro_tools(mcp, get_bridge_func, allow_unsafe_code=allow_unsafe_code)
     register_view_tools(mcp, get_bridge_func)
-    register_validation_tools(mcp, get_bridge_func)
+    register_validation_tools(mcp, get_bridge_func, allow_unsafe_code=allow_unsafe_code)

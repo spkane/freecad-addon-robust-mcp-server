@@ -10,15 +10,21 @@ may fail or create invalid geometry.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools._registration import unsafe_tool
+
 
 def register_validation_tools(
-    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
+    mcp: Any,
+    get_bridge: Callable[[], Awaitable[Any]],
+    *,
+    allow_unsafe_code: bool = False,
 ) -> None:
     """Register validation-related tools with the Robust MCP Server.
 
     Args:
         mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
+        allow_unsafe_code: Whether to expose transactional Python execution.
     """
 
     @mcp.tool()
@@ -453,7 +459,7 @@ else:
             "validation_after": None,
         }
 
-    @mcp.tool()
+    @unsafe_tool(mcp, allow_unsafe_code)
     async def safe_execute(
         code: str,
         doc_name: str | None = None,

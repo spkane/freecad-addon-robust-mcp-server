@@ -207,7 +207,9 @@ def register_all_components() -> None:
     # Register tools
     from freecad_mcp.tools import register_all_tools
 
-    register_all_tools(mcp, get_bridge)
+    register_all_tools(
+        mcp, get_bridge, allow_unsafe_code=get_config().allow_unsafe_code
+    )
 
     # Register resources
     from freecad_mcp.resources import register_resources

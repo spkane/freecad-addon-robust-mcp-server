@@ -10,13 +10,21 @@ macro-centric workflow with templates and validation.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools._registration import unsafe_tool
 
-def register_macro_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
+
+def register_macro_tools(
+    mcp: Any,
+    get_bridge: Callable[[], Awaitable[Any]],
+    *,
+    allow_unsafe_code: bool = False,
+) -> None:
     """Register macro-related tools with the Robust MCP Server.
 
     Args:
         mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
+        allow_unsafe_code: Whether to expose macro creation and execution.
     """
 
     @mcp.tool()
@@ -42,7 +50,7 @@ def register_macro_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
             for macro in macros
         ]
 
-    @mcp.tool()
+    @unsafe_tool(mcp, allow_unsafe_code)
     async def run_macro(
         macro_name: str,
         args: dict[str, Any] | None = None,
@@ -74,7 +82,7 @@ def register_macro_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
             "error_traceback": result.error_traceback,
         }
 
-    @mcp.tool()
+    @unsafe_tool(mcp, allow_unsafe_code)
     async def create_macro(
         name: str,
         code: str,
@@ -192,7 +200,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "Delete macro failed")
 
-    @mcp.tool()
+    @unsafe_tool(mcp, allow_unsafe_code)
     async def create_macro_from_template(
         name: str,
         template: str = "basic",

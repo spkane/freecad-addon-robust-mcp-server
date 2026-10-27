@@ -120,6 +120,7 @@ class ServerConfig(BaseSettings):
     enable_sandbox: bool = True
     allow_file_access: bool = True
     allow_network_access: bool = False
+    allow_unsafe_code: bool = False
 
 
 def get_config() -> ServerConfig:

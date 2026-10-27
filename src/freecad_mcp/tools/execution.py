@@ -11,19 +11,24 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from freecad_mcp.server import get_instance_id
+from freecad_mcp.tools._registration import unsafe_tool
 
 
 def register_execution_tools(
-    mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
+    mcp: Any,
+    get_bridge: Callable[[], Awaitable[Any]],
+    *,
+    allow_unsafe_code: bool = False,
 ) -> None:
     """Register execution-related tools with the Robust MCP Server.
 
     Args:
         mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
+        allow_unsafe_code: Whether to expose arbitrary Python execution.
     """
 
-    @mcp.tool()
+    @unsafe_tool(mcp, allow_unsafe_code)
     async def execute_python(
         code: str,
         timeout_ms: int | None = None,

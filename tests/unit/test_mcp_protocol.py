@@ -164,13 +164,17 @@ async def _start_streamable_http_server(
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)
-async def test_stdio_first_tool_call_completes() -> None:
+@pytest.mark.parametrize("unsafe", [False, True])
+async def test_stdio_first_tool_call_completes(unsafe: bool) -> None:
     """Initialize, list tools, and complete a first call over MCP stdio."""
     with _fake_xmlrpc_server() as xmlrpc_port:
         server_parameters = StdioServerParameters(
             command=sys.executable,
             args=[str(TEST_SERVER)],
-            env=_server_environment(xmlrpc_port),
+            env={
+                **_server_environment(xmlrpc_port),
+                "FREECAD_ALLOW_UNSAFE_CODE": str(unsafe),
+            },
         )
         with tempfile.TemporaryFile(mode="w+") as stderr:
             async with stdio_client(server_parameters, errlog=stderr) as streams:
@@ -182,6 +186,24 @@ async def test_stdio_first_tool_call_completes() -> None:
         assert initialize_result.server_info.name == "freecad-mcp"
         assert initialize_result.server_info.version
         assert any(tool.name == "get_freecad_version" for tool in tools_result.tools)
+        names = {tool.name for tool in tools_result.tools}
+        assert {
+            "execute_python",
+            "safe_execute",
+            "run_macro",
+            "create_macro",
+            "create_macro_from_template",
+        }.issubset(names) is unsafe
+        if not unsafe:
+            assert not names.intersection(
+                {
+                    "execute_python",
+                    "safe_execute",
+                    "run_macro",
+                    "create_macro",
+                    "create_macro_from_template",
+                }
+            )
         assert call_result.is_error is False
 
 
