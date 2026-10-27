@@ -1,0 +1,55 @@
+"""Exercise workbench GUI auto-start in a disposable FreeCAD process."""
+
+import json
+import os
+import runpy
+import sys
+from pathlib import Path
+
+from PySide import QtCore
+
+root = Path(os.environ["MCP_TEST_REPO"]) / "freecad" / "RobustMCPBridge"
+sys.path.insert(0, str(root))
+for name in list(sys.modules):
+    if name in {"preferences", "commands", "freecad_mcp_bridge"} or name.startswith(
+        "freecad_mcp_bridge."
+    ):
+        del sys.modules[name]
+
+import preferences  # noqa: E402
+
+preferences.set_auto_start(True)
+preferences.set_auto_start_headless(False)
+preferences.set_xmlrpc_port(int(os.environ["MCP_TEST_XMLRPC_PORT"]))
+preferences.set_socket_port(int(os.environ["MCP_TEST_SOCKET_PORT"]))
+
+
+def begin():
+    """Run the production initializer after the GUI event loop is ready."""
+    os.environ.pop("FREECAD_MCP_TESTING", None)
+    runpy.run_path(str(root / "__init__.py"), run_name="mcp_gui_autostart_test")
+
+
+def finish():
+    """Record the bridge state, stop it, and close the empty GUI."""
+    try:
+        import commands
+
+        plugin = commands._mcp_plugin
+        started = plugin is not None and plugin.is_running and not plugin._headless
+        listening = bool(
+            started
+            and plugin._xmlrpc_server is not None
+            and plugin._socket_server is not None
+        )
+        Path(os.environ["MCP_TEST_RESULT"]).write_text(
+            json.dumps({"started": started, "listening": listening}), encoding="utf-8"
+        )
+        if plugin is not None:
+            plugin.stop()
+    finally:
+        FreeCADGui.getMainWindow().close()  # noqa: F821 - injected by FreeCAD
+
+
+QtCore.QTimer.singleShot(1000, begin)
+QtCore.QTimer.singleShot(6500, finish)

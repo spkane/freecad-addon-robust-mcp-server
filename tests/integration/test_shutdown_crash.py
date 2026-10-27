@@ -33,8 +33,10 @@ To exclude standalone tests from a normal integration run::
 
 from __future__ import annotations
 
+import json
 import os
 import platform
+import secrets
 import signal
 import socket
 import subprocess
@@ -377,6 +379,51 @@ class TestShutdownCrash:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
+
+    def test_gui_workbench_autostart_and_clean_shutdown(
+        self, freecad_binary: str, tmp_path: Path
+    ) -> None:
+        """The real GUI starts the paired workbench and exits without a crash."""
+        root = Path(__file__).resolve().parents[2]
+        macro = root / "tests" / "fixtures" / "freecad_gui_autostart.FCMacro"
+        result_path = tmp_path / "result.json"
+        ports = []
+        for _ in range(2):
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                ports.append(probe.getsockname()[1])
+        env = {
+            **os.environ,
+            "HOME": str(tmp_path),
+            "FREECAD_MCP_TESTING": "1",
+            "FREECAD_BRIDGE_CLIENT_ID": secrets.token_hex(16),
+            "FREECAD_BRIDGE_SECRET": secrets.token_hex(32),
+            "MCP_TEST_REPO": str(root),
+            "MCP_TEST_RESULT": str(result_path),
+            "MCP_TEST_XMLRPC_PORT": str(ports[0]),
+            "MCP_TEST_SOCKET_PORT": str(ports[1]),
+        }
+        result = subprocess.run(  # noqa: S603 - discovered FreeCAD binary
+            [
+                freecad_binary,
+                "--user-cfg",
+                str(tmp_path / "user.cfg"),
+                "--system-cfg",
+                str(tmp_path / "system.cfg"),
+                str(macro),
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result_path.exists(), result.stdout + result.stderr
+        assert json.loads(result_path.read_text(encoding="utf-8")) == {
+            "started": True,
+            "listening": True,
+        }
 
     def test_sigterm_shutdown_no_crash(
         self,
