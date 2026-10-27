@@ -9,6 +9,7 @@ import pytest
 
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 from freecad_mcp.tools.partdesign import register_partdesign_tools
+from tests.integration.auth_support import integration_credentials
 
 pytestmark = pytest.mark.integration
 
@@ -102,7 +103,7 @@ async def test_live_symmetric_property_selection(
 ) -> None:
     """Invoke each production tool against the running FreeCAD release."""
     doc_name = f"McpSymmetry_{tool_name}_{uuid4().hex}"
-    bridge = XmlRpcBridge()
+    bridge = XmlRpcBridge(**integration_credentials())
     await bridge.connect()
 
     try:

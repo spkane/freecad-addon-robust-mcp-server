@@ -9,6 +9,7 @@ import pytest
 
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 from freecad_mcp.tools.partdesign import register_partdesign_tools
+from tests.integration.auth_support import integration_credentials
 
 pytestmark = pytest.mark.integration
 
@@ -45,7 +46,7 @@ def _register_tools(
 async def test_live_external_geometry_count_uses_subelements() -> None:
     """Count each referenced edge when FreeCAD groups them under one object."""
     doc_name = f"McpExternalGeometry_{uuid4().hex}"
-    bridge = XmlRpcBridge()
+    bridge = XmlRpcBridge(**integration_credentials())
     await bridge.connect()
 
     try:

@@ -34,7 +34,12 @@ public = key.public_key().public_bytes(
 )
 client_id = hashlib.sha256(public).hexdigest()
 auth = BridgeAuthenticator(create_ed25519_verifier({client_id: public}.get))
-plugin = FreecadMCPPlugin(host="127.0.0.1", port=0, xmlrpc_port=0, authenticator=auth)
+plugin = FreecadMCPPlugin(
+    host="127.0.0.1",
+    port=int(os.environ.get("FREECAD_AUTH_TEST_SOCKET_PORT", "0")),
+    xmlrpc_port=int(os.environ.get("FREECAD_AUTH_TEST_XMLRPC_PORT", "0")),
+    authenticator=auth,
+)
 plugin.start()
 deadline = time.monotonic() + 10
 while (

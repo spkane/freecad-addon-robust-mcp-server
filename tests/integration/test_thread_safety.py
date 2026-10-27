@@ -28,6 +28,7 @@ from typing import Any
 import pytest
 
 from freecad_mcp.bridge.socket import SocketBridge
+from tests.integration.auth_support import integration_credentials, integration_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _check_gui_available() -> bool:
     and indicate GUI unavailability.
     """
     try:
-        proxy = xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
+        proxy = integration_proxy()
         result: dict[str, Any] = proxy.execute(  # type: ignore[assignment]
             """
 import FreeCAD
@@ -150,7 +151,7 @@ _result_ = {
     @pytest.mark.asyncio
     async def test_socket_per_call_timeout_reaches_freecad_bridge(self) -> None:
         """Socket timeout overrides should control the workbench queue wait."""
-        bridge = SocketBridge(timeout=5.0)
+        bridge = SocketBridge(timeout=5.0, **integration_credentials())
         await bridge.connect()
 
         try:

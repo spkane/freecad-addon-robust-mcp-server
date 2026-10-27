@@ -11,6 +11,7 @@ from freecad_mcp.bridge.base import FreecadBridge
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 from freecad_mcp.tools.objects import register_object_tools
+from tests.integration.auth_support import integration_credentials
 
 pytestmark = pytest.mark.integration
 
@@ -48,7 +49,7 @@ async def test_live_inspection_of_links_and_optional_sections(
 ) -> None:
     """Inspect a real cut and nested links through each external transport."""
     doc_name = f"McpInspect_{uuid4().hex}"
-    bridge = bridge_type()
+    bridge = bridge_type(**integration_credentials())
     await bridge.connect()
     try:
         setup = await bridge.execute_python(
