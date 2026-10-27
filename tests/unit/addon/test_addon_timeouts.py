@@ -348,6 +348,30 @@ def test_full_queue_rejects_request_without_blocking(server_mod: Any) -> None:
     assert plugin._request_queue.qsize() == server_mod.MAX_PENDING_REQUESTS
 
 
+def test_execution_bounds_stdout_and_stderr_without_losing_result(
+    server_mod: Any,
+) -> None:
+    """Large multibyte output is bounded independently and visibly truncated."""
+    plugin = server_mod.FreecadMCPPlugin()
+    result = plugin._execute_code_sync(
+        "import sys\nprint('é' * 600000)\nprint('x' * 1100000, file=sys.stderr)\n_result_ = 7"
+    )
+    assert result["success"] is True
+    assert result["result"] == 7
+    for name in ("stdout", "stderr"):
+        assert len(result[name].encode("utf-8")) <= server_mod.MAX_CAPTURED_OUTPUT_BYTES
+        assert result[name].endswith(server_mod.OUTPUT_TRUNCATION_MARKER)
+
+
+def test_bounded_capture_rejects_seeking(server_mod: Any) -> None:
+    """Code cannot grow the capture by seeking beyond its bounded output."""
+    capture = server_mod._BoundedCapture(limit=32)
+    with pytest.raises(OSError):
+        capture.seek(10**12)
+    assert capture.write("a" * 1000) == 1000
+    assert len(capture.getvalue().encode("utf-8")) <= 32
+
+
 def test_xmlrpc_rejects_unsafe_framing_and_xml(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

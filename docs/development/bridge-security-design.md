@@ -47,6 +47,9 @@ workbench, and trust store; credential protection by itself is insufficient.
   parser is [not safe for untrusted XML](https://docs.python.org/3.11/library/xml.html).
 - Bind only literal loopback addresses. Enforce request size, connection, read
   deadline, and queue limits independently of authentication.
+- Captured stdout and stderr are each limited to 1,000,000 UTF-8 bytes and
+  marked when truncated. This does not yet bound returned result objects or
+  tracebacks; those remain release verification and implementation work.
 - Keep private keys out of repository files, command-line arguments, logs, and
   model-visible output. Revoke clients independently and document rotation.
 - Do not silently connect to an older, unauthenticated bridge.

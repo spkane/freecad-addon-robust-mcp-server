@@ -143,6 +143,50 @@ MAX_BRIDGE_REQUEST_BYTES = 64 * 1024
 MAX_PENDING_REQUESTS = 32
 MAX_SOCKET_CLIENTS = 32
 REQUEST_READ_TIMEOUT_SECONDS = 10
+MAX_CAPTURED_OUTPUT_BYTES = 1_000_000
+OUTPUT_TRUNCATION_MARKER = "\n[output truncated]\n"
+
+
+class _BoundedCapture(io.TextIOBase):
+    """Capture a bounded amount of UTF-8 output without seekable buffers."""
+
+    def __init__(self, limit: int = MAX_CAPTURED_OUTPUT_BYTES) -> None:
+        """Initialize the maximum byte count for one output stream."""
+        super().__init__()
+        self._limit = limit
+        self._size = 0
+        self._buffer = io.StringIO()
+        self.truncated = False
+
+    def writable(self) -> bool:
+        """Return whether this output stream accepts writes."""
+        return True
+
+    def write(self, text: str) -> int:
+        """Capture as much output as fits and report the original write length."""
+        if not isinstance(text, str):
+            raise TypeError("output must be text")
+        remaining = max(0, self._limit - self._size)
+        sample = text[:remaining]
+        data = sample.encode("utf-8", errors="replace")
+        accepted = data[:remaining].decode("utf-8", errors="ignore")
+        if accepted:
+            self._buffer.write(accepted)
+            self._size += len(accepted.encode("utf-8"))
+        if len(sample) != len(text) or len(data) > remaining:
+            self.truncated = True
+        return len(text)
+
+    def getvalue(self) -> str:
+        """Return captured output, marking truncation within the byte limit."""
+        text = self._buffer.getvalue()
+        if not self.truncated:
+            return text
+        marker = OUTPUT_TRUNCATION_MARKER.encode("utf-8")
+        if self._limit <= len(marker):
+            return marker[: self._limit].decode("utf-8", errors="ignore")
+        content = text.encode("utf-8")[: self._limit - len(marker)]
+        return content.decode("utf-8", errors="ignore") + OUTPUT_TRUNCATION_MARKER
 
 
 def _loopback_host(host: str) -> str:
@@ -952,8 +996,8 @@ class FreecadMCPPlugin:
             Execution result dictionary.
         """
         start = time.perf_counter()
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
+        stdout_capture = _BoundedCapture()
+        stderr_capture = _BoundedCapture()
 
         exec_globals: dict[str, Any] = {
             "__builtins__": __builtins__,
