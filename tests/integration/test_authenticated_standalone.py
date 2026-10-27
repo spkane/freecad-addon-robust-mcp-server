@@ -68,20 +68,21 @@ def isolated_pairing(
         yield client_id, secret_hex
     finally:
         if os.name == "nt":
-            # Delete only the credential created by this test; never remove a
-            # replacement that another process may have installed meanwhile.
+            # Pairing uses this lock too, so another pairing attempt cannot
+            # replace the credential between the ownership check and deletion.
             from freecad_mcp.bridge import windows_credential_store
 
-            if read_credential() == (client_id, secret_hex):
-                api = ctypes.WinDLL("advapi32", use_last_error=True)  # type: ignore[attr-defined]
-                api.CredDeleteW.argtypes = [
-                    wintypes.LPCWSTR,
-                    wintypes.DWORD,
-                    wintypes.DWORD,
-                ]
-                api.CredDeleteW.restype = wintypes.BOOL
-                if not api.CredDeleteW(windows_credential_store._TARGET, 1, 0):
-                    raise OSError("Could not remove disposable Windows credential")
+            with windows_credential_store._pairing_lock():
+                if read_credential() == (client_id, secret_hex):
+                    api = ctypes.WinDLL("advapi32", use_last_error=True)  # type: ignore[attr-defined]
+                    api.CredDeleteW.argtypes = [
+                        wintypes.LPCWSTR,
+                        wintypes.DWORD,
+                        wintypes.DWORD,
+                    ]
+                    api.CredDeleteW.restype = wintypes.BOOL
+                    if not api.CredDeleteW(windows_credential_store._TARGET, 1, 0):
+                        raise OSError("Could not remove disposable Windows credential")
 
 
 def _assert_truncated(*texts: str) -> None:
