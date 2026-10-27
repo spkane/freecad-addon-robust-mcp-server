@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
+from freecad_mcp.bridge.authentication import credentials_from_config
 from freecad_mcp.config import FreecadMode, ServerConfig, TransportType, get_config
 
 if TYPE_CHECKING:
@@ -148,10 +149,13 @@ async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
     elif config.mode == FreecadMode.XMLRPC:
         from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 
+        client_id, signer = credentials_from_config(config)
         _bridge = XmlRpcBridge(
             host=config.socket_host,
             port=config.xmlrpc_port,
             execution_timeout_ms=config.timeout_ms,
+            client_id=client_id,
+            signer=signer,
         )
         logger.info(
             "Using XML-RPC bridge: %s:%d", config.socket_host, config.xmlrpc_port
@@ -160,10 +164,13 @@ async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
     else:  # SOCKET mode
         from freecad_mcp.bridge.socket import SocketBridge
 
+        client_id, signer = credentials_from_config(config)
         _bridge = SocketBridge(
             host=config.socket_host,
             port=config.socket_port,
             execution_timeout_ms=config.timeout_ms,
+            client_id=client_id,
+            signer=signer,
         )
         logger.info(
             "Using socket bridge: %s:%d", config.socket_host, config.socket_port
@@ -271,19 +278,25 @@ async def check_freecad_connection(
         elif config.mode == FreecadMode.XMLRPC:
             from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 
+            client_id, signer = credentials_from_config(config)
             bridge = XmlRpcBridge(
                 host=config.socket_host,
                 port=config.xmlrpc_port,
                 execution_timeout_ms=config.timeout_ms,
+                client_id=client_id,
+                signer=signer,
             )
             print(f"  Host: {config.socket_host}:{config.xmlrpc_port}")
         else:
             from freecad_mcp.bridge.socket import SocketBridge
 
+            client_id, signer = credentials_from_config(config)
             bridge = SocketBridge(
                 host=config.socket_host,
                 port=config.socket_port,
                 execution_timeout_ms=config.timeout_ms,
+                client_id=client_id,
+                signer=signer,
             )
             print(f"  Host: {config.socket_host}:{config.socket_port}")
 

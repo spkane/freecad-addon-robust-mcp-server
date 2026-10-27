@@ -156,6 +156,7 @@ class TestLifespan:
         mock_config.socket_host = "localhost"
         mock_config.xmlrpc_port = 9875
         mock_config.timeout_ms = 45000
+        signer = MagicMock()
 
         mock_xmlrpc_bridge = AsyncMock()
         mock_xmlrpc_bridge.get_freecad_version = AsyncMock(
@@ -164,6 +165,11 @@ class TestLifespan:
 
         with (
             patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module,
+                "credentials_from_config",
+                return_value=("paired", signer),
+            ),
             patch(
                 "freecad_mcp.bridge.xmlrpc.XmlRpcBridge",
                 return_value=mock_xmlrpc_bridge,
@@ -176,6 +182,8 @@ class TestLifespan:
                     host="localhost",
                     port=9875,
                     execution_timeout_ms=45000,
+                    client_id="paired",
+                    signer=signer,
                 )
                 mock_xmlrpc_bridge.connect.assert_called_once()
 
@@ -192,6 +200,8 @@ class TestLifespan:
         mock_config.socket_port = 9876
         mock_config.timeout_ms = 45000
 
+        signer = MagicMock()
+
         mock_socket_bridge = AsyncMock()
         mock_socket_bridge.get_freecad_version = AsyncMock(
             return_value={"version": "1.0.0", "gui_available": True}
@@ -199,6 +209,11 @@ class TestLifespan:
 
         with (
             patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module,
+                "credentials_from_config",
+                return_value=("paired", signer),
+            ),
             patch(
                 "freecad_mcp.bridge.socket.SocketBridge",
                 return_value=mock_socket_bridge,
@@ -211,6 +226,8 @@ class TestLifespan:
                     host="localhost",
                     port=9876,
                     execution_timeout_ms=45000,
+                    client_id="paired",
+                    signer=signer,
                 )
                 mock_socket_bridge.connect.assert_called_once()
 

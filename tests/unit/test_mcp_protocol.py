@@ -1,7 +1,6 @@
 """Protocol-level regression tests for the MCP server."""
 
 import asyncio
-import hashlib
 import importlib
 import os
 import socket
@@ -16,8 +15,6 @@ from typing import Any, cast
 
 import httpx2
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
@@ -56,13 +53,7 @@ def _fake_xmlrpc_server() -> Iterator[int]:
         server_module = importlib.import_module("freecad_mcp_bridge.server")
     finally:
         sys.path.remove(addon_dir)
-    public_key = (
-        Ed25519PrivateKey.from_private_bytes(b"\x01" * 32)
-        .public_key()
-        .public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-    )
-    fingerprint = hashlib.sha256(public_key).hexdigest()
-    verifier = auth_module.create_ed25519_verifier({fingerprint: public_key}.get)
+    verifier = auth_module.create_hmac_verifier({"test-client": b"\x01" * 32}.get)
     plugin = server_module.FreecadMCPPlugin(
         host="127.0.0.1",
         xmlrpc_port=0,
@@ -95,6 +86,8 @@ def _server_environment(xmlrpc_port: int) -> dict[str, str]:
         "FREECAD_SOCKET_HOST": "127.0.0.1",
         "FREECAD_XMLRPC_PORT": str(xmlrpc_port),
         "FREECAD_TRANSPORT": "stdio",
+        "FREECAD_BRIDGE_CLIENT_ID": "test-client",
+        "FREECAD_BRIDGE_SECRET": "01" * 32,
     }
 
 
