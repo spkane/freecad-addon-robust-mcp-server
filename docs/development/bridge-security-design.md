@@ -1,7 +1,10 @@
 # FreeCAD bridge authentication design
 
-Status: scoping. The existing XML-RPC and socket listeners accept unauthenticated
-code execution; the controls described here are not yet a release guarantee.
+Status: implementation design. The existing XML-RPC and socket listeners accept
+unauthenticated code execution; the controls described here are not yet a
+release guarantee. The chosen release boundary protects paired clients and the
+bridge's authorization state from unpaired programs running under the same OS
+account. The bridge must fail closed if this boundary is unavailable.
 
 ## Trust boundary
 
@@ -51,8 +54,8 @@ workbench, and trust store; credential protection by itself is insufficient.
 
 ## Pairing and key isolation
 
-The remaining design decision is how to protect each client key on supported
-platforms while preserving unattended use. Candidate mechanisms include a
+The implementation must protect each client key on supported platforms while
+preserving unattended use where possible. Candidate mechanisms include a
 platform-protected signer with explicit user approval or a hardware-backed key;
 both need a trusted enrollment flow and real platform testing. A per-user
 shared secret is simpler and blocks clients that cannot read it, but it does not
@@ -65,6 +68,32 @@ from unpaired processes, or those processes can register their own keys. User
 approval must identify the client key by fingerprint rather than trusting a
 client-supplied display name. Any provider that can sign silently for arbitrary
 same-user processes is insufficient for that stronger boundary.
+
+### Platform feasibility gates
+
+- **macOS:** Evaluate a signed, sandboxed app and protected app container for
+  the trust store, together with a signer bound to a distinct client identity.
+  Apple documents [app-container access controls](https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox)
+  on macOS 14 and later. Verify the FreeCAD process and loaded workbench are
+  actually covered; merely storing a key in a container does not protect a
+  workbench installed in a user-writable directory.
+- **Windows:** Evaluate a packaged AppContainer process with isolated storage
+  and protected signing identity. Microsoft distinguishes
+  [AppContainer from full-trust desktop apps](https://learn.microsoft.com/en-us/windows/msix/msix-containerization-overview).
+  Verify FreeCAD, Python extensions, networking, and document access in the actual
+  packaged configuration before claiming support.
+- **Linux:** Investigate an isolated service identity or a distribution-specific
+  sandbox with a protected trust store and signer. Landlock restricts the process
+  that opts into it; it does not by itself stop an unrestricted same-user process
+  from modifying a user-owned trust store. Check the deployment boundary and
+  test it against a separate unpaired process.
+
+These are evaluation candidates, not established capabilities of the current
+FreeCAD distribution. For each supported operating system, document the exact
+packaging, identities, access controls, recovery flow, and limitations, and test
+the boundary against an unpaired same-user process. A platform without a
+verified boundary must refuse to enable the execution listener; it must not
+fall back to an unprotected key or an unauthenticated bridge.
 
 ## Verification gates
 
