@@ -179,10 +179,12 @@ class MCPStatusWidget:
         if not _check_main_thread("set_running"):
             return
 
-        self._widget.setText(f"MCP: Running ({xmlrpc_port}/{socket_port})")
+        self._widget.setText(
+            f"MCP: Python execution enabled ({xmlrpc_port}/{socket_port})"
+        )
         self._widget.setStyleSheet(
             "QLabel { "
-            "background-color: #2e7d32; "
+            "background-color: #9a5700; "
             "color: white; "
             "padding: 2px 6px; "
             "border-radius: 3px; "
@@ -190,7 +192,7 @@ class MCPStatusWidget:
             "}"
         )
         self._widget.setToolTip(
-            f"MCP Bridge is running\n"
+            f"MCP Bridge is running and accepts Python from authorized clients\n"
             f"XML-RPC: localhost:{xmlrpc_port}\n"
             f"Socket: localhost:{socket_port}\n"
             f"Requests processed: {request_count}"

@@ -8,11 +8,13 @@ import hashlib
 import hmac
 import http.client
 import importlib
+import importlib.util
 import json
 import socket
 import sys
 import threading
 import time
+import types
 import xmlrpc.client
 from functools import partial
 from pathlib import Path
@@ -170,6 +172,40 @@ def test_start_refuses_missing_authentication_before_opening_listeners(
     assert not plugin.is_running
     assert plugin._socket_thread is None
     assert plugin._xmlrpc_thread is None
+
+
+def test_gui_status_warns_that_bridge_accepts_python(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The running status warns even when MCP code tools are not advertised."""
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(server_mod, "FreeCAD", MagicMock(GuiUp=True), raising=False)
+    status_module = types.ModuleType("Qt.status_widget")
+    status_module.update_status_running = MagicMock()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "Qt.status_widget", status_module)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._set_status_bar = MagicMock()
+    plugin._update_status_bar()
+    assert "Python execution enabled" in plugin._set_status_bar.call_args.args[0]
+    status_module.update_status_running.assert_called_once_with(9875, 9876, 0)
+
+
+def test_permanent_status_widget_warns_that_bridge_accepts_python(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The permanent widget describes what an authorized client can do."""
+    del server_mod
+    path = ADDON_DIR / "Qt" / "status_widget.py"
+    spec = importlib.util.spec_from_file_location("test_bridge_status_widget", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "_check_main_thread", lambda _operation: True)
+    widget = module.MCPStatusWidget()
+    widget._widget = MagicMock()
+    widget.set_running(9875, 9876, 1)
+    assert "Python execution enabled" in widget._widget.setText.call_args.args[0]
+    assert "authorized clients" in widget._widget.setToolTip.call_args.args[0]
 
 
 @pytest.fixture

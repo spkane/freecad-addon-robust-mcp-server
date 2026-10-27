@@ -723,11 +723,26 @@ class FreecadMCPPlugin:
         # Clear status bar message
         if FREECAD_AVAILABLE and FreeCAD.GuiUp:
             self._set_status_bar("")
+            try:
+                from Qt.status_widget import update_status_stopped
+
+                update_status_stopped()
+            except Exception:
+                pass
 
     def _update_status_bar(self) -> None:
         """Update the FreeCAD status bar with MCP bridge status."""
         if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
             return
+
+        # The bridge itself accepts Python from any paired client. Show this
+        # warning regardless of the optional general status-bar preference.
+        try:
+            from Qt.status_widget import update_status_running
+
+            update_status_running(self._xmlrpc_port, self._port, self._request_count)
+        except Exception:
+            pass
 
         # Build status message
         ports = f"XML-RPC:{self._xmlrpc_port}" if self._enable_xmlrpc else ""
@@ -742,11 +757,11 @@ class FreecadMCPPlugin:
                     time_ago = f"{int(elapsed)}s ago"
                 else:
                     time_ago = f"{int(elapsed / 60)}m ago"
-                status = f"🔌 MCP Bridge active{ports} | {self._request_count} requests | last: {time_ago}"
+                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests | last: {time_ago}"
             else:
-                status = f"🔌 MCP Bridge active{ports} | {self._request_count} requests"
+                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests"
         else:
-            status = f"🔌 MCP Bridge running{ports} | waiting for connections..."
+            status = f"🔌 MCP Bridge: Python execution enabled{ports} | waiting for connections..."
 
         self._set_status_bar(status)
 
