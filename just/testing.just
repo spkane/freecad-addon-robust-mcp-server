@@ -438,14 +438,13 @@ integration-headless-release:
     echo "----------------------------------------"
     echo ""
 
-    # Check for existing FreeCAD
-    if is_bridge_running; then
-        echo "ERROR: A FreeCAD Robust MCP Bridge is already running on port 9875."
+    # Do not assume an unresponsive or authenticated listener is safe to stop.
+    if is_port_in_use 9875 || is_port_in_use 9876; then
+        echo "ERROR: A process is already using bridge port 9875 or 9876."
         echo ""
         echo "For release testing, we need to start FreeCAD fresh."
-        echo "Please stop the existing FreeCAD instance and try again."
+        echo "Free the occupied ports and try again."
         echo ""
-        echo "You can run: just testing::kill-bridge"
         exit 1
     fi
 
@@ -526,14 +525,13 @@ integration-gui-release:
     echo "------------------------------------"
     echo ""
 
-    # Check for existing FreeCAD
-    if is_bridge_running; then
-        echo "ERROR: A FreeCAD Robust MCP Bridge is already running on port 9875."
+    # Do not assume an unresponsive or authenticated listener is safe to stop.
+    if is_port_in_use 9875 || is_port_in_use 9876; then
+        echo "ERROR: A process is already using bridge port 9875 or 9876."
         echo ""
         echo "For release testing, we need to start FreeCAD fresh."
-        echo "Please stop the existing FreeCAD instance and try again."
+        echo "Free the occupied ports and try again."
         echo ""
-        echo "You can run: just testing::kill-bridge"
         exit 1
     fi
 

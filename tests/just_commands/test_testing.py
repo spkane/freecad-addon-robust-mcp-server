@@ -6,6 +6,7 @@ Note: We avoid running integration tests here to prevent recursion.
 
 from __future__ import annotations
 
+import socket
 from typing import TYPE_CHECKING, ClassVar
 
 import pytest
@@ -53,6 +54,28 @@ class TestTestingRuntime:
     Note: We use --collect-only or run minimal tests to avoid
     long execution times and recursion issues.
     """
+
+    @pytest.mark.just_runtime
+    @pytest.mark.parametrize(
+        "command",
+        ["testing::integration-headless-release", "testing::integration-gui-release"],
+    )
+    @pytest.mark.parametrize("port", [9875, 9876])
+    def test_release_integration_refuses_occupied_port(
+        self, just: JustRunner, command: str, port: int
+    ) -> None:
+        """An unrelated listener must be left running before release tests start."""
+        with socket.socket() as listener:
+            try:
+                listener.bind(("127.0.0.1", port))
+            except OSError:
+                pytest.skip(f"Port {port} is already occupied")
+            listener.listen()
+            result = just.run(command, timeout=15)
+            assert not result.success
+            assert "already using bridge port" in result.output
+            with socket.create_connection(("127.0.0.1", port), timeout=2):
+                pass
 
     @pytest.mark.just_runtime
     def test_kill_bridge_runs(self, just: JustRunner) -> None:
