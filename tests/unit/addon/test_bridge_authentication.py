@@ -3,6 +3,7 @@
 import base64
 import hmac
 import importlib
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -76,3 +77,44 @@ def test_key_provider_errors_fail_closed(auth_module: Any) -> None:
     auth = auth_module.BridgeAuthenticator(unavailable)
     challenge = auth.issue_challenge()
     assert not auth.verify("paired", challenge, "socket", b"request", "eA==")
+
+
+def test_xmlrpc_headers_bind_body_and_reject_replay(auth_module: Any) -> None:
+    """HTTP authentication uses the original XML bytes and a one-use nonce."""
+    auth = auth_module.BridgeAuthenticator(_verifier)
+    challenge = auth.issue_challenge()
+    body = b"<methodCall/>"
+    headers = Message()
+    headers["X-FreeCAD-Client"] = "paired"
+    headers["X-FreeCAD-Challenge"] = challenge
+    headers["X-FreeCAD-Proof"] = _proof(auth_module, "paired", challenge, body)
+    assert auth.verify_xmlrpc_headers(headers, body)
+    assert not auth.verify_xmlrpc_headers(headers, body)
+
+
+def test_xmlrpc_headers_reject_altered_body(auth_module: Any) -> None:
+    """A valid proof for one XML body must not authorize modified XML."""
+    auth = auth_module.BridgeAuthenticator(_verifier)
+    challenge = auth.issue_challenge()
+    headers = Message()
+    headers["X-FreeCAD-Client"] = "paired"
+    headers["X-FreeCAD-Challenge"] = challenge
+    headers["X-FreeCAD-Proof"] = _proof(auth_module, "paired", challenge, b"first")
+    assert not auth.verify_xmlrpc_headers(headers, b"modified")
+    assert not auth.verify_xmlrpc_headers(headers, b"first")
+
+
+@pytest.mark.parametrize(
+    "header", ["X-FreeCAD-Client", "X-FreeCAD-Challenge", "X-FreeCAD-Proof"]
+)
+def test_xmlrpc_rejects_duplicate_auth_headers(auth_module: Any, header: str) -> None:
+    """Ambiguous headers must never select one of multiple proofs or identities."""
+    auth = auth_module.BridgeAuthenticator(_verifier)
+    challenge = auth.issue_challenge()
+    body = b"<methodCall/>"
+    headers = Message()
+    headers["X-FreeCAD-Client"] = "paired"
+    headers["X-FreeCAD-Challenge"] = challenge
+    headers["X-FreeCAD-Proof"] = _proof(auth_module, "paired", challenge, body)
+    headers[header] = headers[header]
+    assert not auth.verify_xmlrpc_headers(headers, body)

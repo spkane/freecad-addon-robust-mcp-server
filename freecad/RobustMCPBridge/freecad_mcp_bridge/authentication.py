@@ -20,6 +20,7 @@ else:
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from email.message import Message
 
 _CLIENT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
 _CHALLENGE = re.compile(r"[A-Za-z0-9_-]{43}\Z")
@@ -88,6 +89,31 @@ class BridgeAuthenticator:
     def issue_challenge(self) -> str:
         """Issue a random, short-lived request challenge."""
         return self._challenges.issue()
+
+    def verify_xmlrpc_headers(self, headers: Message, body: bytes) -> bool:
+        """Verify one unambiguous set of authentication headers and raw XML.
+
+        This must be called after a bounded body read and before XML parsing.
+        Header duplication is rejected even when duplicate values match.
+
+        Args:
+            headers: Parsed HTTP headers from the XML-RPC request.
+            body: Exact bounded request bytes, before XML parsing.
+
+        Returns:
+            True only when all headers and the request proof are valid.
+        """
+        values = [
+            headers.get_all(name, [])
+            for name in (
+                "X-FreeCAD-Client",
+                "X-FreeCAD-Challenge",
+                "X-FreeCAD-Proof",
+            )
+        ]
+        if any(len(value) != 1 for value in values):
+            return False
+        return self.verify(values[0][0], values[1][0], "xmlrpc", body, values[2][0])
 
     def verify(
         self,
