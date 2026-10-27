@@ -72,13 +72,20 @@ approval must identify the client key by fingerprint rather than trusting a
 client-supplied display name. Any provider that can sign silently for arbitrary
 same-user processes is insufficient for that stronger boundary.
 
-The protocol uses raw 32-byte Ed25519 public keys and their lowercase SHA-256
-fingerprints as client IDs. The verifier resolves the approved key for each request,
+The protocol supports raw 32-byte Ed25519 public keys and 65-byte uncompressed
+SEC1 P-256 public keys, identified by the lowercase SHA-256 fingerprint of the
+canonical key bytes. P-256 signatures use ECDSA with SHA-256 and DER encoding.
+The verifier resolves the approved key for each request,
 checks that its fingerprint matches, and delegates signature validation to a
 provider. Revocation prevents later lookups; it does not cancel an already
-authorized request. The Ed25519 verifier requires the `cryptography` package
+authorized request. Both signature verifiers require the `cryptography` package
 inside FreeCAD and fails closed if it is unavailable. This fingerprint check does not make the
 underlying lookup or signature provider trustworthy on its own.
+
+P-256 is needed for the macOS Secure Enclave candidate: Apple documents that
+[Secure Enclave signing uses P-256 keys](https://developer.apple.com/documentation/security/protecting-keys-with-the-secure-enclave).
+Support for the algorithm does not demonstrate that a signing identity or its
+trust store is isolated; those remain platform verification gates.
 
 ### Platform feasibility gates
 

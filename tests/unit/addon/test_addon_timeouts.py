@@ -14,12 +14,14 @@ import sys
 import threading
 import time
 import xmlrpc.client
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, call
 
 import pytest
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from freecad_mcp.bridge.socket import SocketBridge
@@ -33,21 +35,35 @@ ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPB
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
+@pytest.mark.parametrize("algorithm", ["ed25519", "p256"])
 async def test_real_signatures_across_client_and_listener(
-    server_mod: Any, transport: str
+    server_mod: Any, transport: str, algorithm: str
 ) -> None:
     """Both real transports authorize a paired signature and enforce revocation."""
     auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
-    private_key = Ed25519PrivateKey.generate()
-    public_key = private_key.public_key().public_bytes(
-        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-    )
+    if algorithm == "ed25519":
+        private_key = Ed25519PrivateKey.generate()
+        public_key = private_key.public_key().public_bytes(
+            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+        )
+        signer = private_key.sign
+        wrong_signer = Ed25519PrivateKey.generate().sign
+        make_verifier = auth_module.create_ed25519_verifier
+    else:
+        p256_key = ec.generate_private_key(ec.SECP256R1())
+        public_key = p256_key.public_key().public_bytes(
+            serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+        )
+        signer = partial(p256_key.sign, signature_algorithm=ec.ECDSA(hashes.SHA256()))
+        wrong_key = ec.generate_private_key(ec.SECP256R1())
+        wrong_signer = partial(
+            wrong_key.sign, signature_algorithm=ec.ECDSA(hashes.SHA256())
+        )
+        make_verifier = auth_module.create_p256_verifier
     client_id = hashlib.sha256(public_key).hexdigest()
     approved = {client_id: public_key}
 
-    authenticator = auth_module.BridgeAuthenticator(
-        auth_module.create_ed25519_verifier(approved.get)
-    )
+    authenticator = auth_module.BridgeAuthenticator(make_verifier(approved.get))
     plugin = server_mod.FreecadMCPPlugin(
         host="127.0.0.1", port=0, xmlrpc_port=0, authenticator=authenticator
     )
@@ -65,7 +81,7 @@ async def test_real_signatures_across_client_and_listener(
                 host="127.0.0.1",
                 port=port,
                 client_id=client_id,
-                signer=private_key.sign,
+                signer=signer,
             )
         else:
             thread = threading.Thread(target=plugin._run_xmlrpc_server)
@@ -79,7 +95,7 @@ async def test_real_signatures_across_client_and_listener(
                 host="127.0.0.1",
                 port=port,
                 client_id=client_id,
-                signer=private_key.sign,
+                signer=signer,
             )
 
         assert bridge is not None
@@ -87,7 +103,7 @@ async def test_real_signatures_across_client_and_listener(
             host="127.0.0.1",
             port=port,
             client_id=client_id,
-            signer=Ed25519PrivateKey.generate().sign,
+            signer=wrong_signer,
         )
         try:
             with pytest.raises(ConnectionError):

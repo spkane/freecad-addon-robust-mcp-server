@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from freecad_mcp.bridge.authentication import request_proof_message
@@ -107,6 +108,29 @@ def test_ed25519_provider_missing_fails_closed(
     monkeypatch.setattr(builtins, "__import__", import_without_crypto)
     with pytest.raises(RuntimeError, match="compatible Ed25519 crypto provider"):
         auth_module.create_ed25519_verifier(lambda _client_id: None)
+
+
+def test_p256_verifier_rejects_bad_signatures_and_noncanonical_keys(
+    auth_module: Any,
+) -> None:
+    """Only an approved SEC1 uncompressed key and valid signature are accepted."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    public_key = key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+    client_id = hashlib.sha256(public_key).hexdigest()
+    approved = {client_id: public_key}
+    verifier = auth_module.create_p256_verifier(approved.get)
+    signature = key.sign(b"message", ec.ECDSA(hashes.SHA256()))
+    assert verifier(client_id, b"message", signature)
+    assert not verifier(client_id, b"changed", signature)
+    assert not verifier(client_id, b"message", b"invalid")
+    compressed = key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
+    )
+    compressed_id = hashlib.sha256(compressed).hexdigest()
+    approved[compressed_id] = compressed
+    assert not verifier(compressed_id, b"message", signature)
 
 
 @pytest.mark.parametrize("transport", ["socket", "xmlrpc"])

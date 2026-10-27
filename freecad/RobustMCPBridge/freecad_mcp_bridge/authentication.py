@@ -104,6 +104,44 @@ def create_ed25519_verifier(
     return PairedClientVerifier(lookup, verify_signature)
 
 
+def create_p256_verifier(
+    lookup: Callable[[str], bytes | None],
+) -> PairedClientVerifier:
+    """Create a verifier for uncompressed SEC1 P-256 keys and DER signatures.
+
+    Args:
+        lookup: Resolve an approved fingerprint to a 65-byte public key.
+
+    Returns:
+        A verifier using ECDSA with SHA-256.
+
+    Raises:
+        RuntimeError: If the FreeCAD runtime cannot load the crypto provider.
+    """
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+    except (ImportError, OSError) as e:
+        raise RuntimeError(
+            "The FreeCAD bridge requires a compatible P-256 crypto provider"
+        ) from e
+
+    def verify_signature(key: bytes, message: bytes, signature: bytes) -> bool:
+        if len(key) != 65 or key[0] != 4 or not 8 <= len(signature) <= 72:
+            return False
+        try:
+            public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(), key
+            )
+            public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        except (InvalidSignature, ValueError):
+            return False
+        return True
+
+    return PairedClientVerifier(lookup, verify_signature)
+
+
 def request_proof_message(
     client_id: str,
     challenge: str,
