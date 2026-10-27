@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 
 from freecad_mcp.bridge.authentication import request_proof_message
 
@@ -88,6 +94,41 @@ def test_paired_client_verifier_fails_closed_on_provider_error(
 
     verifier = auth_module.PairedClientVerifier(unavailable, lambda *_args: True)
     assert not verifier("a" * 64, b"message", b"signature")
+
+
+@pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
+def test_real_signature_authentication_and_revocation(
+    auth_module: Any, transport: str
+) -> None:
+    """Validate real asymmetric signatures and reject a revoked client."""
+    private_key = Ed25519PrivateKey.generate()
+    public_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    client_id = hashlib.sha256(public_bytes).hexdigest()
+    approved = {client_id: public_bytes}
+
+    def verify_signature(key: bytes, message: bytes, signature: bytes) -> bool:
+        try:
+            Ed25519PublicKey.from_public_bytes(key).verify(signature, message)
+        except (InvalidSignature, ValueError):
+            return False
+        return True
+
+    verifier = auth_module.PairedClientVerifier(approved.get, verify_signature)
+    auth = auth_module.BridgeAuthenticator(verifier)
+    challenge = auth.issue_challenge()
+    body = b"request body"
+    message = request_proof_message(client_id, challenge, transport, body)
+    proof = base64.b64encode(private_key.sign(message)).decode("ascii")
+    assert auth.verify(client_id, challenge, transport, body, proof)
+    assert not auth.verify(client_id, challenge, transport, body, proof)
+
+    challenge = auth.issue_challenge()
+    message = request_proof_message(client_id, challenge, transport, body)
+    proof = base64.b64encode(private_key.sign(message)).decode("ascii")
+    del approved[client_id]
+    assert not auth.verify(client_id, challenge, transport, body, proof)
 
 
 @pytest.mark.parametrize("altered", ["body", "transport", "identity", "proof"])

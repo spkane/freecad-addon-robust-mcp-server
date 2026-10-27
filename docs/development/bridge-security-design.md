@@ -106,6 +106,14 @@ the boundary against an unpaired same-user process. A platform without a
 verified boundary must refuse to enable the execution listener; it must not
 fall back to an unprotected key or an unauthenticated bridge.
 
+The locally inspected macOS FreeCAD 27.1 development installation uses Python
+3.13 and does not include the `cryptography` package. The MCP server's Python
+environment has that package through its dependencies, but it is a separate
+runtime. Signature verification in the workbench must therefore use a verified
+compatible provider or an explicitly packaged dependency; availability in the
+server environment is not evidence that the workbench can import it. This is an
+observation about that installation, not a claim about every FreeCAD release.
+
 ## Verification gates
 
 Exercise both transports with authorized and unauthorized clients, including
