@@ -380,26 +380,45 @@ class TestMain:
         mock_config.http_port = 8080
         mock_config.http_allowed_hosts = ["127.0.0.1:*"]
         mock_config.http_allowed_origins = ["http://127.0.0.1:*"]
+        mock_config.http_api_key.get_secret_value.return_value = "a" * 40
 
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
-            patch.object(server_module.mcp, "run") as mock_run,
+            patch.object(server_module.mcp, "streamable_http_app") as mock_app,
+            patch("uvicorn.run") as mock_run,
             patch("builtins.print"),
         ):
             server_module.main()
 
-            # Should call run with HTTP transport settings
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args.kwargs
-            assert call_kwargs.get("transport") == "streamable-http"
             assert call_kwargs.get("host") == "127.0.0.1"
             assert call_kwargs.get("port") == 8080
-            security = call_kwargs.get("transport_security")
+            security = mock_app.call_args.kwargs.get("transport_security")
             assert security is not None
             assert security.enable_dns_rebinding_protection is True
             assert security.allowed_hosts == ["127.0.0.1:*"]
             assert security.allowed_origins == ["http://127.0.0.1:*"]
+
+    def test_main_http_requires_api_key(self) -> None:
+        """HTTP startup must fail before creating an unprotected listener."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        config = MagicMock()
+        config.log_level = "INFO"
+        config.mode = FreecadMode.EMBEDDED
+        config.transport = TransportType.HTTP
+        config.http_api_key = None
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=config),
+            patch("uvicorn.run") as run,
+            pytest.raises(RuntimeError, match="FREECAD_HTTP_API_KEY"),
+        ):
+            server_module.main()
+        run.assert_not_called()
 
     def test_main_stdio_transport(self):
         """Main should start stdio transport by default."""

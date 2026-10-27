@@ -34,6 +34,7 @@ Example:
 import argparse
 import logging
 import os
+import secrets
 import sys
 import uuid
 from collections.abc import AsyncIterator
@@ -348,6 +349,7 @@ Environment Variables:
   FREECAD_TRANSPORT      Transport type: stdio or http (default: stdio)
   FREECAD_HTTP_HOST      Bind address for HTTP transport (default: 127.0.0.1)
   FREECAD_HTTP_PORT      Port for HTTP transport (default: 8000)
+  FREECAD_HTTP_API_KEY   Required bearer key for HTTP transport
   FREECAD_HTTP_ALLOWED_HOSTS
                          JSON array of accepted Host values
   FREECAD_HTTP_ALLOWED_ORIGINS
@@ -363,6 +365,8 @@ Examples:
   FREECAD_MODE=socket freecad-mcp
 
   # Use local HTTP transport
+  # Generate a key, store it securely, then set FREECAD_HTTP_API_KEY.
+  freecad-mcp --generate-http-api-key
   FREECAD_TRANSPORT=http FREECAD_HTTP_PORT=8080 freecad-mcp
 
   # Connect to remote FreeCAD instance
@@ -381,6 +385,12 @@ Prerequisites:
         "--version",
         action="store_true",
         help="Show version information and exit",
+    )
+
+    parser.add_argument(
+        "--generate-http-api-key",
+        action="store_true",
+        help="Generate an HTTP API key and exit; store the output securely",
     )
 
     parser.add_argument(
@@ -432,6 +442,10 @@ def main() -> None:
     # Parse arguments first - this handles --help without connecting to FreeCAD
     args = parse_args()
 
+    if args.generate_http_api_key:
+        print(secrets.token_urlsafe(32))
+        return
+
     # Handle --version
     if args.version:
         print(f"freecad-mcp {get_package_version()}")
@@ -469,14 +483,27 @@ def main() -> None:
 
     # Run the server
     if config.transport == TransportType.HTTP:
+        import uvicorn
+
+        from freecad_mcp.http_auth import ApiKeyMiddleware
+
+        if config.http_api_key is None:
+            raise RuntimeError("HTTP transport requires FREECAD_HTTP_API_KEY")
+        app = mcp.streamable_http_app(
+            host=config.http_host,
+            transport_security=build_http_transport_security(config),
+        )
+        authenticated_app = ApiKeyMiddleware(
+            app, config.http_api_key.get_secret_value()
+        )
         logger.info(
             "Starting HTTP transport on %s:%d", config.http_host, config.http_port
         )
-        mcp.run(
-            transport="streamable-http",
+        uvicorn.run(
+            authenticated_app,
             host=config.http_host,
             port=config.http_port,
-            transport_security=build_http_transport_security(config),
+            log_level=mcp.settings.log_level.lower(),
         )
     else:
         logger.info("Starting stdio transport")

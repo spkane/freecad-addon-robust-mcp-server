@@ -15,6 +15,21 @@ Configure the FreeCAD Robust MCP Server using environment variables and MCP clie
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
+## HTTP authentication
+
+The default stdio transport does not use an HTTP API key. When using
+`FREECAD_TRANSPORT=http`, generate a key with `freecad-mcp --generate-http-api-key`,
+store it securely, and supply it to the server in `FREECAD_HTTP_API_KEY`. HTTP
+startup fails if the key is missing or malformed. Configure the harness to send
+`Authorization: Bearer <key>` on every request. The key must be at least 32
+visible ASCII characters; the generation command produces a random key.
+
+The default HTTP bind is loopback. For remote access, use HTTPS with a trusted
+TLS-terminating proxy and protect the key in transit and at rest. A static key
+does not implement MCP OAuth discovery or automatic credential enrollment.
+Rotate it by generating a new key, updating server and client configuration,
+and restarting the server.
+
 ## Arbitrary Code Tools
 
 The `FREECAD_ALLOW_UNSAFE_CODE` setting defaults to `false`. The server does not

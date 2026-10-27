@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
+import httpx2
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -23,6 +24,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEST_SERVER = PROJECT_ROOT / "tests" / "fixtures" / "authenticated_mcp_server.py"
+HTTP_TEST_KEY = "test-only-key-0123456789abcdef0123456789"
 
 
 def _execute_freecad_code(code: str) -> dict[str, Any]:
@@ -131,6 +133,7 @@ async def _start_streamable_http_server(
             "FREECAD_TRANSPORT": "http",
             "FREECAD_HTTP_HOST": "127.0.0.1",
             "FREECAD_HTTP_PORT": str(http_port),
+            "FREECAD_HTTP_API_KEY": HTTP_TEST_KEY,
             "FREECAD_HTTP_ALLOWED_HOSTS": '["127.0.0.1:*"]',
             "FREECAD_HTTP_ALLOWED_ORIGINS": '["http://127.0.0.1:*"]',
         }
@@ -226,13 +229,15 @@ async def test_streamable_http_first_tool_call_completes() -> None:
             else:
                 pytest.fail("Streamable HTTP server did not start")
 
-            async with streamable_http_client(
-                f"http://127.0.0.1:{http_port}/mcp"
-            ) as streams:
-                async with ClientSession(*streams[:2]) as session:
-                    initialize_result = await session.initialize()
-                    tools_result = await session.list_tools()
-                    call_result = await session.call_tool("get_freecad_version")
+            async with httpx2.AsyncClient() as http:
+                url = f"http://127.0.0.1:{http_port}/mcp"
+                assert (await http.post(url)).status_code == 401
+                http.headers["Authorization"] = f"Bearer {HTTP_TEST_KEY}"
+                async with streamable_http_client(url, http_client=http) as streams:
+                    async with ClientSession(*streams[:2]) as session:
+                        initialize_result = await session.initialize()
+                        tools_result = await session.list_tools()
+                        call_result = await session.call_tool("get_freecad_version")
 
             assert initialize_result.server_info.name == "freecad-mcp"
             assert any(

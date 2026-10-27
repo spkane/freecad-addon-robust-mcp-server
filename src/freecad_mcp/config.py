@@ -8,7 +8,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -100,6 +100,7 @@ class ServerConfig(BaseSettings):
         int,
         Field(ge=1, le=65535, description="HTTP server port"),
     ] = 8000
+    http_api_key: SecretStr | None = None
     http_allowed_hosts: list[str] = Field(
         default_factory=lambda: ["127.0.0.1:*", "localhost:*", "[::1]:*"],
         description="Allowed HTTP Host header values",
