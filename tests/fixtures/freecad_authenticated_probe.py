@@ -1,7 +1,7 @@
 """Start a test-only authenticated bridge inside a standalone FreeCAD process.
 
-This fixture uses a public deterministic secret and an in-memory trust store. It
-must never be used as a production pairing or credential provider.
+The launching test supplies a temporary user home and credential store. It
+must never be used as a production startup script.
 """
 
 import json

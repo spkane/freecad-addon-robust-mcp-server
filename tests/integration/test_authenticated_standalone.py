@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from freecad_mcp.bridge.authentication import create_hmac_signer
+from freecad_mcp.bridge.credential_store import create_credential, read_credential
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 
@@ -28,21 +29,27 @@ def _assert_truncated(*texts: str) -> None:
 @pytest.mark.standalone_freecad
 @pytest.mark.asyncio
 @pytest.mark.timeout(45)
-async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> None:
+async def test_authenticated_transports_with_real_freecad(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A paired client executes CAD code; a different secret is rejected."""
     executable = os.environ.get("FREECAD_AUTH_TEST_COMMAND")
     if not executable:
         pytest.skip("Set FREECAD_AUTH_TEST_COMMAND")
     assert executable is not None
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    client_id = create_credential()
+    _, secret_hex = read_credential()
     ready = tmp_path / "ports.json"
     log_path = tmp_path / "freecad.log"
     env = {
         **os.environ,
         "FREECAD_MCP_TESTING": "1",
         "FREECAD_AUTH_TEST_READY": str(ready),
-        "FREECAD_BRIDGE_CLIENT_ID": "test-client",
-        "FREECAD_BRIDGE_SECRET": "01" * 32,
+        "HOME": str(tmp_path),
     }
+    env.pop("FREECAD_BRIDGE_CLIENT_ID", None)
+    env.pop("FREECAD_BRIDGE_SECRET", None)
     with log_path.open("w+", encoding="utf-8") as log:
         process = await asyncio.create_subprocess_exec(
             executable, str(PROBE), stdout=log, stderr=subprocess.STDOUT, env=env
@@ -57,7 +64,6 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                 log.flush()
                 pytest.fail(f"FreeCAD bridge did not start: {log_path.read_text()}")
             ports = json.loads(ready.read_text(encoding="utf-8"))
-            client_id = "test-client"
             for mode, bridge_type in (
                 ("xmlrpc", XmlRpcBridge),
                 ("socket", SocketBridge),
@@ -77,7 +83,7 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                     host="127.0.0.1",
                     port=ports[mode],
                     client_id=client_id,
-                    signer=create_hmac_signer(b"\x01" * 32),
+                    signer=create_hmac_signer(bytes.fromhex(secret_hex)),
                 )
                 try:
                     await bridge.connect()

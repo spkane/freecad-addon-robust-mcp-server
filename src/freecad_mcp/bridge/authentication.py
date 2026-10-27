@@ -23,13 +23,17 @@ def credentials_from_config(
         ValueError: If either credential is missing or malformed.
     """
     client_id = config.bridge_client_id
-    if (
-        not isinstance(client_id, str)
-        or _CLIENT_ID.fullmatch(client_id) is None
-        or config.bridge_secret is None
-    ):
+    configured_secret = config.bridge_secret
+    if client_id is None and configured_secret is None:
+        from freecad_mcp.bridge.credential_store import read_credential
+
+        client_id, raw = read_credential()
+    elif configured_secret is not None:
+        raw = configured_secret.get_secret_value()
+    else:
+        raw = ""
+    if not isinstance(client_id, str) or _CLIENT_ID.fullmatch(client_id) is None:
         raise ValueError("A valid bridge client ID and secret are required")
-    raw = config.bridge_secret.get_secret_value()
     if re.fullmatch(r"[0-9a-fA-F]{64}", raw) is None:
         raise ValueError("Bridge secret must be 64 hexadecimal characters")
     return client_id, create_hmac_signer(bytes.fromhex(raw))

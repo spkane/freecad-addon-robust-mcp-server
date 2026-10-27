@@ -405,6 +405,11 @@ Prerequisites:
         action="store_true",
         help="Generate an HTTP API key and exit; store the output securely",
     )
+    parser.add_argument(
+        "--pair-bridge",
+        action="store_true",
+        help="Create a private per-user FreeCAD bridge credential and exit",
+    )
 
     parser.add_argument(
         "--check",
@@ -457,6 +462,13 @@ def main() -> None:
 
     if args.generate_http_api_key:
         print(secrets.token_urlsafe(32))
+        return
+
+    if args.pair_bridge:
+        from freecad_mcp.bridge.credential_store import create_credential
+
+        client_id = create_credential()
+        print(f"Bridge pairing created for client {client_id}.")
         return
 
     # Handle --version

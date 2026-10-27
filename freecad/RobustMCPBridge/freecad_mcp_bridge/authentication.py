@@ -63,6 +63,18 @@ def authenticator_from_environment() -> BridgeAuthenticator:
 
     client_id = os.environ.get("FREECAD_BRIDGE_CLIENT_ID", "")
     secret_hex = os.environ.get("FREECAD_BRIDGE_SECRET", "")
+    if not client_id and not secret_hex:
+        if __package__:
+            from .credential_store import read_credential
+        else:
+            from credential_store import read_credential  # type: ignore[import-not-found,no-redef]
+        try:
+            client_id, secret_hex = read_credential()
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise RuntimeError(
+                "Cannot start the FreeCAD bridge: a trusted client authentication "
+                "provider is required; create a secure bridge pairing first"
+            ) from exc
     if (
         _CLIENT_ID.fullmatch(client_id) is None
         or re.fullmatch(r"[0-9a-fA-F]{64}", secret_hex) is None
