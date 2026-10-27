@@ -58,7 +58,11 @@ class TestTestingRuntime:
     @pytest.mark.just_runtime
     @pytest.mark.parametrize(
         "command",
-        ["testing::integration-headless-release", "testing::integration-gui-release"],
+        [
+            "testing::integration-headless-release",
+            "testing::integration-gui-release",
+            "testing::integration-freecad-auto",
+        ],
     )
     @pytest.mark.parametrize("port", [9875, 9876])
     def test_release_integration_refuses_occupied_port(
@@ -73,9 +77,28 @@ class TestTestingRuntime:
             listener.listen()
             result = just.run(command, timeout=15)
             assert not result.success
-            assert "already using bridge port" in result.output
+            assert "already" in result.output and "port" in result.output
             with socket.create_connection(("127.0.0.1", port), timeout=2):
                 pass
+
+    @pytest.mark.just_syntax
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "testing::integration-headless-release",
+            "testing::integration-gui-release",
+            "testing::integration-freecad-auto",
+        ],
+    )
+    def test_integration_cleanup_targets_started_process(
+        self, just: JustRunner, command: str
+    ) -> None:
+        """Automatic test runners must not terminate arbitrary port owners."""
+        result = just.dry_run(command)
+        assert result.success
+        assert 'stop_owned_freecad "$FREECAD_PID"' in result.output
+        assert "graceful_kill_bridge_ports" not in result.output
+        assert "kill_port" not in result.output
 
     @pytest.mark.just_runtime
     def test_kill_bridge_runs(self, just: JustRunner) -> None:
@@ -133,10 +156,8 @@ class TestTestingRuntime:
         cleanupPos = scriptText.find("cleanup", stopPos)
         assert cleanupPos != -1, "cleanup call not found after stop marker"
 
-        startedFalsePos = scriptText.find("STARTED_FREECAD=false", stopPos)
-        assert startedFalsePos != -1, (
-            "STARTED_FREECAD=false not found after stop marker"
-        )
+        startedFalsePos = scriptText.find('FREECAD_PID=""', stopPos)
+        assert startedFalsePos != -1, "FREECAD_PID reset not found after stop marker"
 
         portsPos = scriptText.find("wait_for_ports_free", stopPos)
         assert portsPos != -1, "wait_for_ports_free not found after stop marker"
@@ -145,10 +166,10 @@ class TestTestingRuntime:
         assert exitPos != -1, "wait_for_freecad_exit not found after stop marker"
 
         assert cleanupPos < startedFalsePos, (
-            "cleanup must be called before STARTED_FREECAD=false"
+            "cleanup must be called before resetting FREECAD_PID"
         )
         assert startedFalsePos < portsPos, (
-            "STARTED_FREECAD=false must be set before wait_for_ports_free"
+            "FREECAD_PID must be reset before wait_for_ports_free"
         )
         assert portsPos < exitPos, (
             "wait_for_ports_free must be called before wait_for_freecad_exit"

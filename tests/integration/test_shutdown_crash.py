@@ -156,10 +156,10 @@ def _wait_for_bridge(
     Returns:
         True if bridge is available, False if timeout.
     """
-    import xmlrpc.client
-
     startTime = time.time()
-    proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+    from tests.integration.auth_support import integration_proxy
+
+    proxy = integration_proxy(host, port)
 
     while time.time() - startTime < timeout:
         try:
@@ -185,10 +185,10 @@ def _is_gui_available(host: str = "localhost", port: int = 9875) -> bool:
     Returns:
         True if FreeCAD.GuiUp is True, False on any error or if headless.
     """
-    import xmlrpc.client
+    from tests.integration.auth_support import integration_proxy
 
     try:
-        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+        proxy = integration_proxy(host, port)
         result = proxy.execute(
             "import FreeCAD\n_result_ = {'gui_up': bool(FreeCAD.GuiUp)}"
         )
@@ -211,10 +211,10 @@ def _send_quit_command(host: str = "localhost", port: int = 9875) -> bool:
     Returns:
         True if command was sent successfully.
     """
-    import xmlrpc.client
+    from tests.integration.auth_support import integration_proxy
 
     try:
-        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+        proxy = integration_proxy(host, port)
         # Use FreeCADGui.getMainWindow().close() for a clean shutdown
         # This triggers the normal Qt close event which will run atexit handlers
         # Guard FreeCADGui import behind GuiUp check
