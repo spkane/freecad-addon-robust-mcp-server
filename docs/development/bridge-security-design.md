@@ -182,10 +182,9 @@ temporary dependency and test credential are not a deployment mechanism.
 
 The repeatable standalone test in `tests/integration/test_authenticated_standalone.py`
 starts its own headless FreeCAD process on ephemeral ports. Set
-`FREECAD_AUTH_TEST_COMMAND` to the FreeCAD command executable and
-`FREECAD_AUTH_TEST_DEPS` to a disposable directory containing a compatible
-`cryptography` installation, then run that test with `uv run pytest`. It uses a
-public test-only key and skips when these inputs are absent. It does not test
+`FREECAD_AUTH_TEST_COMMAND` to the FreeCAD command executable, then run that
+test with `uv run pytest`. It uses a public test-only shared secret and skips
+when the executable is not configured. It does not test
 the production provider, GUI, or same-account isolation.
 
 A separate Qt6 GUI probe on that development build displayed the permanent

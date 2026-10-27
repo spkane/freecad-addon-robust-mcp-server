@@ -1,10 +1,9 @@
 """Start a test-only authenticated bridge inside a standalone FreeCAD process.
 
-This fixture uses a public deterministic key and an in-memory trust store. It
+This fixture uses a public deterministic secret and an in-memory trust store. It
 must never be used as a production pairing or credential provider.
 """
 
-import hashlib
 import json
 import os
 import sys
@@ -12,7 +11,6 @@ import time
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, os.environ["FREECAD_AUTH_TEST_DEPS"])
 sys.path.insert(0, str(root / "freecad" / "RobustMCPBridge"))
 for module_name in list(sys.modules):
     if module_name == "freecad_mcp_bridge" or module_name.startswith(
@@ -20,20 +18,13 @@ for module_name in list(sys.modules):
     ):
         del sys.modules[module_name]
 
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 from freecad_mcp_bridge.authentication import (  # noqa: E402
     BridgeAuthenticator,
-    create_ed25519_verifier,
+    create_hmac_verifier,
 )
 from freecad_mcp_bridge.server import FreecadMCPPlugin  # noqa: E402
 
-key = Ed25519PrivateKey.from_private_bytes(b"\x01" * 32)
-public = key.public_key().public_bytes(
-    serialization.Encoding.Raw, serialization.PublicFormat.Raw
-)
-client_id = hashlib.sha256(public).hexdigest()
-auth = BridgeAuthenticator(create_ed25519_verifier({client_id: public}.get))
+auth = BridgeAuthenticator(create_hmac_verifier({"test-client": b"\x01" * 32}.get))
 plugin = FreecadMCPPlugin(
     host="127.0.0.1",
     port=int(os.environ.get("FREECAD_AUTH_TEST_SOCKET_PORT", "0")),
