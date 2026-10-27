@@ -11,6 +11,7 @@ Before starting, ensure you have:
 1. FreeCAD installed with the Robust MCP Bridge workbench
 1. The MCP server installed (`pip install freecad-robust-mcp`)
 1. Your MCP client configured (see [Configuration](configuration.md))
+1. Bridge pairing completed by running `freecad-mcp --pair-bridge` on the same computer and user account as FreeCAD
 
 ---
 
