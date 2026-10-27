@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from freecad_mcp.bridge.authentication import request_proof_message
+
 ADDON_DIR = Path(__file__).parents[3] / "freecad" / "RobustMCPBridge"
 TEST_KEY = b"a test key used only to verify the callback interface"
 
@@ -40,6 +42,18 @@ def test_authorized_request_cannot_be_replayed(auth_module: Any) -> None:
     proof = _proof(auth_module, "paired", challenge, body)
     assert auth.verify("paired", challenge, "xmlrpc", body, proof) is True
     assert auth.verify("paired", challenge, "xmlrpc", body, proof) is False
+
+
+@pytest.mark.parametrize("transport", ["xmlrpc", "socket"])
+def test_client_and_addon_construct_identical_proof_messages(
+    auth_module: Any, transport: str
+) -> None:
+    """The separately installed client and addon must use the same wire format."""
+    challenge = auth_module.BridgeAuthenticator(_verifier).issue_challenge()
+    body = b"request bytes\x00\xff"
+    assert request_proof_message("paired", challenge, transport, body) == (
+        auth_module.request_proof_message("paired", challenge, transport, body)
+    )
 
 
 @pytest.mark.parametrize("altered", ["body", "transport", "identity", "proof"])

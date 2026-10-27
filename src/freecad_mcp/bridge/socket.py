@@ -10,12 +10,15 @@ Based on learnings from competitive analysis:
 """
 
 import asyncio
+import base64
 import contextlib
 import json
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
+from freecad_mcp.bridge.authentication import request_proof_message
 from freecad_mcp.bridge.base import (
     DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
@@ -79,6 +82,8 @@ class SocketBridge(FreecadBridge):
         auto_reconnect: bool = True,
         *,
         execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+        client_id: str | None = None,
+        signer: Callable[[bytes], bytes] | None = None,
     ) -> None:
         """Initialize the socket bridge.
 
@@ -88,6 +93,8 @@ class SocketBridge(FreecadBridge):
             timeout: Connection and request timeout in seconds.
             auto_reconnect: Whether to automatically reconnect on connection loss.
             execution_timeout_ms: Default execution timeout in milliseconds.
+            client_id: Identity of the paired client.
+            signer: Protected provider that signs request proof messages.
         """
         self._host = host
         self._port = port
@@ -97,6 +104,8 @@ class SocketBridge(FreecadBridge):
             DEFAULT_EXECUTION_TIMEOUT_MS,
         )
         self._auto_reconnect = auto_reconnect
+        self._client_id = client_id
+        self._signer = signer
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._connected = False
@@ -237,10 +246,34 @@ class SocketBridge(FreecadBridge):
             JsonRpcError: If the server returns an error response.
             TimeoutError: If the response deadline expires.
         """
+        if self._client_id is None or self._signer is None:
+            raise ConnectionError("A paired client and protected signer are required")
         try:
-            request_data = json.dumps(request).encode("utf-8") + b"\n"
             async with asyncio.timeout(response_timeout):
-                writer.write(request_data)
+                writer.write(b'{"type":"challenge"}\n')
+                await writer.drain()
+                challenge_data = await reader.readline()
+                try:
+                    challenge_response = json.loads(challenge_data)
+                    challenge = challenge_response["challenge"]
+                    body = json.dumps(request).encode("utf-8")
+                    message = request_proof_message(
+                        self._client_id, challenge, "socket", body
+                    )
+                except (ValueError, KeyError, TypeError, UnicodeDecodeError) as e:
+                    raise ConnectionError(
+                        "Bridge did not provide a valid challenge"
+                    ) from e
+                proof = await asyncio.to_thread(self._signer, message)
+                if not isinstance(proof, bytes) or not proof or len(proof) > 8192:
+                    raise ConnectionError("Bridge signer returned an invalid proof")
+                envelope = {
+                    "client": self._client_id,
+                    "challenge": challenge,
+                    "body": base64.b64encode(body).decode("ascii"),
+                    "proof": base64.b64encode(proof).decode("ascii"),
+                }
+                writer.write(json.dumps(envelope).encode("utf-8") + b"\n")
                 await writer.drain()
                 response_data = await reader.readline()
         except TimeoutError:
@@ -260,6 +293,8 @@ class SocketBridge(FreecadBridge):
 
         if "error" in response:
             error = response["error"]
+            if not isinstance(error, dict):
+                raise ConnectionError("Bridge rejected authentication")
             raise JsonRpcError(
                 code=error.get("code", -1),
                 message=error.get("message", "Unknown error"),
@@ -410,7 +445,9 @@ class SocketBridge(FreecadBridge):
                         )
                     except (ConnectionResetError, BrokenPipeError) as e:
                         self._discard_request_streams(writer)
-                        recovery_error = e
+                        raise ConnectionError(
+                            "Connection lost during request; execution may have occurred"
+                        ) from e
             finally:
                 self._lock.release()
 

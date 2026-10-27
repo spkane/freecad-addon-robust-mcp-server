@@ -359,14 +359,25 @@ async def test_socket_reconnects_after_server_idle_deadline(
 ) -> None:
     """A real client reconnects before its next request after an idle close."""
     monkeypatch.setattr(server_mod, "REQUEST_READ_TIMEOUT_SECONDS", 0.1)
-    plugin = server_mod.FreecadMCPPlugin(host="127.0.0.1", port=0)
+    auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
+    key = b"unit-test-only-key"
+
+    def sign(message: bytes) -> bytes:
+        return hmac.digest(key, message, "sha256")
+
+    def verify(client: str, message: bytes, proof: bytes) -> bool:
+        return client == "paired" and hmac.compare_digest(sign(message), proof)
+
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=auth_module.BridgeAuthenticator(verify)
+    )
     plugin._running = True
     plugin._execute_via_queue = MagicMock(
         return_value={"success": True, "result": "done"}
     )
     await plugin._start_socket_server()
     port = plugin._socket_server.sockets[0].getsockname()[1]
-    bridge = SocketBridge(host="127.0.0.1", port=port)
+    bridge = SocketBridge(host="127.0.0.1", port=port, client_id="paired", signer=sign)
     try:
         await bridge.connect()
         await asyncio.sleep(0.25)
@@ -467,6 +478,35 @@ async def test_socket_listener_requires_fresh_request_proof(server_mod: Any) -> 
         plugin._running = False
         plugin._socket_server.close()
         await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_socket_client_rejects_legacy_server() -> None:
+    """An unauthenticated peer cannot cause the client to send code."""
+    received: list[bytes] = []
+
+    async def legacy(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        received.append(await reader.readline())
+        writer.write(b'{"jsonrpc":"2.0","result":"pong"}\n')
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    server = await asyncio.start_server(legacy, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1", port=port, client_id="paired", signer=lambda _: b"proof"
+    )
+    try:
+        with pytest.raises(ConnectionError, match="valid challenge"):
+            await bridge.connect()
+        assert received == [b'{"type":"challenge"}\n']
+    finally:
+        await bridge.disconnect()
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.asyncio
