@@ -95,6 +95,8 @@ def _is_port_occupied(host: str = "127.0.0.1", port: int = 9875) -> bool:
     """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            if os.name == "posix":
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((host, port))
     except OSError:
         return True

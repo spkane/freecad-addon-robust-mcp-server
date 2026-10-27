@@ -95,6 +95,7 @@ integration-freecad-auto:
         echo "ERROR: A bridge port is already in use; stop its owner before testing."
         exit 1
     fi
+    require_bridge_pairing
 
     # Start FreeCAD headless in background
     # Redirect stderr to log file (not /dev/null) so startup failures are visible
@@ -429,6 +430,7 @@ integration-headless-release:
         echo ""
         exit 1
     fi
+    require_bridge_pairing
 
     # Install latest workbench code to FreeCAD's Mod directory
     # This ensures tests run against the current source code, not stale installed code
@@ -512,6 +514,7 @@ integration-gui-release:
         echo ""
         exit 1
     fi
+    require_bridge_pairing
 
     # Install latest workbench code to FreeCAD's Mod directory
     # This ensures tests run against the current source code, not stale installed code

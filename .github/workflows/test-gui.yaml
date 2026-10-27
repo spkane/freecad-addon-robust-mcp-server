@@ -214,10 +214,7 @@ jobs:
 
               # Verify GUI mode is active
               echo "Verifying GUI mode..."
-              RESULT=$(uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().execute(\"_result_ = FreeCAD.GuiUp\"))")
-              echo "GuiUp check result: $RESULT"
-
-              if ! echo "$RESULT" | grep -q "true\|True\|1"; then
+              if ! uv run python -m tests.integration.gui_probe; then
                 echo "ERROR: FreeCAD GUI mode not active"
                 cat /test-output/freecad_bridge.log || true
                 kill $XDOT_PID 2>/dev/null || true

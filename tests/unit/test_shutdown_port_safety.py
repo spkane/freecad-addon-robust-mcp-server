@@ -1,5 +1,6 @@
 """Regression tests for standalone FreeCAD test port preflight."""
 
+import os
 import socket
 
 import pytest
@@ -28,3 +29,18 @@ def test_preflight_treats_bind_errors_as_unsafe(
 
     monkeypatch.setattr(socket.socket, "bind", fail_bind)
     assert _is_port_occupied()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX reuse semantics")
+def test_preflight_allows_reusable_time_wait_port() -> None:
+    """A closed reusable listener should not be mistaken for an active one."""
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        with socket.create_connection(("127.0.0.1", port), timeout=1) as client:
+            connection, _ = listener.accept()
+            connection.close()
+            client.recv(1)
+    assert not _is_port_occupied("127.0.0.1", port)

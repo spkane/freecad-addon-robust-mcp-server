@@ -67,6 +67,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "pytest-watch>=4.2.0",
+    "httpx2>=2.16.0",
     "psutil>=7.2.2",
     # Linting and formatting
     "mypy>=2.4.0",

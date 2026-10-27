@@ -39,6 +39,14 @@ is_bridge_running() {
     uv run python -c 'import sys; from tests.integration.auth_support import integration_proxy; result = integration_proxy(port=int(sys.argv[1])).ping(); sys.exit(0 if isinstance(result, dict) and result.get("pong") else 1)' "$port" >/dev/null 2>&1
 }
 
+# Fail before starting FreeCAD if the client cannot load its pairing.
+require_bridge_pairing() {
+    if ! uv run python -c 'from freecad_mcp.bridge.authentication import credentials_from_config; from freecad_mcp.config import get_config; credentials_from_config(get_config())' >/dev/null 2>&1; then
+        echo "ERROR: Bridge credentials are unavailable; run freecad-mcp --pair-bridge first." >&2
+        return 1
+    fi
+}
+
 # Locate an executable that can be run directly and tracked by PID.
 find_freecad_executable() {
     local mode=$1 candidate
@@ -53,11 +61,10 @@ find_freecad_executable() {
         if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
     else
         if [[ "$mode" == gui ]]; then
-            command -v freecad || command -v FreeCAD
+            if command -v freecad || command -v FreeCAD; then return 0; fi
         else
-            command -v freecadcmd || command -v FreeCADCmd
+            if command -v freecadcmd || command -v FreeCADCmd; then return 0; fi
         fi
-        return
     fi
     echo "FreeCAD $mode executable not found" >&2
     return 1

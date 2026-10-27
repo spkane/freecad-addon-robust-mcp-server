@@ -1167,8 +1167,6 @@ class FreecadMCPPlugin:
         finally:
             if self._socket_server is not None:
                 self._socket_server.close()
-                self._socket_loop.run_until_complete(self._socket_server.wait_closed())
-                self._socket_server = None
             pending = asyncio.all_tasks(self._socket_loop)
             for task in pending:
                 task.cancel()
@@ -1176,6 +1174,9 @@ class FreecadMCPPlugin:
                 self._socket_loop.run_until_complete(
                     asyncio.gather(*pending, return_exceptions=True)
                 )
+            if self._socket_server is not None:
+                self._socket_loop.run_until_complete(self._socket_server.wait_closed())
+                self._socket_server = None
             self._socket_loop.close()
 
     async def _start_socket_server(self) -> None:
@@ -1232,6 +1233,8 @@ class FreecadMCPPlugin:
                 writer.write(response_data)
                 await writer.drain()
 
+        except TimeoutError:
+            pass  # Idle clients can reconnect with a fresh challenge.
         except Exception as e:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")

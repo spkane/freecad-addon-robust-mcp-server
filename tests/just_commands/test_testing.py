@@ -7,6 +7,8 @@ Note: We avoid running integration tests here to prevent recursion.
 from __future__ import annotations
 
 import socket
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import pytest
@@ -56,6 +58,30 @@ class TestTestingRuntime:
     """
 
     @pytest.mark.just_runtime
+    @pytest.mark.parametrize("mode", ["gui", "headless"])
+    def test_missing_freecad_executable_reports_error(
+        self, tmp_path: Path, mode: str
+    ) -> None:
+        """Executable discovery must report a clear error when PATH is empty."""
+        helper = Path(__file__).resolve().parents[2] / "scripts/bridge-helpers.sh"
+        result = subprocess.run(  # noqa: S603
+            [
+                "/bin/bash",
+                "-c",
+                '. "$1"; find_freecad_executable "$2"',
+                "bash",
+                str(helper),
+                mode,
+            ],
+            env={"PATH": str(tmp_path), "OSTYPE": "linux-gnu"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0
+        assert f"FreeCAD {mode} executable not found" in result.stderr
+
+    @pytest.mark.just_runtime
     @pytest.mark.parametrize(
         "command",
         [
@@ -99,6 +125,9 @@ class TestTestingRuntime:
         assert 'stop_owned_freecad "$FREECAD_PID"' in result.output
         assert "graceful_kill_bridge_ports" not in result.output
         assert "kill_port" not in result.output
+        assert result.output.index("require_bridge_pairing") < result.output.index(
+            "FREECAD_CMD=$(find_freecad_executable"
+        )
 
     @pytest.mark.just_runtime
     def test_kill_bridge_runs(self, just: JustRunner) -> None:

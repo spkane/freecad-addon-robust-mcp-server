@@ -19,7 +19,7 @@ import xmlrpc.client
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, call
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
@@ -142,6 +142,7 @@ def test_socket_shutdown_releases_active_client_slots(server_mod: Any) -> None:
     plugin._running = True
     plugin._socket_thread = threading.Thread(target=plugin._run_socket_server)
     plugin._socket_thread.start()
+    socket_thread = plugin._socket_thread
     client = None
     try:
         deadline = time.monotonic() + 5
@@ -158,12 +159,41 @@ def test_socket_shutdown_releases_active_client_slots(server_mod: Any) -> None:
         if client is not None:
             client.close()
     assert plugin._socket_client_count == 0
+    assert not socket_thread.is_alive()
+
+
+@pytest.mark.asyncio
+async def test_idle_socket_timeout_is_not_logged_as_error(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An idle connection closes normally without an error in FreeCAD."""
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    reader = MagicMock()
+    reader.readline = AsyncMock(side_effect=TimeoutError())
+    writer = MagicMock()
+    writer.wait_closed = AsyncMock()
+    console = MagicMock()
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(
+        server_mod, "FreeCAD", MagicMock(Console=console), raising=False
+    )
+    await plugin._handle_socket_client(reader, writer)
+    console.PrintError.assert_not_called()
+    writer.close.assert_called_once()
 
 
 def test_start_refuses_missing_authentication_before_opening_listeners(
     server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A missing verifier must not start the queue or either bridge listener."""
+    monkeypatch.delenv("FREECAD_BRIDGE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FREECAD_BRIDGE_SECRET", raising=False)
+    store = importlib.import_module("freecad_mcp_bridge.credential_store")
+    monkeypatch.setattr(
+        store, "read_credential", MagicMock(side_effect=FileNotFoundError)
+    )
     plugin = server_mod.FreecadMCPPlugin()
     plugin._start_queue_processor = MagicMock()
     with pytest.raises(RuntimeError, match="authentication provider is required"):

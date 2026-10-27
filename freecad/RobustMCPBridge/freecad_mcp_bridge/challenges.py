@@ -52,13 +52,13 @@ class ChallengeStore:
         self._lock = threading.Lock()
 
     def issue(self) -> str:
-        """Generate a challenge or reject if the pending limit is reached.
+        """Generate a challenge, evicting the oldest pending challenge if full.
 
         Returns:
             A URL-safe random challenge containing 256 bits of entropy.
 
         Raises:
-            RuntimeError: If the pending challenge limit is reached.
+            RuntimeError: If a unique challenge cannot be generated.
         """
         with self._lock:
             now = self._clock()
@@ -67,11 +67,11 @@ class ChallengeStore:
                 for challenge, expiry in self._pending.items()
                 if expiry > now
             }
-            if len(self._pending) >= self._max_pending:
-                raise RuntimeError("Too many pending bridge challenges")
             for _ in range(3):
                 challenge = secrets.token_urlsafe(32)
                 if challenge not in self._pending:
+                    if len(self._pending) >= self._max_pending:
+                        del self._pending[next(iter(self._pending))]
                     self._pending[challenge] = now + self._lifetime_seconds
                     return challenge
             raise RuntimeError("Could not issue a unique bridge challenge")

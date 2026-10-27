@@ -32,14 +32,16 @@ def test_challenge_is_random_and_single_use(challenges: Any) -> None:
 
 
 def test_expiration_and_pending_limit(challenges: Any) -> None:
-    """Expired entries release capacity and cannot be consumed."""
+    """Oldest challenges are evicted at capacity and expired ones fail."""
     now = [10.0]
     store = challenges.ChallengeStore(
         max_pending=1, lifetime_seconds=5, clock=lambda: now[0]
     )
     first = store.issue()
-    with pytest.raises(RuntimeError, match="Too many"):
-        store.issue()
+    replacement = store.issue()
+    assert not store.consume(first)
+    assert store.consume(replacement)
+    first = store.issue()
     now[0] = 15.0
     second = store.issue()
     assert store.consume(first) is False
