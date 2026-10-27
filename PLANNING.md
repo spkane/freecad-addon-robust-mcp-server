@@ -3,9 +3,9 @@
 **Audit date:** 2026-09-05  
 **MCP migration update:** 2026-09-14
 
-**Post-merge triage update:** 2026-10-26
+**Post-merge triage update:** 2026-10-27
 
-**Repository snapshot:** `9001b40` on remote `main`
+**Repository snapshot:** `79db7f5` on remote `main`
 
 **Intended reader:** The maintainer returning to the project after time away  
 **Intended outcome:** Execute a secure, tested, repeatable public release of the
@@ -40,8 +40,8 @@ Python, operating-system, and MCP-client combinations.
 
 | Priority | Blocker                                                         | Why it blocks release                                                                                                                | Required result                                                                                                       |
 | -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| P0       | Unauthenticated code execution bridge                           | Any process able to reach ports 9875 or 9876 can submit Python that runs inside FreeCAD with the user's privileges                   | Pairing/authentication, loopback-only defaults, bounded requests, and an explicit unsafe-code policy                  |
-| P0       | FreeCAD 1.1 and Qt6 compatibility defects remain                | Workbench load, Qt binding fallback, shutdown, Part Design, external geometry, inspection, screenshots, and pockets have open bugs   | Merge the focused compatibility fixes and run them against supported stable FreeCAD builds                            |
+| Resolved | Unauthenticated code execution bridge                           | PR #155 added per-user pairing and authenticated loopback bridge transports; PR #156 tests real FreeCAD on Linux, macOS, and Windows | Preserve these controls and document the same-user and remote-access limitations                                      |
+| P0       | FreeCAD 1.1 and Qt6 compatibility defects remain                | Shutdown, installed workbench loading, screenshots, and pockets still need fixes despite merged Qt and Part Design repairs           | Merge the focused compatibility fixes and run them against supported stable FreeCAD builds                            |
 | P0       | MCP 2.3 migration needs final artifact certification            | The merged migration and GUI/headless CI pass, but the exact unlocked wheel/client matrix is incomplete                              | Verify the built wheel through stdio and HTTP on supported Python, FreeCAD, operating-system, and client combinations |
 | P0       | Workbench release archive cannot be built                       | The workflow copies `LICENSE`, but only `LICENSE-CODE` and `LICENSE-ICON` exist                                                      | Archive job passes and manifest/archive license names agree                                                           |
 | P0       | Runtime default contradicts documentation                       | Configuration defaults to embedded mode, while the CLI and docs say XML-RPC; embedded mode can crash on macOS                        | Make XML-RPC or socket the single default everywhere; make embedded explicitly opt-in and Linux-only                  |
@@ -49,17 +49,18 @@ Python, operating-system, and MCP-client combinations.
 
 The MCP HTTP listener's former `0.0.0.0` default and missing Host/Origin policy
 were fixed by PR #122. Do not reintroduce that exposure to solve the container
-topology reported in #139. The FreeCAD bridge itself remains unauthenticated and
-must stay loopback-only until it has a real trust boundary.
+topology reported in #139. PR #155 now requires pairing and restricts the bridge
+to loopback. The accepted boundary does not defend against malicious processes
+running as the same OS user.
 
 ## Live issue and pull-request triage
 
-**Triage date:** 2026-10-26
+**Triage date:** 2026-10-27
 
-**Live inventory after cleanup:** 10 open issues, 5 open human-authored pull
+**Live inventory after cleanup:** 9 open issues, 5 open human-authored pull
 requests, and zero open Dependabot pull requests
 
-**Remote `main` at triage:** `9001b40`, the merge commit for PR #101
+**Remote `main` at triage:** `79db7f5`, the merge commit for PR #156
 
 **Previous baseline:** The 2026-09-13 inventory was 15 issues, 11 pull
 requests, and remote `main` at `bde407c`. PR #122 and PR #147 are now merged.
@@ -77,7 +78,11 @@ FreeCAD operation tests passed in the supported Qt5, stable Qt6, and Qt6 canary
 lanes.
 PR #101 closed issue #95 after external geometry counts were verified against
 real FreeCAD link-subelement lists in the supported compatibility lanes. New
-CAM feature request #153 remains deferred while the fix-first queue is active.
+PR #154 closed issue #142 with bounded object-property serialization. PR #155
+authenticated the bridge and added HTTP API-key support; PR #156 added real
+FreeCAD authentication coverage on Linux, macOS, and Windows. PR #157 added
+the Pages landing page. CAM feature request #153 remains deferred while the
+fix-first queue is active.
 Canonical issues and their active implementation pull requests remain open
 until their acceptance criteria pass.
 
@@ -101,16 +106,16 @@ are deferred until this queue is complete.
 | Order | Priority | Effort | Work item                                           | Issue or PR disposition                                                                                                                                                                                                                                                   | Why this position                                                                                                                                                                                                                     |
 | ----: | :------: | :----: | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | P0       | S      | Restore Qt6-only workbench startup                  | **Completed:** [PR #140](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/140) closed [#138](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/138)                                                                                          | Qt5, stable Qt6, weekly Qt6 canary, GUI, and headless checks passed with fail-closed GUI startup.                                                                                                                                     |
-| 2     | P0       | XS     | Correct the unsafe container instructions           | **Completed:** [PR #151](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/151) closed [#139](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/139)                                                                                          | The documentation preserves the loopback-only unauthenticated execution boundary and directs Linux Docker Engine users to run the MCP server on the host.                                                                             |
+| 2     | P0       | XS     | Correct the unsafe container instructions           | **Completed:** [PR #151](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/151) closed [#139](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/139)                                                                                          | The documentation preserves the loopback-only execution boundary and directs Linux Docker Engine users to run the MCP server on the host.                                                                                             |
 | 3     | P0       | M      | Fix timeout and XML-RPC concurrency behavior        | **Completed:** [PR #152](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/152) closed [#143](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/143)                                                                                          | Configured/per-call values reach every mode, XML-RPC access is serialized, queued socket work is cancelled, and late execution is documented and tested.                                                                              |
 | 4     | P0       | S      | Fix symmetric Part Design operations                | **Completed:** [PR #100](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/100) closed [#94](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/94)                                                                                            | Pad prefers `SideType` and falls back to `Midplane`/`Symmetric`; Revolution and Groove use the applicable fallbacks, and real operations pass across the supported FreeCAD lanes.                                                     |
 | 5     | P0       | S      | Fix external-geometry counting                      | **Completed:** [PR #101](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/101) closed [#95](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/95)                                                                                            | Both tools count referenced subelements and the live regression verifies multiple edges from one feature.                                                                                                                             |
-| 6     | P0       | S-M    | Safely serialize common FreeCAD properties          | Implement [#142](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/142) across bridge paths                                                                                                                                                                | `inspect_object` fails on ordinary link properties. Use a shared bounded serializer with structured link identity, cycles/depth/size limits, and XML-RPC/socket/embedded parity tests.                                                |
+| 6     | P0       | S-M    | Safely serialize common FreeCAD properties          | **Completed:** [PR #154](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/154) closed [#142](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/142)                                                                                          | A shared bounded serializer handles link properties with transport parity and real FreeCAD regression coverage.                                                                                                                       |
 | 7     | P0       | S-M    | Fix startup configuration and silent pocket success | Revise and rebase [PR #123](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/123), then close [#105](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/105) and [#99](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/99)   | Remove implicit current-directory `.env` loading, retain the corrected screenshot proxy handling, and verify pocket volume/no-change behavior in real FreeCAD.                                                                        |
 | 8     | P0       | M      | Fix shutdown crash and headless auto-start safely   | Revise [PR #129](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/129); remove the process-wide QTimer sweep                                                                                                                                                | A reproducible exit crash is release-blocking, but deleting other workbenches' timers is unsafe. Limit cleanup to owned timers, respect Qt thread affinity, and complete batch-option tests.                                          |
 | 9     | P0       | S      | Make installed workbench imports reliable           | Revise and rebase [PR #137](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/137)                                                                                                                                                                           | Prefer package-qualified imports over permanent process-wide path precedence, restore `snake_case`, and verify both installed layouts in real FreeCAD.                                                                                |
 | 10    | P0       | M      | Finish screenshot rendering and cleanup             | Revise and rebase [PR #102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102); keep [#82](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/82) and [#92](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/92) canonical | Put camera restoration and temporary-file cleanup in `finally`; consolidate PR #123's view fix and add live success/failure capture tests.                                                                                            |
-| 11    | P1       | XS     | Correct installation documentation                  | Rebase and merge [PR #124](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/124)                                                                                                                                                                            | The content review is complete. Run strict docs/link checks and verify paths against the current installer/archive. Issue #104 is now closed into canonical #73.                                                                      |
+| 11    | P1       | XS     | Correct installation documentation                  | Reconcile [PR #124](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/124) with PR #157 and current installation behavior                                                                                                                                    | PR #157 changed the installation guide; verify Addon Manager availability and current installer/archive paths, then retain or close #124 as appropriate.                                                                              |
 | 12    | P1       | XS     | Repair capabilities metadata                        | Implement [#135](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/135) directly                                                                                                                                                                           | Remove the nonexistent screenshot `file_path` parameter and derive capability data from tool schemas where practical.                                                                                                                 |
 | 13    | P1       | S-M    | Repair release packaging and identity               | Fix the missing archive license input, stale repository URLs, runtime default, and Trusted Publisher identity; retain [#87](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/87) as the release gate                                                      | These are defects in the existing release path, not new features. Build and clean-install the exact candidate before publication.                                                                                                     |
 | 14    | P1       | S-M    | Make installation genuinely cross-platform          | Continue [#97](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/97) after PR #124                                                                                                                                                                         | Detect `python3` or `python`, remove the Git Bash/`cygpath` requirement, discover versioned FreeCAD directories, and test Windows.                                                                                                    |
@@ -143,7 +148,7 @@ The first maintenance-release queue is complete only when all of these are true:
 | -------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [#102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102) | Revise, rebase, merge            | Exception-safe camera/temp-file cleanup plus consolidated view-capability and live capture tests                          |
 | [#123](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/123) | Revise, rebase, merge            | Do not implicitly consume a caller's `.env`; add live FreeCAD pocket and screenshot regressions                           |
-| [#124](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/124) | Rebase, validate, merge          | Strict docs/link checks and install/archive path verification pass on current `main`                                      |
+| [#124](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/124) | Reconcile with PR #157           | Verify Addon Manager availability and install/archive paths; retain or close based on remaining changes                   |
 | [#129](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/129) | Request changes                  | Remove the global QTimer sweep, release only owned timers on their owning thread, and complete batch-option coverage      |
 | [#137](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/137) | Request changes                  | Avoid permanent global import-path precedence where possible, restore `snake_case`, and test installed layouts            |
 
@@ -161,13 +166,15 @@ The first maintenance-release queue is complete only when all of these are true:
 | [Issue #136](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/136) | Closed as resolved                  | Human dispositions were posted on PRs #123 and #124.                                                                |
 | [Issue #94](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/94)   | Closed as fixed                     | PR #100 added property compatibility and live Pad, Revolution, and Groove regressions.                              |
 | [Issue #95](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/95)   | Closed as fixed                     | PR #101 counts linked subelements in both affected tools and tests the real FreeCAD representation.                 |
+| [Issue #142](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/142) | Closed as fixed                     | PR #154 added bounded property serialization and transport regression coverage.                                     |
 | [PR #112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112)      | Closed, retained as design research | The 118-file conflicting rewrite was not a safe merge unit.                                                         |
 | [PR #141](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/141)      | Closed as duplicate of #100         | Symmetric-operation fixes are consolidated in canonical PR #100.                                                    |
 | [PR #100](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/100)      | Merged canonical fix                | FreeCAD 1.0.2/Qt5, stable Qt6, and weekly Qt6 canary checks passed before merge.                                    |
 | [PR #101](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/101)      | Merged canonical fix                | Live external geometry regression passed across the supported FreeCAD compatibility lanes.                          |
 
-Do not close issues #73, #82, #87, #92, #97, #99, #105, #135, #153 or
-issue #142 until their canonical acceptance criteria are met.
+Keep issues #73, #82, #87, #92, #97, #99, #105, #135, and #153 open until
+their acceptance criteria are met. PRs #155, #156, and #157 do not fully resolve
+any of these open issues.
 
 ### Deferred feature/design backlog from closed PR #112
 
@@ -332,28 +339,16 @@ The release must state this directly:
 
 ### Findings
 
-#### CRITICAL-1: Unauthenticated arbitrary code execution inside FreeCAD
+#### RESOLVED CRITICAL-1: Unauthenticated code execution bridge
 
-**Category:** Spoofing, tampering, information disclosure, elevation of privilege  
-**Reachability:** Any same-host process by default; remote clients if the bind
-host is changed  
-**Evidence:** The workbench bridge accepts socket `execute` requests, registers
-XML-RPC `execute`, and calls `exec` with builtins in
-`freecad/RobustMCPBridge/freecad_mcp_bridge/server.py:773-786`, with listeners
-created at lines 838-844 and 1022-1028. No authentication check appears in either
-request path.  
-**Exploit:** A malicious local webpage helper, compromised process, or another
-local user able to reach the port submits Python that reads files, modifies CAD
-documents, or runs with the FreeCAD user's permissions. A non-loopback bind turns
-the same path into remote unauthenticated execution.  
-**Remediation:** Require application-level challenge-response for every bridge
-request, with simple per-user pairing and credentials protected from other OS
-accounts. The accepted release boundary does not protect against malicious
-software running as the same user, which may access credentials or alter the
-workbench. Validate proofs before every method and reject replay. Bind only to
-loopback; do not accept arbitrary bind hosts in normal UI. Put explicit arbitrary
-execution tools in an opt-in profile and show a persistent FreeCAD warning that
-the bridge executes Python. The production pairing flow is still in progress.
+PR #155 requires challenge-response authentication for the XML-RPC and socket
+bridge listeners, restricts them to loopback, bounds request and result handling,
+and warns users that authorized clients can execute Python. Pairing is per user;
+malicious software running as that same user may read or use the credential or
+modify the workbench. MCP HTTP requires a bearer API key. PR #156 exercises real
+headless FreeCAD pairing, rejection, and MCP transports on Linux, macOS, and
+Windows; GUI compatibility is covered separately, not by that Windows auth test.
+Remote deployments still require a separately secured HTTPS transport.
 
 #### RESOLVED CRITICAL-2: MCP HTTP exposed the tool set on all interfaces
 
@@ -376,8 +371,8 @@ an allowlist of origins. Keep stdio as the recommended installation path.
 #### HIGH-3: Security configuration is declarative but unenforced
 
 **Category:** Elevation of privilege and security-boundary confusion  
-**Reachability:** Any authorized MCP caller, plus unauthenticated callers through
-the findings above  
+**Reachability:** Any authorized MCP caller or paired bridge client
+
 **Evidence:** `enable_sandbox`, `allow_file_access`, and
 `allow_network_access` are declared at `src/freecad_mcp/config.py:100-103`; only a
 configuration unit test references them. The execution path does not enforce
@@ -455,8 +450,9 @@ details by default.
 **Category:** Repudiation  
 **Reachability:** All bridge clients  
 **Evidence:** XML-RPC request logging is deliberately suppressed and bridge
-requests have no authenticated client identity, operation digest, result status,
-or tamper-resistant audit record.  
+requests lack a complete operational audit record with client identity,
+operation digest, result status, and tamper resistance.
+
 **Exploit:** After an unexpected model or file change, the operator cannot tell
 which client invoked which operation.  
 **Remediation:** Add structured local logs with request ID, paired client ID,
@@ -478,8 +474,8 @@ tokens, full arbitrary code, private model data, or file contents by default.
 - Secrets scanning, CodeQL, dependency automation, linting, and security tooling
   are already represented in project automation.
 
-These controls reduce risk but do not compensate for unauthenticated arbitrary
-execution.
+These controls reduce risk; authorized bridge clients still have FreeCAD user
+privileges, and same-user malicious software is outside the pairing boundary.
 
 ## Modern MCP plan
 
@@ -843,9 +839,10 @@ run `--version`, initialize over stdio, and see correct current metadata.
 
 **Goal:** Make the local architecture defensible before wider distribution.
 
-- Add per-launch pairing/authentication for both bridge protocols.
-- Bind bridge and local HTTP endpoints explicitly to loopback.
-- Disable or isolate arbitrary Python by default.
+- Preserve the per-user pairing and bridge authentication added by PR #155.
+- Preserve loopback bridge binding and the loopback HTTP default.
+- Preserve the default opt-in for explicit arbitrary-code tools; ordinary CAD
+  tools still execute generated Python through the authorized bridge.
 - Remove or enforce misleading security flags.
 - Add request, connection, queue, output, and execution-state limits.
 - Sanitize remote errors and add structured local audit logs.
@@ -916,9 +913,10 @@ contract is explicit, and no P0/P1 release findings remain.
 
 - [ ] Threat model and privileged execution warning are public.
 - [ ] `SECURITY.md` provides private disclosure instructions.
-- [ ] Bridge requires pairing/authentication and loopback binding.
+- [x] Bridge requires pairing/authentication and loopback binding (PR #155).
 - [ ] Remote HTTP is disabled by default and production configuration is secured.
-- [ ] Arbitrary Python is explicitly opt-in.
+- [x] Explicit arbitrary-code MCP tools are opt-in (PR #155); authorized
+  bridge clients and ordinary CAD tools can still execute Python.
 - [ ] Request, queue, body, output, and concurrency limits are tested.
 - [ ] Full tracebacks stay in local logs.
 - [ ] Supported FreeCAD floor includes required upstream security fixes.
@@ -959,21 +957,22 @@ contract is explicit, and no P0/P1 release findings remain.
 
 ## Recommended next work session
 
-Keep the next implementation session intentionally narrow:
-
-1. Implement the bounded property serializer from #142.
-2. Finish PR #123's
-   startup, screenshot, and pocket changes.
+1. Address silent pocket success in #99, verifying changed and unchanged volume
+   against real FreeCAD. Review and rebase PR #123, which also addresses #105
+   and part of screenshot handling; separate changes when useful for review.
+2. Remove implicit working-directory `.env` loading for #105 and test startup
+   with unrelated settings and explicit environment configuration.
 3. Revise PRs #129 and #137 using real FreeCAD GUI/headless startup, shutdown,
-   and installed-layout tests.
-4. Merge PR #124 after strict documentation validation, then fix the release
-   archive license mismatch and stale repository identity.
-5. Build the exact `0.7.0rc1` wheel and workbench archive, then run the unlocked
-   stdio/HTTP client matrix and supported stable FreeCAD GUI/headless matrix.
+   and installed-layout tests. Avoid a process-wide QTimer sweep.
+4. Resolve screenshot issues #82 and #92 using PR #102 and relevant parts of
+   #123, with live rendering and failure-cleanup tests.
+5. Reconcile PR #124 with PR #157 and #73; correct installation documentation,
+   then address #97, the release archive, package identity, and #87.
+6. Build the exact release candidate and verify unlocked stdio/HTTP clients and
+   supported FreeCAD GUI/headless combinations before publishing.
 
-Do not mix the bridge trust-boundary changes with the FreeCAD compatibility
-patches. Each class needs different reviewers, failure-injection tests, and
-rollback reasoning.
+Bridge authentication is merged separately in PR #155, with cross-platform
+headless coverage in PR #156. Preserve its accepted same-user limitation.
 
 ## Authoritative references
 
