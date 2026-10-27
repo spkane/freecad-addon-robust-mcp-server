@@ -51,6 +51,30 @@ class TestServerConfig:
 
         assert config.socket_port == 12345
 
+    def test_execution_timeout_from_env(self) -> None:
+        """Configuration should read the default execution timeout."""
+        with mock.patch.dict(
+            os.environ,
+            {"FREECAD_TIMEOUT_MS": "45000"},
+            clear=True,
+        ):
+            config = ServerConfig()
+
+        assert config.timeout_ms == 45000
+
+    @pytest.mark.parametrize("timeout_ms", ["999", "600001"])
+    def test_invalid_execution_timeout_raises_error(self, timeout_ms: str) -> None:
+        """Configured execution timeouts must remain inside supported bounds."""
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"FREECAD_TIMEOUT_MS": timeout_ms},
+                clear=True,
+            ),
+            pytest.raises(Exception),
+        ):
+            ServerConfig()
+
     def test_http_transport_from_env(self):
         """Configuration should read transport from environment."""
         with mock.patch.dict(os.environ, {"FREECAD_TRANSPORT": "http"}):

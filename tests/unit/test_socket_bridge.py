@@ -20,6 +20,7 @@ class TestSocketBridge:
         assert bridge._port == 9876
         assert bridge._reader is None
         assert bridge._writer is None
+        assert bridge._execution_timeout_ms == 30000
 
     def test_initialization_custom(self):
         """Bridge should accept custom host and port."""
@@ -61,6 +62,100 @@ class TestSocketBridge:
         assert result.success is False
         assert result.error_type == "ConnectionError"
 
+    @pytest.mark.asyncio
+    async def test_execute_python_uses_configured_timeout(self):
+        """An omitted per-call timeout should use the configured default."""
+        bridge = SocketBridge(execution_timeout_ms=45000)
+
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            new=mock.AsyncMock(return_value={"success": True, "result": "done"}),
+        ) as send_request:
+            result = await bridge.execute_python("_result_ = 'done'")
+
+        assert result.success is True
+        send_request.assert_awaited_once_with(
+            "execute",
+            {"code": "_result_ = 'done'", "timeout_ms": 45000},
+            response_timeout=46.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_python_passes_per_call_timeout(self):
+        """A per-call timeout should override the configured default."""
+        bridge = SocketBridge(execution_timeout_ms=45000)
+
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            new=mock.AsyncMock(return_value={"success": True, "result": "done"}),
+        ) as send_request:
+            await bridge.execute_python("_result_ = 'done'", timeout_ms=60000)
+
+        send_request.assert_awaited_once_with(
+            "execute",
+            {"code": "_result_ = 'done'", "timeout_ms": 60000},
+            response_timeout=61.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_python_preserves_server_timeout_message(self):
+        """Server-side timeout details should be exposed to the MCP caller."""
+        bridge = SocketBridge()
+
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            new=mock.AsyncMock(
+                return_value={
+                    "success": False,
+                    "error_type": "TimeoutError",
+                    "error_message": (
+                        "Execution timed out after 30000ms; "
+                        "code already running in FreeCAD may continue"
+                    ),
+                }
+            ),
+        ):
+            result = await bridge.execute_python("long_operation()")
+
+        assert result.success is False
+        assert result.error_type == "TimeoutError"
+        assert "may continue" in result.stderr
+
+    @pytest.mark.asyncio
+    async def test_execute_python_rejects_invalid_timeout(self):
+        """Per-call timeouts outside the supported bounds should fail locally."""
+        bridge = SocketBridge()
+
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            new=mock.AsyncMock(),
+        ) as send_request:
+            result = await bridge.execute_python("pass", timeout_ms=999)
+
+        assert result.success is False
+        assert result.error_type == "ValueError"
+        send_request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_execute_python_reports_client_response_timeout(self):
+        """A missing server response should retain late-execution guidance."""
+        bridge = SocketBridge()
+
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            new=mock.AsyncMock(side_effect=TimeoutError),
+        ):
+            result = await bridge.execute_python("long_operation()")
+
+        assert result.success is False
+        assert result.error_type == "TimeoutError"
+        assert "may continue" in result.stderr
+
 
 class TestSocketBridgeCommunication:
     """Tests for socket communication."""
@@ -94,6 +189,27 @@ class TestSocketBridgeCommunication:
         assert bridge._reader is not None
         assert bridge._writer is not None
         assert bridge._connected is True
+
+    @pytest.mark.asyncio
+    async def test_response_timeout_discards_desynchronized_connection(
+        self,
+        mock_streams,
+    ) -> None:
+        """A timed-out read should close the stream before another request."""
+        reader, writer = mock_streams
+        reader.readline.side_effect = TimeoutError
+        bridge = SocketBridge(timeout=0.01)
+        bridge._reader = reader
+        bridge._writer = writer
+        bridge._connected = True
+
+        with pytest.raises(TimeoutError):
+            await bridge._send_request("ping")
+
+        writer.close.assert_called_once_with()
+        assert bridge._reader is None
+        assert bridge._writer is None
+        assert bridge._connected is False
 
 
 class TestSocketBridgeDocuments:

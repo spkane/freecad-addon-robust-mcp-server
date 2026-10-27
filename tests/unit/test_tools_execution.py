@@ -61,7 +61,10 @@ class TestExecutionTools:
         assert result["success"] is True
         assert result["result"] == {"value": 42, "type": "int"}
         assert result["execution_time_ms"] == 10.5
-        mock_bridge.execute_python.assert_called_once()
+        mock_bridge.execute_python.assert_awaited_once_with(
+            "_result_ = {'value': 42, 'type': 'int'}",
+            None,
+        )
 
     @pytest.mark.asyncio
     async def test_execute_python_with_timeout(self, register_tools, mock_bridge):

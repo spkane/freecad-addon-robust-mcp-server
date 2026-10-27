@@ -206,7 +206,13 @@ SIGSEGV: Segmentation fault
 Error: Execution timed out after 30000ms
 ```
 
-**Solution:** Increase the timeout with `FREECAD_TIMEOUT_MS=60000` or optimize your operation.
+**Solution:** Increase the default with `FREECAD_TIMEOUT_MS=60000`, pass a
+per-call `timeout_ms` to `execute_python`, or optimize the operation. Per-call
+values take precedence over the environment setting in every connection mode.
+
+A timeout cancels work that is still queued, but it cannot safely interrupt
+Python code that has already started in FreeCAD. The error reports when code may
+still be running. Check document state before retrying a state-changing call.
 
 ---
 

@@ -26,7 +26,7 @@ def register_execution_tools(
     @mcp.tool()
     async def execute_python(
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> dict[str, Any]:
         """Execute Python code in FreeCAD's Python console context.
 
@@ -37,7 +37,8 @@ def register_execution_tools(
             code: Python code to execute. Use `_result_ = value` to return data
                 to the caller. The code has access to FreeCAD, App, FreeCADGui,
                 and Gui modules.
-            timeout_ms: Maximum execution time in milliseconds. Defaults to 30000.
+            timeout_ms: Optional per-call execution timeout in milliseconds.
+                When omitted, the ``FREECAD_TIMEOUT_MS`` setting applies.
 
         Returns:
             Dictionary containing execution results:

@@ -385,7 +385,7 @@ class FreecadBridge(ABC):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000
+        timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context."""
         pass
@@ -475,11 +475,12 @@ class EmbeddedBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000
+        timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context."""
         import time
 
+        effective_timeout_ms = timeout_ms or self._execution_timeout_ms
         start = time.perf_counter()
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -506,7 +507,7 @@ class EmbeddedBridge(FreecadBridge):
                         None,
                         lambda: exec(compile(code, "<mcp>", "exec"), exec_globals)
                     ),
-                    timeout=timeout_ms / 1000
+                    timeout=effective_timeout_ms / 1000
                 )
 
             elapsed = (time.perf_counter() - start) * 1000
@@ -525,9 +526,11 @@ class EmbeddedBridge(FreecadBridge):
                 result=None,
                 stdout=stdout_capture.getvalue(),
                 stderr=stderr_capture.getvalue(),
-                execution_time_ms=timeout_ms,
+                execution_time_ms=effective_timeout_ms,
                 error_type="TimeoutError",
-                error_traceback=f"Execution timed out after {timeout_ms}ms",
+                error_traceback=(
+                    f"Execution timed out after {effective_timeout_ms}ms"
+                ),
             )
         except Exception as e:
             import traceback
@@ -645,12 +648,13 @@ class SocketBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000
+        timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context."""
+        effective_timeout_ms = timeout_ms or self._execution_timeout_ms
         response = await self._send_request("execute", {
             "code": code,
-            "timeout_ms": timeout_ms,
+            "timeout_ms": effective_timeout_ms,
         })
 
         if "error" in response:
@@ -866,14 +870,15 @@ Execute arbitrary Python code in FreeCAD's context.
 @mcp.tool()
 async def execute_python(
     code: str,
-    timeout_ms: int = 30000,
+    timeout_ms: int | None = None,
     capture_result: bool = True,
 ) -> dict:
     """Execute Python code in FreeCAD's Python console context.
 
     Args:
         code: Python code to execute. Use `_result_ = value` to return data.
-        timeout_ms: Maximum execution time in milliseconds.
+        timeout_ms: Optional per-call execution timeout in milliseconds. The
+            configured bridge default applies when omitted.
         capture_result: Whether to capture and return the result value.
 
     Returns:

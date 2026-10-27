@@ -129,6 +129,33 @@ DEFAULT_XMLRPC_PORT = 9875
 QUEUE_POLL_INTERVAL_MS = 50
 STATUS_UPDATE_INTERVAL_MS = 5000  # Update status bar every 5 seconds
 HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
+DEFAULT_EXECUTION_TIMEOUT_MS = 30000
+MIN_EXECUTION_TIMEOUT_MS = 1000
+MAX_EXECUTION_TIMEOUT_MS = 600000
+
+
+def _validate_execution_timeout_ms(timeout_ms: Any) -> int:
+    """Validate a timeout received through either bridge protocol.
+
+    Args:
+        timeout_ms: Candidate timeout value from an XML-RPC or JSON-RPC client.
+
+    Returns:
+        The validated timeout in milliseconds.
+
+    Raises:
+        ValueError: If the value is not an integer in the supported range.
+    """
+    if (
+        type(timeout_ms) is not int
+        or not MIN_EXECUTION_TIMEOUT_MS <= timeout_ms <= MAX_EXECUTION_TIMEOUT_MS
+    ):
+        msg = (
+            "Execution timeout must be an integer between "
+            f"{MIN_EXECUTION_TIMEOUT_MS} and {MAX_EXECUTION_TIMEOUT_MS} milliseconds"
+        )
+        raise ValueError(msg)
+    return timeout_ms
 
 
 def _get_qt_core() -> Any:
@@ -154,7 +181,7 @@ class ExecutionRequest:
     def __init__(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
         request_id: str | None = None,
     ) -> None:
         """Initialize execution request.
@@ -169,6 +196,38 @@ class ExecutionRequest:
         self.request_id = request_id
         self.result: dict[str, Any] | None = None
         self.completed = threading.Event()
+        self._state = "queued"
+        self._state_lock = threading.Lock()
+
+    def start(self) -> bool:
+        """Mark a queued request as running unless its caller already timed out.
+
+        Returns:
+            True when execution may start, or False when the request was cancelled.
+        """
+        with self._state_lock:
+            if self._state != "queued":
+                return False
+            self._state = "running"
+            return True
+
+    def finish(self, result: dict[str, Any]) -> None:
+        """Store the result and notify the waiting protocol thread."""
+        with self._state_lock:
+            self.result = result
+            self._state = "completed"
+            self.completed.set()
+
+    def mark_timed_out(self) -> str:
+        """Cancel queued work or report that running work cannot be interrupted.
+
+        Returns:
+            The request state after applying the timeout.
+        """
+        with self._state_lock:
+            if self._state == "queued":
+                self._state = "cancelled"
+            return self._state
 
 
 class FreecadMCPPlugin:
@@ -728,9 +787,10 @@ class FreecadMCPPlugin:
         while not self._request_queue.empty():
             try:
                 request = self._request_queue.get_nowait()
+                if not request.start():
+                    continue
                 result = self._execute_code_sync(request.code)
-                request.result = result
-                request.completed.set()
+                request.finish(result)
                 # Track request for status bar
                 self._record_request()
             except queue.Empty:
@@ -742,7 +802,7 @@ class FreecadMCPPlugin:
     def _execute_via_queue(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
     ) -> dict[str, Any]:
         """Execute code via the queue system for thread safety.
 
@@ -753,6 +813,16 @@ class FreecadMCPPlugin:
         Returns:
             Execution result dictionary.
         """
+        try:
+            timeout_ms = _validate_execution_timeout_ms(timeout_ms)
+        except ValueError as e:
+            return {
+                "success": False,
+                "error_type": "ValueError",
+                "error_message": str(e),
+                "execution_time_ms": 0,
+            }
+
         request = ExecutionRequest(code, timeout_ms)
         self._request_queue.put(request)
 
@@ -763,13 +833,21 @@ class FreecadMCPPlugin:
                 "error_type": "InternalError",
                 "error_message": "No result returned",
             }
-        else:
-            return {
-                "success": False,
-                "error_type": "TimeoutError",
-                "error_message": f"Execution timed out after {timeout_ms}ms",
-                "execution_time_ms": timeout_ms,
-            }
+        state = request.mark_timed_out()
+        if state == "completed" and request.result is not None:
+            return request.result
+
+        detail = (
+            "code already running in FreeCAD may continue"
+            if state == "running"
+            else "queued code was cancelled before execution"
+        )
+        return {
+            "success": False,
+            "error_type": "TimeoutError",
+            "error_message": f"Execution timed out after {timeout_ms}ms; {detail}",
+            "execution_time_ms": timeout_ms,
+        }
 
     def _execute_code_sync(self, code: str) -> dict[str, Any]:
         """Execute Python code synchronously (call on main thread only).
@@ -939,7 +1017,7 @@ class FreecadMCPPlugin:
         # Handle execute via queue
         if method == "execute":
             code = params.get("code", "")
-            timeout_ms = params.get("timeout_ms", 30000)
+            timeout_ms = params.get("timeout_ms", DEFAULT_EXECUTION_TIMEOUT_MS)
 
             # Execute via queue for thread safety
             loop = asyncio.get_event_loop()
@@ -1089,16 +1167,22 @@ class FreecadMCPPlugin:
         """
         return {"instance_id": self._instance_id}
 
-    def _xmlrpc_execute(self, code: str) -> dict[str, Any]:
+    def _xmlrpc_execute(
+        self,
+        code: str,
+        timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+    ) -> dict[str, Any]:
         """XML-RPC execute handler (neka-nat compatible).
 
         Args:
             code: Python code to execute.
+            timeout_ms: Execution timeout in milliseconds. The default preserves
+                compatibility with one-argument XML-RPC clients.
 
         Returns:
             Execution result dictionary.
         """
-        return self._execute_via_queue(code, 30000)
+        return self._execute_via_queue(code, timeout_ms)
 
     # Valid view types for screenshot capture
     _VALID_VIEW_TYPES = frozenset(

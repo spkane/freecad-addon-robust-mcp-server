@@ -17,6 +17,7 @@ import uuid
 from typing import Any
 
 from freecad_mcp.bridge.base import (
+    DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
     DocumentInfo,
     ExecutionResult,
@@ -26,11 +27,13 @@ from freecad_mcp.bridge.base import (
     ScreenshotResult,
     ViewAngle,
     WorkbenchInfo,
+    resolve_execution_timeout_ms,
 )
 
 DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_TIMEOUT = 30.0
+EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
 
 
 class JsonRpcError(Exception):
@@ -68,6 +71,7 @@ class SocketBridge(FreecadBridge):
         host: str = DEFAULT_SOCKET_HOST,
         port: int = DEFAULT_SOCKET_PORT,
         timeout: float = DEFAULT_TIMEOUT,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
         auto_reconnect: bool = True,
     ) -> None:
         """Initialize the socket bridge.
@@ -76,11 +80,16 @@ class SocketBridge(FreecadBridge):
             host: Socket server hostname.
             port: Socket server port.
             timeout: Connection and request timeout in seconds.
+            execution_timeout_ms: Default execution timeout in milliseconds.
             auto_reconnect: Whether to automatically reconnect on connection loss.
         """
         self._host = host
         self._port = port
         self._timeout = timeout
+        self._execution_timeout_ms = resolve_execution_timeout_ms(
+            execution_timeout_ms,
+            DEFAULT_EXECUTION_TIMEOUT_MS,
+        )
         self._auto_reconnect = auto_reconnect
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
@@ -136,12 +145,15 @@ class SocketBridge(FreecadBridge):
         self,
         method: str,
         params: dict[str, Any] | None = None,
+        response_timeout: float | None = None,
     ) -> Any:
         """Send a JSON-RPC request and wait for response.
 
         Args:
             method: Method name to call.
             params: Method parameters.
+            response_timeout: Optional response timeout in seconds. The bridge
+                connection timeout applies when omitted.
 
         Returns:
             Result from the JSON-RPC response.
@@ -149,6 +161,7 @@ class SocketBridge(FreecadBridge):
         Raises:
             ConnectionError: If not connected.
             JsonRpcError: If server returns an error.
+            TimeoutError: If the response deadline expires.
         """
         if self._writer is None or self._reader is None:
             msg = "Not connected to socket server"
@@ -173,7 +186,9 @@ class SocketBridge(FreecadBridge):
                 # Read response
                 response_data = await asyncio.wait_for(
                     self._reader.readline(),
-                    timeout=self._timeout,
+                    timeout=(
+                        self._timeout if response_timeout is None else response_timeout
+                    ),
                 )
 
                 if not response_data:
@@ -194,9 +209,13 @@ class SocketBridge(FreecadBridge):
 
                 return response.get("result")
 
-            except TimeoutError as e:
-                msg = "Request timed out"
-                raise ConnectionError(msg) from e
+            except TimeoutError:
+                self._connected = False
+                if self._writer is not None:
+                    self._writer.close()
+                self._reader = None
+                self._writer = None
+                raise
             except json.JSONDecodeError as e:
                 msg = f"Invalid JSON response: {e}"
                 raise ConnectionError(msg) from e
@@ -206,7 +225,11 @@ class SocketBridge(FreecadBridge):
                     # Try to reconnect
                     try:
                         await self.connect()
-                        return await self._send_request(method, params)
+                        return await self._send_request(
+                            method,
+                            params,
+                            response_timeout,
+                        )
                     except Exception:
                         pass
                 msg = f"Connection lost: {e}"
@@ -264,23 +287,42 @@ class SocketBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context via socket.
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The configured
+                bridge default applies when omitted.
 
         Returns:
             ExecutionResult with execution outcome.
         """
+        try:
+            effective_timeout_ms = resolve_execution_timeout_ms(
+                timeout_ms,
+                self._execution_timeout_ms,
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=str(e),
+                execution_time_ms=0,
+                error_type="ValueError",
+            )
+
         start = time.perf_counter()
 
         try:
-            result = await asyncio.wait_for(
-                self._send_request("execute", {"code": code}),
-                timeout=timeout_ms / 1000,
+            result = await self._send_request(
+                "execute",
+                {"code": code, "timeout_ms": effective_timeout_ms},
+                response_timeout=(
+                    effective_timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS
+                ),
             )
             elapsed = (time.perf_counter() - start) * 1000
 
@@ -289,7 +331,7 @@ class SocketBridge(FreecadBridge):
                     success=result.get("success", False),
                     result=result.get("result"),
                     stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
+                    stderr=(result.get("stderr") or result.get("error_message", "")),
                     execution_time_ms=elapsed,
                     error_type=result.get("error_type"),
                     error_traceback=result.get("error_traceback"),
@@ -308,8 +350,11 @@ class SocketBridge(FreecadBridge):
                 success=False,
                 result=None,
                 stdout="",
-                stderr=f"Execution timed out after {timeout_ms}ms",
-                execution_time_ms=float(timeout_ms),
+                stderr=(
+                    f"Execution response timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                ),
+                execution_time_ms=float(effective_timeout_ms),
                 error_type="TimeoutError",
             )
         except JsonRpcError as e:

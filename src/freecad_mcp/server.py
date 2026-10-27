@@ -140,6 +140,7 @@ async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
 
         _bridge = EmbeddedBridge(
             freecad_path=str(config.freecad_path) if config.freecad_path else None,
+            execution_timeout_ms=config.timeout_ms,
         )
         logger.info("Using embedded bridge (headless mode)")
 
@@ -149,6 +150,7 @@ async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
         _bridge = XmlRpcBridge(
             host=config.socket_host,
             port=config.xmlrpc_port,
+            execution_timeout_ms=config.timeout_ms,
         )
         logger.info(
             "Using XML-RPC bridge: %s:%d", config.socket_host, config.xmlrpc_port
@@ -160,6 +162,7 @@ async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
         _bridge = SocketBridge(
             host=config.socket_host,
             port=config.socket_port,
+            execution_timeout_ms=config.timeout_ms,
         )
         logger.info(
             "Using socket bridge: %s:%d", config.socket_host, config.socket_port
@@ -260,6 +263,7 @@ async def check_freecad_connection(
                 freecad_path=(
                     str(config.freecad_path) if config.freecad_path else None
                 ),
+                execution_timeout_ms=config.timeout_ms,
             )
         elif config.mode == FreecadMode.XMLRPC:
             from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
@@ -267,6 +271,7 @@ async def check_freecad_connection(
             bridge = XmlRpcBridge(
                 host=config.socket_host,
                 port=config.xmlrpc_port,
+                execution_timeout_ms=config.timeout_ms,
             )
             print(f"  Host: {config.socket_host}:{config.xmlrpc_port}")
         else:
@@ -275,6 +280,7 @@ async def check_freecad_connection(
             bridge = SocketBridge(
                 host=config.socket_host,
                 port=config.socket_port,
+                execution_timeout_ms=config.timeout_ms,
             )
             print(f"  Host: {config.socket_host}:{config.socket_port}")
 

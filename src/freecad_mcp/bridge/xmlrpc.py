@@ -21,9 +21,12 @@ Attribution:
 import asyncio
 import time
 import xmlrpc.client
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from freecad_mcp.bridge.base import (
+    DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
     DocumentInfo,
     ExecutionResult,
@@ -33,11 +36,13 @@ from freecad_mcp.bridge.base import (
     ScreenshotResult,
     ViewAngle,
     WorkbenchInfo,
+    resolve_execution_timeout_ms,
 )
 
 DEFAULT_XMLRPC_HOST = "localhost"
 DEFAULT_XMLRPC_PORT = 9875
 DEFAULT_TIMEOUT = 30.0
+EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
 
 
 class XmlRpcBridge(FreecadBridge):
@@ -58,6 +63,7 @@ class XmlRpcBridge(FreecadBridge):
         host: str = DEFAULT_XMLRPC_HOST,
         port: int = DEFAULT_XMLRPC_PORT,
         timeout: float = DEFAULT_TIMEOUT,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
     ) -> None:
         """Initialize the XML-RPC bridge.
 
@@ -65,11 +71,17 @@ class XmlRpcBridge(FreecadBridge):
             host: XML-RPC server hostname.
             port: XML-RPC server port.
             timeout: Connection and request timeout in seconds.
+            execution_timeout_ms: Default execution timeout in milliseconds.
         """
         self._host = host
         self._port = port
         self._timeout = timeout
+        self._execution_timeout_ms = resolve_execution_timeout_ms(
+            execution_timeout_ms,
+            DEFAULT_EXECUTION_TIMEOUT_MS,
+        )
         self._proxy: xmlrpc.client.ServerProxy | None = None
+        self._executor: ThreadPoolExecutor | None = None
         self._connected = False
 
     @property
@@ -83,24 +95,26 @@ class XmlRpcBridge(FreecadBridge):
         Raises:
             ConnectionError: If connection cannot be established.
         """
-        loop = asyncio.get_event_loop()
         try:
-            self._proxy = await loop.run_in_executor(
-                None,
-                lambda: xmlrpc.client.ServerProxy(
-                    self._server_url,
-                    allow_none=True,
-                ),
+            self._executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="freecad-xmlrpc",
+            )
+            self._proxy = xmlrpc.client.ServerProxy(
+                self._server_url,
+                allow_none=True,
             )
             # Test connection with a ping
             await self.ping()
             self._connected = True
         except ConnectionRefusedError as e:
             self._connected = False
+            self._shutdown_executor()
             msg = self._get_connection_refused_message()
             raise ConnectionError(msg) from e
         except Exception as e:
             self._connected = False
+            self._shutdown_executor()
             error_str = str(e)
             if "Connection refused" in error_str or "Errno 61" in error_str:
                 msg = self._get_connection_refused_message()
@@ -141,6 +155,43 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
         """Close connection to FreeCAD XML-RPC server."""
         self._proxy = None
         self._connected = False
+        self._shutdown_executor()
+
+    def _shutdown_executor(self) -> None:
+        """Stop accepting XML-RPC calls and release executor resources."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
+
+    async def _run_proxy_call(
+        self,
+        call: Callable[[xmlrpc.client.ServerProxy], Any],
+        timeout_seconds: float,
+    ) -> Any:
+        """Run one serialized call against the shared XML-RPC proxy.
+
+        ``ServerProxy`` transports are not thread-safe. A dedicated single-worker
+        executor also prevents a timed-out background call from overlapping the
+        next request while its blocking socket operation finishes.
+
+        Args:
+            call: Blocking operation to invoke with the active proxy.
+            timeout_seconds: Maximum time to await the blocking operation.
+
+        Returns:
+            The XML-RPC response.
+
+        Raises:
+            ConnectionError: If the bridge is disconnected.
+            TimeoutError: If the response does not arrive before the deadline.
+        """
+        if self._proxy is None or self._executor is None:
+            msg = "Not connected to XML-RPC server"
+            raise ConnectionError(msg)
+
+        loop = asyncio.get_running_loop()
+        future = loop.run_in_executor(self._executor, call, self._proxy)
+        return await asyncio.wait_for(future, timeout=timeout_seconds)
 
     async def is_connected(self) -> bool:
         """Check if bridge is connected to FreeCAD."""
@@ -167,21 +218,12 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
             msg = "Not connected to XML-RPC server"
             raise ConnectionError(msg)
 
-        loop = asyncio.get_event_loop()
         start = time.perf_counter()
 
         try:
-            # Try standard system.listMethods or a simple execute
-            if self._proxy is None:
-                msg = "Not connected"
-                raise ConnectionError(msg)
-            proxy = self._proxy  # Local reference for lambda
-            await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: proxy.execute("_result_ = True"),
-                ),
-                timeout=self._timeout,
+            await self._run_proxy_call(
+                lambda proxy: proxy.execute("_result_ = True"),
+                self._timeout,
             )
         except TimeoutError as e:
             msg = "Ping timed out"
@@ -231,13 +273,14 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context via XML-RPC.
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The configured
+                bridge default applies when omitted.
 
         Returns:
             ExecutionResult with execution outcome.
@@ -252,17 +295,27 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
                 error_type="ConnectionError",
             )
 
-        loop = asyncio.get_event_loop()
+        try:
+            effective_timeout_ms = resolve_execution_timeout_ms(
+                timeout_ms,
+                self._execution_timeout_ms,
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=str(e),
+                execution_time_ms=0,
+                error_type="ValueError",
+            )
+
         start = time.perf_counter()
-        proxy = self._proxy  # Local reference for lambda
 
         try:
-            result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: proxy.execute(code),
-                ),
-                timeout=timeout_ms / 1000,
+            result = await self._run_proxy_call(
+                lambda proxy: proxy.execute(code, effective_timeout_ms),
+                (effective_timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS),
             )
             elapsed = (time.perf_counter() - start) * 1000
 
@@ -272,7 +325,7 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
                     success=result.get("success", False),
                     result=result.get("result"),
                     stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
+                    stderr=(result.get("stderr") or result.get("error_message", "")),
                     execution_time_ms=elapsed,
                     error_type=result.get("error_type"),
                     error_traceback=result.get("error_traceback"),
@@ -292,8 +345,11 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
                 success=False,
                 result=None,
                 stdout="",
-                stderr=f"Execution timed out after {timeout_ms}ms",
-                execution_time_ms=float(timeout_ms),
+                stderr=(
+                    f"Execution timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                ),
+                execution_time_ms=float(effective_timeout_ms),
                 error_type="TimeoutError",
             )
         except Exception as e:

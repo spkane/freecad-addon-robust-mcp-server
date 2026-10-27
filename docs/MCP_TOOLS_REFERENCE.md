@@ -32,14 +32,18 @@ Execute arbitrary Python code in FreeCAD's context.
 ```python
 execute_python(
     code: str,
-    timeout_ms: int = 30000
+    timeout_ms: int | None = None
 ) -> dict
 ```
 
 **Parameters:**
 
 - `code`: Python code to execute. Use `_result_ = value` to return data.
-- `timeout_ms`: Maximum execution time in milliseconds.
+- `timeout_ms`: Optional per-call execution timeout in milliseconds
+  (1000-600000). `FREECAD_TIMEOUT_MS`, then 30000, applies when omitted.
+
+If a timeout occurs after code starts inside FreeCAD, that code may continue.
+Inspect state before retrying a mutating operation.
 
 **Returns:** Execution result with stdout, stderr, and any assigned `_result_`.
 

@@ -8,6 +8,10 @@
 
 ### Fixed
 
+- **Execution timeout propagation**: XML-RPC and socket requests now receive the
+  caller's effective timeout, while one-argument XML-RPC clients retain the
+  30-second default. Requests that time out before execution are removed from
+  the queue; already-running FreeCAD code reports that it may continue.
 - **Qt binding selection**: The bridge now selects PySide6 for Qt 6 FreeCAD builds and PySide2 for Qt 5 builds, prefers PySide6 only when the host version cannot be detected, and refuses unsafe cross-major fallback.
 - **GUI thread safety during startup**: A GUI bridge now refuses to start if neither supported Qt binding can provide the main-thread queue timer. Background queue processing remains limited to genuine headless sessions.
 

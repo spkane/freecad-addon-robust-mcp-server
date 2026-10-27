@@ -13,7 +13,30 @@ Configure the FreeCAD Robust MCP Server using environment variables and MCP clie
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                       | `localhost` |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
-| `FREECAD_TIMEOUT_MS`  | Execution timeout in ms                              | `30000`     |
+| `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
+
+---
+
+## Execution Timeouts
+
+Execution timeout selection is consistent across `xmlrpc`, `socket`, and
+`embedded` modes:
+
+1. An `execute_python(timeout_ms=...)` value overrides all other settings.
+1. Otherwise, `FREECAD_TIMEOUT_MS` supplies the server-wide default.
+1. If neither is set, the default is 30000 milliseconds.
+
+Both configured and per-call values must be between 1000 and 600000
+milliseconds. XML-RPC sends the effective timeout to the FreeCAD workbench;
+one-argument XML-RPC clients remain supported with the 30000 millisecond
+workbench default.
+
+> **Warning:** A timeout is not process cancellation. The bridge cancels a
+> request that is still waiting in its queue. Python code that has already
+> started inside FreeCAD cannot be interrupted safely and may continue after
+> the caller receives a timeout. Do not automatically retry a timed-out
+> state-changing operation. Inspect the document state first, or make the
+> operation idempotent.
 
 ---
 

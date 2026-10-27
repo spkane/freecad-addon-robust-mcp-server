@@ -123,6 +123,28 @@ _result_ = {
         assert "is_main_thread" in thread_info
         assert "thread_name" in thread_info
 
+    def test_xmlrpc_per_call_timeout_reaches_freecad_bridge(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+    ) -> None:
+        """XML-RPC timeout overrides should control the workbench queue wait."""
+        timed_out: dict[str, Any] = xmlrpc_proxy.execute(  # type: ignore[assignment]
+            "import time; time.sleep(1.2); _result_ = 'late'",
+            1000,
+        )
+
+        assert timed_out["success"] is False
+        assert timed_out["error_type"] == "TimeoutError"
+        assert "may continue" in timed_out["error_message"]
+
+        completed: dict[str, Any] = xmlrpc_proxy.execute(  # type: ignore[assignment]
+            "import time; time.sleep(0.2); _result_ = 'done'",
+            3000,
+        )
+
+        assert completed["success"] is True
+        assert completed["result"] == "done"
+
     @requires_gui
     def test_gui_mode_executes_on_main_thread(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy

@@ -7,7 +7,26 @@ from freecad_mcp.bridge.base import (
     ExecutionResult,
     FreecadBridge,
     ObjectInfo,
+    resolve_execution_timeout_ms,
 )
+
+
+class TestExecutionTimeoutResolution:
+    """Tests for bridge-level and per-call timeout precedence."""
+
+    def test_uses_configured_default_when_override_is_omitted(self) -> None:
+        """The bridge default should apply when no per-call value is supplied."""
+        assert resolve_execution_timeout_ms(None, 45000) == 45000
+
+    def test_per_call_value_overrides_configured_default(self) -> None:
+        """An explicit per-call value should have highest precedence."""
+        assert resolve_execution_timeout_ms(60000, 45000) == 60000
+
+    @pytest.mark.parametrize("timeout_ms", [999, 600001])
+    def test_rejects_out_of_range_timeout(self, timeout_ms: int) -> None:
+        """Timeouts must remain inside the documented safety bounds."""
+        with pytest.raises(ValueError, match="between 1000 and 600000"):
+            resolve_execution_timeout_ms(timeout_ms, 30000)
 
 
 class TestExecutionResult:

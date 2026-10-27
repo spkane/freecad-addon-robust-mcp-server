@@ -175,7 +175,7 @@ host-loopback listener.
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                       | `localhost` |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
-| `FREECAD_TIMEOUT_MS`  | Execution timeout in ms                              | `30000`     |
+| `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
 #### Connection Modes
 

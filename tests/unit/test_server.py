@@ -119,6 +119,7 @@ class TestLifespan:
         mock_config = MagicMock()
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.freecad_path = None
+        mock_config.timeout_ms = 45000
 
         mock_embedded_bridge = AsyncMock()
         mock_embedded_bridge.get_freecad_version = AsyncMock(
@@ -136,7 +137,10 @@ class TestLifespan:
 
             async with server_module.lifespan(mock_server):
                 # Bridge should be initialized
-                mock_embedded_class.assert_called_once_with(freecad_path=None)
+                mock_embedded_class.assert_called_once_with(
+                    freecad_path=None,
+                    execution_timeout_ms=45000,
+                )
                 mock_embedded_bridge.connect.assert_called_once()
 
             # After exiting, disconnect should be called
@@ -151,6 +155,7 @@ class TestLifespan:
         mock_config.mode = FreecadMode.XMLRPC
         mock_config.socket_host = "localhost"
         mock_config.xmlrpc_port = 9875
+        mock_config.timeout_ms = 45000
 
         mock_xmlrpc_bridge = AsyncMock()
         mock_xmlrpc_bridge.get_freecad_version = AsyncMock(
@@ -167,7 +172,11 @@ class TestLifespan:
             mock_server = MagicMock()
 
             async with server_module.lifespan(mock_server):
-                mock_xmlrpc_class.assert_called_once_with(host="localhost", port=9875)
+                mock_xmlrpc_class.assert_called_once_with(
+                    host="localhost",
+                    port=9875,
+                    execution_timeout_ms=45000,
+                )
                 mock_xmlrpc_bridge.connect.assert_called_once()
 
             mock_xmlrpc_bridge.disconnect.assert_called_once()
@@ -181,6 +190,7 @@ class TestLifespan:
         mock_config.mode = FreecadMode.SOCKET
         mock_config.socket_host = "localhost"
         mock_config.socket_port = 9876
+        mock_config.timeout_ms = 45000
 
         mock_socket_bridge = AsyncMock()
         mock_socket_bridge.get_freecad_version = AsyncMock(
@@ -197,7 +207,11 @@ class TestLifespan:
             mock_server = MagicMock()
 
             async with server_module.lifespan(mock_server):
-                mock_socket_class.assert_called_once_with(host="localhost", port=9876)
+                mock_socket_class.assert_called_once_with(
+                    host="localhost",
+                    port=9876,
+                    execution_timeout_ms=45000,
+                )
                 mock_socket_bridge.connect.assert_called_once()
 
             mock_socket_bridge.disconnect.assert_called_once()
@@ -210,6 +224,7 @@ class TestLifespan:
         mock_config = MagicMock()
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.freecad_path = None
+        mock_config.timeout_ms = 30000
 
         mock_bridge = AsyncMock()
         mock_bridge.get_freecad_version = AsyncMock(

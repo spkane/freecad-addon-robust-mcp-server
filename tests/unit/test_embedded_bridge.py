@@ -17,12 +17,19 @@ class TestEmbeddedBridge:
         assert bridge._freecad_path is None
         assert bridge._fc_module is None
         assert bridge._connected is False
+        assert bridge._execution_timeout_ms == 30000
 
     def test_initialization_with_path(self):
         """Bridge should accept custom FreeCAD path."""
         bridge = EmbeddedBridge(freecad_path="/custom/path")
 
         assert bridge._freecad_path == "/custom/path"
+
+    def test_initialization_with_execution_timeout(self):
+        """Bridge should retain the configured execution timeout."""
+        bridge = EmbeddedBridge(execution_timeout_ms=45000)
+
+        assert bridge._execution_timeout_ms == 45000
 
     @pytest.mark.asyncio
     async def test_is_connected_before_connect(self):
@@ -41,6 +48,18 @@ class TestEmbeddedBridge:
         assert result.success is False
         assert result.error_type == "ConnectionError"
         assert "not connected" in result.stderr
+
+    @pytest.mark.asyncio
+    async def test_execute_python_rejects_invalid_timeout(self):
+        """Per-call timeouts outside the supported bounds should fail locally."""
+        bridge = EmbeddedBridge()
+        bridge._fc_module = mock.MagicMock()
+        bridge._connected = True
+
+        result = await bridge.execute_python("pass", timeout_ms=999)
+
+        assert result.success is False
+        assert result.error_type == "ValueError"
 
     @pytest.mark.asyncio
     async def test_disconnect_when_not_connected(self):

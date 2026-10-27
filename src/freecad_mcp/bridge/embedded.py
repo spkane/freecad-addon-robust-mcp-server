@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from freecad_mcp.bridge.base import (
+    DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
     DocumentInfo,
     ExecutionResult,
@@ -29,6 +30,7 @@ from freecad_mcp.bridge.base import (
     ScreenshotResult,
     ViewAngle,
     WorkbenchInfo,
+    resolve_execution_timeout_ms,
 )
 
 
@@ -42,14 +44,23 @@ class EmbeddedBridge(FreecadBridge):
         freecad_path: Optional path to FreeCAD's lib directory.
     """
 
-    def __init__(self, freecad_path: str | None = None) -> None:
+    def __init__(
+        self,
+        freecad_path: str | None = None,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+    ) -> None:
         """Initialize the embedded bridge.
 
         Args:
             freecad_path: Path to FreeCAD's lib directory. If provided,
                 this path will be added to sys.path before importing.
+            execution_timeout_ms: Default execution timeout in milliseconds.
         """
         self._freecad_path = freecad_path
+        self._execution_timeout_ms = resolve_execution_timeout_ms(
+            execution_timeout_ms,
+            DEFAULT_EXECUTION_TIMEOUT_MS,
+        )
         self._fc_module: Any = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freecad")
         self._connected = False
@@ -92,13 +103,14 @@ class EmbeddedBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context.
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The configured
+                bridge default applies when omitted.
 
         Returns:
             ExecutionResult with execution outcome.
@@ -114,6 +126,22 @@ class EmbeddedBridge(FreecadBridge):
                 error_traceback=None,
             )
 
+        try:
+            effective_timeout_ms = resolve_execution_timeout_ms(
+                timeout_ms,
+                self._execution_timeout_ms,
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=str(e),
+                execution_time_ms=0,
+                error_type="ValueError",
+                error_traceback=None,
+            )
+
         loop = asyncio.get_event_loop()
 
         try:
@@ -122,15 +150,18 @@ class EmbeddedBridge(FreecadBridge):
                     self._executor,
                     lambda: self._execute_code(code),
                 ),
-                timeout=timeout_ms / 1000,
+                timeout=effective_timeout_ms / 1000,
             )
         except TimeoutError:
             return ExecutionResult(
                 success=False,
                 result=None,
                 stdout="",
-                stderr=f"Execution timed out after {timeout_ms}ms",
-                execution_time_ms=float(timeout_ms),
+                stderr=(
+                    f"Execution timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                ),
+                execution_time_ms=float(effective_timeout_ms),
                 error_type="TimeoutError",
                 error_traceback=None,
             )
