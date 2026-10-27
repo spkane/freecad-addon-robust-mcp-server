@@ -91,7 +91,7 @@ def test_explicit_console_mode(
 def test_cleanup_only_touches_owned_timers_on_their_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A foreign-thread timer and an unrelated timer remain untouched."""
+    """An owned timer is released only from its owning thread."""
     monkeypatch.setenv("FREECAD_MCP_TESTING", "1")
     monkeypatch.syspath_prepend(str(ADDON))
     freecad = ModuleType("FreeCAD")
@@ -113,7 +113,6 @@ def test_cleanup_only_touches_owned_timers_on_their_thread(
     owned.thread.return_value = owner
     foreign = MagicMock()
     foreign.thread.return_value = object()
-    unrelated = MagicMock()
     waiter = SimpleNamespace(_check_timer=owned, _defer_timer=foreign)
     state["_auto_start_timer"] = None
     state["_gui_waiter"] = waiter
@@ -128,7 +127,6 @@ def test_cleanup_only_touches_owned_timers_on_their_thread(
     owned.stop.assert_called_once()
     delete.assert_called_once_with(owned)
     foreign.stop.assert_not_called()
-    unrelated.stop.assert_not_called()
     assert waiter._check_timer is None
     assert waiter._defer_timer is foreign
 
