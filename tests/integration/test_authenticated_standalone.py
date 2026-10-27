@@ -321,6 +321,7 @@ async def test_authenticated_transports_with_real_freecad(
 @pytest.mark.standalone_freecad
 @pytest.mark.timeout(120)
 @pytest.mark.usefixtures("isolated_pairing")
+@pytest.mark.parametrize("early", [False, True], ids=["script", "workbench-init"])
 @pytest.mark.parametrize(
     ("interactive", "headless_enabled", "batch_enabled", "expected"),
     [
@@ -332,6 +333,7 @@ async def test_authenticated_transports_with_real_freecad(
 )
 def test_headless_workbench_autostart(
     tmp_path: Path,
+    early: bool,
     interactive: bool,
     headless_enabled: bool,
     batch_enabled: bool,
@@ -363,7 +365,31 @@ def test_headless_workbench_autostart(
         "--system-cfg",
         str(tmp_path / "system.cfg"),
     ]
-    if interactive:
+    if early:
+        # FreeCAD imports namespace workbenches before running the script or
+        # accepting console input. Exercise the initializer in that early phase.
+        module_dir = tmp_path / "modules"
+        workbench = module_dir / "freecad" / "MCPStartupProbe"
+        workbench.mkdir(parents=True)
+        (workbench / "__init__.py").write_text(
+            "import os, runpy\n"
+            "os.environ.pop('FREECAD_MCP_TESTING', None)\n"
+            "try:\n"
+            f"    runpy.run_path({str(probe)!r})\n"
+            "finally:\n"
+            "    os.environ['FREECAD_MCP_TESTING'] = '1'\n",
+            encoding="utf-8",
+        )
+        env["FREECAD_MCP_TESTING"] = "1"
+        command.extend(["--module-path", str(module_dir)])
+        batch_script = tmp_path / "batch.py"
+        batch_script.write_text("pass\n", encoding="utf-8")
+        if interactive:
+            source = "pass\n"
+        else:
+            command.append(str(batch_script))
+            source = None
+    elif interactive:
         source = f"import runpy; _ = runpy.run_path({str(probe)!r})\n"
     else:
         command.append(str(probe))
