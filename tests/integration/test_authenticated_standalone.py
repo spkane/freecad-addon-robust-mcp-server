@@ -408,4 +408,4 @@ def test_headless_workbench_autostart(
     assert json.loads(ready.read_text(encoding="utf-8")) == {
         "started": expected,
         "listening": expected,
-    }
+    }, result.stdout + result.stderr
