@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from freecad_mcp.bridge.socket import SocketBridge
+from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -278,6 +279,54 @@ def test_xmlrpc_listener_authenticates_before_dispatch(server_mod: Any) -> None:
     finally:
         plugin._running = False
         thread.join(timeout=3)
+        if plugin._xmlrpc_server is not None:
+            plugin._xmlrpc_server.server_close()
+        assert not thread.is_alive()
+
+
+@pytest.mark.asyncio
+async def test_xmlrpc_client_signs_requests_for_listener(server_mod: Any) -> None:
+    """The XML-RPC client and real listener agree on request proofs."""
+    auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
+    key = b"unit-test-only-key"
+
+    def sign(message: bytes) -> bytes:
+        return hmac.digest(key, message, "sha256")
+
+    def verify(client: str, message: bytes, proof: bytes) -> bool:
+        return client == "paired" and hmac.compare_digest(sign(message), proof)
+
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        xmlrpc_port=0,
+        authenticator=auth_module.BridgeAuthenticator(verify),
+    )
+    plugin._execute_via_queue = MagicMock(
+        return_value={"success": True, "result": "done"}
+    )
+    plugin._running = True
+    thread = threading.Thread(target=plugin._run_xmlrpc_server)
+    thread.start()
+    bridge = None
+    try:
+        deadline = time.monotonic() + 5
+        while plugin._xmlrpc_server is None and time.monotonic() < deadline:  # noqa: ASYNC110
+            await asyncio.sleep(0.01)
+        assert plugin._xmlrpc_server is not None
+        port = plugin._xmlrpc_server.server_address[1]
+        bridge = XmlRpcBridge(
+            host="127.0.0.1", port=port, client_id="paired", signer=sign
+        )
+        await bridge.connect()
+        result = await bridge.execute_python("pass")
+        assert result.success is True
+        assert result.result == "done"
+        plugin._execute_via_queue.assert_called_with("pass", 30000)
+    finally:
+        if bridge is not None:
+            await bridge.disconnect()
+        plugin._running = False
+        await asyncio.to_thread(thread.join, 3)
         if plugin._xmlrpc_server is not None:
             plugin._xmlrpc_server.server_close()
         assert not thread.is_alive()

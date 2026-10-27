@@ -19,12 +19,15 @@ Attribution:
 """
 
 import asyncio
+import base64
+import http.client
 import time
 import xmlrpc.client
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from freecad_mcp.bridge.authentication import request_proof_message
 from freecad_mcp.bridge.base import (
     DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
@@ -48,6 +51,72 @@ LEGACY_EXECUTE_ARITY_FAULT = (
     "<class 'TypeError'>:FreecadMCPPlugin._xmlrpc_execute() takes 2 "
     "positional arguments but 3 were given"
 )
+
+
+class AuthenticatedXmlRpcTransport(xmlrpc.client.Transport):
+    """Authenticate exact XML request bytes without automatic request retries."""
+
+    def __init__(
+        self, client_id: str, signer: Callable[[bytes], bytes], timeout: float
+    ) -> None:
+        """Initialize a transport with a paired identity and protected signer."""
+        super().__init__()
+        self._client_id = client_id
+        self._signer = signer
+        self._timeout = timeout
+
+    def request(
+        self,
+        host: str | tuple[str, dict[str, str]],
+        handler: str,
+        request_body: Any,
+        verbose: bool = False,
+    ) -> Any:
+        """Issue one challenge and send exactly one authenticated XML request."""
+        if isinstance(host, tuple):
+            host = host[0]
+        request_body = bytes(request_body)
+        connection = http.client.HTTPConnection(host, timeout=self._timeout)
+        self.verbose = verbose
+        try:
+            connection.request("GET", "/challenge")
+            response = connection.getresponse()
+            if response.status != 200:
+                raise ConnectionError("Bridge did not provide a challenge")
+            challenge_bytes = response.read(128)
+            if len(challenge_bytes) != 43:
+                raise ConnectionError("Bridge provided an invalid challenge")
+            try:
+                challenge = challenge_bytes.decode("ascii")
+                message = request_proof_message(
+                    self._client_id, challenge, "xmlrpc", request_body
+                )
+            except (UnicodeDecodeError, ValueError) as e:
+                raise ConnectionError("Bridge provided an invalid challenge") from e
+            try:
+                proof = self._signer(message)
+            except Exception as e:
+                raise ConnectionError("Bridge signer is unavailable") from e
+            if not isinstance(proof, bytes) or not proof or len(proof) > 8192:
+                raise ConnectionError("Bridge signer returned an invalid proof")
+            headers = {
+                "Content-Type": "text/xml",
+                "X-FreeCAD-Client": self._client_id,
+                "X-FreeCAD-Challenge": challenge,
+                "X-FreeCAD-Proof": base64.b64encode(proof).decode("ascii"),
+            }
+            connection.request("POST", handler, body=request_body, headers=headers)
+            response = connection.getresponse()
+            if response.status != 200:
+                raise xmlrpc.client.ProtocolError(
+                    host + handler,
+                    response.status,
+                    response.reason,
+                    dict(response.getheaders()),
+                )
+            return self.parse_response(response)
+        finally:
+            connection.close()
 
 
 def _is_legacy_execute_arity_fault(error: xmlrpc.client.Fault) -> bool:
@@ -85,6 +154,9 @@ class XmlRpcBridge(FreecadBridge):
         port: int = DEFAULT_XMLRPC_PORT,
         timeout: float = DEFAULT_TIMEOUT,
         execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+        *,
+        client_id: str | None = None,
+        signer: Callable[[bytes], bytes] | None = None,
     ) -> None:
         """Initialize the XML-RPC bridge.
 
@@ -93,15 +165,20 @@ class XmlRpcBridge(FreecadBridge):
             port: XML-RPC server port.
             timeout: Connection and request timeout in seconds.
             execution_timeout_ms: Default execution timeout in milliseconds.
+            client_id: Identity of the paired client.
+            signer: Protected provider that signs request proof messages.
         """
         self._host = host
         self._port = port
         self._timeout = timeout
+        self._client_id = client_id
+        self._signer = signer
         self._execution_timeout_ms = resolve_execution_timeout_ms(
             execution_timeout_ms,
             DEFAULT_EXECUTION_TIMEOUT_MS,
         )
         self._proxy: xmlrpc.client.ServerProxy | None = None
+        self._transport: AuthenticatedXmlRpcTransport | None = None
         self._executor: ThreadPoolExecutor | None = None
         self._connected = False
 
@@ -117,13 +194,21 @@ class XmlRpcBridge(FreecadBridge):
             ConnectionError: If connection cannot be established.
         """
         try:
+            if self._client_id is None or self._signer is None:
+                raise ConnectionError(
+                    "A paired client and protected signer are required"
+                )
             self._executor = ThreadPoolExecutor(
                 max_workers=1,
                 thread_name_prefix="freecad-xmlrpc",
             )
+            self._transport = AuthenticatedXmlRpcTransport(
+                self._client_id, self._signer, self._timeout
+            )
             self._proxy = xmlrpc.client.ServerProxy(
                 self._server_url,
                 allow_none=True,
+                transport=self._transport,
             )
             # Test connection with a ping
             await self.ping()
@@ -175,6 +260,7 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
     async def disconnect(self) -> None:
         """Close connection to FreeCAD XML-RPC server."""
         self._proxy = None
+        self._transport = None
         self._connected = False
         self._shutdown_executor()
 
@@ -210,8 +296,15 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
             msg = "Not connected to XML-RPC server"
             raise ConnectionError(msg)
 
+        transport = self._transport
+
+        def invoke(proxy: xmlrpc.client.ServerProxy) -> Any:
+            if transport is not None:
+                transport._timeout = timeout_seconds
+            return call(proxy)
+
         loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(self._executor, call, self._proxy)
+        future = loop.run_in_executor(self._executor, invoke, self._proxy)
         return await asyncio.wait_for(future, timeout=timeout_seconds)
 
     async def is_connected(self) -> bool:

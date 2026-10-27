@@ -14,8 +14,43 @@ import pytest
 from freecad_mcp.bridge.xmlrpc import (
     EXECUTION_RESPONSE_GRACE_SECONDS,
     LEGACY_EXECUTE_ARITY_FAULT,
+    AuthenticatedXmlRpcTransport,
     XmlRpcBridge,
 )
+
+
+def test_authenticated_transport_refuses_legacy_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A server without challenge support never receives the XML request."""
+    connection = MagicMock()
+    connection.getresponse.return_value.status = 404
+    monkeypatch.setattr(
+        "http.client.HTTPConnection", lambda *_args, **_kwargs: connection
+    )
+    transport = AuthenticatedXmlRpcTransport("paired", lambda _: b"proof", 2.0)
+    with pytest.raises(ConnectionError, match="challenge"):
+        transport.request("localhost:9875", "/RPC2", b"<methodCall/>")
+    connection.request.assert_called_once_with("GET", "/challenge")
+
+
+def test_authenticated_transport_never_retries_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed POST may have executed and must not be sent a second time."""
+    connection = MagicMock()
+    response = connection.getresponse.return_value
+    response.status = 200
+    response.read.return_value = b"A" * 43
+    connection.request.side_effect = [None, ConnectionResetError("reset")]
+    monkeypatch.setattr(
+        "http.client.HTTPConnection", lambda *_args, **_kwargs: connection
+    )
+    transport = AuthenticatedXmlRpcTransport("paired", lambda _: b"proof", 2.0)
+    with pytest.raises(ConnectionResetError):
+        transport.request("localhost:9875", "/RPC2", b"<methodCall/>")
+    assert connection.request.call_count == 2
+    assert connection.request.call_args_list[1].args[0] == "POST"
 
 
 def _connected_bridge(
