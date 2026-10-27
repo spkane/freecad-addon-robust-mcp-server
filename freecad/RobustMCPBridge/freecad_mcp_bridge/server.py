@@ -148,6 +148,11 @@ MAX_CAPTURED_OUTPUT_BYTES = 1_000_000
 OUTPUT_TRUNCATION_MARKER = "\n[output truncated]\n"
 MAX_RESULT_BUDGET = 1_000_000
 MAX_RESULT_DEPTH = 64
+_XML_TEXT_ESCAPES = {
+    **{value: f"\\x{value:02x}" for value in range(32) if value not in (9, 10, 13)},
+    0xFFFE: "\\ufffe",
+    0xFFFF: "\\uffff",
+}
 
 
 def _validate_result(value: Any) -> None:  # noqa: PLR0912
@@ -226,7 +231,7 @@ class _BoundedCapture(io.TextIOBase):
             return len(text)
         remaining = max(0, self._limit - self._size)
         sample = text[:remaining]
-        data = sample.encode("utf-8", errors="replace")
+        data = sample.translate(_XML_TEXT_ESCAPES).encode("utf-8", errors="replace")
         accepted = data[:remaining].decode("utf-8", errors="ignore")
         if accepted:
             self._buffer.write(accepted)

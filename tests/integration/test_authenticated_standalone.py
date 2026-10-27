@@ -96,6 +96,11 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                     assert output.success
                     assert len(output.stdout) == 100000
                     output = await bridge.execute_python(
+                        "print('left\\x00right', end='')"
+                    )
+                    assert output.success
+                    assert output.stdout == r"left\x00right"
+                    output = await bridge.execute_python(
                         "import sys\nprint('é' * 600000)\n"
                         "print('x' * 1100000, file=sys.stderr)"
                     )

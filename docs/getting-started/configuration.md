@@ -38,7 +38,8 @@ and portable XML-RPC/JSON values. A result exceeding that budget, including a
 large screenshot, returns `ResultValidationError` rather than partial data.
 The operation may already have modified the document when this error is
 reported. Captured stdout and stderr are independently limited and marked when
-truncated.
+truncated. Characters that XML cannot represent, such as a null byte, are
+rendered as visible escape sequences in captured output.
 
 ---
 

@@ -383,6 +383,14 @@ def test_bounded_capture_stops_after_partial_unicode_character(server_mod: Any) 
     assert capture.getvalue().endswith(server_mod.OUTPUT_TRUNCATION_MARKER)
 
 
+def test_captured_output_escapes_xml_incompatible_characters(server_mod: Any) -> None:
+    """Control and noncharacter output remains readable on both transports."""
+    capture = server_mod._BoundedCapture(limit=100)
+    original = "a\x00\x0b\uffff\t\nb"
+    assert capture.write(original) == len(original)
+    assert capture.getvalue() == r"a\x00\x0b\uffff" + "\t\nb"
+
+
 def test_exception_diagnostics_are_bounded(server_mod: Any) -> None:
     """Large exception messages and tracebacks have bounded encoded output."""
     plugin = server_mod.FreecadMCPPlugin()
