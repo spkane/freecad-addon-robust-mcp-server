@@ -136,12 +136,20 @@ The workbench has its own preferences that control how the bridge runs inside Fr
 - **Edit → Preferences → Robust MCP Bridge** (in FreeCAD's main Preferences dialog)
 - **Robust MCP Bridge → MCP Bridge Preferences...** (from the workbench menu)
 
-| Setting               | Description                                  | Default  |
-| --------------------- | -------------------------------------------- | -------- |
-| Auto-start bridge     | Start bridge automatically on FreeCAD launch | Disabled |
-| Show status indicator | Display status in FreeCAD's status bar       | Enabled  |
-| XML-RPC Port          | Port for XML-RPC connections                 | 9875     |
-| Socket Port           | Port for JSON-RPC socket connections         | 9876     |
+| Setting                          | Description                                       | Default  |
+| -------------------------------- | ------------------------------------------------- | -------- |
+| Auto-start bridge (GUI)          | Start the bridge when the FreeCAD GUI launches    | Disabled |
+| Auto-start in console FreeCAD    | Start the bridge in long-running console sessions | Disabled |
+| Also auto-start in batch runs    | Allow console auto-start for scripts and commands | Disabled |
+| Show status indicator            | Display status in FreeCAD's status bar            | Enabled  |
+| XML-RPC Port                     | Port for XML-RPC connections                      | 9875     |
+| Socket Port                      | Port for JSON-RPC socket connections              | 9876     |
+
+Console and GUI auto-start are independent. Batch auto-start additionally
+requires console auto-start, and can cause short-lived jobs to compete for the
+same ports. Unknown command-line options are treated as batch invocations.
+Pair the bridge before enabling either auto-start option; see
+[Configuration](../getting-started/configuration.md).
 
 !!! note "Port Configuration"
     If you change the ports in the workbench preferences while the bridge is running, it will automatically restart with the new configuration.

@@ -62,13 +62,27 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         startup_layout = QtWidgets.QVBoxLayout(startup_group)
 
         self.auto_start_cb = QtWidgets.QCheckBox(
-            "Auto-start bridge when FreeCAD launches"
+            "Auto-start bridge when FreeCAD GUI launches"
         )
         self.auto_start_cb.setToolTip(
             "Automatically start the MCP bridge server when FreeCAD starts.\n"
             "The bridge allows AI assistants like Claude to control FreeCAD."
         )
         startup_layout.addWidget(self.auto_start_cb)
+        self.auto_start_headless_cb = QtWidgets.QCheckBox(
+            "Auto-start in console FreeCAD"
+        )
+        self.auto_start_headless_cb.setToolTip(
+            "Start the paired bridge in long-running freecadcmd sessions."
+        )
+        startup_layout.addWidget(self.auto_start_headless_cb)
+        self.auto_start_headless_batch_cb = QtWidgets.QCheckBox(
+            "Also auto-start in console batch runs"
+        )
+        self.auto_start_headless_batch_cb.setToolTip(
+            "Requires console auto-start. Batch runs may contend for bridge ports."
+        )
+        startup_layout.addWidget(self.auto_start_headless_batch_cb)
 
         layout.addWidget(startup_group)
 
@@ -168,12 +182,16 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         # Import here to avoid circular imports and ensure module is available
         from preferences import (
             get_auto_start,
+            get_auto_start_headless,
+            get_auto_start_headless_batch,
             get_socket_port,
             get_status_bar_enabled,
             get_xmlrpc_port,
         )
 
         self.auto_start_cb.setChecked(get_auto_start())
+        self.auto_start_headless_cb.setChecked(get_auto_start_headless())
+        self.auto_start_headless_batch_cb.setChecked(get_auto_start_headless_batch())
         self.status_bar_cb.setChecked(get_status_bar_enabled())
         self.xmlrpc_spin.setValue(get_xmlrpc_port())
         self.socket_spin.setValue(get_socket_port())
@@ -187,6 +205,8 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
             get_socket_port,
             get_xmlrpc_port,
             set_auto_start,
+            set_auto_start_headless,
+            set_auto_start_headless_batch,
             set_socket_port,
             set_status_bar_enabled,
             set_xmlrpc_port,
@@ -198,6 +218,8 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
 
         # Save all preferences
         set_auto_start(self.auto_start_cb.isChecked())
+        set_auto_start_headless(self.auto_start_headless_cb.isChecked())
+        set_auto_start_headless_batch(self.auto_start_headless_batch_cb.isChecked())
         set_status_bar_enabled(self.status_bar_cb.isChecked())
         set_xmlrpc_port(self.xmlrpc_spin.value())
         set_socket_port(self.socket_spin.value())

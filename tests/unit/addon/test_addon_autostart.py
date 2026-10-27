@@ -408,8 +408,7 @@ class TestAutoStartCodePaths:
             node
             for node in ast.walk(tree)
             if isinstance(node, ast.If)
-            and isinstance(node.test, ast.Attribute)
-            and node.test.attr == "GuiUp"
+            and "getattr(FreeCAD, 'GuiUp', False)" in ast.unparse(node.test)
         )
         branch_code = "\n".join(ast.unparse(node) for node in gui_up_branch.body)
 
@@ -424,8 +423,7 @@ class TestAutoStartCodePaths:
             node
             for node in ast.walk(tree)
             if isinstance(node, ast.If)
-            and isinstance(node.test, ast.Attribute)
-            and node.test.attr == "GuiUp"
+            and "getattr(FreeCAD, 'GuiUp', False)" in ast.unparse(node.test)
         )
         while startup_branch.orelse and isinstance(startup_branch.orelse[0], ast.If):
             startup_branch = startup_branch.orelse[0]

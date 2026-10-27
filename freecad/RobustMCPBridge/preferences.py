@@ -34,7 +34,7 @@ PARAM_PATH = "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
 
 # Default values
 DEFAULT_AUTO_START = False
-DEFAULT_AUTO_START_HEADLESS = True
+DEFAULT_AUTO_START_HEADLESS = False
 DEFAULT_AUTO_START_HEADLESS_BATCH = False
 DEFAULT_STATUS_BAR_ENABLED = True
 DEFAULT_XMLRPC_PORT = 9875
@@ -74,7 +74,7 @@ def get_auto_start_headless() -> bool:
 
     Returns:
         True if the bridge should auto-start in console FreeCAD.
-        Default: True
+        Default: False
     """
     return get_param().GetBool("AutoStartHeadless", DEFAULT_AUTO_START_HEADLESS)
 
@@ -92,7 +92,7 @@ def get_auto_start_headless_batch() -> bool:
     """Get whether the bridge also auto-starts for console *batch* runs.
 
     A batch run is a console invocation that was given something to process
-    (``freecadcmd script.py``, ``freecadcmd -c "..."``): it is short-lived, so
+    (``freecadcmd script.py``, ``freecadcmd --run-test 0``): it is short-lived, so
     starting a server there mostly contends for the bridge ports.
 
     Returns:

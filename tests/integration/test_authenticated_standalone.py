@@ -316,3 +316,70 @@ async def test_authenticated_transports_with_real_freecad(
                     except TimeoutError:
                         process.kill()
                         await process.wait()
+
+
+@pytest.mark.standalone_freecad
+@pytest.mark.timeout(120)
+@pytest.mark.usefixtures("isolated_pairing")
+@pytest.mark.parametrize(
+    ("interactive", "headless_enabled", "batch_enabled", "expected"),
+    [
+        (True, True, False, True),
+        (True, False, True, False),
+        (False, True, False, False),
+        (False, True, True, True),
+    ],
+)
+def test_headless_workbench_autostart(
+    tmp_path: Path,
+    interactive: bool,
+    headless_enabled: bool,
+    batch_enabled: bool,
+    expected: bool,
+) -> None:
+    """Exercise real console startup, batch gating, and clean shutdown."""
+    executable = os.environ["FREECAD_AUTH_TEST_COMMAND"]
+    probe = ROOT / "tests" / "fixtures" / "freecad_autostart_probe.py"
+    ready = tmp_path / "autostart-result.json"
+    ports = []
+    for _ in range(2):
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            ports.append(sock.getsockname()[1])
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "MCP_TEST_HEADLESS": "1" if headless_enabled else "0",
+        "MCP_TEST_BATCH": "1" if batch_enabled else "0",
+        "MCP_TEST_XMLRPC_PORT": str(ports[0]),
+        "MCP_TEST_SOCKET_PORT": str(ports[1]),
+        "MCP_TEST_RESULT": str(ready),
+    }
+    env.pop("FREECAD_MCP_TESTING", None)
+    command = [
+        executable,
+        "--user-cfg",
+        str(tmp_path / "user.cfg"),
+        "--system-cfg",
+        str(tmp_path / "system.cfg"),
+    ]
+    if interactive:
+        source = f"import runpy; runpy.run_path({str(probe)!r})\n"
+    else:
+        command.append(str(probe))
+        source = None
+    result = subprocess.run(  # noqa: S603 - explicit test executable
+        command,
+        input=source,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ready.exists(), result.stdout + result.stderr
+    assert json.loads(ready.read_text(encoding="utf-8")) == {
+        "started": expected,
+        "listening": expected,
+    }

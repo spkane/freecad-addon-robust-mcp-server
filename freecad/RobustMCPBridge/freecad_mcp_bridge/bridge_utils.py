@@ -104,22 +104,8 @@ class GuiWaiter:
             )
             return
 
-        # LOCAL PATCH (Luminova, 2026-09-22): never create a QTimer that cannot
-        # run.  A QTimer only fires when Qt has an application object and an
-        # event loop.  Started without one, Qt warns ("Timers can only be used
-        # with threads started with QThread"), the timer never fires -- and it
-        # is never destroyed either.  It then survives to interpreter
-        # finalization, where GC tears it down while Python is already
-        # half-torn-down:
-        #     Py_FinalizeEx -> finalize_modules -> gc_collect_main
-        #       -> PySide::onPysideReceiverSlotDestroyed -> QObject::disconnect
-        #       -> QTimerWrapper::disconnectNotify -> Sbk_GetPyOverride
-        #       -> _PyType_Lookup on a freed type object -> SIGSEGV
-        # That is the "FreeCAD quit unexpectedly" crash on every close, in both
-        # the GUI and freecadcmd.  Nothing is lost by skipping: FreeCAD's GUI
-        # startup schedules its own auto-start from InitGui.py, and in true
-        # headless (freecadcmd) there is no event loop for the waiter to poll,
-        # so it could never have fired anyway.
+        # A timer cannot run before a Qt application exists. GUI startup can
+        # schedule its own callback later through init_gui.py.
         if QtCore.QCoreApplication.instance() is None:
             FreeCAD.Console.PrintMessage(
                 f"{self.log_prefix}: No Qt application/event loop available - "
