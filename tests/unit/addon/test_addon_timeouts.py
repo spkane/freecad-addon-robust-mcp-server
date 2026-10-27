@@ -418,6 +418,32 @@ def test_unrenderable_exception_still_returns_failure(server_mod: Any) -> None:
 
 
 @pytest.mark.parametrize(
+    "exception", ["SystemExit", "KeyboardInterrupt", "GeneratorExit"]
+)
+def test_execution_contains_base_exceptions(server_mod: Any, exception: str) -> None:
+    """Submitted code must not terminate the FreeCAD execution worker."""
+    plugin = server_mod.FreecadMCPPlugin()
+    failure = plugin._execute_code_sync(f"raise {exception}('test')")
+    assert not failure["success"]
+    assert failure["error_type"] == exception
+    assert plugin._execute_code_sync("_result_ = 42")["result"] == 42
+
+
+def test_exception_rendering_contains_base_exception(server_mod: Any) -> None:
+    """An exception's broken string method cannot terminate the worker."""
+    plugin = server_mod.FreecadMCPPlugin()
+    result = plugin._execute_code_sync(
+        "class BadError(Exception):\n"
+        "    def __str__(self):\n"
+        "        raise SystemExit()\n"
+        "raise BadError()"
+    )
+    assert not result["success"]
+    assert result["error_type"] == "BadError"
+    assert result["error_message"] == "Exception message could not be rendered"
+
+
+@pytest.mark.parametrize(
     "code",
     [
         "_result_ = 'x' * 1000001",

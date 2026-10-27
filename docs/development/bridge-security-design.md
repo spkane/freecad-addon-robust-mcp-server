@@ -56,6 +56,10 @@ workbench, and trust store; credential protection by itself is insufficient.
   Unsupported or oversized results return an explicit error; the submitted code
   may already have changed FreeCAD. This does not limit allocations made by the
   submitted code before its result is checked.
+- Python `SystemExit`, `KeyboardInterrupt`, and `GeneratorExit` raised by
+  submitted code are returned as execution failures instead of escaping the
+  execution worker. This is not process isolation: native calls and deliberate
+  process termination remain available to authorized Python code.
 - The socket client accepts response frames up to 32 MiB, including JSON
   escaping, and closes the connection on larger frames. This client-side limit
   does not prevent code from allocating an oversized result before validation.

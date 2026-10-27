@@ -117,6 +117,13 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                     assert not oversized.success
                     assert oversized.error_type == "ResultValidationError"
                     assert "FreeCAD changes may have occurred" in oversized.stderr
+                    interrupted = await bridge.execute_python(
+                        "raise SystemExit('test')"
+                    )
+                    assert not interrupted.success
+                    assert interrupted.error_type == "SystemExit"
+                    after = await bridge.execute_python("_result_ = 42")
+                    assert after.success and after.result == 42
                 finally:
                     await bridge.disconnect()
         finally:

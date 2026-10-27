@@ -259,17 +259,17 @@ def _bounded_text(text: str) -> str:
     return capture.getvalue()
 
 
-def _exception_diagnostics(error: Exception) -> tuple[str, str]:
+def _exception_diagnostics(error: BaseException) -> tuple[str, str]:
     """Return bounded diagnostics even when an exception cannot be rendered."""
     try:
         message = _bounded_text(str(error))
-    except Exception:
+    except BaseException:
         message = "Exception message could not be rendered"
     capture = _BoundedCapture()
     try:
         traceback.print_exception(type(error), error, error.__traceback__, file=capture)
         formatted = capture.getvalue()
-    except Exception:
+    except BaseException:
         formatted = "Exception traceback could not be rendered"
     return message, formatted
 
@@ -1123,7 +1123,7 @@ class FreecadMCPPlugin:
                 "execution_time_ms": elapsed,
             }
 
-        except Exception as e:
+        except BaseException as e:
             elapsed = (time.perf_counter() - start) * 1000
             message, formatted_traceback = _exception_diagnostics(e)
             return {
