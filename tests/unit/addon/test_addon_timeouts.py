@@ -190,6 +190,21 @@ def test_gui_status_warns_that_bridge_accepts_python(
     status_module.update_status_running.assert_called_once_with(9875, 9876, 0)
 
 
+@pytest.mark.parametrize("freecad_available", [False, True])
+def test_headless_start_does_not_create_gui_status_timer(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, freecad_available: bool
+) -> None:
+    """Headless startup must not create Qt timers or query GUI bindings."""
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", freecad_available)
+    monkeypatch.setattr(server_mod, "FreeCAD", MagicMock(GuiUp=False), raising=False)
+    qt_loader = MagicMock()
+    monkeypatch.setattr(server_mod, "_get_qt_core", qt_loader)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._start_status_updates()
+    qt_loader.assert_not_called()
+    assert plugin._status_timer is None
+
+
 def test_permanent_status_widget_warns_that_bridge_accepts_python(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

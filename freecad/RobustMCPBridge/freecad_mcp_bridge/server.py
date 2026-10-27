@@ -694,6 +694,9 @@ class FreecadMCPPlugin:
         ``_cleanup_for_exit`` (via ``shiboken.delete()``) or by
         ``_stop_status_updates`` (via ``deleteLater()``).
         """
+        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+            return
+
         QtCore = _get_qt_core()
         if QtCore is None:
             return
