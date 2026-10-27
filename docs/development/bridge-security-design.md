@@ -129,6 +129,12 @@ client ID was rejected on each transport. This manual probe did not test a GUI,
 production credential storage, pairing, or same-account isolation. The
 temporary dependency and test credential are not a deployment mechanism.
 
+A separate Qt6 GUI probe on that development build displayed the permanent
+Python-execution warning with the test authenticator and exited with code 0.
+FreeCAD also logged an application-initialization warning during direct launch,
+so this is a narrow widget check, not a clean GUI integration result. Qt5 and
+the supported stable Qt6 build still require their normal GUI test lanes.
+
 The same local macOS development installation has a Developer ID signature and
 the hardened-runtime flag, but its entitlements include
 `com.apple.security.cs.disable-library-validation` and
