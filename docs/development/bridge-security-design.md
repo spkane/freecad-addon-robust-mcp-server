@@ -3,9 +3,9 @@
 Status: implementation in progress. Released XML-RPC and socket listeners accept
 unauthenticated code execution; the controls described here are not yet a
 release guarantee. On the development branch, startup refuses to open listeners
-without an injected authentication provider. A production provider and pairing
-flow are not yet available, so the development branch is not usable for normal
-bridge connections. The selected release boundary uses per-user pairing and
+without an authentication provider. The development branch can load explicit
+credentials from its process environment, but a simple per-user enrollment and
+storage flow is not yet available. The selected release boundary uses per-user pairing and
 does not promise isolation from malicious programs running under the same OS
 account. The bridge must fail closed if pairing or authentication is unavailable.
 
@@ -84,8 +84,9 @@ it is not an isolation boundary against a compromised user account.
 The development branch also has a standard-library HMAC-SHA-256 proof provider
 using a separate 32-byte shared secret per client. It does not require a crypto
 package inside FreeCAD. Both sides must protect the secret; anyone who can read
-it can impersonate that client. The credential store, enrollment, and production
-startup wiring for this provider have not yet been implemented or verified.
+it can impersonate that client. Both processes can load an explicitly supplied
+client ID and secret from their environments; the credential store and
+enrollment flow have not yet been implemented or verified.
 
 Public-key pairing can leave only public keys in the FreeCAD workbench. The
 client signs a server challenge and the request, and the bridge checks the

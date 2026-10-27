@@ -570,10 +570,12 @@ class FreecadMCPPlugin:
             return
 
         if self._authenticator is None:
-            raise RuntimeError(
-                "Cannot start the FreeCAD bridge: a trusted client authentication "
-                "provider is required"
-            )
+            if __package__:
+                from .authentication import authenticator_from_environment
+            else:
+                from authentication import authenticator_from_environment  # type: ignore[import-not-found,no-redef]
+
+            self._authenticator = authenticator_from_environment()
 
         self._running = True
 

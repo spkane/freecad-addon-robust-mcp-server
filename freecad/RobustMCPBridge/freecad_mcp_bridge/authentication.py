@@ -53,6 +53,32 @@ def create_hmac_verifier(
     return verify
 
 
+def authenticator_from_environment() -> BridgeAuthenticator:
+    """Load an explicitly configured shared credential for this bridge.
+
+    Raises:
+        RuntimeError: If the client ID or shared secret is missing or invalid.
+    """
+    import os
+
+    client_id = os.environ.get("FREECAD_BRIDGE_CLIENT_ID", "")
+    secret_hex = os.environ.get("FREECAD_BRIDGE_SECRET", "")
+    if (
+        _CLIENT_ID.fullmatch(client_id) is None
+        or re.fullmatch(r"[0-9a-fA-F]{64}", secret_hex) is None
+    ):
+        raise RuntimeError(
+            "Cannot start the FreeCAD bridge: a trusted client authentication "
+            "provider is required (configure a valid client ID and secret)"
+        )
+    secret = bytes.fromhex(secret_hex)
+    return BridgeAuthenticator(
+        create_hmac_verifier(
+            lambda candidate: secret if candidate == client_id else None
+        )
+    )
+
+
 class PairedClientVerifier:
     """Resolve approved public keys for every request and verify their proofs.
 

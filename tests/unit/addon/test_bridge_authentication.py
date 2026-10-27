@@ -152,6 +152,32 @@ def test_configured_bridge_credentials_sign_requests() -> None:
     assert "010101" not in repr(config)
 
 
+def test_workbench_environment_credentials_authenticate_requests(
+    auth_module: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The workbench accepts only the matching configured identity and secret."""
+    monkeypatch.setenv("FREECAD_BRIDGE_CLIENT_ID", "client-1")
+    monkeypatch.setenv("FREECAD_BRIDGE_SECRET", "01" * 32)
+    auth = auth_module.authenticator_from_environment()
+    challenge = auth.issue_challenge()
+    message = request_proof_message("client-1", challenge, "xmlrpc", b"request")
+    proof = base64.b64encode(create_hmac_signer(b"\x01" * 32)(message)).decode()
+    assert auth.verify("client-1", challenge, "xmlrpc", b"request", proof)
+
+
+@pytest.mark.parametrize(
+    "client_id,secret", [("", "01" * 32), ("client", "01"), ("client", "zz" * 32)]
+)
+def test_workbench_rejects_missing_or_invalid_credentials(
+    auth_module: Any, monkeypatch: pytest.MonkeyPatch, client_id: str, secret: str
+) -> None:
+    """Invalid environment configuration cannot start an authenticated bridge."""
+    monkeypatch.setenv("FREECAD_BRIDGE_CLIENT_ID", client_id)
+    monkeypatch.setenv("FREECAD_BRIDGE_SECRET", secret)
+    with pytest.raises(RuntimeError, match="authentication provider is required"):
+        auth_module.authenticator_from_environment()
+
+
 @pytest.mark.parametrize(
     "client_id,secret",
     [(None, "01" * 32), ("bad id", "01" * 32), ("client", "zz" * 32), ("client", "01")],

@@ -40,6 +40,8 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
         **os.environ,
         "FREECAD_MCP_TESTING": "1",
         "FREECAD_AUTH_TEST_READY": str(ready),
+        "FREECAD_BRIDGE_CLIENT_ID": "test-client",
+        "FREECAD_BRIDGE_SECRET": "01" * 32,
     }
     with log_path.open("w+", encoding="utf-8") as log:
         process = await asyncio.create_subprocess_exec(
