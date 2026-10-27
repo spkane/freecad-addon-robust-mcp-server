@@ -1,0 +1,91 @@
+name: Cross-platform authentication
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-freecad-auth:
+    name: Real FreeCAD pairing and MCP (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Install project dependencies
+        run: uv sync --all-extras
+
+      - name: Set up Linux FreeCAD
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-freecad
+
+      - name: Select Linux command
+        if: runner.os == 'Linux'
+        shell: bash
+        run: echo "FREECAD_AUTH_TEST_COMMAND=$(command -v freecadcmd)" >> "$GITHUB_ENV"
+
+      - name: Download and verify native FreeCAD
+        if: runner.os != 'Linux'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RELEASE=$(gh api repos/FreeCAD/FreeCAD/releases/latest)
+          TAG=$(jq -r '.tag_name' <<< "$RELEASE")
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            case "$(uname -m)" in
+              arm64) ARCH=arm64 ;;
+              x86_64) ARCH=x86_64 ;;
+              *) echo "Unsupported macOS architecture" >&2; exit 1 ;;
+            esac
+            PATTERN="macOS-${ARCH}-py311\\.dmg$"
+          else
+            PATTERN='Windows-x86_64-py311\.7z$'
+          fi
+          ASSET=$(jq -ce --arg pattern "$PATTERN" \
+            '[.assets[] | select(.name | test($pattern))] | if length == 1 then .[0] else error("expected exactly one native FreeCAD asset") end' <<< "$RELEASE")
+          NAME=$(jq -r '.name' <<< "$ASSET")
+          DIGEST=$(jq -r '.digest' <<< "$ASSET")
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          gh release download "$TAG" --repo FreeCAD/FreeCAD --pattern "$NAME" --dir "$RUNNER_TEMP"
+          uv run python -c 'import hashlib, pathlib, sys; p=pathlib.Path(sys.argv[1]); expected=sys.argv[2]; actual=hashlib.file_digest(p.open("rb"), "sha256").hexdigest(); sys.exit(0 if actual == expected else "FreeCAD asset digest mismatch")' "$RUNNER_TEMP/$NAME" "${DIGEST#sha256:}"
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            MOUNT="$RUNNER_TEMP/freecad-volume"
+            hdiutil attach "$RUNNER_TEMP/$NAME" -readonly -nobrowse -mountpoint "$MOUNT"
+            APP=$(find "$MOUNT" -maxdepth 1 -name '*.app' -type d -print -quit)
+            [[ -n "$APP" ]]
+            ditto "$APP" "$RUNNER_TEMP/FreeCAD.app"
+            hdiutil detach "$MOUNT"
+            CMD="$RUNNER_TEMP/FreeCAD.app/Contents/Resources/bin/freecadcmd"
+            [[ -f "$CMD" ]]
+          else
+            7z x "$RUNNER_TEMP/$NAME" "-o$RUNNER_TEMP/freecad" -y > /dev/null
+            CMD=$(find "$RUNNER_TEMP/freecad" -iname FreeCADCmd.exe -type f -print -quit)
+            [[ -n "$CMD" ]]
+            CMD=$(cygpath -w "$CMD")
+          fi
+          echo "FREECAD_AUTH_TEST_COMMAND=$CMD" >> "$GITHUB_ENV"
+
+      - name: Exercise pairing and both MCP transports with real FreeCAD
+        env:
+          FREECAD_AUTH_TEST_REQUIRED: '1'
+          FREECAD_AUTH_TEST_DISPOSABLE_WINDOWS: '1'
+        run: uv run pytest tests/integration/test_authenticated_standalone.py -v --tb=short
