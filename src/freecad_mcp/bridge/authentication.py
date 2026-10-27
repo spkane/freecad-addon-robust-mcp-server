@@ -1,11 +1,28 @@
 """Client-side request proof construction for paired FreeCAD bridges."""
 
 import hashlib
+import hmac
 import re
+from collections.abc import Callable
 
 _CLIENT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
 _CHALLENGE = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _DOMAIN = b"freecad-robust-mcp-bridge-request-v1\x00"
+
+
+def create_hmac_signer(secret: bytes) -> Callable[[bytes], bytes]:
+    """Create a request signer for a paired 32-byte shared secret.
+
+    Raises:
+        ValueError: If the credential is not exactly 32 bytes.
+    """
+    if not isinstance(secret, bytes) or len(secret) != 32:
+        raise ValueError("Bridge credential must be exactly 32 bytes")
+
+    def sign(message: bytes) -> bytes:
+        return hmac.digest(secret, message, "sha256")
+
+    return sign
 
 
 def request_proof_message(

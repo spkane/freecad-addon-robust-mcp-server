@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from freecad_mcp.bridge.authentication import request_proof_message
+from freecad_mcp.bridge.authentication import create_hmac_signer, request_proof_message
 
 ADDON_DIR = Path(__file__).parents[3] / "freecad" / "RobustMCPBridge"
 TEST_KEY = b"a test key used only to verify the callback interface"
@@ -92,6 +92,47 @@ def test_paired_client_verifier_fails_closed_on_provider_error(
 
     verifier = auth_module.PairedClientVerifier(unavailable, lambda *_args: True)
     assert not verifier("a" * 64, b"message", b"signature")
+
+
+@pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
+def test_shared_secret_proofs_bind_requests_and_allow_revocation(
+    auth_module: Any, transport: str
+) -> None:
+    """Shared-secret proofs require the right request and an active pairing."""
+    secret = bytes(range(32))
+    paired = {"client-1": secret}
+    auth = auth_module.BridgeAuthenticator(auth_module.create_hmac_verifier(paired.get))
+    sign = create_hmac_signer(secret)
+    challenge = auth.issue_challenge()
+    message = request_proof_message("client-1", challenge, transport, b"original")
+    proof = base64.b64encode(sign(message)).decode("ascii")
+    assert not auth.verify("client-1", challenge, transport, b"modified", proof)
+    assert not auth.verify("client-1", challenge, transport, b"original", proof)
+
+    challenge = auth.issue_challenge()
+    message = request_proof_message("client-1", challenge, transport, b"original")
+    proof = base64.b64encode(sign(message)).decode("ascii")
+    assert auth.verify("client-1", challenge, transport, b"original", proof)
+    challenge = auth.issue_challenge()
+    message = request_proof_message("client-1", challenge, transport, b"original")
+    proof = base64.b64encode(sign(message)).decode("ascii")
+    del paired["client-1"]
+    assert not auth.verify("client-1", challenge, transport, b"original", proof)
+
+
+def test_shared_secret_provider_rejects_invalid_credentials(auth_module: Any) -> None:
+    """Malformed secrets and unavailable credential stores fail closed."""
+    with pytest.raises(ValueError, match="exactly 32 bytes"):
+        create_hmac_signer(b"short")
+    verifier = auth_module.create_hmac_verifier(lambda _client: b"short")
+    assert not verifier("client-1", b"message", b"proof")
+
+    def unavailable(_client: str) -> bytes | None:
+        raise OSError("unavailable")
+
+    assert not auth_module.create_hmac_verifier(unavailable)(
+        "client-1", b"message", b"proof"
+    )
 
 
 def test_ed25519_provider_missing_fails_closed(

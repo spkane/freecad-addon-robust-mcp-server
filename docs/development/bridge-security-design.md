@@ -81,6 +81,12 @@ be able to use or obtain those credentials or modify the workbench and its
 trust store. Pairing protects against clients without access to the credential;
 it is not an isolation boundary against a compromised user account.
 
+The development branch also has a standard-library HMAC-SHA-256 proof provider
+using a separate 32-byte shared secret per client. It does not require a crypto
+package inside FreeCAD. Both sides must protect the secret; anyone who can read
+it can impersonate that client. The credential store, enrollment, and production
+startup wiring for this provider have not yet been implemented or verified.
+
 Public-key pairing can leave only public keys in the FreeCAD workbench. The
 client signs a server challenge and the request, and the bridge checks the
 signature against its approved clients. The trust store must be protected from

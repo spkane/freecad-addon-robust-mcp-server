@@ -30,6 +30,29 @@ _MAX_PROOF_BYTES = 8192
 _FINGERPRINT = re.compile(r"[0-9a-f]{64}\Z")
 
 
+def create_hmac_verifier(
+    lookup: Callable[[str], bytes | None],
+) -> Callable[[str, bytes, bytes], bool]:
+    """Verify request proofs using individually paired 32-byte shared secrets.
+
+    The lookup is responsible for credential protection and revocation. A
+    shared secret permits anyone who can read it to impersonate that client.
+    """
+
+    def verify(client_id: str, message: bytes, proof: bytes) -> bool:
+        if not isinstance(client_id, str) or _CLIENT_ID.fullmatch(client_id) is None:
+            return False
+        try:
+            secret = lookup(client_id)
+            if not isinstance(secret, bytes) or len(secret) != 32:
+                return False
+            return hmac.compare_digest(hmac.digest(secret, message, "sha256"), proof)
+        except Exception:
+            return False
+
+    return verify
+
+
 class PairedClientVerifier:
     """Resolve approved public keys for every request and verify their proofs.
 
