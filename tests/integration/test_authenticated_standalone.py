@@ -159,7 +159,7 @@ async def _check_harnesses(env: dict[str, str], port: int, mode: str) -> None:
                 try:
                     response = await http.post(url)
                     break
-                except httpx2.ConnectError:
+                except (httpx2.ConnectError, httpx2.ConnectTimeout):
                     await asyncio.sleep(0.1)
             else:
                 pytest.fail("MCP HTTP server did not become ready")
