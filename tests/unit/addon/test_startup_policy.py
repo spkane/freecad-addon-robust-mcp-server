@@ -69,6 +69,13 @@ def test_only_exact_console_executables(executable: str, expected: bool) -> None
         ("other", ["--console"], False),
         ("freecad", [], False),
         ("freecad", ["-u", "--console"], False),
+        ("freecad", ["--response-file", "--console"], False),
+        ("freecad", ["--get-config", "--console"], False),
+        ("freecad", ["--run-test", "--console"], False),
+        ("freecad", ["--pass", "--console"], False),
+        ("freecad", ["--unknown", "--console"], False),
+        ("freecad", ["document.FCStd", "--console"], False),
+        ("freecad", ["--run-test", "0", "--console"], True),
         ("freecad", ["--", "--console"], False),
     ],
 )

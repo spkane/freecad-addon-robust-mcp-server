@@ -44,6 +44,19 @@ _BATCH_OPTIONS = frozenset(
         "--response-file",
     }
 )
+# These batch options also consume one argument. Do not interpret that value
+# as an explicit console flag when establishing the execution safety boundary.
+_BATCH_VALUE_OPTIONS = frozenset(
+    {
+        "-t",
+        "--run-test",
+        "-r",
+        "--run-open",
+        "--get-config",
+        "--set-config",
+        "--response-file",
+    }
+)
 _FLAG_OPTIONS = frozenset(
     {
         "-c",
@@ -75,13 +88,29 @@ def is_console_invocation(executable: str, arguments: Sequence[str]) -> bool:
     index = 0
     while index < len(arguments):
         argument = arguments[index]
-        if argument == "--":
+        if argument in {"--", "--pass"}:
             return False
         if argument in {"-c", "--console"}:
             return True
         option = argument.split("=", 1)[0]
-        if option in _VALUE_OPTIONS and "=" not in argument:
-            index += 1
+        if option in _VALUE_OPTIONS or option in _BATCH_VALUE_OPTIONS:
+            if "=" not in argument:
+                index += 1
+                if index >= len(arguments):
+                    break
+        elif (
+            argument in _FLAG_OPTIONS
+            or argument in _BATCH_OPTIONS
+            or any(
+                argument.startswith(short) and argument != short
+                for short in ("-u", "-s", "-M", "-E", "-P", "-t", "-r")
+            )
+        ):
+            pass
+        else:
+            # Unknown options or positional arguments make later tokens
+            # ambiguous; never infer headless mode from those tokens.
+            break
         index += 1
     return False
 
