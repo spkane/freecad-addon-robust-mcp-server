@@ -48,8 +48,9 @@ workbench, and trust store; credential protection by itself is insufficient.
 - Bind only literal loopback addresses. Enforce request size, connection, read
   deadline, and queue limits independently of authentication.
 - Captured stdout and stderr are each limited to 1,000,000 UTF-8 bytes and
-  marked when truncated. This does not yet bound returned result objects or
-  tracebacks; those remain release verification and implementation work.
+  marked when truncated. Exception messages, types, and tracebacks use the same
+  output limit. Rendering an exception can still allocate memory before the
+  limit is applied, and returned result objects are not yet bounded.
 - The socket client accepts response frames up to 16 MiB, including JSON
   escaping, and closes the connection on larger frames. This client-side limit
   does not prevent a server from allocating an oversized result before sending.

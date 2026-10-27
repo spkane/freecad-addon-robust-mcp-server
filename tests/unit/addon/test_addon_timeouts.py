@@ -372,6 +372,32 @@ def test_bounded_capture_rejects_seeking(server_mod: Any) -> None:
     assert len(capture.getvalue().encode("utf-8")) <= 32
 
 
+def test_exception_diagnostics_are_bounded(server_mod: Any) -> None:
+    """Large exception messages and tracebacks have bounded encoded output."""
+    plugin = server_mod.FreecadMCPPlugin()
+    result = plugin._execute_code_sync("raise ValueError('é' * 600000)")
+    assert result["success"] is False
+    assert result["error_type"] == "ValueError"
+    for name in ("error_message", "error_traceback"):
+        assert len(result[name].encode("utf-8")) <= server_mod.MAX_CAPTURED_OUTPUT_BYTES
+        assert result[name].endswith(server_mod.OUTPUT_TRUNCATION_MARKER)
+
+
+def test_unrenderable_exception_still_returns_failure(server_mod: Any) -> None:
+    """A broken exception string must not leave the request unanswered."""
+    plugin = server_mod.FreecadMCPPlugin()
+    result = plugin._execute_code_sync(
+        "class BadError(Exception):\n"
+        "    def __str__(self):\n"
+        "        raise RuntimeError('broken')\n"
+        "raise BadError()"
+    )
+    assert result["success"] is False
+    assert result["error_type"] == "BadError"
+    assert result["error_message"] == "Exception message could not be rendered"
+    assert "BadError" in result["error_traceback"]
+
+
 def test_xmlrpc_rejects_unsafe_framing_and_xml(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

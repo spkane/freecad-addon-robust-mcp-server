@@ -189,6 +189,28 @@ class _BoundedCapture(io.TextIOBase):
         return content.decode("utf-8", errors="ignore") + OUTPUT_TRUNCATION_MARKER
 
 
+def _bounded_text(text: str) -> str:
+    """Limit UTF-8 text using the same policy as captured execution output."""
+    capture = _BoundedCapture()
+    capture.write(text)
+    return capture.getvalue()
+
+
+def _exception_diagnostics(error: Exception) -> tuple[str, str]:
+    """Return bounded diagnostics even when an exception cannot be rendered."""
+    try:
+        message = _bounded_text(str(error))
+    except Exception:
+        message = "Exception message could not be rendered"
+    capture = _BoundedCapture()
+    try:
+        traceback.print_exception(type(error), error, error.__traceback__, file=capture)
+        formatted = capture.getvalue()
+    except Exception:
+        formatted = "Exception traceback could not be rendered"
+    return message, formatted
+
+
 def _loopback_host(host: str) -> str:
     """Resolve the supported local host names without trusting DNS.
 
@@ -1025,15 +1047,16 @@ class FreecadMCPPlugin:
 
         except Exception as e:
             elapsed = (time.perf_counter() - start) * 1000
+            message, formatted_traceback = _exception_diagnostics(e)
             return {
                 "success": False,
                 "result": None,
                 "stdout": stdout_capture.getvalue(),
                 "stderr": stderr_capture.getvalue(),
                 "execution_time_ms": elapsed,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "error_traceback": traceback.format_exc(),
+                "error_type": _bounded_text(type(e).__name__),
+                "error_message": message,
+                "error_traceback": formatted_traceback,
             }
 
     # =========================================================================

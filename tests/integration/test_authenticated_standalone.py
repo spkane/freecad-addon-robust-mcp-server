@@ -20,6 +20,13 @@ ROOT = Path(__file__).resolve().parents[2]
 PROBE = ROOT / "tests" / "fixtures" / "freecad_authenticated_probe.py"
 
 
+def _assert_truncated(*texts: str) -> None:
+    """Check the bridge's byte limit and explicit truncation marker."""
+    for text in texts:
+        assert len(text.encode("utf-8")) <= 1_000_000
+        assert text.endswith("\n[output truncated]\n")
+
+
 @pytest.mark.standalone_freecad
 @pytest.mark.asyncio
 @pytest.mark.timeout(45)
@@ -93,9 +100,14 @@ async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> Non
                         "print('x' * 1100000, file=sys.stderr)"
                     )
                     assert output.success
-                    for text in (output.stdout, output.stderr):
-                        assert len(text.encode("utf-8")) <= 1_000_000
-                        assert text.endswith("\n[output truncated]\n")
+                    _assert_truncated(output.stdout, output.stderr)
+                    error = await bridge.execute_python(
+                        "raise ValueError('é' * 600000)"
+                    )
+                    assert not error.success
+                    assert error.error_type == "ValueError"
+                    assert error.error_traceback is not None
+                    _assert_truncated(error.stderr, error.error_traceback)
                 finally:
                     await bridge.disconnect()
         finally:
