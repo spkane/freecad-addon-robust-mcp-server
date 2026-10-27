@@ -308,6 +308,21 @@ inspect_object(
 ) -> dict
 ```
 
+Property values are made safe for both XML-RPC and JSON. A link to a FreeCAD
+document object is represented by a dictionary containing `name`, `label`,
+`type_id`, and `document`; link lists and subelement references retain their
+list structure. Other FreeCAD-specific values are represented as strings.
+Integers outside XML-RPC's signed 32-bit range and non-finite floats are also
+represented as strings. Invalid XML characters are replaced with `�`.
+
+Property inspection is bounded to 100 entries per collection, eight levels of
+nesting, 512 values, and 2,048 total text characters; individual strings are
+limited to 512 characters. Truncated collections or strings include a
+`<truncated>` marker, cycles are marked `<cycle>`, excessive depth is marked
+`<max depth>`, and an unreadable property is marked `<unreadable>`. Disable
+`include_properties` or `include_shape` to avoid reading those sections in
+FreeCAD.
+
 #### create_object
 
 Create a generic FreeCAD object by type ID.

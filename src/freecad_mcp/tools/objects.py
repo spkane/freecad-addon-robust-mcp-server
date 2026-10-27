@@ -51,6 +51,9 @@ def register_object_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) ->
     ) -> dict[str, Any]:
         """Get detailed information about a FreeCAD object.
 
+        Document-object links include their name, label, type ID, and document.
+        Nested properties are bounded and may contain truncation or cycle markers.
+
         Args:
             object_name: Name of the object to inspect.
             doc_name: Document containing the object. Uses active document if None.
@@ -69,7 +72,12 @@ def register_object_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) ->
                 - visibility: Whether object is visible
         """
         bridge = await get_bridge()
-        obj = await bridge.get_object(object_name, doc_name)
+        obj = await bridge.get_object(
+            object_name,
+            doc_name,
+            include_properties=include_properties,
+            include_shape=include_shape,
+        )
 
         result = {
             "name": obj.name,

@@ -32,6 +32,7 @@ from freecad_mcp.bridge.base import (
     WorkbenchInfo,
     resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 
 
 class EmbeddedBridge(FreecadBridge):
@@ -266,53 +267,24 @@ else:
         self,
         obj_name: str,
         doc_name: str | None = None,
+        *,
+        include_properties: bool = True,
+        include_shape: bool = True,
     ) -> ObjectInfo:
         """Get detailed object information."""
         result = await self.execute_python(
-            f"""
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
-if doc is None:
-    raise ValueError("No document found")
-
-obj = doc.getObject({obj_name!r})
-if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
-
-props = {{}}
-for prop in obj.PropertiesList:
-    try:
-        val = getattr(obj, prop)
-        if hasattr(val, '__class__') and val.__class__.__module__ != 'builtins':
-            val = str(val)
-        props[prop] = val
-    except Exception:
-        props[prop] = "<unreadable>"
-
-shape_info = None
-if hasattr(obj, "Shape"):
-    shape = obj.Shape
-    shape_info = {{
-        "type": shape.ShapeType,
-        "volume": shape.Volume if hasattr(shape, "Volume") else None,
-        "area": shape.Area if hasattr(shape, "Area") else None,
-        "is_valid": shape.isValid(),
-    }}
-
-_result_ = {{
-    "name": obj.Name,
-    "label": obj.Label,
-    "type_id": obj.TypeId,
-    "properties": props,
-    "shape_info": shape_info,
-    "children": [c.Name for c in obj.OutList] if hasattr(obj, "OutList") else [],
-}}
-"""
+            build_object_inspection_code(
+                obj_name,
+                doc_name,
+                include_properties=include_properties,
+                include_shape=include_shape,
+            )
         )
 
         if result.success and result.result:
             return ObjectInfo(**result.result)
 
-        error_msg = result.error_traceback or "Failed to get object"
+        error_msg = result.error_traceback or result.stderr or "Failed to get object"
         raise ValueError(error_msg)
 
     async def get_console_output(

@@ -434,12 +434,17 @@ class FreecadBridge(ABC):
         self,
         obj_name: str,
         doc_name: str | None = None,
+        *,
+        include_properties: bool = True,
+        include_shape: bool = True,
     ) -> ObjectInfo:
         """Get detailed object information.
 
         Args:
             obj_name: Name of the object.
             doc_name: Document name (uses active if None).
+            include_properties: Read object property values.
+            include_shape: Read shape geometry details.
 
         Returns:
             ObjectInfo with full object details.
