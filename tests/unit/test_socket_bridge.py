@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from freecad_mcp.bridge.socket import SocketBridge
+from freecad_mcp.bridge.socket import RequestNotSentError, SocketBridge
 
 
 class TestSocketBridge:
@@ -227,7 +227,7 @@ class TestSocketBridgeCommunication:
 
         await bridge._lock.acquire()
         try:
-            with pytest.raises(TimeoutError):
+            with pytest.raises(RequestNotSentError):
                 await bridge._send_request(
                     "execute",
                     {"code": "queued"},
@@ -238,6 +238,82 @@ class TestSocketBridgeCommunication:
             bridge._lock.release()
 
         writer.write.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_queued_execute_reports_code_not_executed(
+        self,
+        mock_streams,
+    ) -> None:
+        """An execute request that expires in the queue should be unambiguous."""
+        reader, writer = mock_streams
+        bridge = SocketBridge(execution_timeout_ms=1000)
+        bridge._reader = reader
+        bridge._writer = writer
+        bridge._connected = True
+
+        await bridge._lock.acquire()
+        try:
+            result = await bridge.execute_python("state_changing_operation()")
+        finally:
+            bridge._lock.release()
+
+        assert result.success is False
+        assert result.error_type == "RequestNotSentError"
+        assert "code was not executed" in result.stderr
+        assert "may continue" not in result.stderr
+        writer.write.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reconnect_deadline_before_write_reports_request_not_sent(
+        self,
+    ) -> None:
+        """An initial reconnect deadline should retain definitive retry guidance."""
+        bridge = SocketBridge()
+
+        async def slow_open() -> None:
+            await asyncio.sleep(1.0)
+
+        with mock.patch.object(
+            bridge,
+            "_open_streams",
+            new=mock.AsyncMock(side_effect=slow_open),
+        ):
+            with pytest.raises(RequestNotSentError):
+                await bridge._send_request(
+                    "execute",
+                    {"code": "not_sent"},
+                    request_timeout=0.01,
+                )
+
+    @pytest.mark.asyncio
+    async def test_reconnect_deadline_after_write_remains_ambiguous(
+        self,
+        mock_streams,
+    ) -> None:
+        """A failed write attempt should retain conservative timeout guidance."""
+        reader, writer = mock_streams
+        writer.drain.side_effect = ConnectionResetError("reset")
+        bridge = SocketBridge()
+        bridge._reader = reader
+        bridge._writer = writer
+        bridge._connected = True
+
+        async def slow_open() -> None:
+            await asyncio.sleep(1.0)
+
+        with mock.patch.object(
+            bridge,
+            "_open_streams",
+            new=mock.AsyncMock(side_effect=slow_open),
+        ):
+            with pytest.raises(TimeoutError) as error:
+                await bridge._send_request(
+                    "execute",
+                    {"code": "possibly_sent"},
+                    request_timeout=0.01,
+                )
+
+        assert not isinstance(error.value, RequestNotSentError)
 
     @pytest.mark.asyncio
     async def test_waiting_request_selects_streams_after_acquiring_lock(

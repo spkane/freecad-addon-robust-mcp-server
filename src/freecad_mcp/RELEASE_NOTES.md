@@ -10,7 +10,8 @@
   its non-thread-safe transport. Socket connections recover after a timed-out
   response, select current streams only while holding the request lock, and do
   not send work whose execution deadline expired while queued. Socket recovery
-  also runs outside the request lock to avoid reconnect deadlocks. XML-RPC
+  also runs outside the request lock to avoid reconnect deadlocks, and pre-send
+  deadline failures explicitly report that code was not executed. XML-RPC
   retains execution compatibility with older workbenches that expose only the
   one-argument `execute(code)` method.
 

@@ -44,6 +44,11 @@ configured or per-call timeouts longer than 30 seconds.
 > state-changing operation. Inspect the document state first, or make the
 > operation idempotent.
 
+Socket requests that expire while waiting for the request lock or reconnecting
+before any write attempt return `RequestNotSentError` and explicitly confirm
+that the code was not executed. If a write was attempted, the result remains a
+general `TimeoutError` because FreeCAD may have started the operation.
+
 ---
 
 ## Connection Modes

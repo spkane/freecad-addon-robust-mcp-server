@@ -53,6 +53,10 @@ class JsonRpcError(Exception):
         self.data = data
 
 
+class RequestNotSentError(TimeoutError):
+    """Request deadline expired before any write attempt to FreeCAD."""
+
+
 class SocketBridge(FreecadBridge):
     """Bridge that communicates with FreeCAD via JSON-RPC over sockets.
 
@@ -321,6 +325,22 @@ class SocketBridge(FreecadBridge):
         except ConnectionError as e:
             raise ConnectionError(message) from e
 
+    @staticmethod
+    def _request_deadline_error(request_may_have_been_sent: bool) -> TimeoutError:
+        """Classify a pre-send deadline based on earlier write attempts.
+
+        Args:
+            request_may_have_been_sent: Whether this logical request has already
+                reached a stream write attempt.
+
+        Returns:
+            A conservative timeout when an earlier attempt may have reached
+            FreeCAD, otherwise a definitive request-not-sent timeout.
+        """
+        if request_may_have_been_sent:
+            return TimeoutError()
+        return RequestNotSentError()
+
     async def _send_request(
         self,
         method: str,
@@ -360,20 +380,25 @@ class SocketBridge(FreecadBridge):
         send_deadline = asyncio.get_running_loop().time() + (
             self._timeout if request_timeout is None else request_timeout
         )
+        request_may_have_been_sent = False
 
         while True:
-            await self._acquire_request_lock(send_deadline)
+            try:
+                await self._acquire_request_lock(send_deadline)
+            except TimeoutError as e:
+                raise self._request_deadline_error(request_may_have_been_sent) from e
 
             recovery_error: ConnectionError | ConnectionResetError | BrokenPipeError
             try:
                 if asyncio.get_running_loop().time() >= send_deadline:
-                    raise TimeoutError
+                    raise self._request_deadline_error(request_may_have_been_sent)
 
                 try:
                     reader, writer = self._get_request_streams()
                 except ConnectionError as e:
                     recovery_error = e
                 else:
+                    request_may_have_been_sent = True
                     try:
                         return await self._send_request_once(
                             request,
@@ -387,7 +412,10 @@ class SocketBridge(FreecadBridge):
             finally:
                 self._lock.release()
 
-            await self._recover_request_connection(recovery_error, send_deadline)
+            try:
+                await self._recover_request_connection(recovery_error, send_deadline)
+            except TimeoutError as e:
+                raise self._request_deadline_error(request_may_have_been_sent) from e
 
     async def ping(self) -> float:
         """Ping FreeCAD to check connection and measure latency.
@@ -500,17 +528,26 @@ class SocketBridge(FreecadBridge):
                     execution_time_ms=elapsed,
                 )
 
-        except TimeoutError:
+        except TimeoutError as e:
+            if isinstance(e, RequestNotSentError):
+                error_message = (
+                    f"Execution request expired after {effective_timeout_ms}ms "
+                    "before being sent; code was not executed"
+                )
+                error_type = "RequestNotSentError"
+            else:
+                error_message = (
+                    f"Execution response timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                )
+                error_type = "TimeoutError"
             return ExecutionResult(
                 success=False,
                 result=None,
                 stdout="",
-                stderr=(
-                    f"Execution response timed out after {effective_timeout_ms}ms; "
-                    "code already running in FreeCAD may continue"
-                ),
+                stderr=error_message,
                 execution_time_ms=float(effective_timeout_ms),
-                error_type="TimeoutError",
+                error_type=error_type,
             )
         except JsonRpcError as e:
             elapsed = (time.perf_counter() - start) * 1000
