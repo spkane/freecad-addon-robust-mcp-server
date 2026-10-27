@@ -141,17 +141,17 @@ if __package__:
     try:
         from freecad_mcp_bridge.startup_policy import (
             is_batch_invocation,
-            is_console_executable,
+            is_console_invocation,
         )
     except ImportError:
         from .freecad_mcp_bridge.startup_policy import (
             is_batch_invocation,
-            is_console_executable,
+            is_console_invocation,
         )
 else:
     from freecad_mcp_bridge.startup_policy import (
         is_batch_invocation,
-        is_console_executable,
+        is_console_invocation,
     )
 
 
@@ -199,10 +199,11 @@ try:
             qcore_app = QtCore.QCoreApplication.instance()
             _has_qapp = isinstance(qcore_app, QtWidgets.QApplication)
             _is_true_headless = not _has_qapp and (
-                qcore_app is not None or is_console_executable(sys.executable)
+                qcore_app is not None
+                or is_console_invocation(sys.executable, sys.argv[1:])
             )
         else:
-            _is_true_headless = is_console_executable(sys.executable)
+            _is_true_headless = is_console_invocation(sys.executable, sys.argv[1:])
         _is_true_headless = _is_true_headless and not getattr(FreeCAD, "GuiUp", False)
 
         FreeCAD.Console.PrintMessage(

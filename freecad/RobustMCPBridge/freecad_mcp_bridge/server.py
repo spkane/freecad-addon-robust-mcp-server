@@ -45,14 +45,14 @@ if TYPE_CHECKING:
 
 if __package__:
     from .qt_compat import get_host_qt_binding, load_qt_core, load_qt_core_widgets
-    from .startup_policy import is_console_executable
+    from .startup_policy import is_console_invocation
 else:
     from qt_compat import (  # type: ignore[import-not-found, no-redef]
         get_host_qt_binding,
         load_qt_core,
         load_qt_core_widgets,
     )
-    from startup_policy import is_console_executable  # type: ignore[import-not-found, no-redef]
+    from startup_policy import is_console_invocation  # type: ignore[import-not-found, no-redef]
 
 # Global registry of active servers for cleanup on Python exit
 # Uses weak references to avoid preventing garbage collection
@@ -1002,9 +1002,9 @@ class FreecadMCPPlugin:
             if app is not None:
                 confirmed_headless = not isinstance(app, qtwidgets.QApplication)
             else:
-                confirmed_headless = is_console_executable(sys.executable)
+                confirmed_headless = is_console_invocation(sys.executable, sys.argv[1:])
         except RuntimeError:
-            confirmed_headless = is_console_executable(sys.executable)
+            confirmed_headless = is_console_invocation(sys.executable, sys.argv[1:])
         if not confirmed_headless:
             raise RuntimeError(
                 "Cannot confirm headless FreeCAD; refusing unsafe background "

@@ -62,6 +62,30 @@ def is_console_executable(executable: str) -> bool:
     return Path(executable).name.lower() in {"freecadcmd", "freecadcmd.exe"}
 
 
+def is_console_invocation(executable: str, arguments: Sequence[str]) -> bool:
+    """Identify the console binary or FreeCAD's explicit console mode.
+
+    A Qt GUI application, if present, must still take precedence over this
+    command-line signal when choosing the execution thread.
+    """
+    if is_console_executable(executable):
+        return True
+    if Path(executable).name.lower() not in {"freecad", "freecad.exe"}:
+        return False
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument == "--":
+            return False
+        if argument in {"-c", "--console"}:
+            return True
+        option = argument.split("=", 1)[0]
+        if option in _VALUE_OPTIONS and "=" not in argument:
+            index += 1
+        index += 1
+    return False
+
+
 def is_batch_invocation(arguments: Sequence[str]) -> bool:
     """Fail closed for scripts, batch options and unknown command-line options.
 

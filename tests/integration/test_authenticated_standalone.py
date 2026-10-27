@@ -364,7 +364,7 @@ def test_headless_workbench_autostart(
         str(tmp_path / "system.cfg"),
     ]
     if interactive:
-        source = f"import runpy; runpy.run_path({str(probe)!r})\n"
+        source = f"import runpy; _ = runpy.run_path({str(probe)!r})\n"
     else:
         command.append(str(probe))
         source = None

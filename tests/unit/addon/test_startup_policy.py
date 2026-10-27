@@ -59,6 +59,26 @@ def test_only_exact_console_executables(executable: str, expected: bool) -> None
     assert policy.is_console_executable(executable) is expected
 
 
+@pytest.mark.parametrize(
+    ("executable", "arguments", "expected"),
+    [
+        ("freecadcmd", [], True),
+        ("freecad", ["--console"], True),
+        ("freecad", ["-c"], True),
+        ("freecad.exe", ["--console"], True),
+        ("other", ["--console"], False),
+        ("freecad", [], False),
+        ("freecad", ["-u", "--console"], False),
+        ("freecad", ["--", "--console"], False),
+    ],
+)
+def test_explicit_console_mode(
+    executable: str, arguments: list[str], expected: bool
+) -> None:
+    """Accept console mode only for FreeCAD and actual option arguments."""
+    assert policy.is_console_invocation(executable, arguments) is expected
+
+
 def test_cleanup_only_touches_owned_timers_on_their_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
