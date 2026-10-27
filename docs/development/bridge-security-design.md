@@ -40,6 +40,10 @@ but the identity and signing of the actual Python executable matter.
 - Keep private keys out of repository files, command-line arguments, logs, and
   model-visible output. Revoke clients independently and document rotation.
 - Do not silently connect to an older, unauthenticated bridge.
+- Update integration-test readiness probes to authenticate. An occupied port
+  whose owner cannot be authenticated must be reported as occupied, not treated
+  as a zombie to be terminated; startup and cleanup must target only the FreeCAD
+  process started by that test run.
 
 ## Pairing and key isolation
 

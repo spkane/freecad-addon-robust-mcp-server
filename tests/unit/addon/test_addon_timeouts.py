@@ -285,6 +285,59 @@ async def test_socket_reconnects_after_server_idle_deadline(
         await plugin._socket_server.wait_closed()
 
 
+@pytest.mark.asyncio
+async def test_socket_rejects_oversized_frame_before_execution(
+    server_mod: Any,
+) -> None:
+    """An oversized socket frame closes the connection without executing code."""
+    plugin = server_mod.FreecadMCPPlugin(host="127.0.0.1", port=0)
+    plugin._running = True
+    plugin._execute_via_queue = MagicMock()
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    try:
+        writer.write(b"x" * (server_mod.MAX_BRIDGE_REQUEST_BYTES + 1) + b"\n")
+        await writer.drain()
+        assert await asyncio.wait_for(reader.read(), timeout=3) == b""
+        plugin._execute_via_queue.assert_not_called()
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_socket_limits_simultaneous_clients(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Connections beyond the cap are closed while an existing client remains."""
+    monkeypatch.setattr(server_mod, "MAX_SOCKET_CLIENTS", 1)
+    plugin = server_mod.FreecadMCPPlugin(host="127.0.0.1", port=0)
+    plugin._running = True
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    first_reader, first_writer = await asyncio.open_connection("127.0.0.1", port)
+    second_writer = None
+    try:
+        first_writer.write(b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n')
+        await first_writer.drain()
+        assert await asyncio.wait_for(first_reader.readline(), timeout=3)
+        second_reader, second_writer = await asyncio.open_connection("127.0.0.1", port)
+        assert await asyncio.wait_for(second_reader.read(), timeout=3) == b""
+    finally:
+        first_writer.close()
+        await first_writer.wait_closed()
+        if second_writer is not None:
+            second_writer.close()
+            await second_writer.wait_closed()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
 def test_timed_out_queued_request_is_not_executed(server_mod: Any) -> None:
     """Work that has not started should be cancelled when its caller times out."""
     plugin = server_mod.FreecadMCPPlugin()
