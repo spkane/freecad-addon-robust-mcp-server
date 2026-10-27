@@ -96,3 +96,18 @@ def test_pair_command_creates_reusable_credential(
     output = capsys.readouterr().out
     assert client_id in output
     assert secret not in output
+
+
+def test_integration_helpers_use_the_configured_pairing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Integration clients use the same per-user credential as production."""
+    from tests.integration.auth_support import integration_credentials
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("FREECAD_BRIDGE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FREECAD_BRIDGE_SECRET", raising=False)
+    client_id = create_credential()
+    creds = integration_credentials()
+    assert creds["client_id"] == client_id
+    assert len(creds["signer"](b"request")) == 32

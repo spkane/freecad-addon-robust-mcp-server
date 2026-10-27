@@ -97,6 +97,7 @@ jobs:
 
       - name: Start FreeCAD headless with MCP bridge
         run: |
+          uv run freecad-mcp --pair-bridge
           # Start FreeCAD headless with MCP bridge in background
           setsid freecadcmd freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
@@ -108,7 +109,7 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
               if curl -s --connect-timeout 1 http://localhost:9875 > /dev/null 2>&1; then
                   # Try to ping the bridge
-                  if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+                  if uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())" 2>/dev/null | grep -q "pong"; then
                       echo "FreeCAD MCP bridge is ready!"
                       break
                   fi

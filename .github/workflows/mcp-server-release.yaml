@@ -282,6 +282,7 @@ jobs:
 
       - name: Start FreeCAD headless with MCP bridge
         run: |
+          uv run freecad-mcp --pair-bridge
           # Start FreeCAD headless with MCP bridge in background
           setsid freecadcmd freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
@@ -293,7 +294,7 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
               if curl -s --connect-timeout 1 http://localhost:9875 > /dev/null 2>&1; then
                   # Try to ping the bridge
-                  if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+                  if uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())" 2>/dev/null | grep -q "pong"; then
                       echo "FreeCAD MCP bridge is ready!"
                       break
                   fi
@@ -309,6 +310,9 @@ jobs:
 
       - name: Test pushed image with MCP communication
         run: |
+          FREECAD_BRIDGE_CLIENT_ID=$(uv run python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[0])')
+          FREECAD_BRIDGE_SECRET=$(uv run python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[1])')
+          export FREECAD_BRIDGE_CLIENT_ID FREECAD_BRIDGE_SECRET
           # Pull the image to verify it was pushed successfully
           docker pull ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }}
 
@@ -319,6 +323,8 @@ jobs:
               --network=host \
               -e FREECAD_MODE=xmlrpc \
               -e FREECAD_SOCKET_HOST=localhost \
+              -e FREECAD_BRIDGE_CLIENT_ID \
+              -e FREECAD_BRIDGE_SECRET \
               ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }} 2>&1 | \
             grep -q '"result"'
           echo "Container MCP communication test passed"

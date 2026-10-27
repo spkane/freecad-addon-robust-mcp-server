@@ -164,6 +164,7 @@ jobs:
               # Install project dependencies
               echo "Installing dependencies..."
               uv sync --all-extras
+              uv run freecad-mcp --pair-bridge
 
               # Start FreeCAD GUI with MCP bridge
               echo "Starting FreeCAD GUI with MCP bridge..."
@@ -191,10 +192,7 @@ jobs:
                 fi
 
                 # Check XML-RPC endpoint
-                if curl -s --max-time 1 -X POST \
-                    -H "Content-Type: text/xml" \
-                    -d "<?xml version=\"1.0\"?><methodCall><methodName>ping</methodName></methodCall>" \
-                    http://localhost:9875 2>/dev/null | grep -q "pong"; then
+                if uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())" 2>/dev/null | grep -q "pong"; then
                   echo "MCP bridge is ready after ${i}s!"
                   BRIDGE_READY=1
                   break
@@ -216,10 +214,7 @@ jobs:
 
               # Verify GUI mode is active
               echo "Verifying GUI mode..."
-              RESULT=$(curl -s -X POST \
-                -H "Content-Type: text/xml" \
-                -d "<?xml version=\"1.0\"?><methodCall><methodName>execute</methodName><params><param><value><string>_result_ = FreeCAD.GuiUp</string></value></param></params></methodCall>" \
-                http://localhost:9875)
+              RESULT=$(uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().execute('_result_ = FreeCAD.GuiUp'))")
               echo "GuiUp check result: $RESULT"
 
               if ! echo "$RESULT" | grep -q "true\|True\|1"; then
