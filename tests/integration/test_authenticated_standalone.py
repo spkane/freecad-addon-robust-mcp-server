@@ -41,6 +41,8 @@ def isolated_pairing(
         pytest.skip("Set FREECAD_AUTH_TEST_COMMAND")
     if os.name == "nt":
         if os.environ.get("FREECAD_AUTH_TEST_DISPOSABLE_WINDOWS") != "1":
+            if os.environ.get("FREECAD_AUTH_TEST_REQUIRED") == "1":
+                pytest.fail("Windows CI requires an explicitly disposable user account")
             pytest.skip("Windows requires an explicitly disposable user account")
         try:
             read_credential()
@@ -174,6 +176,28 @@ async def _check_harnesses(env: dict[str, str], port: int, mode: str) -> None:
         await asyncio.wait_for(server.wait(), timeout=10)
 
 
+async def _check_unauthenticated_bridge_request(port: int, mode: str) -> None:
+    """Confirm the real listener rejects a request without authentication."""
+    if mode == "xmlrpc":
+        async with httpx2.AsyncClient(timeout=5) as client:
+            response = await client.post(
+                f"http://127.0.0.1:{port}/",
+                content=b"<methodCall><methodName>ping</methodName></methodCall>",
+                headers={"Content-Type": "text/xml"},
+            )
+            assert response.status_code == 401
+    else:
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        try:
+            writer.write(b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n')
+            await writer.drain()
+            response = json.loads(await asyncio.wait_for(reader.readline(), timeout=5))
+            assert response.get("error") == "Bridge authentication required"
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+
 @pytest.mark.standalone_freecad
 @pytest.mark.asyncio
 @pytest.mark.timeout(120)
@@ -212,6 +236,7 @@ async def test_authenticated_transports_with_real_freecad(
                 ("xmlrpc", XmlRpcBridge),
                 ("socket", SocketBridge),
             ):
+                await _check_unauthenticated_bridge_request(ports[mode], mode)
                 wrong = bridge_type(
                     host="127.0.0.1",
                     port=ports[mode],
