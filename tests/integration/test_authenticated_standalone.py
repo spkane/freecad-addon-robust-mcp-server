@@ -173,7 +173,11 @@ async def _check_harnesses(env: dict[str, str], port: int, mode: str) -> None:
     finally:
         if server.returncode is None:
             server.terminate()
-        await asyncio.wait_for(server.wait(), timeout=10)
+        try:
+            await asyncio.wait_for(server.wait(), timeout=10)
+        except TimeoutError:
+            server.kill()
+            await server.wait()
 
 
 async def _check_unauthenticated_bridge_request(port: int, mode: str) -> None:

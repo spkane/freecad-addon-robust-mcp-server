@@ -18,6 +18,8 @@ jobs:
     name: Real FreeCAD pairing and MCP (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
+    env:
+      FREECAD_VERSION: "1.1.4"
     strategy:
       fail-fast: false
       matrix:
@@ -25,6 +27,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -35,6 +39,8 @@ jobs:
       - name: Set up Linux FreeCAD
         if: runner.os == 'Linux'
         uses: ./.github/actions/setup-freecad
+        with:
+          freecad-tag: ${{ env.FREECAD_VERSION }}
 
       - name: Select Linux command
         if: runner.os == 'Linux'
@@ -48,7 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          RELEASE=$(gh api repos/FreeCAD/FreeCAD/releases/latest)
+          RELEASE=$(gh api "repos/FreeCAD/FreeCAD/releases/tags/$FREECAD_VERSION")
           TAG=$(jq -r '.tag_name' <<< "$RELEASE")
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             case "$(uname -m)" in
