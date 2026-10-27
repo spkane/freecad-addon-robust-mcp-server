@@ -115,7 +115,9 @@ class TestObjectTools:
         assert result["properties"]["Length"] == 10.0
         assert result["shape_info"]["volume"] == 6000.0
         assert result["children"] == ["Fillet001"]
-        mock_bridge.get_object.assert_called_once_with("Box", None)
+        mock_bridge.get_object.assert_called_once_with(
+            "Box", None, include_properties=True, include_shape=True
+        )
 
     @pytest.mark.asyncio
     async def test_inspect_object_without_properties(self, register_tools, mock_bridge):
@@ -140,6 +142,9 @@ class TestObjectTools:
         assert result["name"] == "Box"
         assert "properties" not in result
         assert "shape_info" not in result
+        mock_bridge.get_object.assert_called_once_with(
+            "Box", None, include_properties=False, include_shape=False
+        )
 
     @pytest.mark.asyncio
     async def test_create_object(self, register_tools, mock_bridge):

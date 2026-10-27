@@ -1206,6 +1206,7 @@ async def export_step(
 async def inspect_object(
     object_name: str,
     doc_name: str | None = None,
+    include_properties: bool = True,
     include_shape: bool = True,
 ) -> dict:
     """Get detailed information about an object.
@@ -1213,6 +1214,7 @@ async def inspect_object(
     Args:
         object_name: Name of the object
         doc_name: Document name
+        include_properties: Include object property values
         include_shape: Include shape geometry details
 
     Returns:
