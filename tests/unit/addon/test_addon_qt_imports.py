@@ -346,7 +346,9 @@ class TestStartQueueProcessor:
         monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
         monkeypatch.setitem(sys.modules, "PySide2", _NameErrorModule("PySide2"))
 
-        plugin = server_mod.FreecadMCPPlugin(enable_xmlrpc=True)
+        plugin = server_mod.FreecadMCPPlugin(
+            enable_xmlrpc=True, authenticator=MagicMock()
+        )
         with pytest.raises(RuntimeError, match="Refusing unsafe background"):
             plugin.start()
 

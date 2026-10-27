@@ -434,10 +434,17 @@ class FreecadMCPPlugin:
 
         Raises:
             RuntimeError: If GUI mode is active but no supported Qt binding can
-                provide the main-thread queue timer.
+                provide the main-thread queue timer, or if no authentication
+                provider is configured.
         """
         if self._running:
             return
+
+        if self._authenticator is None:
+            raise RuntimeError(
+                "Cannot start the FreeCAD bridge: a trusted client authentication "
+                "provider is required"
+            )
 
         self._running = True
 

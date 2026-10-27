@@ -52,6 +52,20 @@ def test_socket_shutdown_releases_active_client_slots(server_mod: Any) -> None:
     assert plugin._socket_client_count == 0
 
 
+def test_start_refuses_missing_authentication_before_opening_listeners(
+    server_mod: Any,
+) -> None:
+    """A missing verifier must not start the queue or either bridge listener."""
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._start_queue_processor = MagicMock()
+    with pytest.raises(RuntimeError, match="authentication provider is required"):
+        plugin.start()
+    plugin._start_queue_processor.assert_not_called()
+    assert not plugin.is_running
+    assert plugin._socket_thread is None
+    assert plugin._xmlrpc_thread is None
+
+
 @pytest.fixture
 def server_mod(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """Import the bundled bridge server without importing the FreeCAD addon."""

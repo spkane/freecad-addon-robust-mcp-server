@@ -1,8 +1,11 @@
 # FreeCAD bridge authentication design
 
-Status: implementation design. The existing XML-RPC and socket listeners accept
+Status: implementation in progress. Released XML-RPC and socket listeners accept
 unauthenticated code execution; the controls described here are not yet a
-release guarantee. The chosen release boundary protects paired clients and the
+release guarantee. On the development branch, startup refuses to open listeners
+without an injected authentication provider. A production provider and pairing
+flow are not yet available, so the development branch is not usable for normal
+bridge connections. The chosen release boundary protects paired clients and the
 bridge's authorization state from unpaired programs running under the same OS
 account. The bridge must fail closed if this boundary is unavailable.
 
