@@ -13,8 +13,14 @@ import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from pydantic import SecretStr
 
-from freecad_mcp.bridge.authentication import create_hmac_signer, request_proof_message
+from freecad_mcp.bridge.authentication import (
+    create_hmac_signer,
+    credentials_from_config,
+    request_proof_message,
+)
+from freecad_mcp.config import ServerConfig
 
 ADDON_DIR = Path(__file__).parents[3] / "freecad" / "RobustMCPBridge"
 TEST_KEY = b"a test key used only to verify the callback interface"
@@ -133,6 +139,30 @@ def test_shared_secret_provider_rejects_invalid_credentials(auth_module: Any) ->
     assert not auth_module.create_hmac_verifier(unavailable)(
         "client-1", b"message", b"proof"
     )
+
+
+def test_configured_bridge_credentials_sign_requests() -> None:
+    """Configured credentials produce the same proof as the underlying signer."""
+    config = ServerConfig(
+        bridge_client_id="client-1", bridge_secret=SecretStr("01" * 32)
+    )
+    client_id, sign = credentials_from_config(config)
+    assert client_id == "client-1"
+    assert sign(b"message") == hmac.digest(b"\x01" * 32, b"message", "sha256")
+    assert "010101" not in repr(config)
+
+
+@pytest.mark.parametrize(
+    "client_id,secret",
+    [(None, "01" * 32), ("bad id", "01" * 32), ("client", "zz" * 32), ("client", "01")],
+)
+def test_invalid_configured_bridge_credentials_fail_closed(
+    client_id: str | None, secret: str
+) -> None:
+    """Invalid IDs and secrets cannot create a bridge signer."""
+    config = ServerConfig(bridge_client_id=client_id, bridge_secret=SecretStr(secret))
+    with pytest.raises(ValueError):
+        credentials_from_config(config)
 
 
 def test_ed25519_provider_missing_fails_closed(

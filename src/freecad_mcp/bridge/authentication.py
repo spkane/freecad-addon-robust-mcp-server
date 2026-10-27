@@ -4,10 +4,35 @@ import hashlib
 import hmac
 import re
 from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from freecad_mcp.config import ServerConfig
 
 _CLIENT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
 _CHALLENGE = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _DOMAIN = b"freecad-robust-mcp-bridge-request-v1\x00"
+
+
+def credentials_from_config(
+    config: "ServerConfig",
+) -> tuple[str, Callable[[bytes], bytes]]:
+    """Load the explicitly configured bridge identity and shared-secret signer.
+
+    Raises:
+        ValueError: If either credential is missing or malformed.
+    """
+    client_id = config.bridge_client_id
+    if (
+        not isinstance(client_id, str)
+        or _CLIENT_ID.fullmatch(client_id) is None
+        or config.bridge_secret is None
+    ):
+        raise ValueError("A valid bridge client ID and secret are required")
+    raw = config.bridge_secret.get_secret_value()
+    if re.fullmatch(r"[0-9a-fA-F]{64}", raw) is None:
+        raise ValueError("Bridge secret must be 64 hexadecimal characters")
+    return client_id, create_hmac_signer(bytes.fromhex(raw))
 
 
 def create_hmac_signer(secret: bytes) -> Callable[[bytes], bytes]:
