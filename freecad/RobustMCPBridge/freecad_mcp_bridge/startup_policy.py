@@ -137,7 +137,9 @@ def is_batch_invocation(arguments: Sequence[str]) -> bool:
         if option in _VALUE_OPTIONS:
             if "=" not in argument:
                 index += 1
-                if index >= len(arguments):
+                if index >= len(arguments) or arguments[index].startswith("-"):
+                    # Missing or option-like values are ambiguous. Do not
+                    # start an interactive bridge for a malformed command.
                     return True
         elif any(
             argument.startswith(short) and argument != short

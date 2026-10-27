@@ -37,6 +37,8 @@ spec.loader.exec_module(policy)
         (["--get-config", "x"], True),
         (["--unknown"], True),
         (["-u"], True),
+        (["-u", "--run-test=0"], True),
+        (["--module-path", "--run-open=0"], True),
     ],
 )
 def test_batch_classification(arguments: list[str], batch: bool) -> None:
