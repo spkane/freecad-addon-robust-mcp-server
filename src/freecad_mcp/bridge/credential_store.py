@@ -1,7 +1,7 @@
-"""Per-user bridge credential storage on POSIX systems.
+"""Per-user bridge credential storage.
 
 The workbench contains an identical copy because it runs in FreeCAD's separate
-Python environment. Windows storage requires a platform-specific implementation.
+Python environment. Windows uses its native Credential Manager.
 """
 
 from __future__ import annotations
@@ -41,6 +41,13 @@ def _open_store(create: bool) -> int:
 
 def read_credential() -> tuple[str, str]:
     """Read the client ID and hex secret from a private credential file."""
+    if os.name == "nt":
+        if __package__:
+            from .windows_credential_store import read_credential as read_windows
+        else:
+            from windows_credential_store import read_credential as read_windows  # type: ignore[import-not-found,no-redef]
+
+        return read_windows()
     directory_fd = _open_store(False)
     try:
         fd = os.open(
@@ -81,6 +88,13 @@ def create_credential() -> str:
     Returns:
         The non-secret client ID of the new pairing.
     """
+    if os.name == "nt":
+        if __package__:
+            from .windows_credential_store import create_credential as create_windows
+        else:
+            from windows_credential_store import create_credential as create_windows  # type: ignore[import-not-found,no-redef]
+
+        return create_windows()
     directory_fd = _open_store(True)
     try:
         client_id = secrets.token_hex(16)

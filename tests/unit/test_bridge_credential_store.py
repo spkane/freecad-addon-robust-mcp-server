@@ -76,6 +76,11 @@ def test_workbench_store_matches_server_store() -> None:
     server = root / "src/freecad_mcp/bridge/credential_store.py"
     workbench = root / "freecad/RobustMCPBridge/freecad_mcp_bridge/credential_store.py"
     assert server.read_bytes() == workbench.read_bytes()
+    server = root / "src/freecad_mcp/bridge/windows_credential_store.py"
+    workbench = (
+        root / "freecad/RobustMCPBridge/freecad_mcp_bridge/windows_credential_store.py"
+    )
+    assert server.read_bytes() == workbench.read_bytes()
 
 
 def test_pair_command_creates_reusable_credential(

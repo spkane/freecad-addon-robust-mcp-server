@@ -4,8 +4,8 @@ Status: implementation in progress. Released XML-RPC and socket listeners accept
 unauthenticated code execution; the controls described here are not yet a
 release guarantee. On the development branch, startup refuses to open listeners
 without an authentication provider. The development branch can load explicit
-credentials from its process environment or a private POSIX credential file.
-Windows storage and cross-platform verification are still outstanding. The
+credentials from its process environment, a private POSIX credential file, or
+Windows Credential Manager. Windows and cross-platform verification are still outstanding. The
 selected release boundary uses per-user pairing and
 does not promise isolation from malicious programs running under the same OS
 account. The bridge must fail closed if pairing or authentication is unavailable.
@@ -89,8 +89,10 @@ it can impersonate that client. Both processes can load an explicitly supplied
 client ID and secret from their environments. On POSIX, the development branch
 also supports `freecad-mcp --pair-bridge` to create a private per-user file,
 which both processes read. The command refuses to overwrite an existing pairing.
-Windows storage is not yet implemented. The POSIX store has unit coverage and a
-headless FreeCAD test, but has not yet been verified across all supported systems.
+On Windows, the same command uses a locally persisted generic credential in
+Windows Credential Manager. That path requires real Windows verification before
+release. The POSIX store has unit coverage and a headless FreeCAD test, but has
+not yet been verified across all supported systems.
 
 Public-key pairing can leave only public keys in the FreeCAD workbench. The
 client signs a server challenge and the request, and the bridge checks the

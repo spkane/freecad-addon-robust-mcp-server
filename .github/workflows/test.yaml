@@ -56,6 +56,22 @@ jobs:
       - name: Run type checking
         run: uv run mypy src/
 
+  windows-credential-test:
+    name: Windows Credential Manager
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Verify Credential Manager pairing
+        run: uv run pytest tests/unit/test_windows_bridge_credential_store.py -v --tb=short
+
   integration-test:
     name: Integration Tests (FreeCAD Headless)
     runs-on: ubuntu-latest
