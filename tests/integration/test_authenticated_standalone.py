@@ -1,0 +1,101 @@
+"""Real FreeCAD authenticated transport tests with test-only credentials."""
+
+import asyncio
+import hashlib
+import json
+import os
+import signal
+import subprocess
+import time
+from pathlib import Path
+
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from freecad_mcp.bridge.socket import SocketBridge
+from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
+
+ROOT = Path(__file__).resolve().parents[2]
+PROBE = ROOT / "tests" / "fixtures" / "freecad_authenticated_probe.py"
+
+
+@pytest.mark.standalone_freecad
+@pytest.mark.asyncio
+@pytest.mark.timeout(45)
+async def test_authenticated_transports_with_real_freecad(tmp_path: Path) -> None:
+    """A paired client executes CAD code; a different private key is rejected."""
+    executable = os.environ.get("FREECAD_AUTH_TEST_COMMAND")
+    dependencies = os.environ.get("FREECAD_AUTH_TEST_DEPS")
+    if not executable or not dependencies:
+        pytest.skip("Set FREECAD_AUTH_TEST_COMMAND and FREECAD_AUTH_TEST_DEPS")
+    assert executable is not None and dependencies is not None
+    ready = tmp_path / "ports.json"
+    log_path = tmp_path / "freecad.log"
+    env = {
+        **os.environ,
+        "FREECAD_MCP_TESTING": "1",
+        "FREECAD_AUTH_TEST_READY": str(ready),
+        "FREECAD_AUTH_TEST_DEPS": dependencies,
+    }
+    with log_path.open("w+", encoding="utf-8") as log:
+        process = await asyncio.create_subprocess_exec(
+            executable, str(PROBE), stdout=log, stderr=subprocess.STDOUT, env=env
+        )
+        try:
+            deadline = time.monotonic() + 20
+            while not ready.exists() and time.monotonic() < deadline:
+                if process.returncode is not None:
+                    break
+                await asyncio.sleep(0.05)
+            if not ready.exists():
+                log.flush()
+                pytest.fail(f"FreeCAD bridge did not start: {log_path.read_text()}")
+            ports = json.loads(ready.read_text(encoding="utf-8"))
+            key = Ed25519PrivateKey.from_private_bytes(b"\x01" * 32)
+            public = key.public_key().public_bytes(
+                serialization.Encoding.Raw, serialization.PublicFormat.Raw
+            )
+            client_id = hashlib.sha256(public).hexdigest()
+            for mode, bridge_type in (
+                ("xmlrpc", XmlRpcBridge),
+                ("socket", SocketBridge),
+            ):
+                wrong = bridge_type(
+                    host="127.0.0.1",
+                    port=ports[mode],
+                    client_id=client_id,
+                    signer=Ed25519PrivateKey.generate().sign,
+                )
+                try:
+                    with pytest.raises(ConnectionError):
+                        await wrong.connect()
+                finally:
+                    await wrong.disconnect()
+                bridge = bridge_type(
+                    host="127.0.0.1",
+                    port=ports[mode],
+                    client_id=client_id,
+                    signer=key.sign,
+                )
+                try:
+                    await bridge.connect()
+                    result = await bridge.execute_python(
+                        "import Part\n_result_ = Part.makeBox(2, 3, 4).Volume"
+                    )
+                    assert result.success
+                    assert result.result == pytest.approx(24.0)
+                finally:
+                    await bridge.disconnect()
+        finally:
+            if process.returncode is None:
+                process.send_signal(signal.SIGINT)
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except TimeoutError:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5)
+                    except TimeoutError:
+                        process.kill()
+                        await process.wait()
