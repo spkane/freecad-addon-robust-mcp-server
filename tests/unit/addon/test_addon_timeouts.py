@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import hmac
 import http.client
 import importlib
@@ -18,6 +19,12 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, call
 
 import pytest
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
@@ -26,6 +33,100 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPBridge"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
+async def test_real_signatures_across_client_and_listener(
+    server_mod: Any, transport: str
+) -> None:
+    """Both real transports authorize a paired signature and enforce revocation."""
+    auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    client_id = hashlib.sha256(public_key).hexdigest()
+    approved = {client_id: public_key}
+
+    def verify(key: bytes, message: bytes, signature: bytes) -> bool:
+        try:
+            Ed25519PublicKey.from_public_bytes(key).verify(signature, message)
+        except (InvalidSignature, ValueError):
+            return False
+        return True
+
+    authenticator = auth_module.BridgeAuthenticator(
+        auth_module.PairedClientVerifier(approved.get, verify)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, xmlrpc_port=0, authenticator=authenticator
+    )
+    plugin._execute_via_queue = MagicMock(
+        return_value={"success": True, "result": "done"}
+    )
+    plugin._running = True
+    thread = None
+    bridge: SocketBridge | XmlRpcBridge | None = None
+    try:
+        if transport == "socket":
+            await plugin._start_socket_server()
+            port = plugin._socket_server.sockets[0].getsockname()[1]
+            bridge = SocketBridge(
+                host="127.0.0.1",
+                port=port,
+                client_id=client_id,
+                signer=private_key.sign,
+            )
+        else:
+            thread = threading.Thread(target=plugin._run_xmlrpc_server)
+            thread.start()
+            deadline = time.monotonic() + 5
+            while plugin._xmlrpc_server is None and time.monotonic() < deadline:  # noqa: ASYNC110
+                await asyncio.sleep(0.01)
+            assert plugin._xmlrpc_server is not None
+            port = plugin._xmlrpc_server.server_address[1]
+            bridge = XmlRpcBridge(
+                host="127.0.0.1",
+                port=port,
+                client_id=client_id,
+                signer=private_key.sign,
+            )
+
+        assert bridge is not None
+        impostor = type(bridge)(
+            host="127.0.0.1",
+            port=port,
+            client_id=client_id,
+            signer=Ed25519PrivateKey.generate().sign,
+        )
+        try:
+            with pytest.raises(ConnectionError):
+                await impostor.connect()
+            plugin._execute_via_queue.assert_not_called()
+        finally:
+            await impostor.disconnect()
+
+        await bridge.connect()
+        result = await bridge.execute_python("pass")
+        assert result.success and result.result == "done"
+        prior_calls = plugin._execute_via_queue.call_count
+        del approved[client_id]
+        result = await bridge.execute_python("revoked()")
+        assert not result.success
+        assert plugin._execute_via_queue.call_count == prior_calls
+    finally:
+        if bridge is not None:
+            await bridge.disconnect()
+        plugin._running = False
+        if plugin._socket_server is not None:
+            plugin._socket_server.close()
+            await plugin._socket_server.wait_closed()
+        if thread is not None:
+            await asyncio.to_thread(thread.join, 3)
+            if plugin._xmlrpc_server is not None:
+                plugin._xmlrpc_server.server_close()
+            assert not thread.is_alive()
 
 
 def test_socket_shutdown_releases_active_client_slots(server_mod: Any) -> None:
