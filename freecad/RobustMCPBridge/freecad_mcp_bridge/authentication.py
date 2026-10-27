@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import re
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,44 @@ _CLIENT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
 _CHALLENGE = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _DOMAIN = b"freecad-robust-mcp-bridge-request-v1\x00"
 _MAX_PROOF_BYTES = 8192
+_FINGERPRINT = re.compile(r"[0-9a-f]{64}\Z")
+
+
+class PairedClientVerifier:
+    """Resolve approved public keys for every request and verify their proofs.
+
+    The lookup must use an externally protected trust store. This class does not
+    create a trust store or provide an operating-system isolation boundary.
+    """
+
+    def __init__(
+        self,
+        lookup: Callable[[str], bytes | None],
+        verify_signature: Callable[[bytes, bytes, bytes], bool],
+    ) -> None:
+        """Use an authoritative key lookup and a signature verification provider.
+
+        Args:
+            lookup: Resolve an approved fingerprint to canonical public key bytes.
+            verify_signature: Verify a signature with the resolved public key.
+        """
+        self._lookup = lookup
+        self._verify_signature = verify_signature
+
+    def __call__(self, client_id: str, message: bytes, proof: bytes) -> bool:
+        """Reject unknown, revoked, malformed, or incorrectly identified keys."""
+        if not isinstance(client_id, str) or _FINGERPRINT.fullmatch(client_id) is None:
+            return False
+        try:
+            key = self._lookup(client_id)
+            if not isinstance(key, bytes) or not key or len(key) > 8192:
+                return False
+            fingerprint = hashlib.sha256(key).hexdigest()
+            if not hmac.compare_digest(fingerprint, client_id):
+                return False
+            return self._verify_signature(key, message, proof) is True
+        except Exception:
+            return False
 
 
 def request_proof_message(

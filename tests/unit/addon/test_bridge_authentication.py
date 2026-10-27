@@ -1,6 +1,7 @@
 """Tests for the bridge request authentication primitives."""
 
 import base64
+import hashlib
 import hmac
 import importlib
 from email.message import Message
@@ -54,6 +55,39 @@ def test_client_and_addon_construct_identical_proof_messages(
     assert request_proof_message("paired", challenge, transport, body) == (
         auth_module.request_proof_message("paired", challenge, transport, body)
     )
+
+
+def test_paired_client_verifier_checks_fingerprint_and_revocation(
+    auth_module: Any,
+) -> None:
+    """Revocation takes effect for subsequent proofs and key substitution fails."""
+    public_key = b"canonical public key test fixture"
+    client_id = hashlib.sha256(public_key).hexdigest()
+    approved = {client_id: public_key}
+
+    def verify_signature(key: bytes, message: bytes, proof: bytes) -> bool:
+        return key == public_key and message == b"message" and proof == b"signature"
+
+    verifier = auth_module.PairedClientVerifier(approved.get, verify_signature)
+    assert verifier(client_id, b"message", b"signature")
+    assert not verifier(client_id, b"message", b"incorrect")
+    approved[client_id] = b"substituted key"
+    assert not verifier(client_id, b"message", b"signature")
+    del approved[client_id]
+    assert not verifier(client_id, b"message", b"signature")
+    assert not verifier("unpaired", b"message", b"signature")
+
+
+def test_paired_client_verifier_fails_closed_on_provider_error(
+    auth_module: Any,
+) -> None:
+    """An unavailable trust store cannot authorize a client."""
+
+    def unavailable(_client_id: str) -> bytes | None:
+        raise RuntimeError("unavailable")
+
+    verifier = auth_module.PairedClientVerifier(unavailable, lambda *_args: True)
+    assert not verifier("a" * 64, b"message", b"signature")
 
 
 @pytest.mark.parametrize("altered", ["body", "transport", "identity", "proof"])

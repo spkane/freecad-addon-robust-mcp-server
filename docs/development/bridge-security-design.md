@@ -72,6 +72,14 @@ approval must identify the client key by fingerprint rather than trusting a
 client-supplied display name. Any provider that can sign silently for arbitrary
 same-user processes is insufficient for that stronger boundary.
 
+The protocol uses the lowercase SHA-256 fingerprint of canonical public-key
+bytes as the client ID. The verifier resolves the approved key for each request,
+checks that its fingerprint matches, and delegates signature validation to a
+provider. Revocation prevents later lookups; it does not cancel an already
+authorized request. The platform provider must define and enforce one canonical
+key encoding and signature algorithm. This fingerprint check does not make the
+underlying lookup or signature provider trustworthy on its own.
+
 ### Platform feasibility gates
 
 - **macOS:** Evaluate a signed, sandboxed app and protected app container for
