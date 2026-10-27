@@ -22,9 +22,11 @@ import atexit
 import contextlib
 import errno
 import io
+import ipaddress
 import json
 import os
 import queue
+import socket
 import sys
 import threading
 import time
@@ -132,6 +134,33 @@ HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
 DEFAULT_EXECUTION_TIMEOUT_MS = 30000
 MIN_EXECUTION_TIMEOUT_MS = 1000
 MAX_EXECUTION_TIMEOUT_MS = 600000
+MAX_BRIDGE_REQUEST_BYTES = 64 * 1024
+MAX_PENDING_REQUESTS = 32
+MAX_SOCKET_CLIENTS = 32
+REQUEST_READ_TIMEOUT_SECONDS = 10
+
+
+def _loopback_host(host: str) -> str:
+    """Resolve the supported local host names without trusting DNS.
+
+    Args:
+        host: A loopback IP address or the special name ``localhost``.
+
+    Returns:
+        The canonical loopback IP address.
+
+    Raises:
+        ValueError: If the host is not a literal loopback address.
+    """
+    if host == "localhost":
+        return "127.0.0.1"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as e:
+        raise ValueError("Bridge host must be a loopback IP address") from e
+    if not address.is_loopback:
+        raise ValueError("Bridge host must be a loopback IP address")
+    return str(address)
 
 
 def _validate_execution_timeout_ms(timeout_ms: Any) -> int:
@@ -156,6 +185,25 @@ def _validate_execution_timeout_ms(timeout_ms: Any) -> int:
         )
         raise ValueError(msg)
     return timeout_ms
+
+
+def _validate_execution_code(code: Any) -> None:
+    """Reject non-text and oversized code before it reaches the work queue.
+
+    Args:
+        code: Code submitted by a bridge client.
+
+    Raises:
+        ValueError: If the code is not valid UTF-8 text within the size limit.
+    """
+    if not isinstance(code, str):
+        raise ValueError("Code must be a string")
+    try:
+        code_size = len(code.encode("utf-8"))
+    except UnicodeEncodeError as e:
+        raise ValueError("Code must be valid UTF-8 text") from e
+    if code_size > MAX_BRIDGE_REQUEST_BYTES:
+        raise ValueError("Code exceeds the bridge request size limit")
 
 
 def _get_qt_core() -> Any:
@@ -261,7 +309,7 @@ class FreecadMCPPlugin:
         # Generate unique instance ID for this server
         self._instance_id = str(uuid.uuid4())
 
-        self._host = host
+        self._host = _loopback_host(host)
         self._port = port
         self._xmlrpc_port = xmlrpc_port
         self._enable_xmlrpc = enable_xmlrpc
@@ -277,7 +325,10 @@ class FreecadMCPPlugin:
         self._running = False
 
         # Queue-based execution for thread safety (learned from neka-nat)
-        self._request_queue: queue.Queue[ExecutionRequest] = queue.Queue()
+        self._request_queue: queue.Queue[ExecutionRequest] = queue.Queue(
+            maxsize=MAX_PENDING_REQUESTS
+        )
+        self._socket_client_count = 0
         self._timer = None
         self._queue_thread: threading.Thread | None = None
         self._headless = False
@@ -815,6 +866,7 @@ class FreecadMCPPlugin:
         """
         try:
             timeout_ms = _validate_execution_timeout_ms(timeout_ms)
+            _validate_execution_code(code)
         except ValueError as e:
             return {
                 "success": False,
@@ -824,7 +876,15 @@ class FreecadMCPPlugin:
             }
 
         request = ExecutionRequest(code, timeout_ms)
-        self._request_queue.put(request)
+        try:
+            self._request_queue.put_nowait(request)
+        except queue.Full:
+            return {
+                "success": False,
+                "error_type": "Overloaded",
+                "error_message": "Bridge execution queue is full",
+                "execution_time_ms": 0,
+            }
 
         # Wait for completion
         if request.completed.wait(timeout=timeout_ms / 1000):
@@ -933,6 +993,7 @@ class FreecadMCPPlugin:
             self._handle_socket_client,
             self._host,
             self._port,
+            limit=MAX_BRIDGE_REQUEST_BYTES,
         )
 
     async def _handle_socket_client(
@@ -946,10 +1007,20 @@ class FreecadMCPPlugin:
             reader: Stream reader for incoming data.
             writer: Stream writer for outgoing data.
         """
+        if self._socket_client_count >= MAX_SOCKET_CLIENTS:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
+            return
+        self._socket_client_count += 1
         try:
             while self._running:
-                data = await reader.readline()
+                data = await asyncio.wait_for(
+                    reader.readline(), timeout=REQUEST_READ_TIMEOUT_SECONDS
+                )
                 if not data:
+                    break
+                if len(data) > MAX_BRIDGE_REQUEST_BYTES:
                     break
 
                 try:
@@ -974,13 +1045,14 @@ class FreecadMCPPlugin:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")
         finally:
+            self._socket_client_count -= 1
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
 
     async def _process_jsonrpc_request(
         self,
-        request: dict[str, Any],
+        request: Any,
     ) -> dict[str, Any]:
         """Process a JSON-RPC 2.0 request.
 
@@ -990,9 +1062,28 @@ class FreecadMCPPlugin:
         Returns:
             JSON-RPC response dictionary.
         """
+        if (
+            not isinstance(request, dict)
+            or request.get("jsonrpc") != "2.0"
+            or (
+                request.get("id") is not None
+                and type(request.get("id")) not in (str, int)
+            )
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Invalid request"},
+            }
         request_id = request.get("id")
         method = request.get("method")
         params = request.get("params", {})
+        if not isinstance(params, dict):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32602, "message": "Invalid params"},
+            }
 
         # Handle ping specially (no queue needed)
         if method == "ping":
@@ -1055,6 +1146,58 @@ class FreecadMCPPlugin:
         class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
             """XML-RPC handler that responds gracefully to GET requests."""
 
+            def setup(self) -> None:
+                """Apply a total deadline to reading HTTP headers and body."""
+                super().setup()
+                self.connection.settimeout(REQUEST_READ_TIMEOUT_SECONDS)
+                self._read_timer = threading.Timer(
+                    REQUEST_READ_TIMEOUT_SECONDS, self._expire_read
+                )
+                self._read_timer.daemon = True
+                self._read_timer.start()
+
+            def _expire_read(self) -> None:
+                """Interrupt a client that has not finished sending a request."""
+                with contextlib.suppress(OSError):
+                    self.connection.shutdown(socket.SHUT_RDWR)
+
+            def finish(self) -> None:
+                """Release the read deadline when the handler finishes."""
+                self._read_timer.cancel()
+                super().finish()
+
+            def do_POST(self) -> None:
+                """Reject oversized, compressed, or ambiguously framed requests."""
+                lengths = self.headers.get_all("Content-Length", [])
+                if (
+                    len(lengths) != 1
+                    or not lengths[0].isascii()
+                    or not lengths[0].isdigit()
+                    or len(lengths[0]) > 10
+                    or self.headers.get("Transfer-Encoding") is not None
+                    or self.headers.get("Content-Encoding", "identity").lower()
+                    != "identity"
+                ):
+                    self.send_error(400, "Invalid request framing")
+                    return
+                if int(lengths[0]) > MAX_BRIDGE_REQUEST_BYTES:
+                    self.send_error(413, "Request too large")
+                    return
+                super().do_POST()
+
+            def decode_request_content(self, data: bytes) -> bytes | None:
+                """Refuse XML declarations that can trigger entity expansion."""
+                self._read_timer.cancel()
+                try:
+                    text = data.decode("utf-8")
+                except UnicodeDecodeError:
+                    self.send_error(400, "XML must be UTF-8")
+                    return None
+                if "<!DOCTYPE" in text or "<!ENTITY" in text or "\x00" in text:
+                    self.send_error(400, "XML declarations are not permitted")
+                    return None
+                return data
+
             def do_GET(self) -> None:
                 """Handle GET requests with a friendly plain-text response.
 
@@ -1078,6 +1221,7 @@ class FreecadMCPPlugin:
                         curl http://localhost:9875/
                         # Returns: FreeCAD MCP Bridge - XML-RPC endpoint (POST only)
                 """
+                self._read_timer.cancel()
                 response = b"FreeCAD MCP Bridge - XML-RPC endpoint (POST only)"
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
@@ -1112,7 +1256,15 @@ class FreecadMCPPlugin:
                 pass
 
         try:
-            self._xmlrpc_server = xmlrpc.server.SimpleXMLRPCServer(
+
+            class LoopbackXMLRPCServer(xmlrpc.server.SimpleXMLRPCServer):
+                """Select the address family of the validated loopback address."""
+
+                address_family = (
+                    socket.AF_INET6 if ":" in self._host else socket.AF_INET
+                )
+
+            self._xmlrpc_server = LoopbackXMLRPCServer(
                 (self._host, self._xmlrpc_port),
                 requestHandler=QuietXMLRPCRequestHandler,
                 allow_none=True,

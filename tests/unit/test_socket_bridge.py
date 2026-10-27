@@ -174,12 +174,46 @@ class TestSocketBridgeCommunication:
     def mock_streams(self):
         """Create mock reader and writer streams."""
         reader = mock.AsyncMock(spec=asyncio.StreamReader)
+        reader.at_eof.return_value = False
         writer = mock.MagicMock(spec=asyncio.StreamWriter)
         writer.is_closing.return_value = False
         writer.drain = mock.AsyncMock()
         writer.close = mock.MagicMock()
         writer.wait_closed = mock.AsyncMock()
         return reader, writer
+
+    @pytest.mark.asyncio
+    async def test_idle_closed_stream_is_reconnected_before_sending(
+        self, mock_streams
+    ) -> None:
+        """Reconnect a known-closed idle stream before sending a mutation."""
+        old_reader, old_writer = mock_streams
+        old_reader.at_eof.return_value = True
+        new_reader = mock.AsyncMock(spec=asyncio.StreamReader)
+        new_reader.at_eof.return_value = False
+        new_reader.readline.return_value = (
+            json.dumps({"jsonrpc": "2.0", "id": "new", "result": "done"}).encode()
+            + b"\n"
+        )
+        new_writer = mock.MagicMock(spec=asyncio.StreamWriter)
+        new_writer.is_closing.return_value = False
+        new_writer.drain = mock.AsyncMock()
+        new_writer.wait_closed = mock.AsyncMock()
+        bridge = SocketBridge()
+        bridge._reader, bridge._writer, bridge._connected = old_reader, old_writer, True
+
+        async def open_replacement() -> None:
+            bridge._reader, bridge._writer, bridge._connected = (
+                new_reader,
+                new_writer,
+                True,
+            )
+
+        with mock.patch.object(bridge, "_open_streams", side_effect=open_replacement):
+            assert await bridge._send_request("execute", {"code": "work()"}) == "done"
+        old_writer.write.assert_not_called()
+        old_writer.close.assert_called_once()
+        new_writer.write.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_send_request_format(self, mock_streams):

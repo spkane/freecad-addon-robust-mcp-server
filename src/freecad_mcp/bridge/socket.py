@@ -163,6 +163,9 @@ class SocketBridge(FreecadBridge):
             ConnectionError: If the bridge is not currently connected.
         """
         if self._connected and self._writer is not None and self._reader is not None:
+            if self._reader.at_eof() is True or self._writer.is_closing() is True:
+                self._discard_request_streams(self._writer)
+                raise ConnectionError("Socket connection has closed")
             return self._reader, self._writer
 
         msg = "Not connected to socket server"
