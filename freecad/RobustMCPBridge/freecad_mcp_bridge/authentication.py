@@ -67,6 +67,43 @@ class PairedClientVerifier:
             return False
 
 
+def create_ed25519_verifier(
+    lookup: Callable[[str], bytes | None],
+) -> PairedClientVerifier:
+    """Create a verifier for raw 32-byte Ed25519 public keys.
+
+    The supplied lookup must be backed by an independently protected trust
+    store. This function does not establish that operating-system boundary.
+
+    Args:
+        lookup: Resolve an approved key fingerprint to its raw public key.
+
+    Returns:
+        A verifier accepting only valid Ed25519 signatures from approved keys.
+
+    Raises:
+        RuntimeError: If the FreeCAD runtime cannot load the crypto provider.
+    """
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    except (ImportError, OSError) as e:
+        raise RuntimeError(
+            "The FreeCAD bridge requires a compatible Ed25519 crypto provider"
+        ) from e
+
+    def verify_signature(key: bytes, message: bytes, signature: bytes) -> bool:
+        if len(key) != 32 or len(signature) != 64:
+            return False
+        try:
+            Ed25519PublicKey.from_public_bytes(key).verify(signature, message)
+        except (InvalidSignature, ValueError):
+            return False
+        return True
+
+    return PairedClientVerifier(lookup, verify_signature)
+
+
 def request_proof_message(
     client_id: str,
     challenge: str,

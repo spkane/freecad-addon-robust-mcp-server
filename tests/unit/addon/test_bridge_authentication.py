@@ -1,6 +1,7 @@
 """Tests for the bridge request authentication primitives."""
 
 import base64
+import builtins
 import hashlib
 import hmac
 import importlib
@@ -9,12 +10,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from freecad_mcp.bridge.authentication import request_proof_message
 
@@ -96,6 +93,22 @@ def test_paired_client_verifier_fails_closed_on_provider_error(
     assert not verifier("a" * 64, b"message", b"signature")
 
 
+def test_ed25519_provider_missing_fails_closed(
+    auth_module: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unavailable FreeCAD crypto dependency must not allow a downgrade."""
+    original_import = builtins.__import__
+
+    def import_without_crypto(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name.startswith("cryptography"):
+            raise ImportError("not installed")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_crypto)
+    with pytest.raises(RuntimeError, match="compatible Ed25519 crypto provider"):
+        auth_module.create_ed25519_verifier(lambda _client_id: None)
+
+
 @pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
 def test_real_signature_authentication_and_revocation(
     auth_module: Any, transport: str
@@ -108,14 +121,7 @@ def test_real_signature_authentication_and_revocation(
     client_id = hashlib.sha256(public_bytes).hexdigest()
     approved = {client_id: public_bytes}
 
-    def verify_signature(key: bytes, message: bytes, signature: bytes) -> bool:
-        try:
-            Ed25519PublicKey.from_public_bytes(key).verify(signature, message)
-        except (InvalidSignature, ValueError):
-            return False
-        return True
-
-    verifier = auth_module.PairedClientVerifier(approved.get, verify_signature)
+    verifier = auth_module.create_ed25519_verifier(approved.get)
     auth = auth_module.BridgeAuthenticator(verifier)
     challenge = auth.issue_challenge()
     body = b"request body"

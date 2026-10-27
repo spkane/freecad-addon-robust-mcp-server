@@ -19,12 +19,8 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, call
 
 import pytest
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
@@ -49,15 +45,8 @@ async def test_real_signatures_across_client_and_listener(
     client_id = hashlib.sha256(public_key).hexdigest()
     approved = {client_id: public_key}
 
-    def verify(key: bytes, message: bytes, signature: bytes) -> bool:
-        try:
-            Ed25519PublicKey.from_public_bytes(key).verify(signature, message)
-        except (InvalidSignature, ValueError):
-            return False
-        return True
-
     authenticator = auth_module.BridgeAuthenticator(
-        auth_module.PairedClientVerifier(approved.get, verify)
+        auth_module.create_ed25519_verifier(approved.get)
     )
     plugin = server_mod.FreecadMCPPlugin(
         host="127.0.0.1", port=0, xmlrpc_port=0, authenticator=authenticator
