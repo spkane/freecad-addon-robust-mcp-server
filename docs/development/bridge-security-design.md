@@ -5,9 +5,9 @@ unauthenticated code execution; the controls described here are not yet a
 release guarantee. On the development branch, startup refuses to open listeners
 without an injected authentication provider. A production provider and pairing
 flow are not yet available, so the development branch is not usable for normal
-bridge connections. The chosen release boundary protects paired clients and the
-bridge's authorization state from unpaired programs running under the same OS
-account. The bridge must fail closed if this boundary is unavailable.
+bridge connections. The selected release boundary uses per-user pairing and
+does not promise isolation from malicious programs running under the same OS
+account. The bridge must fail closed if pairing or authentication is unavailable.
 
 ## Trust boundary
 
@@ -23,8 +23,9 @@ compromised paired client remains trusted and has FreeCAD's privileges. Remote
 access requires a separate authenticated and encrypted deployment, not a wider
 bind address.
 
-The stronger threat model also includes another unpaired process running under
-the same OS account. This cannot be satisfied solely by file permissions or an
+Protection from another malicious process running under the same OS account is
+outside the selected release boundary. It cannot be satisfied solely by file
+permissions or an
 unrestricted per-user credential store. For example, Microsoft's
 [CurrentUser DPAPI documentation](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.dpapidataprotector.scope?view=netframework-4.8.1)
 states that applications using the same user credentials can access protected
@@ -73,20 +74,27 @@ workbench, and trust store; credential protection by itself is insufficient.
 
 ## Pairing and key isolation
 
-The implementation must protect each client key on supported platforms while
-preserving unattended use where possible. Candidate mechanisms include a
-platform-protected signer with explicit user approval or a hardware-backed key;
-both need a trusted enrollment flow and real platform testing. A per-user
-shared secret is simpler and blocks clients that cannot read it, but it does not
-meet the stronger same-account threat model on its own.
+The implementation must provide a simple per-user pairing flow on supported
+platforms, protect credentials from other OS accounts, and preserve unattended
+use with ordinary MCP harnesses. Other software running as the same user may
+be able to use or obtain those credentials or modify the workbench and its
+trust store. Pairing protects against clients without access to the credential;
+it is not an isolation boundary against a compromised user account.
 
 Public-key pairing can leave only public keys in the FreeCAD workbench. The
 client signs a server challenge and the request, and the bridge checks the
-signature against its approved clients. The trust store itself must be protected
-from unpaired processes, or those processes can register their own keys. User
+signature against its approved clients. The trust store must be protected from
+other user accounts; malicious same-user processes are outside the selected
+boundary. User
 approval must identify the client key by fingerprint rather than trusting a
 client-supplied display name. Any provider that can sign silently for arbitrary
 same-user processes is insufficient for that stronger boundary.
+
+For MCP-over-HTTP, the user also selected a generated API key as an initial
+authentication mechanism. This is separate from bridge pairing. Clients must
+be able to send the key in an HTTP authorization header, and non-loopback
+deployments need TLS. A static key does not provide OAuth discovery or the
+full MCP OAuth authorization flow.
 
 The protocol supports raw 32-byte Ed25519 public keys and 65-byte uncompressed
 SEC1 P-256 public keys, identified by the lowercase SHA-256 fingerprint of the
@@ -103,10 +111,10 @@ P-256 is needed for the macOS Secure Enclave candidate: Apple documents that
 Support for the algorithm does not demonstrate that a signing identity or its
 trust store is isolated; those remain platform verification gates.
 
-### Deployment decision
+### Stronger isolation alternatives
 
-None of the following options currently satisfies the selected threat model
-without additional protections and platform testing:
+The following are possible future directions for a stronger same-user threat
+model, but require additional protections and platform testing:
 
 | Candidate | What it can protect | Remaining requirement |
 | --------- | ------------------- | --------------------- |
@@ -120,9 +128,10 @@ the FreeCAD process shares that process's authority. A viable deployment must
 define which add-ons can run, where the verifier and approved-client store live,
 how a client is identified at signing time, and how enrollment and revocation
 remain protected. Existing user-writable workbench installations do not provide
-those guarantees. The developer's choice of deployment model is pending.
+those guarantees. These alternatives are not prerequisites for the selected
+per-user release boundary.
 
-### Platform feasibility gates
+### Future stronger-isolation feasibility gates
 
 - **macOS:** Evaluate a signed, sandboxed app and protected app container for
   the trust store, together with a signer bound to a distinct client identity.
@@ -144,9 +153,10 @@ those guarantees. The developer's choice of deployment model is pending.
 These are evaluation candidates, not established capabilities of the current
 FreeCAD distribution. For each supported operating system, document the exact
 packaging, identities, access controls, recovery flow, and limitations, and test
-the boundary against an unpaired same-user process. A platform without a
-verified boundary must refuse to enable the execution listener; it must not
-fall back to an unprotected key or an unauthenticated bridge.
+the boundary against an unpaired same-user process. A platform must not claim
+that stronger protection without a verified boundary. The selected per-user
+implementation must still fail closed if its own credential protection or
+authentication is unavailable.
 
 The locally inspected macOS FreeCAD 27.1 development installation uses Python
 3.13 and does not include the `cryptography` package. The MCP server's Python

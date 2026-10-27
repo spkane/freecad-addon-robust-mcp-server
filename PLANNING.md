@@ -347,15 +347,13 @@ local user able to reach the port submits Python that reads files, modifies CAD
 documents, or runs with the FreeCAD user's permissions. A non-loopback bind turns
 the same path into remote unauthenticated execution.  
 **Remediation:** Require application-level challenge-response for every bridge
-connection, using a client-specific key that is protected by a distinct OS
-identity, sandbox boundary, or hardware-backed credential. Unix peer credentials
-and Windows named-pipe identity checks are supplementary transport checks, not
-pairing proof by themselves. Store pairing material only in the platform
-credential store or exchange it through protected IPC; do not rely on a
-user-readable per-launch token. Validate proofs in constant time before every
-method. Bind explicitly to `127.0.0.1` and `::1`; do not accept arbitrary bind
-hosts in normal UI. Put arbitrary execution in an opt-in profile and show a
-persistent FreeCAD warning while it is enabled.
+request, with simple per-user pairing and credentials protected from other OS
+accounts. The accepted release boundary does not protect against malicious
+software running as the same user, which may access credentials or alter the
+workbench. Validate proofs before every method and reject replay. Bind only to
+loopback; do not accept arbitrary bind hosts in normal UI. Put explicit arbitrary
+execution tools in an opt-in profile and show a persistent FreeCAD warning that
+the bridge executes Python. The production pairing flow is still in progress.
 
 #### RESOLVED CRITICAL-2: MCP HTTP exposed the tool set on all interfaces
 
