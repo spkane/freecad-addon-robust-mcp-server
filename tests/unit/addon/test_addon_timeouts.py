@@ -7,6 +7,7 @@ import base64
 import hmac
 import http.client
 import importlib
+import json
 import socket
 import sys
 import threading
@@ -396,6 +397,70 @@ async def test_socket_rejects_oversized_frame_before_execution(
         await writer.drain()
         assert await asyncio.wait_for(reader.read(), timeout=3) == b""
         plugin._execute_via_queue.assert_not_called()
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_socket_listener_requires_fresh_request_proof(server_mod: Any) -> None:
+    """The live socket rejects legacy, modified, and replayed request frames."""
+    auth_module = importlib.import_module("freecad_mcp_bridge.authentication")
+    key = b"unit-test-only-key"
+
+    def verify(client: str, message: bytes, proof: bytes) -> bool:
+        return client == "paired" and hmac.compare_digest(
+            hmac.digest(key, message, "sha256"), proof
+        )
+
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=auth_module.BridgeAuthenticator(verify)
+    )
+    plugin._running = True
+    plugin._execute_via_queue = MagicMock(return_value={"success": True})
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+
+    async def exchange(frame: dict[str, Any]) -> Any:
+        writer.write(json.dumps(frame).encode() + b"\n")
+        await writer.drain()
+        return json.loads(await asyncio.wait_for(reader.readline(), timeout=3))
+
+    try:
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "execute",
+            "params": {"code": "pass"},
+        }
+        assert "error" in await exchange(request)
+        plugin._execute_via_queue.assert_not_called()
+        challenge = (await exchange({"type": "challenge"}))["challenge"]
+        body = json.dumps(request).encode()
+        message = auth_module.request_proof_message("paired", challenge, "socket", body)
+        envelope = {
+            "client": "paired",
+            "challenge": challenge,
+            "body": base64.b64encode(body).decode(),
+            "proof": base64.b64encode(hmac.digest(key, message, "sha256")).decode(),
+        }
+        assert (await exchange(envelope))["result"]["success"] is True
+        assert "error" in await exchange(envelope)
+        challenge = (await exchange({"type": "challenge"}))["challenge"]
+        message = auth_module.request_proof_message("paired", challenge, "socket", body)
+        envelope["challenge"] = challenge
+        envelope["proof"] = base64.b64encode(
+            hmac.digest(key, message, "sha256")
+        ).decode()
+        envelope["body"] = base64.b64encode(body + b" ").decode()
+        assert "error" in await exchange(envelope)
+        envelope["body"] = base64.b64encode(body).decode()
+        assert "error" in await exchange(envelope)
+        plugin._execute_via_queue.assert_called_once()
     finally:
         writer.close()
         await writer.wait_closed()

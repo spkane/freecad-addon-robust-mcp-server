@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import base64
+import binascii
 import contextlib
 import errno
 import io
@@ -1041,9 +1043,9 @@ class FreecadMCPPlugin:
                     break
 
                 try:
-                    request = json.loads(data.decode("utf-8"))
-                    response = await self._process_jsonrpc_request(request)
-                except json.JSONDecodeError as e:
+                    envelope = json.loads(data.decode("utf-8"))
+                    response = await self._process_socket_envelope(envelope)
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
                     response = {
                         "jsonrpc": "2.0",
                         "id": None,
@@ -1066,6 +1068,49 @@ class FreecadMCPPlugin:
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
+
+    async def _process_socket_envelope(  # noqa: PLR0911
+        self, envelope: Any
+    ) -> dict[str, Any]:
+        """Authenticate a bounded socket envelope before parsing its request.
+
+        The unauthenticated challenge operation only issues a bounded one-use
+        nonce. Every JSON-RPC request must provide a proof over its exact bytes.
+        """
+        auth = self._authenticator
+        if auth is None or not isinstance(envelope, dict):
+            return {"error": "Bridge authentication required"}
+        if envelope == {"type": "challenge"}:
+            try:
+                return {"challenge": auth.issue_challenge()}
+            except RuntimeError:
+                return {"error": "Bridge challenge unavailable"}
+        if set(envelope) != {"client", "challenge", "proof", "body"}:
+            return {"error": "Bridge authentication required"}
+        body = envelope["body"]
+        if not isinstance(body, str):
+            return {"error": "Bridge authentication required"}
+        try:
+            raw_body = base64.b64decode(body, validate=True)
+        except (ValueError, binascii.Error):
+            return {"error": "Bridge authentication required"}
+        if not auth.verify(
+            envelope["client"],
+            envelope["challenge"],
+            "socket",
+            raw_body,
+            envelope["proof"],
+        ):
+            return {"error": "Bridge authentication required"}
+        try:
+            request = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": "Parse error"},
+            }
+        return await self._process_jsonrpc_request(request)
 
     async def _process_jsonrpc_request(
         self,
