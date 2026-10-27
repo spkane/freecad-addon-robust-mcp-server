@@ -114,6 +114,20 @@ compatible provider or an explicitly packaged dependency; availability in the
 server environment is not evidence that the workbench can import it. This is an
 observation about that installation, not a claim about every FreeCAD release.
 
+The same local macOS development installation has a Developer ID signature and
+the hardened-runtime flag, but its entitlements include
+`com.apple.security.cs.disable-library-validation` and
+`com.apple.security.get-task-allow`. The installed application and workbench
+directories are owned by the desktop user. Apple's documentation states that
+[disabled library validation permits third-party libraries](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.disable-library-validation),
+and that [debugger access to a process with `get-task-allow` can require an
+administrator authorization dialog](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.debugger).
+These observations do not demonstrate a successful bypass. They do show that
+the current installation cannot simply be assumed to protect the workbench and
+trust store against other programs under the same account. Verify any proposed
+packaging and process isolation with an actual unpaired-process test, without
+assuming that code signing alone protects user-writable add-on code.
+
 ## Verification gates
 
 Exercise both transports with authorized and unauthorized clients, including
