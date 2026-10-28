@@ -875,7 +875,8 @@ Tools for controlling the 3D view and capturing screenshots.
 
 #### get_screenshot
 
-Capture a screenshot of the 3D view.
+Capture a screenshot of the 3D view. The model is fitted into the image, and
+the original camera is restored after capture, including when capture fails.
 
 **Requires GUI mode.**
 

@@ -33,6 +33,7 @@ from freecad_mcp.bridge.base import (
     resolve_execution_timeout_ms,
 )
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
+from freecad_mcp.bridge.screenshot import build_screenshot_code
 
 
 class EmbeddedBridge(FreecadBridge):
@@ -731,57 +732,7 @@ _result_ = True
 
         # If GUI is available, attempt screenshot
         view_angle_str = view_angle.value if view_angle else "Isometric"
-        code = f"""
-import base64
-import tempfile
-import os
-
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
-if doc is None:
-    raise ValueError("No document found")
-
-view = FreeCADGui.ActiveDocument.ActiveView
-if view is None:
-    raise ValueError("No active view")
-
-# Set view angle
-view_type = {view_angle_str!r}
-if view_type == "FitAll":
-    view.fitAll()
-elif view_type == "Isometric":
-    view.viewIsometric()
-elif view_type == "Front":
-    view.viewFront()
-elif view_type == "Back":
-    view.viewRear()
-elif view_type == "Top":
-    view.viewTop()
-elif view_type == "Bottom":
-    view.viewBottom()
-elif view_type == "Left":
-    view.viewLeft()
-elif view_type == "Right":
-    view.viewRight()
-
-# Save to temp file and read
-with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-    temp_path = f.name
-
-view.saveImage(temp_path, {width}, {height}, "Current")
-
-with open(temp_path, "rb") as f:
-    image_data = base64.b64encode(f.read()).decode("utf-8")
-
-os.unlink(temp_path)
-
-_result_ = {{
-    "success": True,
-    "data": image_data,
-    "format": "png",
-    "width": {width},
-    "height": {height},
-}}
-"""
+        code = build_screenshot_code(doc_name, view_angle_str, width, height)
         result = await self.execute_python(code)
 
         if result.success and result.result:

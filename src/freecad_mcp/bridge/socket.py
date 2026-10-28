@@ -33,6 +33,7 @@ from freecad_mcp.bridge.base import (
     resolve_execution_timeout_ms,
 )
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
+from freecad_mcp.bridge.screenshot import build_screenshot_code
 
 DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
@@ -941,68 +942,7 @@ _result_ = True
     ) -> ScreenshotResult:
         """Capture a screenshot of the 3D view via socket."""
         view_angle_str = view_angle.value if view_angle else "Isometric"
-        code = f"""
-import base64
-import tempfile
-import os
-
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
-if doc is None:
-    raise ValueError("No document found")
-
-# Check if GUI is available
-if not FreeCAD.GuiUp:
-    raise RuntimeError("GUI not available")
-
-view = FreeCADGui.ActiveDocument.ActiveView
-if view is None:
-    raise ValueError("No active view")
-
-# Check if this is a 3D view (not TechDraw, Spreadsheet, etc.)
-# Note: Use type() instead of __class__ because FreeCAD's View3DInventor
-# has a broken __class__ attribute that returns a dict of methods.
-view_type = type(view).__name__
-if view_type not in ["View3DInventor", "View3DInventorPy"]:
-    raise ValueError(f"Cannot capture screenshot from {{view_type}} view")
-
-# Set view angle
-view_type_str = {view_angle_str!r}
-if view_type_str == "FitAll":
-    view.fitAll()
-elif view_type_str == "Isometric":
-    view.viewIsometric()
-elif view_type_str == "Front":
-    view.viewFront()
-elif view_type_str == "Back":
-    view.viewRear()
-elif view_type_str == "Top":
-    view.viewTop()
-elif view_type_str == "Bottom":
-    view.viewBottom()
-elif view_type_str == "Left":
-    view.viewLeft()
-elif view_type_str == "Right":
-    view.viewRight()
-
-# Save to temp file and read
-with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-    temp_path = f.name
-
-view.saveImage(temp_path, {width}, {height}, "Current")
-
-with open(temp_path, "rb") as f:
-    image_data = base64.b64encode(f.read()).decode("utf-8")
-
-os.unlink(temp_path)
-
-_result_ = {{
-    "success": True,
-    "data": image_data,
-    "format": "png",
-    "width": {width},
-    "height": {height},
-}}
-"""
+        code = build_screenshot_code(doc_name, view_angle_str, width, height)
         result = await self.execute_python(code)
 
         if result.success and result.result:
