@@ -35,6 +35,13 @@ class TestInstallSyntax:
         result = just.dry_run(command)
         assert result.success, f"Syntax error in '{command}': {result.stderr}"
 
+    @pytest.mark.just_syntax
+    def test_workbench_installer_uses_portable_script(self, just: JustRunner) -> None:
+        """The workbench recipe delegates to the platform-independent installer."""
+        result = just.dry_run("install::mcp-bridge-workbench")
+        assert result.success
+        assert "scripts/install_workbench.py" in result.output
+
 
 class TestInstallRuntime:
     """Runtime tests for install commands."""

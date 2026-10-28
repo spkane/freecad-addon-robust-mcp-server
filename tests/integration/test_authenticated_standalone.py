@@ -256,11 +256,22 @@ async def test_authenticated_transports_with_real_freecad(
     client_id, secret_hex = isolated_pairing
     ready = tmp_path / "ports.json"
     log_path = tmp_path / "freecad.log"
+    mod_dir = tmp_path / "Mod"
+    installer = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(ROOT / "scripts/install_workbench.py"),
+        "--mod-dir",
+        str(mod_dir),
+    )
+    assert await installer.wait() == 0
     env = {
         **os.environ,
         "FREECAD_MCP_TESTING": "1",
         "FREECAD_AUTH_TEST_READY": str(ready),
         "HOME": str(tmp_path),
+        "FREECAD_AUTH_TEST_WORKBENCH_PATH": str(
+            mod_dir / "RobustMCPBridge" / "freecad" / "RobustMCPBridge"
+        ),
     }
     env.pop("FREECAD_BRIDGE_CLIENT_ID", None)
     env.pop("FREECAD_BRIDGE_SECRET", None)

@@ -11,7 +11,12 @@ import time
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(root / "freecad" / "RobustMCPBridge"))
+workbench = Path(
+    os.environ.get(
+        "FREECAD_AUTH_TEST_WORKBENCH_PATH", str(root / "freecad" / "RobustMCPBridge")
+    )
+)
+sys.path.insert(0, str(workbench))
 for module_name in list(sys.modules):
     if module_name == "freecad_mcp_bridge" or module_name.startswith(
         "freecad_mcp_bridge."

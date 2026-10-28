@@ -129,67 +129,12 @@ uninstall-mcp-server:
 
 # Install the FreeCAD Robust MCP workbench addon to FreeCAD's Mod directory
 # Uses new-style namespace package format: Mod/RobustMCPBridge/freecad/RobustMCPBridge/
+[script("uv", "run", "python")]
 mcp-bridge-workbench:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PROJECT_DIR="{{project_root}}"
-    # New-style namespace package: freecad/RobustMCPBridge
-    ADDON_NAMESPACE="freecad"
-    ADDON_NAME="RobustMCPBridge"
-
-    # Set FreeCAD directories
-    eval "$(just install::_freecad-dirs)"
-
-    # Install to Mod/RobustMCPBridge/ (addon folder at Mod root)
-    # The namespace package structure is created inside: freecad/RobustMCPBridge/
-    ADDON_DEST="$MOD_DIR/$ADDON_NAME"
-
-    # Build the replacement before removing an existing installation.
-    mkdir -p "$MOD_DIR"
-    STAGING_DIR=$(mktemp -d "$MOD_DIR/.robust-mcp-install.XXXXXX")
-    trap 'rm -rf "$STAGING_DIR"' EXIT
-    python3 "${PROJECT_DIR}/scripts/package_workbench.py" install "$STAGING_DIR/$ADDON_NAME"
-
-    # Remove existing installation if present
-    if [[ -d "$ADDON_DEST" ]]; then
-        echo "Removing existing installation at: $ADDON_DEST"
-        rm -rf "$ADDON_DEST"
-    fi
-
-    # Also remove old-style installations if present
-    OLD_STYLE_DEST="$MOD_DIR/FreecadRobustMCPBridge"
-    if [[ -d "$OLD_STYLE_DEST" ]]; then
-        echo "Removing legacy old-style installation at: $OLD_STYLE_DEST"
-        rm -rf "$OLD_STYLE_DEST"
-    fi
-
-    # Also remove incorrect namespace installation (Mod/freecad/RobustMCPBridge)
-    WRONG_NS_DEST="$MOD_DIR/$ADDON_NAMESPACE/$ADDON_NAME"
-    if [[ -d "$WRONG_NS_DEST" ]]; then
-        echo "Removing incorrect namespace installation at: $WRONG_NS_DEST"
-        rm -rf "$WRONG_NS_DEST"
-        # Clean up empty freecad directory if it exists
-        if [[ -d "$MOD_DIR/$ADDON_NAMESPACE" ]] && [[ -z "$(ls -A "$MOD_DIR/$ADDON_NAMESPACE")" ]]; then
-            rmdir "$MOD_DIR/$ADDON_NAMESPACE"
-        fi
-    fi
-
-    # Install the fully built package on the same filesystem.
-    mv "$STAGING_DIR/$ADDON_NAME" "$ADDON_DEST"
-
-    echo ""
-    echo "=========================================="
-    echo "FreeCAD Robust MCP Workbench installed!"
-    echo "=========================================="
-    echo ""
-    echo "Installation path: $ADDON_DEST"
-    echo ""
-    echo "To use:"
-    echo "  1. Start FreeCAD"
-    echo "  2. Select the 'Robust MCP Bridge' workbench from the workbench selector"
-    echo "  3. Click 'Start MCP Bridge' in the toolbar"
-    echo "  4. Connect your MCP client (Claude Code, etc.) to FreeCAD"
-    echo ""
+    import runpy
+    import sys
+    sys.path.insert(0, "scripts")
+    runpy.run_path("scripts/install_workbench.py", run_name="__main__")
 
 # Uninstall the FreeCAD Robust MCP workbench addon
 uninstall-mcp-bridge-workbench:

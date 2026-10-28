@@ -80,6 +80,9 @@ jobs:
       - name: Verify Credential Manager pairing
         run: uv run pytest tests/unit/test_windows_bridge_credential_store.py -v --tb=short
 
+      - name: Verify workbench installer on Windows
+        run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
+
   integration-test:
     name: Integration Tests (FreeCAD Headless)
     runs-on: ubuntu-latest

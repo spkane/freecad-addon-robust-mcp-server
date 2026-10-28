@@ -68,14 +68,21 @@ The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection 
 
 The workbench is not currently in the public Addon Manager catalog. From the
 checkout used for the server, run `just install::mcp-bridge-workbench`, then
-restart FreeCAD. On Windows, use Git Bash with the Rust `just` command and a
-working `python3` command; see [Windows installation issue #97](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/97)
-for remaining limitations.
+restart FreeCAD. The command works from PowerShell on Windows using the Rust
+`just` command and `uv`; neither Git Bash nor a `python3` wrapper is required.
+Alternatively, run `uv run python scripts/install_workbench.py` directly.
+
+To select a specific profile, pass its `Mod` directory to the Python installer:
+
+```powershell
+uv run python scripts/install_workbench.py --mod-dir "$env:APPDATA\FreeCAD\v1-1\Mod"
+```
 
 The source installer creates `Mod/RobustMCPBridge/package.xml` and
 `Mod/RobustMCPBridge/freecad/RobustMCPBridge/` in the selected user profile. It
 selects the latest versioned FreeCAD profile when one exists; otherwise it uses
-the unversioned profile. Do not copy the repository itself into `Mod`.
+the unversioned profile. It prints the selected installation path. Do not copy
+the repository itself into `Mod`.
 
 ### Manual Installation
 
