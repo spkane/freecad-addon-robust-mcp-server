@@ -210,9 +210,12 @@ If installed from source with mise/uv:
 
 ### Docker Desktop Configuration
 
-This configuration is supported on Docker Desktop for macOS and Windows.
 Docker Desktop forwards `host.docker.internal` to services listening on the
-host loopback interface.
+host loopback interface. This example configures networking only: the
+container must also receive the existing bridge pairing credential. Pairing on
+the host does not automatically provision the container, and a portable secure
+provisioning procedure has not yet been validated. Run the MCP server on the
+host until the container's credential has been provisioned securely.
 
 ```json
 {

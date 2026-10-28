@@ -157,6 +157,11 @@ modes because FreeCAD runs on the host. This topology currently works only
 with Docker Desktop, whose `host.docker.internal` forwarding can reach a
 host-loopback listener.
 
+The container also needs the existing bridge pairing credential; pairing the
+host account does not provision it in the container. A portable secure
+provisioning procedure has not yet been validated, so run the MCP server on the
+host unless the container credential is already provisioned securely.
+
 > **Security and Linux limitation:** The FreeCAD bridge listens on loopback and
 > requires pairing before accepting Python execution. Docker Engine on Linux maps
 > `host.docker.internal` or `host-gateway` to a bridge-network address, which
@@ -253,15 +258,24 @@ which the FreeCAD bridge listens.
 
 #### Starting the MCP Bridge in FreeCAD
 
-Before your AI assistant can connect, you need to start the MCP bridge inside FreeCAD:
+Before starting the bridge, pair the MCP server and FreeCAD bridge using the
+same operating-system user account:
+
+```bash
+freecad-mcp --pair-bridge
+```
+
+For a source checkout use `uv run freecad-mcp --pair-bridge`. For container or
+different-account setups, see the [pairing instructions](docs/getting-started/installation.md#step-1-pair-the-bridge).
+Use matching server and workbench builds that support pairing; the published
+0.6.x releases predate it.
+
+Then start the MCP bridge inside FreeCAD:
 
 ##### Option A: Using the Workbench (Recommended)
 
-1. Install the Robust MCP Bridge workbench via FreeCAD's Addon Manager:
-
-   - **Edit -> Preferences -> Addon Manager**
-   - Search for "Robust MCP Bridge"
-   - Install and restart FreeCAD
+1. Install the workbench using the [installation guide](docs/getting-started/installation.md).
+   The workbench is not currently in the public Addon Manager catalog.
 
 1. Start the bridge:
 
