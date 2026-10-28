@@ -118,7 +118,9 @@ _result_ = {
         result = execute_code(
             xmlrpc_proxy,
             """
+import importlib
 import sys
+import types
 from pathlib import Path
 
 bridge_server = sys.modules.get("server") or sys.modules.get(
@@ -128,14 +130,14 @@ if bridge_server is None:
     raise RuntimeError("The active bridge server module could not be identified")
 
 workbench_root = str(Path(bridge_server.__file__).resolve().parent.parent)
-if workbench_root not in sys.path:
-    sys.path.insert(0, workbench_root)
+package = types.ModuleType("_mcp_widget_probe")
+package.__path__ = [workbench_root]
+sys.modules[package.__name__] = package
+preferences_module = importlib.import_module("_mcp_widget_probe.Qt.preferences_page")
+status_module = importlib.import_module("_mcp_widget_probe.Qt.status_widget")
 
-from Qt.preferences_page import MCPBridgePreferencesPage
-from Qt.status_widget import MCPStatusWidget
-
-preferences_page = MCPBridgePreferencesPage()
-status_widget = MCPStatusWidget()
+preferences_page = preferences_module.MCPBridgePreferencesPage()
+status_widget = status_module.MCPStatusWidget()
 status_installed = status_widget.install()
 
 _result_ = {
