@@ -36,6 +36,24 @@ jobs:
       - name: Install project dependencies
         run: uv sync --all-extras
 
+      - name: Build and install the server wheel in an isolated environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv build --wheel --out-dir "$RUNNER_TEMP/release-wheel"
+          uv venv --python 3.11 "$RUNNER_TEMP/release-wheel-venv"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PYTHON="$RUNNER_TEMP/release-wheel-venv/Scripts/python.exe"
+          else
+            PYTHON="$RUNNER_TEMP/release-wheel-venv/bin/python"
+          fi
+          uv pip install --python "$PYTHON" "$RUNNER_TEMP"/release-wheel/*.whl
+          "$PYTHON" -c 'import freecad_mcp, pathlib; p = pathlib.Path(freecad_mcp.__file__).resolve(); root = pathlib.Path.cwd().resolve(); assert not p.is_relative_to(root), p; print("Testing installed wheel:", p)'
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PYTHON=$(cygpath -w "$PYTHON")
+          fi
+          echo "FREECAD_MCP_TEST_PYTHON=$PYTHON" >> "$GITHUB_ENV"
+
       - name: Set up Linux FreeCAD
         if: runner.os == 'Linux'
         uses: ./.github/actions/setup-freecad

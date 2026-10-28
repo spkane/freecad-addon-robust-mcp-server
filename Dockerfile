@@ -61,9 +61,9 @@ FROM python:3.11-alpine AS runtime
 # Note: version, revision, and created are set dynamically in CI/CD workflows
 LABEL org.opencontainers.image.title="FreeCAD Robust MCP Server" \
       org.opencontainers.image.description="Robust MCP Server for FreeCAD integration with AI assistants" \
-      org.opencontainers.image.url="https://github.com/spkane/freecad-robust-mcp-and-more" \
-      org.opencontainers.image.source="https://github.com/spkane/freecad-robust-mcp-and-more" \
-      org.opencontainers.image.documentation="https://github.com/spkane/freecad-robust-mcp-and-more#readme" \
+      org.opencontainers.image.url="https://github.com/spkane/freecad-addon-robust-mcp-server" \
+      org.opencontainers.image.source="https://github.com/spkane/freecad-addon-robust-mcp-server" \
+      org.opencontainers.image.documentation="https://spkane.github.io/freecad-addon-robust-mcp-server/latest/" \
       org.opencontainers.image.licenses="Apache-2.0 AND MIT" \
       org.opencontainers.image.vendor="Sean P. Kane" \
       org.opencontainers.image.authors="Sean P. Kane <spkane@gmail.com>" \

@@ -193,11 +193,24 @@ just release::tag-mcp-server 1.0.0
 
 1. GitHub Actions validates the tag format
 2. Builds Python wheel and source distribution (version from tag)
-3. Tests installation on Ubuntu and macOS
+3. Tests wheel installation on Ubuntu, macOS, and Windows
 4. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
 5. Builds multi-architecture Docker image (amd64 + arm64)
 6. Pushes to Docker Hub as `spkane/freecad-robust-mcp:1.0.0`
 7. Creates GitHub Release with wheel and tar.gz artifacts
+
+Before tagging, confirm the cross-platform authentication workflow has passed
+against its freshly built, isolated wheel, including the sketch operations
+reported in issue #87. The release workflow tests the built tag artifacts for
+installation; verify the actual candidate against FreeCAD before publication.
+
+PyPI and TestPyPI use separate Trusted Publisher registrations. In each
+registry, verify the publisher for `freecad-robust-mcp` names GitHub owner
+`spkane`, repository `freecad-addon-robust-mcp-server`, workflow
+`mcp-server-release.yaml`, and the corresponding environment (`pypi` or
+`testpypi`). These registry-side settings cannot be verified by GitHub Actions
+alone. A successful registration check is not a substitute for a TestPyPI
+candidate publication and clean install.
 
 **Pre-release versions:**
 
@@ -308,7 +321,7 @@ just release::dry-run-tag workbench 1.0.0
 2. Common issues:
    - Invalid version format (must be semver)
    - Version mismatch between source files and tag
-   - Missing secrets (PyPI token, Docker credentials)
+   - A mismatched Trusted Publisher registration or missing Docker credentials
    - Tests failing during the release build
 
 ### Version Mismatch Error

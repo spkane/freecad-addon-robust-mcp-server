@@ -29,6 +29,11 @@ ROOT = Path(__file__).resolve().parents[2]
 PROBE = ROOT / "tests" / "fixtures" / "freecad_authenticated_probe.py"
 
 
+def _server_python() -> str:
+    """Use the installed wheel's interpreter in release verification jobs."""
+    return os.environ.get("FREECAD_MCP_TEST_PYTHON", sys.executable)
+
+
 @pytest.fixture
 def isolated_pairing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -54,8 +59,8 @@ def isolated_pairing(
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     pair_env = {**os.environ, "HOME": str(tmp_path)}
-    result = subprocess.run(
-        [sys.executable, "-m", "freecad_mcp.server", "--pair-bridge"],
+    result = subprocess.run(  # noqa: S603 - test interpreter selected by CI
+        [_server_python(), "-m", "freecad_mcp.server", "--pair-bridge"],
         env=pair_env,
         capture_output=True,
         text=True,
@@ -93,13 +98,44 @@ def _assert_truncated(*texts: str) -> None:
 
 
 async def _check_harness_session(session: ClientSession) -> None:
-    """Initialize and perform a real FreeCAD tool call through an MCP client."""
+    """Exercise installed MCP tools, including the sketch regressions in #87."""
     result = await session.initialize()
     assert result.server_info.name == "freecad-mcp"
     tools = await session.list_tools()
     assert any(tool.name == "get_freecad_version" for tool in tools.tools)
     call = await session.call_tool("get_freecad_version")
     assert not call.is_error
+    calls = (
+        ("create_document", {"name": "ReleaseSketchRegression"}),
+        (
+            "create_partdesign_body",
+            {"name": "Body", "doc_name": "ReleaseSketchRegression"},
+        ),
+        (
+            "create_sketch",
+            {
+                "name": "BaseSketch",
+                "body_name": "Body",
+                "plane": "XY_Plane",
+                "doc_name": "ReleaseSketchRegression",
+            },
+        ),
+        (
+            "add_sketch_rectangle",
+            {
+                "sketch_name": "BaseSketch",
+                "x": -30,
+                "y": -20,
+                "width": 60,
+                "height": 40,
+                "doc_name": "ReleaseSketchRegression",
+            },
+        ),
+        ("close_document", {"doc_name": "ReleaseSketchRegression"}),
+    )
+    for name, arguments in calls:
+        tool_result = await session.call_tool(name, arguments=arguments)
+        assert not tool_result.is_error, (name, tool_result)
 
 
 async def _check_harnesses(
@@ -119,7 +155,7 @@ async def _check_harnesses(
         assert mode == "xmlrpc"
         settings.pop("FREECAD_MODE", None)
     params = StdioServerParameters(
-        command=sys.executable, args=["-m", "freecad_mcp.server"], env=settings
+        command=_server_python(), args=["-m", "freecad_mcp.server"], env=settings
     )
     with tempfile.TemporaryFile(mode="w+") as stderr:
         async with stdio_client(params, errlog=stderr) as streams:
@@ -127,7 +163,7 @@ async def _check_harnesses(
                 await _check_harness_session(session)
 
     generator = await asyncio.create_subprocess_exec(
-        sys.executable,
+        _server_python(),
         "-m",
         "freecad_mcp.server",
         "--generate-http-api-key",
@@ -149,7 +185,7 @@ async def _check_harnesses(
         FREECAD_HTTP_API_KEY=key,
     )
     server = await asyncio.create_subprocess_exec(
-        sys.executable,
+        _server_python(),
         "-m",
         "freecad_mcp.server",
         env=settings,
