@@ -28,45 +28,13 @@ project_root := justfile_directory()
 _freecad-dirs:
     #!/usr/bin/env bash
     cat << 'DIRS_EOF'
-    # Determine base FreeCAD directory based on OS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        FREECAD_BASE="$HOME/Library/Application Support/FreeCAD"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        FREECAD_BASE="$HOME/.local/share/FreeCAD"
+    # Use the installer's profile selection, including XDG and numeric versions.
+    if [[ -n "${FREECAD_INSTALL_MOD_DIR:-}" ]]; then
+        MOD_DIR="$FREECAD_INSTALL_MOD_DIR"
     else
-        # Windows: validate APPDATA or use fallback
-        if [[ -n "$APPDATA" ]]; then
-            FREECAD_BASE="$APPDATA/FreeCAD"
-        elif [[ -n "$HOME" ]]; then
-            FREECAD_BASE="$HOME/AppData/Roaming/FreeCAD"
-            echo "Warning: APPDATA not set, using fallback: $FREECAD_BASE" >&2
-        else
-            echo "Error: Neither APPDATA nor HOME is set. Cannot determine FreeCAD directory." >&2
-            exit 1
-        fi
+        MOD_DIR=$(cd "{{project_root}}" && uv run python -c 'from scripts.install_workbench import default_mod_directory; print(default_mod_directory())') || exit 1
     fi
-
-    # FreeCAD 1.x+ uses versioned directories (v1-1, v1-2, v2-0, etc.)
-    # Find the latest versioned directory if present
-    VERSIONED_DIR=""
-    if [[ -d "$FREECAD_BASE" ]]; then
-        # Find directories matching v*-* pattern (supports v1-*, v2-*, etc.)
-        # Use sort -t- -k1.2 -k2 -n to sort by major then minor version
-        LATEST_VERSION=$(ls -d "$FREECAD_BASE"/v*-* 2>/dev/null | sort -t- -k1.2 -k2 -n | tail -n 1)
-        if [[ -n "$LATEST_VERSION" && -d "$LATEST_VERSION" ]]; then
-            VERSIONED_DIR="$LATEST_VERSION"
-        fi
-    fi
-
-    # Use versioned directory if found, otherwise use base directory
-    if [[ -n "$VERSIONED_DIR" ]]; then
-        MOD_DIR="$VERSIONED_DIR/Mod"
-        MACRO_DIR="$VERSIONED_DIR/Macro"
-        echo "Note: Using FreeCAD versioned directory: $VERSIONED_DIR" >&2
-    else
-        MOD_DIR="$FREECAD_BASE/Mod"
-        MACRO_DIR="$FREECAD_BASE/Macro"
-    fi
+    MACRO_DIR="$(dirname "$MOD_DIR")/Macro"
     DIRS_EOF
 
 # =============================================================================
@@ -140,7 +108,7 @@ mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
     runpy.run_path("../scripts/install_workbench.py", run_name="__main__")
 
 # Uninstall the FreeCAD Robust MCP workbench addon
-uninstall-mcp-bridge-workbench:
+uninstall-mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
     #!/usr/bin/env bash
     set -euo pipefail
     # New-style namespace package: Mod/RobustMCPBridge/freecad/RobustMCPBridge/
@@ -183,7 +151,7 @@ uninstall-mcp-bridge-workbench:
 # =============================================================================
 
 # Check installation status of all components
-status:
+status $FREECAD_INSTALL_MOD_DIR="":
     #!/usr/bin/env bash
     set -euo pipefail
 

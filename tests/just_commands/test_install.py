@@ -70,6 +70,17 @@ class TestInstallRuntime:
         assert "Installation Status" in result.stdout
 
     @pytest.mark.just_runtime
+    def test_status_uses_selected_mod_directory(
+        self, just: JustRunner, tmp_path: Path
+    ) -> None:
+        """Status inspects the same explicitly selected profile as installation."""
+        mod_dir = tmp_path / "selected profile" / "Mod"
+        (mod_dir / "RobustMCPBridge").mkdir(parents=True)
+        result = just.run("install::status", str(mod_dir), timeout=60)
+        assert result.success, result.stderr
+        assert str(mod_dir / "RobustMCPBridge") in result.stdout
+
+    @pytest.mark.just_runtime
     def test_freecad_dirs_helper_runs(self, just: JustRunner) -> None:
         """Private _freecad-dirs helper should work."""
         result = just.run("install::_freecad-dirs", timeout=10)

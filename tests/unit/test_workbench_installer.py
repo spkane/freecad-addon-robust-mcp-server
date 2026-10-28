@@ -104,3 +104,48 @@ def test_rejects_symlink_installation_target(tmp_path: Path) -> None:
         pytest.skip("Directory symlinks unavailable on this host")
     with pytest.raises(ValueError, match="not a regular directory"):
         install_workbench(mod)
+
+
+def test_successful_install_removes_only_legacy_workbenches(tmp_path: Path) -> None:
+    """Clean legacy layouts after installing while retaining other addons."""
+    mod = tmp_path / "Mod"
+    old = mod / "FreecadRobustMCPBridge"
+    misplaced = mod / "freecad" / "RobustMCPBridge"
+    other = mod / "freecad" / "OtherWorkbench"
+    for path in (old, misplaced, other):
+        path.mkdir(parents=True)
+        (path / "marker").write_text("keep", encoding="utf-8")
+    install_workbench(mod)
+    assert not old.exists()
+    assert not misplaced.exists()
+    assert (other / "marker").is_file()
+
+
+def test_failed_install_preserves_legacy_workbench(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed package build does not remove a previously usable legacy addon."""
+    legacy = tmp_path / "Mod" / "FreecadRobustMCPBridge"
+    legacy.mkdir(parents=True)
+
+    def fail(_destination: Path) -> None:
+        raise OSError("build failed")
+
+    monkeypatch.setattr("scripts.install_workbench.prepare_package", fail)
+    with pytest.raises(OSError, match="build failed"):
+        install_workbench(legacy.parent)
+    assert legacy.is_dir()
+
+
+def test_install_does_not_follow_legacy_namespace_symlink(tmp_path: Path) -> None:
+    """A symlinked namespace must not cause deletion outside the selected Mod."""
+    mod = tmp_path / "Mod"
+    mod.mkdir()
+    external = tmp_path / "external"
+    (external / "RobustMCPBridge").mkdir(parents=True)
+    try:
+        (mod / "freecad").symlink_to(external, target_is_directory=True)
+    except OSError:
+        pytest.skip("Directory symlinks unavailable on this host")
+    install_workbench(mod)
+    assert (external / "RobustMCPBridge").is_dir()

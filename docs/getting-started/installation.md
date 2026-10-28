@@ -87,8 +87,13 @@ just install::mcp-bridge-workbench "$env:APPDATA\FreeCAD\v1-1\Mod"
 The source installer creates `Mod/RobustMCPBridge/package.xml` and
 `Mod/RobustMCPBridge/freecad/RobustMCPBridge/` in the selected user profile. It
 selects the latest versioned FreeCAD profile when one exists; otherwise it uses
-the unversioned profile. It prints the selected installation path. Do not copy
-the repository itself into `Mod`.
+the unversioned profile. It prints the selected installation path. The installer
+removes recognized older workbench layouts after the new package is installed.
+Do not copy the repository itself into `Mod`.
+
+If you selected a profile explicitly, pass the same `Mod` directory to
+`just install::status` or `just install::uninstall-mcp-bridge-workbench`. These
+status and uninstall recipes require Bash, including on Windows.
 
 ### Manual Installation
 

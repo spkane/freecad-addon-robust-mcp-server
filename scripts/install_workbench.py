@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import re
 import shutil
@@ -69,6 +70,18 @@ def install_workbench(mod_directory: Path) -> Path:
             raise
         if backup.exists():
             shutil.rmtree(backup)
+        # Remove only known legacy layouts after the new package is in place.
+        # A symlinked namespace could point outside the selected Mod directory.
+        namespace = mod_directory / "freecad"
+        legacy_paths = [mod_directory / "FreecadRobustMCPBridge"]
+        if not namespace.is_symlink():
+            legacy_paths.append(namespace / "RobustMCPBridge")
+        for legacy in legacy_paths:
+            if legacy.is_dir() and not legacy.is_symlink():
+                shutil.rmtree(legacy)
+        if namespace.is_dir() and not namespace.is_symlink():
+            with contextlib.suppress(OSError):
+                namespace.rmdir()  # Keep namespaces containing other workbenches.
     finally:
         # Preserve the backup if replacing or restoring the existing install fails.
         if not backup.exists():
