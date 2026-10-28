@@ -102,7 +102,9 @@ async def _check_harness_session(session: ClientSession) -> None:
     assert not call.is_error
 
 
-async def _check_harnesses(env: dict[str, str], port: int, mode: str) -> None:
+async def _check_harnesses(
+    env: dict[str, str], port: int, mode: str, *, use_default: bool = False
+) -> None:
     """Exercise stdio and API-key HTTP clients against the paired bridge."""
     settings = {
         **env,
@@ -113,6 +115,9 @@ async def _check_harnesses(env: dict[str, str], port: int, mode: str) -> None:
         "FREECAD_TRANSPORT": "stdio",
     }
     settings.pop("FREECAD_HTTP_API_KEY", None)
+    if use_default:
+        assert mode == "xmlrpc"
+        settings.pop("FREECAD_MODE", None)
     params = StdioServerParameters(
         command=sys.executable, args=["-m", "freecad_mcp.server"], env=settings
     )
@@ -301,6 +306,7 @@ async def test_authenticated_transports_with_real_freecad(
                 finally:
                     await bridge.disconnect()
                 await _check_harnesses(env, ports[mode], mode)
+            await _check_harnesses(env, ports["xmlrpc"], "xmlrpc", use_default=True)
         finally:
             if process.returncode is None:
                 if os.name == "nt":

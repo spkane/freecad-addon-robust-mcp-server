@@ -34,7 +34,7 @@ class ServerConfig(BaseSettings):
     For example, FREECAD_MODE sets the mode field.
 
     Attributes:
-        mode: Connection mode - 'embedded', 'socket', or 'xmlrpc'.
+        mode: Connection mode - 'xmlrpc' (default), 'socket', or 'embedded'.
         freecad_path: Path to FreeCAD's lib directory (for embedded mode).
         socket_host: Hostname for socket/xmlrpc connection.
         socket_port: Port for JSON-RPC socket connection (default 9876).
@@ -57,7 +57,7 @@ class ServerConfig(BaseSettings):
     )
 
     # FreeCAD connection settings
-    mode: FreecadMode = FreecadMode.EMBEDDED
+    mode: FreecadMode = FreecadMode.XMLRPC
     freecad_path: Annotated[
         Path | None,
         Field(

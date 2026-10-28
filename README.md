@@ -158,7 +158,7 @@ with Docker Desktop, whose `host.docker.internal` forwarding can reach a
 host-loopback listener.
 
 > **Security and Linux limitation:** The FreeCAD bridge listens on loopback and
-> accepts unauthenticated Python execution. Docker Engine on Linux maps
+> requires pairing before accepting Python execution. Docker Engine on Linux maps
 > `host.docker.internal` or `host-gateway` to a bridge-network address, which
 > cannot reach that loopback listener. Run the MCP server directly on the Linux
 > host instead. Do not expose ports 9875 or 9876 by rebinding the bridge to

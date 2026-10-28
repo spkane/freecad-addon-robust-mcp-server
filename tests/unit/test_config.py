@@ -16,7 +16,7 @@ class TestServerConfig:
         with mock.patch.dict(os.environ, {}, clear=True):
             config = ServerConfig()
 
-        assert config.mode == FreecadMode.EMBEDDED
+        assert config.mode == FreecadMode.XMLRPC
         assert config.socket_host == "localhost"
         assert config.socket_port == 9876
         assert config.timeout_ms == 30000
@@ -43,6 +43,11 @@ class TestServerConfig:
             config = ServerConfig()
 
         assert config.mode == FreecadMode.SOCKET
+
+    def test_embedded_mode_requires_explicit_selection(self) -> None:
+        """The environment can explicitly opt in to embedded mode."""
+        with mock.patch.dict(os.environ, {"FREECAD_MODE": "embedded"}, clear=True):
+            assert ServerConfig().mode == FreecadMode.EMBEDDED
 
     def test_custom_port_from_env(self):
         """Configuration should read port from environment."""
@@ -120,7 +125,7 @@ class TestServerConfig:
         monkeypatch.chdir(tmp_path)
         with mock.patch.dict(os.environ, {}, clear=True):
             config = ServerConfig()
-        assert config.mode == FreecadMode.EMBEDDED
+        assert config.mode == FreecadMode.XMLRPC
         assert config.allow_unsafe_code is False
 
     def test_environment_overrides_ignored_working_directory_dotenv(

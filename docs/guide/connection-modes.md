@@ -16,10 +16,10 @@ The FreeCAD Robust MCP Server supports multiple ways to connect to FreeCAD. Choo
 
 ## Security Boundary
 
-The XML-RPC and socket bridges listen on loopback and accept unauthenticated
-Python execution inside FreeCAD. Keep ports 9875 and 9876 inaccessible from
-other hosts. Non-loopback and remote connections are not supported until the
-bridge has protected transport or pairing.
+The XML-RPC and socket bridges listen on loopback and require pairing with the
+MCP server before accepting requests. A paired client can execute Python inside
+FreeCAD. Pairing does not protect against malicious programs running as the same
+operating-system user. Non-loopback and remote bridge connections are not supported.
 
 Docker Desktop can forward `host.docker.internal` to a host-loopback listener.
 Docker Engine on Linux cannot: its `host-gateway` address is outside the host
@@ -29,7 +29,10 @@ loopback interface. For Linux GUI use, run the MCP server directly on the host.
 
 ## XML-RPC Mode (Recommended)
 
-XML-RPC mode is the **default and recommended** connection method. It works on all platforms and provides robust, reliable communication.
+XML-RPC mode is the **default and recommended** connection method when
+`FREECAD_MODE` and `--mode` are unset. It works on all platforms and provides
+robust, reliable communication. Pair the MCP server and bridge as described in
+the [installation guide](../getting-started/installation.md).
 
 ### How It Works
 
@@ -92,6 +95,7 @@ freecad-mcp
 Embedded mode **only works on Linux**. On macOS and Windows, it causes crashes due to Python ABI incompatibility.
 
 Embedded mode imports FreeCAD directly into the Robust MCP Server process, providing the fastest execution.
+It is an explicit opt-in: set `FREECAD_MODE=embedded` or pass `--mode embedded`.
 
 ### Why It Crashes on macOS/Windows
 

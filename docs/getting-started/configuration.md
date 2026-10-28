@@ -231,7 +231,7 @@ host loopback interface.
 ```
 
 !!! danger "Do not expose the FreeCAD bridge"
-    The bridge accepts unauthenticated Python execution inside FreeCAD and must
+    The bridge requires pairing before accepting Python execution inside FreeCAD and must
     remain loopback-only. Do not rebind ports 9875 or 9876 to `0.0.0.0` or a
     LAN address.
 
