@@ -25,7 +25,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
     - [Quick Links](#quick-links)
   - [Robust MCP Server](#robust-mcp-server)
     - [Installation](#installation)
-      - [Using pip (recommended)](#using-pip-recommended)
+      - [Using pip](#using-pip)
       - [Using mise and just (from source)](#using-mise-and-just-from-source)
       - [Using Docker](#using-docker)
     - [Configuration](#configuration)
@@ -114,7 +114,7 @@ This section covers installation and usage for end users who want to use the Rob
 
 ### Installation
 
-#### Using pip (recommended)
+#### Using pip
 
 ```bash
 pip install freecad-robust-mcp
