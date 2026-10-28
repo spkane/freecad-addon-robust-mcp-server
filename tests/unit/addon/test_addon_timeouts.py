@@ -257,6 +257,12 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
 ) -> None:
     """The permanent widget describes what an authorized client can do."""
     del server_mod
+    namespace = types.ModuleType("freecad")
+    namespace.__path__ = [str(ADDON_DIR.parent)]
+    package = types.ModuleType("freecad.RobustMCPBridge")
+    package.__path__ = [str(ADDON_DIR)]
+    monkeypatch.setitem(sys.modules, "freecad", namespace)
+    monkeypatch.setitem(sys.modules, "freecad.RobustMCPBridge", package)
     path = ADDON_DIR / "Qt" / "status_widget.py"
     spec = importlib.util.spec_from_file_location(
         "freecad.RobustMCPBridge.Qt.status_widget", path

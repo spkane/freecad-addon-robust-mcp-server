@@ -21,7 +21,7 @@ spec.loader.exec_module(policy)
 def _install_package_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Execute startup under the same package name FreeCAD uses."""
     import freecad_mcp_bridge
-    from freecad_mcp_bridge import bridge_utils, qt_compat, server, startup_policy
+    from freecad_mcp_bridge import qt_compat, server, startup_policy
 
     package = ModuleType("freecad.RobustMCPBridge")
     package.__path__ = [str(ADDON)]
@@ -33,7 +33,6 @@ def _install_package_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
             )
     for name, module in (
         ("", freecad_mcp_bridge),
-        (".bridge_utils", bridge_utils),
         (".qt_compat", qt_compat),
         (".server", server),
         (".startup_policy", startup_policy),
@@ -41,6 +40,14 @@ def _install_package_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setitem(
             sys.modules, f"freecad.RobustMCPBridge.freecad_mcp_bridge{name}", module
         )
+    qualified = "freecad.RobustMCPBridge.freecad_mcp_bridge.bridge_utils"
+    spec = importlib.util.spec_from_file_location(
+        qualified, ADDON / "freecad_mcp_bridge" / "bridge_utils.py"
+    )
+    assert spec is not None and spec.loader is not None
+    bridge_utils = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, qualified, bridge_utils)
+    spec.loader.exec_module(bridge_utils)
 
 
 @pytest.mark.parametrize(
@@ -214,6 +221,7 @@ def test_headless_preference_and_batch_gates(
     )
 
     assert plugin.start.called is expected
+    assert commands._mcp_plugin is (plugin if expected else None)
 
 
 @pytest.mark.parametrize("gui_enabled", [False, True])
