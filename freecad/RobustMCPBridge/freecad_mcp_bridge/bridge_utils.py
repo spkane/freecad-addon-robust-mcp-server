@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+if __package__:
+    from .qt_compat import load_qt_core
+else:
+    from qt_compat import load_qt_core  # type: ignore[import-not-found, no-redef]
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
@@ -74,7 +79,7 @@ class GuiWaiter:
         self.max_retries = max_retries
         self.timeout_error_extra = timeout_error_extra
 
-        # Timer references use Any since they could be from PySide2 or PySide6
+        # Timer references use Any since they could be from PySide6 or PySide2
         self._check_timer: Any | None = None
         self._defer_timer: Any | None = None
         self._retry_count: int = 0
@@ -91,16 +96,22 @@ class GuiWaiter:
 
         # Resolve QtCore once and store for later use
         try:
-            from PySide2 import QtCore  # type: ignore[import]
-        except ImportError:
-            try:
-                from PySide6 import QtCore  # type: ignore[import]
-            except ImportError:
-                FreeCAD.Console.PrintError(
-                    f"{self.log_prefix}: Neither PySide2 nor PySide6 is available. "
-                    "Cannot wait for GUI - Qt is required for timer-based waiting.\n"
-                )
-                return
+            QtCore = load_qt_core()
+        except RuntimeError as error:
+            FreeCAD.Console.PrintError(
+                f"{self.log_prefix}: {error} Cannot wait for GUI - Qt is required "
+                "for timer-based waiting.\n"
+            )
+            return
+
+        # A timer cannot run before a Qt application exists. GUI startup can
+        # schedule its own callback later through init_gui.py.
+        if QtCore.QCoreApplication.instance() is None:
+            FreeCAD.Console.PrintMessage(
+                f"{self.log_prefix}: No Qt application/event loop available - "
+                "skipping timer-based GUI wait (it could never fire).\n"
+            )
+            return
 
         self._qtcore = QtCore
         self._check_timer = QtCore.QTimer()

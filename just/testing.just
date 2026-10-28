@@ -72,15 +72,14 @@ integration-freecad-auto:
     . "{{project_root}}/scripts/bridge-helpers.sh"
 
     # Track whether we started FreeCAD (so cleanup knows to stop it)
-    STARTED_FREECAD=false
+    FREECAD_PID=""
 
     # Cleanup function to ensure FreeCAD is stopped
-    # We kill by port since the subshell approach makes PID tracking unreliable
     cleanup() {
-        if [ "$STARTED_FREECAD" = true ]; then
+        if [ -n "$FREECAD_PID" ]; then
             echo ""
             echo "Stopping FreeCAD..."
-            graceful_kill_bridge_ports
+            stop_owned_freecad "$FREECAD_PID"
         fi
     }
 
@@ -92,35 +91,19 @@ integration-freecad-auto:
     echo "Starting FreeCAD headless server for integration tests..."
     echo ""
 
-    # Check if a bridge is already running and responsive
-    if curl -s --connect-timeout 1 --max-time 1 http://localhost:9875 > /dev/null 2>&1; then
-        # Try to ping - if it responds, there's a healthy bridge already running
-        if uv run python -c "import socket; socket.setdefaulttimeout(2); import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
-            echo "ERROR: A FreeCAD Robust MCP Bridge is already running on port 9875."
-            echo ""
-            echo "Options:"
-            echo "  1. Use 'just testing::integration' to run tests against the existing bridge"
-            echo "  2. Stop the existing FreeCAD instance and try again"
-            echo "  3. If this is a zombie process, run: just testing::kill-bridge"
-            exit 1
-        else
-            # Port is bound but not responding to ping - likely a zombie
-            echo "WARNING: Port 9875 is bound but not responding (zombie process?)"
-            echo "Attempting to kill zombie process..."
-            kill_port 9875 -9
-            kill_port 9876 -9
-            sleep 2
-        fi
+    if is_port_in_use 9875 || is_port_in_use 9876; then
+        echo "ERROR: A bridge port is already in use; stop its owner before testing."
+        exit 1
     fi
-
-    # Mark that we're starting FreeCAD (for cleanup)
-    STARTED_FREECAD=true
+    require_bridge_pairing
 
     # Start FreeCAD headless in background
     # Redirect stderr to log file (not /dev/null) so startup failures are visible
     # Background process won't fail the script when killed by cleanup trap
     FREECAD_LOG="{{project_root}}/freecad-headless.log"
-    just freecad::run-headless 2>"$FREECAD_LOG" &
+    FREECAD_CMD=$(find_freecad_executable headless)
+    "$FREECAD_CMD" "{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py" 2>"$FREECAD_LOG" &
+    FREECAD_PID=$!
 
     # Give FreeCAD time to start the XML-RPC server
     echo "Waiting for FreeCAD Robust MCP Bridge to start..."
@@ -129,7 +112,7 @@ integration-freecad-auto:
     # Check if the bridge is ready (verify XML-RPC ping, not just port open)
     MAX_RETRIES=30
     RETRY_COUNT=0
-    while ! uv run python -c "import socket; socket.setdefaulttimeout(2); import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; do
+    while ! is_bridge_running; do
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
             echo "ERROR: FreeCAD Robust MCP Bridge did not start within timeout"
@@ -419,14 +402,14 @@ integration-headless-release:
     . "{{project_root}}/scripts/bridge-helpers.sh"
 
     # Track whether we started FreeCAD (so cleanup knows to stop it)
-    STARTED_FREECAD=false
+    FREECAD_PID=""
 
     # Cleanup function
     cleanup() {
-        if [ "$STARTED_FREECAD" = true ]; then
+        if [ -n "$FREECAD_PID" ]; then
             echo ""
             echo "Stopping FreeCAD headless..."
-            graceful_kill_bridge_ports
+            stop_owned_freecad "$FREECAD_PID"
         fi
     }
 
@@ -438,16 +421,16 @@ integration-headless-release:
     echo "----------------------------------------"
     echo ""
 
-    # Check for existing FreeCAD
-    if is_bridge_running; then
-        echo "ERROR: A FreeCAD Robust MCP Bridge is already running on port 9875."
+    # Do not assume an unresponsive or authenticated listener is safe to stop.
+    if is_port_in_use 9875 || is_port_in_use 9876; then
+        echo "ERROR: A process is already using bridge port 9875 or 9876."
         echo ""
         echo "For release testing, we need to start FreeCAD fresh."
-        echo "Please stop the existing FreeCAD instance and try again."
+        echo "Free the occupied ports and try again."
         echo ""
-        echo "You can run: just testing::kill-bridge"
         exit 1
     fi
+    require_bridge_pairing
 
     # Install latest workbench code to FreeCAD's Mod directory
     # This ensures tests run against the current source code, not stale installed code
@@ -456,11 +439,12 @@ integration-headless-release:
     echo ""
 
     # Start FreeCAD headless
-    STARTED_FREECAD=true
     echo "Starting FreeCAD headless..."
 
     FREECAD_LOG="{{project_root}}/freecad-headless-release.log"
-    just freecad::run-headless 2>"$FREECAD_LOG" &
+    FREECAD_CMD=$(find_freecad_executable headless)
+    "$FREECAD_CMD" "{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py" 2>"$FREECAD_LOG" &
+    FREECAD_PID=$!
 
     # Wait for bridge to be ready
     echo "Waiting for FreeCAD Robust MCP Bridge to start..."
@@ -502,19 +486,14 @@ integration-gui-release:
     . "{{project_root}}/scripts/bridge-helpers.sh"
 
     # Track whether we started FreeCAD (so cleanup knows to stop it)
-    STARTED_FREECAD=false
+    FREECAD_PID=""
 
     # Cleanup function
     cleanup() {
-        if [ "$STARTED_FREECAD" = true ]; then
+        if [ -n "$FREECAD_PID" ]; then
             echo ""
             echo "Stopping FreeCAD GUI..."
-            graceful_kill_bridge_ports
-
-            # On macOS, also try to quit FreeCAD gracefully
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                osascript -e 'tell application "FreeCAD" to quit' 2>/dev/null || true
-            fi
+            stop_owned_freecad "$FREECAD_PID"
         fi
     }
 
@@ -526,16 +505,16 @@ integration-gui-release:
     echo "------------------------------------"
     echo ""
 
-    # Check for existing FreeCAD
-    if is_bridge_running; then
-        echo "ERROR: A FreeCAD Robust MCP Bridge is already running on port 9875."
+    # Do not assume an unresponsive or authenticated listener is safe to stop.
+    if is_port_in_use 9875 || is_port_in_use 9876; then
+        echo "ERROR: A process is already using bridge port 9875 or 9876."
         echo ""
         echo "For release testing, we need to start FreeCAD fresh."
-        echo "Please stop the existing FreeCAD instance and try again."
+        echo "Free the occupied ports and try again."
         echo ""
-        echo "You can run: just testing::kill-bridge"
         exit 1
     fi
+    require_bridge_pairing
 
     # Install latest workbench code to FreeCAD's Mod directory
     # This ensures tests run against the current source code, not stale installed code
@@ -544,13 +523,13 @@ integration-gui-release:
     echo ""
 
     # Start FreeCAD GUI
-    STARTED_FREECAD=true
     echo "Starting FreeCAD GUI..."
 
     FREECAD_LOG="{{project_root}}/freecad-gui-release.log"
 
-    # Start FreeCAD GUI (this returns immediately on macOS)
-    just freecad::run-gui 2>"$FREECAD_LOG" || true
+    FREECAD_CMD=$(find_freecad_executable gui)
+    "$FREECAD_CMD" "{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/startup_bridge.py" 2>"$FREECAD_LOG" &
+    FREECAD_PID=$!
 
     # Wait for bridge to be ready (GUI takes longer to start)
     echo "Waiting for FreeCAD Robust MCP Bridge to start (GUI mode, may take 30-60s)..."
@@ -584,7 +563,7 @@ integration-gui-release:
     echo ""
     echo "Stopping FreeCAD for standalone tests..."
     cleanup
-    STARTED_FREECAD=false  # Prevent double cleanup
+    FREECAD_PID=""  # Prevent double cleanup
 
     # Wait until ports are actually free before starting standalone tests.
     # A fixed sleep is not enough — FreeCAD's GUI process can take 10+ seconds

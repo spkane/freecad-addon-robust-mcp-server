@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 import FreeCAD
+from freecad_mcp_bridge.qt_compat import load_qt_modules
 from path_utils import get_addon_path, get_icon_path
 
 # FreeCADGui is imported lazily in methods that need it, as this module
@@ -355,23 +356,20 @@ class MCPBridgePreferencesCommand:
         import FreeCADGui
         from preferences import (
             get_auto_start,
+            get_auto_start_headless,
+            get_auto_start_headless_batch,
             get_socket_port,
             get_status_bar_enabled,
             get_xmlrpc_port,
             set_auto_start,
+            set_auto_start_headless,
+            set_auto_start_headless_batch,
             set_socket_port,
             set_status_bar_enabled,
             set_xmlrpc_port,
         )
 
-        # Import QtWidgets with fallback for different PySide versions
-        try:
-            from PySide6 import QtWidgets
-        except ImportError:
-            try:
-                from PySide2 import QtWidgets  # type: ignore[no-redef]
-            except ImportError:
-                from PySide import QtWidgets  # type: ignore[import-not-found,no-redef]
+        (QtWidgets,) = load_qt_modules("QtWidgets")
 
         # Create the dialog
         dialog = QtWidgets.QDialog(FreeCADGui.getMainWindow())
@@ -384,9 +382,19 @@ class MCPBridgePreferencesCommand:
         startup_group = QtWidgets.QGroupBox("Startup")
         startup_layout = QtWidgets.QVBoxLayout(startup_group)
 
-        auto_start_cb = QtWidgets.QCheckBox("Auto-start bridge when FreeCAD launches")
+        auto_start_cb = QtWidgets.QCheckBox(
+            "Auto-start bridge when FreeCAD GUI launches"
+        )
         auto_start_cb.setChecked(get_auto_start())
         startup_layout.addWidget(auto_start_cb)
+        auto_start_headless_cb = QtWidgets.QCheckBox("Auto-start in console FreeCAD")
+        auto_start_headless_cb.setChecked(get_auto_start_headless())
+        startup_layout.addWidget(auto_start_headless_cb)
+        auto_start_headless_batch_cb = QtWidgets.QCheckBox(
+            "Also auto-start in console batch runs"
+        )
+        auto_start_headless_batch_cb.setChecked(get_auto_start_headless_batch())
+        startup_layout.addWidget(auto_start_headless_batch_cb)
 
         layout.addWidget(startup_group)
 
@@ -459,6 +467,8 @@ class MCPBridgePreferencesCommand:
             old_socket = get_socket_port()
 
             set_auto_start(auto_start_cb.isChecked())
+            set_auto_start_headless(auto_start_headless_cb.isChecked())
+            set_auto_start_headless_batch(auto_start_headless_batch_cb.isChecked())
             set_status_bar_enabled(status_bar_cb.isChecked())
             set_xmlrpc_port(xmlrpc_spin.value())
             set_socket_port(socket_spin.value())

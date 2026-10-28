@@ -63,7 +63,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
     PartDesign for embossing, engraving, and extrusion workflows.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
+        mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
 
     Returns:

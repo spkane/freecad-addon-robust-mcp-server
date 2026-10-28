@@ -4,23 +4,23 @@
 [tools]
 # Python 3.11 is required for embedded FreeCAD mode - FreeCAD bundles libpython3.11
 # Using a different Python version causes ABI incompatibility crashes
-python = "3.11"
+python = "3.11.17"
 # Pin tool versions for reproducible CI builds
 # Update these periodically with: mise upgrade
-uv = "0.9"              # uv package manager
-just = "1.43"           # task runner
-pre-commit = "4.5"      # pre-commit hooks
-github-cli = "2.74"     # GitHub CLI for PR/issue management
+uv = "0.13.5"           # uv package manager
+just = "1.59.0"         # task runner
+pre-commit = "4.7.0"    # pre-commit hooks
+github-cli = "2.103.2"  # GitHub CLI for PR/issue management
 
 # Security and code quality tools
-trivy = "0.74.0"          # container vulnerability scanner
-gitleaks = "8.30"       # secrets scanner
-actionlint = "1.7"      # GitHub Actions linter
+trivy = "0.76.1"        # container vulnerability scanner
+gitleaks = "8.30.1"     # secrets scanner
+actionlint = "1.7.12"   # GitHub Actions linter
 # Note: hadolint and shellcheck are managed by their pre-commit repos
 # (hadolint-py and shellcheck-py auto-download binaries)
 
 # Markdown tools
-markdownlint-cli2 = "0.20"  # markdown linter
+markdownlint-cli2 = "0.24.0"  # markdown linter
 
 [env]
 # FreeCAD connection mode:

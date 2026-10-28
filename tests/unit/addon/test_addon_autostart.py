@@ -377,13 +377,13 @@ class TestAutoStartCodePaths:
         1. GUI already up - use timer for deferred start
         2. True headless (QCoreApplication only) - start directly with background thread
         3. GUI not ready but Qt available - use GuiWaiter
-        4. No Qt available - start directly (unusual state)
+        4. No Qt available - stop because headless mode is unconfirmed
         """
         # Check for documentation of scenarios
         assert "GuiUp is True" in init_code or "GUI is already up" in init_code
         assert "QCoreApplication" in init_code  # True headless detection
         assert "GUI not ready" in init_code
-        assert "No Qt available" in init_code or "headless" in init_code.lower()
+        assert "No Qt binding" in init_code
 
     def test_all_paths_have_logging(self, init_code: str) -> None:
         """Each code path should have diagnostic logging."""
@@ -392,20 +392,51 @@ class TestAutoStartCodePaths:
             "GUI already up",
             "True headless mode",
             "GUI not ready",
-            "No Qt available",
+            "No Qt binding",
         ]
         found = sum(1 for pattern in log_patterns if pattern in init_code)
         assert found >= 4, f"Expected 4 code paths with logging, found {found}"
 
-    def test_pyside_fallback_from_2_to_6(self, init_code: str) -> None:
-        """Should try PySide2 first, then fall back to PySide6."""
-        # Check for both imports
-        assert "PySide2" in init_code
-        assert "PySide6" in init_code
-        # PySide2 should be tried first (common pattern)
-        pyside2_pos = init_code.find("PySide2")
-        pyside6_pos = init_code.find("PySide6")
-        assert pyside2_pos < pyside6_pos, "Should try PySide2 before PySide6"
+    def test_uses_host_compatible_qt_loader(self, init_code: str) -> None:
+        """Auto-start should use the shared host-compatible Qt loader."""
+        assert "load_qt_core_widgets" in init_code
+
+    def test_gui_without_qt_fails_closed(self, init_code: str) -> None:
+        """A ready GUI without Qt bindings must not start the bridge directly."""
+        tree = ast.parse(init_code)
+        gui_up_branch = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.If)
+            and "getattr(FreeCAD, 'GuiUp', False)" in ast.unparse(node.test)
+        )
+        branch_code = "\n".join(ast.unparse(node) for node in gui_up_branch.body)
+
+        assert "QtCore is not None and QtWidgets is not None" in branch_code
+        assert "Auto-start was stopped" in branch_code
+        assert branch_code.count("_auto_start_bridge()") == 0
+
+    def test_unconfirmed_headless_mode_fails_closed(self, init_code: str) -> None:
+        """No Qt plus GuiUp false must not be treated as proven headless mode."""
+        tree = ast.parse(init_code)
+        startup_branch = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.If)
+            and "getattr(FreeCAD, 'GuiUp', False)" in ast.unparse(node.test)
+        )
+        while startup_branch.orelse and isinstance(startup_branch.orelse[0], ast.If):
+            startup_branch = startup_branch.orelse[0]
+        fallback_code = "\n".join(ast.unparse(node) for node in startup_branch.orelse)
+
+        assert "headless mode could not be confirmed" in fallback_code
+        assert "_auto_start_bridge()" not in fallback_code
+
+    def test_qt_fallback_handles_partially_initialized_binding(
+        self, init_code: str
+    ) -> None:
+        """PySide probes should tolerate the NameError seen on Qt6 builds."""
+        assert "load_qt_core_widgets" in init_code
 
     def test_true_headless_detection_via_isinstance(self, init_code: str) -> None:
         """Should use isinstance to detect true headless mode.

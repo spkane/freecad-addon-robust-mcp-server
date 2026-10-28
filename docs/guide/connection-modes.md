@@ -14,6 +14,19 @@ The FreeCAD Robust MCP Server supports multiple ways to connect to FreeCAD. Choo
 
 ---
 
+## Security Boundary
+
+The XML-RPC and socket bridges listen on loopback and accept unauthenticated
+Python execution inside FreeCAD. Keep ports 9875 and 9876 inaccessible from
+other hosts. Non-loopback and remote connections are not supported until the
+bridge has protected transport or pairing.
+
+Docker Desktop can forward `host.docker.internal` to a host-loopback listener.
+Docker Engine on Linux cannot: its `host-gateway` address is outside the host
+loopback interface. For Linux GUI use, run the MCP server directly on the host.
+
+---
+
 ## XML-RPC Mode (Recommended)
 
 XML-RPC mode is the **default and recommended** connection method. It works on all platforms and provides robust, reliable communication.
@@ -126,14 +139,15 @@ graph TD
 
 ### Recommendations
 
-| Use Case                      | Recommended Mode |
-| ----------------------------- | ---------------- |
-| General development           | `xmlrpc`         |
-| Interactive modeling with GUI | `xmlrpc`         |
-| CI/CD pipelines on Linux      | `embedded`       |
-| Docker containers             | `xmlrpc`         |
-| Remote FreeCAD instance       | `xmlrpc`         |
-| Debugging connection issues   | `socket`         |
+| Use Case                      | Recommended Mode   |
+| ----------------------------- | ------------------ |
+| General development           | `xmlrpc`           |
+| Interactive modeling with GUI | `xmlrpc`           |
+| CI/CD pipelines on Linux      | `embedded`         |
+| Docker Desktop containers     | `xmlrpc`           |
+| Docker Engine on Linux        | Run server on host |
+| Remote FreeCAD instance       | Not supported      |
+| Debugging connection issues   | `socket`           |
 
 ---
 
@@ -192,7 +206,13 @@ SIGSEGV: Segmentation fault
 Error: Execution timed out after 30000ms
 ```
 
-**Solution:** Increase the timeout with `FREECAD_TIMEOUT_MS=60000` or optimize your operation.
+**Solution:** Increase the default with `FREECAD_TIMEOUT_MS=60000`, pass a
+per-call `timeout_ms` to `execute_python`, or optimize the operation. Per-call
+values take precedence over the environment setting in every connection mode.
+
+A timeout cancels work that is still queued, but it cannot safely interrupt
+Python code that has already started in FreeCAD. The error reports when code may
+still be running. Check document state before retrying a state-changing call.
 
 ---
 

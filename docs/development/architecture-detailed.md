@@ -214,7 +214,7 @@ The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is a standa
 │                         MCP Server Layer                                 │
 │                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                     FastMCP Application                             │ │
+│  │                    MCPServer Application                            │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐           │ │
 │  │  │ Tool     │  │ Resource │  │ Prompt   │  │ Lifecycle│           │ │
 │  │  │ Registry │  │ Registry │  │ Registry │  │ Manager  │           │ │
@@ -290,40 +290,37 @@ freecad_mcp/
 
 ### 1. MCP Server (`server.py`)
 
-The main entry point using FastMCP from the official MCP Python SDK.
+The main entry point uses MCPServer from the official MCP Python SDK 2.x.
 
 ```python
 """FreeCAD Robust MCP Server - Main entry point."""
 
-from mcp.server.fastmcp import FastMCP
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
 
-from freecad_mcp.config import ServerConfig
-from freecad_mcp.bridge import create_bridge
-from freecad_mcp.tools import register_all_tools
-from freecad_mcp.resources import register_all_resources
-from freecad_mcp.prompts import register_all_prompts
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP(
-    name="freecad-mcp",
-    version="0.1.0",
-    description="MCP server for FreeCAD integration with AI assistants"
-)
-
-# Bridge instance (initialized on startup)
 bridge = None
 
-@mcp.on_startup
-async def startup():
-    """Initialize FreeCAD bridge on server startup."""
+@asynccontextmanager
+async def lifespan(_server: MCPServer[Any]) -> AsyncIterator[None]:
+    """Connect the configured FreeCAD bridge for the server lifetime."""
     global bridge
-    config = ServerConfig.from_env()
-    bridge = await create_bridge(config)
+    bridge = build_bridge_from_config()
+    await bridge.connect()
+    try:
+        yield
+    finally:
+        await bridge.disconnect()
 
-@mcp.on_shutdown
-async def shutdown():
-    """Clean up FreeCAD bridge on server shutdown."""
-    if bridge:
-        await bridge.close()
+mcp = MCPServer(
+    name="freecad-mcp",
+    title="FreeCAD Robust MCP Server",
+    description="Connect AI assistants to FreeCAD through a robust bridge.",
+    version=get_package_version(),
+    lifespan=lifespan,
+)
 ```
 
 ### 2. Bridge Interface (`bridge/base.py`)
@@ -388,7 +385,7 @@ class FreecadBridge(ABC):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000
+        timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context."""
         pass
@@ -478,11 +475,12 @@ class EmbeddedBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000
+        timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context."""
         import time
 
+        effective_timeout_ms = timeout_ms or self._execution_timeout_ms
         start = time.perf_counter()
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -509,7 +507,7 @@ class EmbeddedBridge(FreecadBridge):
                         None,
                         lambda: exec(compile(code, "<mcp>", "exec"), exec_globals)
                     ),
-                    timeout=timeout_ms / 1000
+                    timeout=effective_timeout_ms / 1000
                 )
 
             elapsed = (time.perf_counter() - start) * 1000
@@ -528,9 +526,11 @@ class EmbeddedBridge(FreecadBridge):
                 result=None,
                 stdout=stdout_capture.getvalue(),
                 stderr=stderr_capture.getvalue(),
-                execution_time_ms=timeout_ms,
+                execution_time_ms=effective_timeout_ms,
                 error_type="TimeoutError",
-                error_traceback=f"Execution timed out after {timeout_ms}ms",
+                error_traceback=(
+                    f"Execution timed out after {effective_timeout_ms}ms"
+                ),
             )
         except Exception as e:
             import traceback
@@ -648,12 +648,13 @@ class SocketBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000
+        timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context."""
+        effective_timeout_ms = timeout_ms or self._execution_timeout_ms
         response = await self._send_request("execute", {
             "code": code,
-            "timeout_ms": timeout_ms,
+            "timeout_ms": effective_timeout_ms,
         })
 
         if "error" in response:
@@ -832,7 +833,9 @@ class FreecadMCPPlugin:
 
         # Schedule execution in FreeCAD's main thread
         # Use FreeCAD's timer mechanism for thread safety
-        from PySide2 import QtCore
+        from freecad_mcp_bridge.qt_compat import load_qt_core
+
+        QtCore = load_qt_core()
 
         event = threading.Event()
 
@@ -867,14 +870,15 @@ Execute arbitrary Python code in FreeCAD's context.
 @mcp.tool()
 async def execute_python(
     code: str,
-    timeout_ms: int = 30000,
+    timeout_ms: int | None = None,
     capture_result: bool = True,
 ) -> dict:
     """Execute Python code in FreeCAD's Python console context.
 
     Args:
         code: Python code to execute. Use `_result_ = value` to return data.
-        timeout_ms: Maximum execution time in milliseconds.
+        timeout_ms: Optional per-call execution timeout in milliseconds. The
+            configured bridge default applies when omitted.
         capture_result: Whether to capture and return the result value.
 
     Returns:
@@ -1202,6 +1206,7 @@ async def export_step(
 async def inspect_object(
     object_name: str,
     doc_name: str | None = None,
+    include_properties: bool = True,
     include_shape: bool = True,
 ) -> dict:
     """Get detailed information about an object.
@@ -1209,6 +1214,7 @@ async def inspect_object(
     Args:
         object_name: Name of the object
         doc_name: Document name
+        include_properties: Include object property values
         include_shape: Include shape geometry details
 
     Returns:

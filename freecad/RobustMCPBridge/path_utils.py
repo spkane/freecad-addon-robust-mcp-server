@@ -14,7 +14,7 @@ Python features at load time.
 
 from __future__ import annotations
 
-import os  # noqa: PTH
+import os
 
 import FreeCAD
 

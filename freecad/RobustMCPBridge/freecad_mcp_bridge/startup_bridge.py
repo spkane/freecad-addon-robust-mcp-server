@@ -29,6 +29,11 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from .qt_compat import load_qt_core_widgets
+else:
+    from qt_compat import load_qt_core_widgets  # type: ignore[import-not-found, no-redef]
+
 # Add the script's directory to sys.path so we can import the server module
 script_dir = str(Path(__file__).resolve().parent)
 if script_dir not in sys.path:
@@ -160,11 +165,8 @@ try:
     _has_qapp = False
     _is_true_headless = False
 
-    try:
-        from PySide2 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
-    except ImportError:
-        with contextlib.suppress(ImportError):
-            from PySide6 import QtCore, QtWidgets  # type: ignore[assignment, no-redef]
+    with contextlib.suppress(RuntimeError):
+        QtCore, QtWidgets = load_qt_core_widgets()
 
     # Detect GUI mode vs true headless mode
     # - True headless (freecadcmd): QCoreApplication exists but NOT QApplication
@@ -185,16 +187,26 @@ try:
             # If no app at all, assume early GUI startup (will use GuiWaiter)
 
     FreeCAD.Console.PrintMessage(
-        f"Startup Bridge: GuiUp={FreeCAD.GuiUp}, "
+        f"Startup Bridge: GuiUp={getattr(FreeCAD, 'GuiUp', False)}, "
         f"QtCore={'available' if QtCore else 'unavailable'}, "
         f"QApp={'running' if _has_qapp else 'none'}, "
         f"headless={_is_true_headless}\n"
     )
 
-    if FreeCAD.GuiUp:
-        # GUI is already up - start bridge directly
-        FreeCAD.Console.PrintMessage("Startup Bridge: GUI already up, starting...\n")
-        _start_bridge()
+    if getattr(FreeCAD, "GuiUp", False):
+        if QtCore is None or QtWidgets is None:
+            # Never start a GUI bridge without a main-thread Qt timer.
+            FreeCAD.Console.PrintError(
+                "Startup Bridge: GUI is ready, but a PySide binding matching "
+                "FreeCAD's Qt version could not provide QtCore and QtWidgets. "
+                "Startup was stopped.\n"
+            )
+        else:
+            # GUI is already up - start bridge directly
+            FreeCAD.Console.PrintMessage(
+                "Startup Bridge: GUI already up, starting...\n"
+            )
+            _start_bridge()
     elif _is_true_headless:
         # True headless mode - QCoreApplication exists but not QApplication
         # No Qt event loop for GUI, so start bridge directly with background thread
@@ -203,7 +215,7 @@ try:
             "starting directly...\n"
         )
         _start_bridge()
-    elif QtCore is not None:
+    elif QtCore is not None and QtWidgets is not None:
         # GUI not ready yet (either QApplication exists or no app yet)
         # Use GuiWaiter to wait for GuiUp to become True before starting
         # This ensures the bridge uses Qt timer (not background thread) for queue
@@ -222,11 +234,12 @@ try:
         )
         _gui_waiter.start()
     else:
-        # No Qt available at all - unusual state, start directly
-        FreeCAD.Console.PrintMessage(
-            "Startup Bridge: No Qt available, starting directly...\n"
+        # Without Qt, GuiUp=False cannot distinguish early GUI startup
+        # from a genuinely headless process. Refuse the ambiguous path.
+        FreeCAD.Console.PrintError(
+            "Startup Bridge: No Qt binding is available and headless mode "
+            "could not be confirmed. Startup was stopped.\n"
         )
-        _start_bridge()
 except Exception as e:
     FreeCAD.Console.PrintError(f"Startup Bridge: Failed to initialize: {e}\n")
     FreeCAD.Console.PrintError(traceback.format_exc())

@@ -15,6 +15,41 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+DEFAULT_EXECUTION_TIMEOUT_MS = 30000
+MIN_EXECUTION_TIMEOUT_MS = 1000
+MAX_EXECUTION_TIMEOUT_MS = 600000
+
+
+def resolve_execution_timeout_ms(
+    timeout_ms: int | None,
+    default_timeout_ms: int,
+) -> int:
+    """Resolve and validate a per-call execution timeout.
+
+    Args:
+        timeout_ms: Optional per-call timeout override in milliseconds.
+        default_timeout_ms: Bridge-level default in milliseconds.
+
+    Returns:
+        The validated effective timeout in milliseconds.
+
+    Raises:
+        ValueError: If the effective timeout is outside the supported range.
+    """
+    effective_timeout_ms = default_timeout_ms if timeout_ms is None else timeout_ms
+    if (
+        type(effective_timeout_ms) is not int
+        or not MIN_EXECUTION_TIMEOUT_MS
+        <= effective_timeout_ms
+        <= MAX_EXECUTION_TIMEOUT_MS
+    ):
+        msg = (
+            "Execution timeout must be between "
+            f"{MIN_EXECUTION_TIMEOUT_MS} and {MAX_EXECUTION_TIMEOUT_MS} milliseconds"
+        )
+        raise ValueError(msg)
+    return effective_timeout_ms
+
 
 class ViewAngle(str, Enum):
     """Standard view angles for screenshots."""
@@ -287,7 +322,7 @@ class FreecadBridge(ABC):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context.
 
@@ -296,7 +331,8 @@ class FreecadBridge(ABC):
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The bridge's
+                configured default applies when omitted.
 
         Returns:
             ExecutionResult with success status, output, and any errors.
@@ -398,12 +434,17 @@ class FreecadBridge(ABC):
         self,
         obj_name: str,
         doc_name: str | None = None,
+        *,
+        include_properties: bool = True,
+        include_shape: bool = True,
     ) -> ObjectInfo:
         """Get detailed object information.
 
         Args:
             obj_name: Name of the object.
             doc_name: Document name (uses active if None).
+            include_properties: Read object property values.
+            include_shape: Read shape geometry details.
 
         Returns:
             ObjectInfo with full object details.

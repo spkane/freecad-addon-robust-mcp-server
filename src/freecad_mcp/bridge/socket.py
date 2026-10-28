@@ -10,13 +10,17 @@ Based on learnings from competitive analysis:
 """
 
 import asyncio
+import base64
 import contextlib
 import json
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
+from freecad_mcp.bridge.authentication import request_proof_message
 from freecad_mcp.bridge.base import (
+    DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
     DocumentInfo,
     ExecutionResult,
@@ -26,11 +30,17 @@ from freecad_mcp.bridge.base import (
     ScreenshotResult,
     ViewAngle,
     WorkbenchInfo,
+    resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 
 DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_TIMEOUT = 30.0
+EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
+# Captured streams, result values, and error diagnostics can expand substantially
+# when JSON escapes control characters. Bound the wire frame while allowing them.
+MAX_SOCKET_RESPONSE_BYTES = 32 * 1024 * 1024
 
 
 class JsonRpcError(Exception):
@@ -48,6 +58,10 @@ class JsonRpcError(Exception):
         self.code = code
         self.message = message
         self.data = data
+
+
+class RequestNotSentError(TimeoutError):
+    """Request deadline expired before any write attempt to FreeCAD."""
 
 
 class SocketBridge(FreecadBridge):
@@ -69,6 +83,10 @@ class SocketBridge(FreecadBridge):
         port: int = DEFAULT_SOCKET_PORT,
         timeout: float = DEFAULT_TIMEOUT,
         auto_reconnect: bool = True,
+        *,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+        client_id: str | None = None,
+        signer: Callable[[bytes], bytes] | None = None,
     ) -> None:
         """Initialize the socket bridge.
 
@@ -77,15 +95,25 @@ class SocketBridge(FreecadBridge):
             port: Socket server port.
             timeout: Connection and request timeout in seconds.
             auto_reconnect: Whether to automatically reconnect on connection loss.
+            execution_timeout_ms: Default execution timeout in milliseconds.
+            client_id: Identity of the paired client.
+            signer: Protected provider that signs request proof messages.
         """
         self._host = host
         self._port = port
         self._timeout = timeout
+        self._execution_timeout_ms = resolve_execution_timeout_ms(
+            execution_timeout_ms,
+            DEFAULT_EXECUTION_TIMEOUT_MS,
+        )
         self._auto_reconnect = auto_reconnect
+        self._client_id = client_id
+        self._signer = signer
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._connected = False
         self._lock = asyncio.Lock()
+        self._reconnect_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         """Establish connection to FreeCAD socket server.
@@ -94,31 +122,37 @@ class SocketBridge(FreecadBridge):
             ConnectionError: If connection cannot be established.
         """
         try:
-            self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(self._host, self._port),
-                timeout=self._timeout,
-            )
-            self._connected = True
-
-            # Verify connection with a ping
+            await self._open_streams()
             await self.ping()
         except TimeoutError as e:
+            await self.disconnect()
             msg = f"Connection to {self._host}:{self._port} timed out"
             raise ConnectionError(msg) from e
         except Exception as e:
-            self._connected = False
+            await self.disconnect()
             msg = f"Failed to connect to {self._host}:{self._port}: {e}"
             raise ConnectionError(msg) from e
 
+    async def _open_streams(self) -> None:
+        """Open socket streams without issuing a nested request."""
+        self._reader, self._writer = await asyncio.wait_for(
+            asyncio.open_connection(
+                self._host, self._port, limit=MAX_SOCKET_RESPONSE_BYTES
+            ),
+            timeout=self._timeout,
+        )
+        self._connected = True
+
     async def disconnect(self) -> None:
         """Close connection to FreeCAD socket server."""
-        if self._writer:
-            self._writer.close()
-            with contextlib.suppress(Exception):
-                await self._writer.wait_closed()
+        writer = self._writer
         self._reader = None
         self._writer = None
         self._connected = False
+        if writer:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
 
     async def is_connected(self) -> bool:
         """Check if bridge is connected to FreeCAD."""
@@ -132,16 +166,250 @@ class SocketBridge(FreecadBridge):
             self._connected = False
             return False
 
+    def _get_request_streams(
+        self,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Return the current request streams.
+
+        Returns:
+            The active reader and writer streams.
+
+        Raises:
+            ConnectionError: If the bridge is not currently connected.
+        """
+        if self._connected and self._writer is not None and self._reader is not None:
+            if self._reader.at_eof() is True or self._writer.is_closing() is True:
+                self._discard_request_streams(self._writer)
+                raise ConnectionError("Socket connection has closed")
+            return self._reader, self._writer
+
+        msg = "Not connected to socket server"
+        raise ConnectionError(msg)
+
+    async def _reconnect_request_streams(self) -> None:
+        """Replace missing request streams without holding the request lock.
+
+        Raises:
+            ConnectionError: If replacement streams cannot be established.
+        """
+        async with self._reconnect_lock:
+            if (
+                self._connected
+                and self._writer is not None
+                and self._reader is not None
+            ):
+                return
+
+            await self.disconnect()
+            try:
+                await self._open_streams()
+            except Exception as e:
+                await self.disconnect()
+                msg = "Not connected to socket server"
+                raise ConnectionError(msg) from e
+
+    async def _reconnect_before_deadline(self, deadline: float) -> None:
+        """Reconnect while the caller's pre-send deadline remains.
+
+        Args:
+            deadline: Absolute event-loop time by which the request must be sent.
+
+        Raises:
+            TimeoutError: If the deadline expires during reconnection.
+            ConnectionError: If reconnection fails.
+        """
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            raise TimeoutError
+
+        await asyncio.wait_for(
+            self._reconnect_request_streams(),
+            timeout=remaining,
+        )
+
+    async def _send_request_once(
+        self,
+        request: dict[str, Any],
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        response_timeout: float,
+    ) -> Any:
+        """Send one request over streams selected under the request lock.
+
+        Args:
+            request: JSON-RPC request payload.
+            reader: Current response stream.
+            writer: Current request stream.
+            response_timeout: Response timeout in seconds.
+
+        Returns:
+            Result from the JSON-RPC response.
+
+        Raises:
+            ConnectionError: If the server closes the connection or returns
+                invalid JSON.
+            JsonRpcError: If the server returns an error response.
+            TimeoutError: If the response deadline expires.
+        """
+        if self._client_id is None or self._signer is None:
+            raise ConnectionError("A paired client and protected signer are required")
+        try:
+            async with asyncio.timeout(response_timeout):
+                writer.write(b'{"type":"challenge"}\n')
+                await writer.drain()
+                challenge_data = await self._read_response_line(reader, writer)
+                try:
+                    challenge_response = json.loads(challenge_data)
+                    challenge = challenge_response["challenge"]
+                    body = json.dumps(request).encode("utf-8")
+                    message = request_proof_message(
+                        self._client_id, challenge, "socket", body
+                    )
+                except (ValueError, KeyError, TypeError, UnicodeDecodeError) as e:
+                    raise ConnectionError(
+                        "Bridge did not provide a valid challenge"
+                    ) from e
+                proof = await asyncio.to_thread(self._signer, message)
+                if not isinstance(proof, bytes) or not proof or len(proof) > 8192:
+                    raise ConnectionError("Bridge signer returned an invalid proof")
+                envelope = {
+                    "client": self._client_id,
+                    "challenge": challenge,
+                    "body": base64.b64encode(body).decode("ascii"),
+                    "proof": base64.b64encode(proof).decode("ascii"),
+                }
+                writer.write(json.dumps(envelope).encode("utf-8") + b"\n")
+                await writer.drain()
+                response_data = await self._read_response_line(reader, writer)
+        except TimeoutError:
+            self._discard_request_streams(writer)
+            raise
+
+        if not response_data:
+            self._connected = False
+            msg = "Connection closed by server"
+            raise ConnectionError(msg)
+
+        try:
+            response = json.loads(response_data.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            msg = f"Invalid JSON response: {e}"
+            raise ConnectionError(msg) from e
+
+        if "error" in response:
+            error = response["error"]
+            if not isinstance(error, dict):
+                raise ConnectionError("Bridge rejected authentication")
+            raise JsonRpcError(
+                code=error.get("code", -1),
+                message=error.get("message", "Unknown error"),
+                data=error.get("data"),
+            )
+
+        return response.get("result")
+
+    async def _read_response_line(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> bytes:
+        """Read a bounded response and discard an oversized stream."""
+        try:
+            return await reader.readline()
+        except ValueError as e:
+            self._discard_request_streams(writer)
+            raise ConnectionError("Bridge response exceeds the socket limit") from e
+
+    def _discard_request_streams(self, writer: asyncio.StreamWriter) -> None:
+        """Close and clear a failed stream pair.
+
+        Args:
+            writer: Writer associated with the failed request.
+        """
+        writer.close()
+        if self._writer is writer:
+            self._reader = None
+            self._writer = None
+            self._connected = False
+
+    async def _acquire_request_lock(self, deadline: float) -> None:
+        """Acquire the request lock before an absolute send deadline.
+
+        Args:
+            deadline: Absolute event-loop time by which the lock must be acquired.
+
+        Raises:
+            TimeoutError: If the deadline expires while waiting for the lock.
+        """
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            raise TimeoutError
+        await asyncio.wait_for(self._lock.acquire(), timeout=remaining)
+
+    @staticmethod
+    def _connection_failure_message(
+        error: ConnectionError | ConnectionResetError | BrokenPipeError,
+    ) -> str:
+        """Return the public message for a recoverable connection failure."""
+        if isinstance(error, (ConnectionResetError, BrokenPipeError)):
+            return f"Connection lost: {error}"
+        return "Not connected to socket server"
+
+    async def _recover_request_connection(
+        self,
+        error: ConnectionError | ConnectionResetError | BrokenPipeError,
+        deadline: float,
+    ) -> None:
+        """Recover a request connection outside the request lock.
+
+        Args:
+            error: Failure that required reconnection.
+            deadline: Absolute event-loop time by which the request must be sent.
+
+        Raises:
+            ConnectionError: If reconnection is disabled or fails.
+            TimeoutError: If the request deadline expires during reconnection.
+        """
+        message = self._connection_failure_message(error)
+        if not self._auto_reconnect:
+            raise ConnectionError(message) from error
+
+        try:
+            await self._reconnect_before_deadline(deadline)
+        except ConnectionError as e:
+            raise ConnectionError(message) from e
+
+    @staticmethod
+    def _request_deadline_error(request_may_have_been_sent: bool) -> TimeoutError:
+        """Classify a pre-send deadline based on earlier write attempts.
+
+        Args:
+            request_may_have_been_sent: Whether this logical request has already
+                reached a stream write attempt.
+
+        Returns:
+            A conservative timeout when an earlier attempt may have reached
+            FreeCAD, otherwise a definitive request-not-sent timeout.
+        """
+        if request_may_have_been_sent:
+            return TimeoutError()
+        return RequestNotSentError()
+
     async def _send_request(
         self,
         method: str,
         params: dict[str, Any] | None = None,
+        response_timeout: float | None = None,
+        request_timeout: float | None = None,
     ) -> Any:
         """Send a JSON-RPC request and wait for response.
 
         Args:
             method: Method name to call.
             params: Method parameters.
+            response_timeout: Optional response timeout in seconds. The bridge
+                connection timeout applies when omitted.
+            request_timeout: Optional deadline in seconds for acquiring the
+                request lock and sending the request. The bridge connection
+                timeout applies when omitted.
 
         Returns:
             Result from the JSON-RPC response.
@@ -149,12 +417,8 @@ class SocketBridge(FreecadBridge):
         Raises:
             ConnectionError: If not connected.
             JsonRpcError: If server returns an error.
+            TimeoutError: If the request or response deadline expires.
         """
-        if self._writer is None or self._reader is None:
-            msg = "Not connected to socket server"
-            raise ConnectionError(msg)
-
-        # Build JSON-RPC request
         request_id = str(uuid.uuid4())
         request = {
             "jsonrpc": "2.0",
@@ -162,55 +426,50 @@ class SocketBridge(FreecadBridge):
             "method": method,
             "params": params or {},
         }
+        response_deadline = (
+            self._timeout if response_timeout is None else response_timeout
+        )
+        send_deadline = asyncio.get_running_loop().time() + (
+            self._timeout if request_timeout is None else request_timeout
+        )
+        request_may_have_been_sent = False
 
-        async with self._lock:
+        while True:
             try:
-                # Send request
-                request_data = json.dumps(request).encode("utf-8") + b"\n"
-                self._writer.write(request_data)
-                await self._writer.drain()
-
-                # Read response
-                response_data = await asyncio.wait_for(
-                    self._reader.readline(),
-                    timeout=self._timeout,
-                )
-
-                if not response_data:
-                    self._connected = False
-                    msg = "Connection closed by server"
-                    raise ConnectionError(msg)
-
-                response = json.loads(response_data.decode("utf-8"))
-
-                # Check for error
-                if "error" in response:
-                    error = response["error"]
-                    raise JsonRpcError(
-                        code=error.get("code", -1),
-                        message=error.get("message", "Unknown error"),
-                        data=error.get("data"),
-                    )
-
-                return response.get("result")
-
+                await self._acquire_request_lock(send_deadline)
             except TimeoutError as e:
-                msg = "Request timed out"
-                raise ConnectionError(msg) from e
-            except json.JSONDecodeError as e:
-                msg = f"Invalid JSON response: {e}"
-                raise ConnectionError(msg) from e
-            except (ConnectionResetError, BrokenPipeError) as e:
-                self._connected = False
-                if self._auto_reconnect:
-                    # Try to reconnect
+                raise self._request_deadline_error(request_may_have_been_sent) from e
+
+            recovery_error: ConnectionError | ConnectionResetError | BrokenPipeError
+            try:
+                if asyncio.get_running_loop().time() >= send_deadline:
+                    raise self._request_deadline_error(request_may_have_been_sent)
+
+                try:
+                    reader, writer = self._get_request_streams()
+                except ConnectionError as e:
+                    recovery_error = e
+                else:
+                    request_may_have_been_sent = True
                     try:
-                        await self.connect()
-                        return await self._send_request(method, params)
-                    except Exception:
-                        pass
-                msg = f"Connection lost: {e}"
-                raise ConnectionError(msg) from e
+                        return await self._send_request_once(
+                            request,
+                            reader,
+                            writer,
+                            response_deadline,
+                        )
+                    except (ConnectionResetError, BrokenPipeError) as e:
+                        self._discard_request_streams(writer)
+                        raise ConnectionError(
+                            "Connection lost during request; execution may have occurred"
+                        ) from e
+            finally:
+                self._lock.release()
+
+            try:
+                await self._recover_request_connection(recovery_error, send_deadline)
+            except TimeoutError as e:
+                raise self._request_deadline_error(request_may_have_been_sent) from e
 
     async def ping(self) -> float:
         """Ping FreeCAD to check connection and measure latency.
@@ -264,23 +523,43 @@ class SocketBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context via socket.
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The configured
+                bridge default applies when omitted.
 
         Returns:
             ExecutionResult with execution outcome.
         """
+        try:
+            effective_timeout_ms = resolve_execution_timeout_ms(
+                timeout_ms,
+                self._execution_timeout_ms,
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=str(e),
+                execution_time_ms=0,
+                error_type="ValueError",
+            )
+
         start = time.perf_counter()
 
         try:
-            result = await asyncio.wait_for(
-                self._send_request("execute", {"code": code}),
-                timeout=timeout_ms / 1000,
+            result = await self._send_request(
+                "execute",
+                {"code": code, "timeout_ms": effective_timeout_ms},
+                response_timeout=(
+                    effective_timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS
+                ),
+                request_timeout=effective_timeout_ms / 1000,
             )
             elapsed = (time.perf_counter() - start) * 1000
 
@@ -289,7 +568,7 @@ class SocketBridge(FreecadBridge):
                     success=result.get("success", False),
                     result=result.get("result"),
                     stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
+                    stderr=(result.get("stderr") or result.get("error_message", "")),
                     execution_time_ms=elapsed,
                     error_type=result.get("error_type"),
                     error_traceback=result.get("error_traceback"),
@@ -303,14 +582,26 @@ class SocketBridge(FreecadBridge):
                     execution_time_ms=elapsed,
                 )
 
-        except TimeoutError:
+        except TimeoutError as e:
+            if isinstance(e, RequestNotSentError):
+                error_message = (
+                    f"Execution request expired after {effective_timeout_ms}ms "
+                    "before being sent; code was not executed"
+                )
+                error_type = "RequestNotSentError"
+            else:
+                error_message = (
+                    f"Execution response timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                )
+                error_type = "TimeoutError"
             return ExecutionResult(
                 success=False,
                 result=None,
                 stdout="",
-                stderr=f"Execution timed out after {timeout_ms}ms",
-                execution_time_ms=float(timeout_ms),
-                error_type="TimeoutError",
+                stderr=error_message,
+                execution_time_ms=float(effective_timeout_ms),
+                error_type=error_type,
             )
         except JsonRpcError as e:
             elapsed = (time.perf_counter() - start) * 1000
@@ -514,58 +805,23 @@ _result_ = objects
         self,
         obj_name: str,
         doc_name: str | None = None,
+        *,
+        include_properties: bool = True,
+        include_shape: bool = True,
     ) -> ObjectInfo:
         """Get detailed object information."""
-        code = f"""
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
-if doc is None:
-    raise ValueError("No document found")
-
-obj = doc.getObject({obj_name!r})
-if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
-
-props = {{}}
-for prop in obj.PropertiesList:
-    try:
-        val = getattr(obj, prop)
-        if hasattr(val, '__class__') and val.__class__.__module__ != 'builtins':
-            val = str(val)
-        props[prop] = val
-    except Exception:
-        props[prop] = "<unreadable>"
-
-shape_info = None
-if hasattr(obj, "Shape"):
-    shape = obj.Shape
-    shape_info = {{
-        "shape_type": shape.ShapeType,
-        "volume": shape.Volume if hasattr(shape, "Volume") else None,
-        "area": shape.Area if hasattr(shape, "Area") else None,
-        "is_valid": shape.isValid(),
-        "is_closed": shape.isClosed() if hasattr(shape, "isClosed") else False,
-        "vertex_count": len(shape.Vertexes) if hasattr(shape, "Vertexes") else 0,
-        "edge_count": len(shape.Edges) if hasattr(shape, "Edges") else 0,
-        "face_count": len(shape.Faces) if hasattr(shape, "Faces") else 0,
-    }}
-
-_result_ = {{
-    "name": obj.Name,
-    "label": obj.Label,
-    "type_id": obj.TypeId,
-    "properties": props,
-    "shape_info": shape_info,
-    "children": [c.Name for c in obj.OutList] if hasattr(obj, "OutList") else [],
-    "parents": [p.Name for p in obj.InList] if hasattr(obj, "InList") else [],
-    "visibility": obj.ViewObject.Visibility if hasattr(obj, "ViewObject") and obj.ViewObject else True,
-}}
-"""
+        code = build_object_inspection_code(
+            obj_name,
+            doc_name,
+            include_properties=include_properties,
+            include_shape=include_shape,
+        )
         result = await self.execute_python(code)
 
         if result.success and result.result:
             return ObjectInfo(**result.result)
 
-        error_msg = result.error_traceback or "Failed to get object"
+        error_msg = result.error_traceback or result.stderr or "Failed to get object"
         raise ValueError(error_msg)
 
     async def create_object(
@@ -702,8 +958,10 @@ view = FreeCADGui.ActiveDocument.ActiveView
 if view is None:
     raise ValueError("No active view")
 
-# Check view type
-view_type = view.__class__.__name__
+# Check if this is a 3D view (not TechDraw, Spreadsheet, etc.)
+# Note: Use type() instead of __class__ because FreeCAD's View3DInventor
+# has a broken __class__ attribute that returns a dict of methods.
+view_type = type(view).__name__
 if view_type not in ["View3DInventor", "View3DInventorPy"]:
     raise ValueError(f"Cannot capture screenshot from {{view_type}} view")
 

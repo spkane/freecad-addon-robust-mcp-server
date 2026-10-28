@@ -44,6 +44,13 @@ class TestQualitySyntax:
         result = just.dry_run(command)
         assert result.success, f"Syntax error in '{command}': {result.stderr}"
 
+    def test_safety_scan_uses_isolated_environment(self, just: JustRunner) -> None:
+        """Safety should not share Authlib dependencies with the MCP runtime."""
+        result = just.dry_run("quality::security")
+
+        assert result.success, result.stderr
+        assert "uvx --python 3.11 --from safety==3.8.1 safety scan" in result.output
+
 
 class TestQualityRuntime:
     """Runtime tests for quality commands."""

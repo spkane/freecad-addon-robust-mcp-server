@@ -45,6 +45,28 @@ class TestGetInstanceId:
         assert id1 == id2
 
 
+class TestGetPackageVersion:
+    """Tests for package version metadata."""
+
+    def test_returns_distribution_version(self) -> None:
+        """Installed distribution metadata should supply the server version."""
+        import freecad_mcp.server as server_module
+
+        with patch.object(server_module, "distribution_version", return_value="0.7.0"):
+            assert server_module.get_package_version() == "0.7.0"
+
+    def test_returns_source_fallback_without_metadata(self) -> None:
+        """A source checkout without metadata should still report a version."""
+        import freecad_mcp.server as server_module
+
+        with patch.object(
+            server_module,
+            "distribution_version",
+            side_effect=server_module.PackageNotFoundError,
+        ):
+            assert server_module.get_package_version() == "0.0.0.dev0+unknown"
+
+
 class TestGetBridge:
     """Tests for get_bridge function."""
 
@@ -97,6 +119,7 @@ class TestLifespan:
         mock_config = MagicMock()
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.freecad_path = None
+        mock_config.timeout_ms = 45000
 
         mock_embedded_bridge = AsyncMock()
         mock_embedded_bridge.get_freecad_version = AsyncMock(
@@ -114,7 +137,10 @@ class TestLifespan:
 
             async with server_module.lifespan(mock_server):
                 # Bridge should be initialized
-                mock_embedded_class.assert_called_once_with(freecad_path=None)
+                mock_embedded_class.assert_called_once_with(
+                    freecad_path=None,
+                    execution_timeout_ms=45000,
+                )
                 mock_embedded_bridge.connect.assert_called_once()
 
             # After exiting, disconnect should be called
@@ -129,6 +155,8 @@ class TestLifespan:
         mock_config.mode = FreecadMode.XMLRPC
         mock_config.socket_host = "localhost"
         mock_config.xmlrpc_port = 9875
+        mock_config.timeout_ms = 45000
+        signer = MagicMock()
 
         mock_xmlrpc_bridge = AsyncMock()
         mock_xmlrpc_bridge.get_freecad_version = AsyncMock(
@@ -137,6 +165,11 @@ class TestLifespan:
 
         with (
             patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module,
+                "credentials_from_config",
+                return_value=("paired", signer),
+            ),
             patch(
                 "freecad_mcp.bridge.xmlrpc.XmlRpcBridge",
                 return_value=mock_xmlrpc_bridge,
@@ -145,7 +178,13 @@ class TestLifespan:
             mock_server = MagicMock()
 
             async with server_module.lifespan(mock_server):
-                mock_xmlrpc_class.assert_called_once_with(host="localhost", port=9875)
+                mock_xmlrpc_class.assert_called_once_with(
+                    host="localhost",
+                    port=9875,
+                    execution_timeout_ms=45000,
+                    client_id="paired",
+                    signer=signer,
+                )
                 mock_xmlrpc_bridge.connect.assert_called_once()
 
             mock_xmlrpc_bridge.disconnect.assert_called_once()
@@ -159,6 +198,9 @@ class TestLifespan:
         mock_config.mode = FreecadMode.SOCKET
         mock_config.socket_host = "localhost"
         mock_config.socket_port = 9876
+        mock_config.timeout_ms = 45000
+
+        signer = MagicMock()
 
         mock_socket_bridge = AsyncMock()
         mock_socket_bridge.get_freecad_version = AsyncMock(
@@ -167,6 +209,11 @@ class TestLifespan:
 
         with (
             patch.object(server_module, "get_config", return_value=mock_config),
+            patch.object(
+                server_module,
+                "credentials_from_config",
+                return_value=("paired", signer),
+            ),
             patch(
                 "freecad_mcp.bridge.socket.SocketBridge",
                 return_value=mock_socket_bridge,
@@ -175,7 +222,13 @@ class TestLifespan:
             mock_server = MagicMock()
 
             async with server_module.lifespan(mock_server):
-                mock_socket_class.assert_called_once_with(host="localhost", port=9876)
+                mock_socket_class.assert_called_once_with(
+                    host="localhost",
+                    port=9876,
+                    execution_timeout_ms=45000,
+                    client_id="paired",
+                    signer=signer,
+                )
                 mock_socket_bridge.connect.assert_called_once()
 
             mock_socket_bridge.disconnect.assert_called_once()
@@ -188,6 +241,7 @@ class TestLifespan:
         mock_config = MagicMock()
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.freecad_path = None
+        mock_config.timeout_ms = 30000
 
         mock_bridge = AsyncMock()
         mock_bridge.get_freecad_version = AsyncMock(
@@ -213,7 +267,7 @@ class TestLifespan:
 class TestRegisterAllComponents:
     """Tests for register_all_components function."""
 
-    def test_registers_tools(self):
+    def test_registers_tools(self) -> None:
         """Should register all tool categories."""
         from freecad_mcp.server import mcp
 
@@ -221,12 +275,35 @@ class TestRegisterAllComponents:
         # that the mcp instance exists and has tools registered
         assert mcp is not None
         assert mcp.name == "freecad-mcp"
+        assert mcp.version
+
+    @pytest.mark.asyncio
+    @pytest.mark.timeout(3)
+    async def test_first_tool_call_completes(self) -> None:
+        """The first registered tool call should complete without hanging."""
+        import freecad_mcp.server as server_module
+
+        original_bridge = server_module._bridge
+        mock_bridge = AsyncMock()
+        mock_bridge.get_freecad_version.return_value = {
+            "version": "1.0.2",
+            "gui_available": True,
+        }
+
+        try:
+            server_module._bridge = mock_bridge
+            result = await server_module.mcp.call_tool("get_freecad_version", {})
+
+            assert result is not None
+            mock_bridge.get_freecad_version.assert_awaited_once_with()
+        finally:
+            server_module._bridge = original_bridge
 
 
 class TestMain:
     """Tests for main function."""
 
-    def test_main_prints_instance_id(self):
+    def test_main_prints_instance_id(self) -> None:
         """Main should print instance ID on startup when FREECAD_MCP_TESTING is set."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -260,6 +337,22 @@ class TestMain:
             )
             assert instance_id_call.kwargs.get("file") == sys.stderr
 
+    def test_main_prints_package_version(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The version command should report the installed distribution."""
+        import freecad_mcp.server as server_module
+
+        with (
+            patch.object(sys, "argv", ["freecad-mcp", "--version"]),
+            patch.object(server_module, "get_package_version", return_value="0.7.0"),
+            pytest.raises(SystemExit) as exit_info,
+        ):
+            server_module.main()
+
+        assert exit_info.value.code == 0
+        assert "freecad-mcp 0.7.0" in capsys.readouterr().out
+
     def test_main_no_instance_id_without_testing_env(self):
         """Main should NOT print instance ID when FREECAD_MCP_TESTING is unset."""
         import freecad_mcp.server as server_module
@@ -291,7 +384,7 @@ class TestMain:
             print_calls = [str(call) for call in mock_print.call_args_list]
             assert not any("FREECAD_MCP_INSTANCE_ID=" in call for call in print_calls)
 
-    def test_main_http_transport(self):
+    def test_main_http_transport(self) -> None:
         """Main should start HTTP transport when configured."""
         import freecad_mcp.server as server_module
         from freecad_mcp.config import TransportType
@@ -300,21 +393,49 @@ class TestMain:
         mock_config.log_level = "INFO"
         mock_config.mode = FreecadMode.EMBEDDED
         mock_config.transport = TransportType.HTTP
+        mock_config.http_host = "127.0.0.1"
         mock_config.http_port = 8080
+        mock_config.http_allowed_hosts = ["127.0.0.1:*"]
+        mock_config.http_allowed_origins = ["http://127.0.0.1:*"]
+        mock_config.http_api_key.get_secret_value.return_value = "a" * 40
 
         with (
             patch.object(sys, "argv", DEFAULT_ARGV),
             patch.object(server_module, "get_config", return_value=mock_config),
-            patch.object(server_module.mcp, "run") as mock_run,
+            patch.object(server_module.mcp, "streamable_http_app") as mock_app,
+            patch("uvicorn.run") as mock_run,
             patch("builtins.print"),
         ):
             server_module.main()
 
-            # Should call run with HTTP transport settings
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args.kwargs
-            assert call_kwargs.get("transport") == "streamable-http"
+            assert call_kwargs.get("host") == "127.0.0.1"
             assert call_kwargs.get("port") == 8080
+            security = mock_app.call_args.kwargs.get("transport_security")
+            assert security is not None
+            assert security.enable_dns_rebinding_protection is True
+            assert security.allowed_hosts == ["127.0.0.1:*"]
+            assert security.allowed_origins == ["http://127.0.0.1:*"]
+
+    def test_main_http_requires_api_key(self) -> None:
+        """HTTP startup must fail before creating an unprotected listener."""
+        import freecad_mcp.server as server_module
+        from freecad_mcp.config import TransportType
+
+        config = MagicMock()
+        config.log_level = "INFO"
+        config.mode = FreecadMode.EMBEDDED
+        config.transport = TransportType.HTTP
+        config.http_api_key = None
+        with (
+            patch.object(sys, "argv", DEFAULT_ARGV),
+            patch.object(server_module, "get_config", return_value=config),
+            patch("uvicorn.run") as run,
+            pytest.raises(RuntimeError, match="FREECAD_HTTP_API_KEY"),
+        ):
+            server_module.main()
+        run.assert_not_called()
 
     def test_main_stdio_transport(self):
         """Main should start stdio transport by default."""
@@ -365,7 +486,7 @@ class TestStdioProtocolCleanliness:
 
         # Start the MCP server process
         # Use a non-existent FreeCAD host so it won't actually connect
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             [
                 sys.executable,
                 "-m",
@@ -457,7 +578,7 @@ class TestStdioProtocolCleanliness:
         import subprocess
         import time
 
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             [
                 sys.executable,
                 "-m",

@@ -45,7 +45,7 @@ def register_export_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) ->
     """Register export-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance (Any due to lack of stubs).
+        mcp: The MCPServer instance (Any to keep registration modules decoupled).
         get_bridge: Async function returning the active bridge connection.
     """
 

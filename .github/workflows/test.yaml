@@ -36,13 +36,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
 
       - name: Cache uv dependencies
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -56,22 +56,38 @@ jobs:
       - name: Run type checking
         run: uv run mypy src/
 
+  windows-credential-test:
+    name: Windows Credential Manager
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Verify Credential Manager pairing
+        run: uv run pytest tests/unit/test_windows_bridge_credential_store.py -v --tb=short
+
   integration-test:
     name: Integration Tests (FreeCAD Headless)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup FreeCAD
         uses: ./.github/actions/setup-freecad
 
       - name: Install mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
 
       - name: Cache uv dependencies
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -81,6 +97,7 @@ jobs:
 
       - name: Start FreeCAD headless with MCP bridge
         run: |
+          uv run freecad-mcp --pair-bridge
           # Start FreeCAD headless with MCP bridge in background
           setsid freecadcmd freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
@@ -92,7 +109,7 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
               if curl -s --connect-timeout 1 http://localhost:9875 > /dev/null 2>&1; then
                   # Try to ping the bridge
-                  if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+                  if uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())" 2>/dev/null | grep -q "pong"; then
                       echo "FreeCAD MCP bridge is ready!"
                       break
                   fi

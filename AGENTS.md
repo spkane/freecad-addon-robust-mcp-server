@@ -98,13 +98,17 @@ This project uses [Safety CLI](https://safetycli.com/) for dependency vulnerabil
 
 ```bash
 # Register for a free account (interactive)
-uv run safety auth
+uvx --python 3.11 --from safety==3.8.1 safety auth
 
 # Or login if you already have an account
-uv run safety auth --login
+uvx --python 3.11 --from safety==3.8.1 safety auth login
 ```
 
-**Note:** The Safety CLI authentication is stored locally and only needs to be done once per machine. If you skip this step, `just quality::check` will show a clear error message with instructions. The `safety` pre-commit hook will also fail with an authentication prompt.
+**Note:** Safety runs in an isolated `uvx` environment to avoid dependency
+conflicts with the MCP runtime. Authentication is stored locally and only needs
+to be done once per machine. If you skip this step, `just quality::check` will
+show a clear error message with instructions. The `safety` pre-commit hook will
+also fail with an authentication prompt.
 
 **CI/CD:** Safety runs in CI using the `SAFETY_API_KEY` repository secret. The API key is passed via environment variable to the pre-commit hook.
 
@@ -1069,10 +1073,9 @@ If you put auto-start logic in `Init.py`, it will only run when the user manuall
 
 ```python
 # Module-level code - runs at FreeCAD GUI startup
-try:
-    from PySide2 import QtCore
-except ImportError:
-    from PySide6 import QtCore
+from freecad_mcp_bridge.qt_compat import load_qt_core
+
+QtCore = load_qt_core()
 
 def _auto_start_bridge() -> None:
     """Auto-start bridge after GUI is fully ready."""
@@ -1539,7 +1542,7 @@ This project uses component-specific release workflows along with CI/CD pipeline
 | Workflow          | Trigger                       | Purpose                                                   |
 | ----------------- | ----------------------------- | --------------------------------------------------------- |
 | `test.yaml`       | Push, PR                      | Runs unit tests and integration tests on Ubuntu and macOS |
-| `test-gui.yaml`   | Push, PR                      | Runs GUI integration tests using Docker + Xvfb            |
+| `test-gui.yaml`   | Push, PR, scheduled           | Runs the Qt5, Qt6 stable, and Qt6 canary GUI matrix       |
 | `pre-commit.yaml` | Push, PR                      | Runs all pre-commit hooks for code quality                |
 | `docker.yaml`     | Push, PR                      | Builds Docker image to verify Dockerfile works            |
 | `codeql.yaml`     | Push, PR, scheduled           | GitHub CodeQL security analysis                           |
@@ -1557,15 +1560,24 @@ You do NOT need to manually start FreeCAD when the CI workflow runs. The workflo
 
 **IMPORTANT - test-gui.yaml Workflow**: The `test-gui.yaml` workflow runs **GUI integration tests** using Docker and Xvfb. It:
 
-1. Builds the `tests/ci-test/Dockerfile.gui-test` image (with caching)
-2. Starts Xvfb (virtual framebuffer) and openbox (window manager)
-3. Starts FreeCAD GUI mode with the MCP bridge
-4. Uses xdotool to send synthetic mouse/keyboard events (helps GUI initialization)
-5. Verifies `FreeCAD.GuiUp == True` before running tests
-6. Runs `tests/integration/test_gui_mode.py` for GUI-specific tests
-7. Collects artifacts (screenshots, logs, test results) for debugging
+1. Resolves and verifies the official FreeCAD AppImage for each matrix lane
+2. Builds the `tests/ci-test/Dockerfile.gui-test` image (with per-lane caching)
+3. Starts Xvfb (virtual framebuffer) and openbox (window manager)
+4. Starts FreeCAD GUI mode with the MCP bridge
+5. Uses xdotool to send synthetic mouse/keyboard events (helps GUI initialization)
+6. Verifies `FreeCAD.GuiUp == True` before running tests
+7. Verifies the selected PySide binding and Qt major version
+8. Runs the integration suite, including all GUI-specific tests
+9. Collects artifacts (screenshots, logs, test results) for debugging
 
-This workflow tests GUI-only features like screenshots, visibility, display modes, and camera operations that cannot be tested in headless mode.
+The required matrix lanes use FreeCAD 1.0.2 with Qt5/PySide2 and the latest
+stable FreeCAD release with Qt6/PySide6. A third lane follows the latest weekly
+Qt6/PySide6 snapshot. The weekly lane runs on pushes, pull requests, manual
+dispatches, and the weekly schedule; failures produce a warning and job summary
+but do not block the workflow.
+
+This workflow tests GUI-only features like screenshots, visibility, display
+modes, and camera operations that cannot be tested in headless mode.
 
 ### Release Workflows
 

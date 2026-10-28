@@ -17,7 +17,7 @@ def register_partdesign_tools(
     """Register PartDesign-related tools with the Robust MCP Server.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
+        mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
     """
 
@@ -315,7 +315,17 @@ try:
     pad = body.newObject("PartDesign::Pad", pad_name)
     pad.Profile = sketch
     pad.Length = {length}
-    pad.Symmetric = {symmetric}
+    _symmetric = {symmetric}
+    if "SideType" in pad.PropertiesList:
+        pad.SideType = "Symmetric" if _symmetric else "One side"
+    elif "Midplane" in pad.PropertiesList:
+        pad.Midplane = _symmetric
+    elif "Symmetric" in pad.PropertiesList:
+        pad.Symmetric = _symmetric
+    else:
+        raise AttributeError(
+            "PartDesign::Pad exposes no supported symmetric extrusion property"
+        )
     pad.Reversed = {reversed}
 
     doc.recompute()
@@ -342,6 +352,7 @@ _result_ = {{
         type: str = "Length",
         name: str | None = None,
         doc_name: str | None = None,
+        reversed: bool = False,
     ) -> dict[str, Any]:
         """Create a Pocket (cut extrusion) from a sketch.
 
@@ -351,12 +362,21 @@ _result_ = {{
             type: Pocket type: "Length", "ThroughAll", "UpToFirst", "UpToFace".
             name: Pocket feature name. Auto-generated if None.
             doc_name: Document containing the sketch. Uses active document if None.
+            reversed: Flip the cut direction. Use True when the default
+                direction points away from the material and removes nothing.
+                Defaults to False. Kept last so existing positional calls that
+                pass name before this option keep working.
 
         Returns:
             Dictionary with created pocket information:
                 - name: Pocket name
                 - label: Pocket label
                 - type_id: Object type
+                - volume_before: Body volume before the pocket
+                - volume_after: Body volume after the pocket
+                - volume_removed: Material removed (volume_before - volume_after)
+                - warning: Present only when the pocket removed no material, so a
+                    caller can tell a no-op cut from a real one
         """
         bridge = await get_bridge()
 
@@ -377,16 +397,25 @@ for obj in doc.Objects:
 if body is None:
     raise ValueError("Sketch must be inside a PartDesign Body for Pocket operation")
 
-# Wrap in transaction for undo support
+# Wrap in transaction for undo support. The baseline recompute and read happen
+# inside the transaction so a failure there aborts cleanly instead of leaving a
+# half-applied recompute behind, and the baseline still reflects any pending
+# changes to the body or its dependencies.
 doc.openTransaction("Pocket Sketch")
 try:
+    doc.recompute()
+    volume_before = body.Shape.Volume if hasattr(body, "Shape") else 0.0
+
     pocket_name = {name!r} or "Pocket"
     pocket = body.newObject("PartDesign::Pocket", pocket_name)
     pocket.Profile = sketch
     pocket.Length = {length}
     pocket.Type = {type!r}
+    pocket.Reversed = {reversed}
 
     doc.recompute()
+    volume_after = body.Shape.Volume if hasattr(body, "Shape") else 0.0
+    volume_removed = volume_before - volume_after
     doc.commitTransaction()
 except Exception:
     doc.abortTransaction()
@@ -396,7 +425,16 @@ _result_ = {{
     "name": pocket.Name,
     "label": pocket.Label,
     "type_id": pocket.TypeId,
+    "volume_before": volume_before,
+    "volume_after": volume_after,
+    "volume_removed": volume_removed,
 }}
+if abs(volume_removed) < 1e-6:
+    _result_["warning"] = (
+        "Pocket removed no material. The cut direction likely points away from "
+        "the solid. Try reversed=True, or place the profile sketch on the face "
+        "where the material is."
+    )
 """
         result = await bridge.execute_python(code)
         if result.success:
@@ -633,14 +671,34 @@ try:
     rev = body.newObject("PartDesign::Revolution", rev_name)
     rev.Profile = sketch
     rev.Angle = {angle}
-    rev.Symmetric = {symmetric}
+    _symmetric = {symmetric}
+    if "SideType" in rev.PropertiesList:
+        rev.SideType = "Symmetric" if _symmetric else "One side"
+    elif "Midplane" in rev.PropertiesList:
+        rev.Midplane = _symmetric
+    elif "Symmetric" in rev.PropertiesList:
+        rev.Symmetric = _symmetric
+    else:
+        raise AttributeError(
+            "PartDesign::Revolution exposes no supported symmetric extrusion property"
+        )
     rev.Reversed = {reversed}
 
     # Set axis reference
     axis_name = {axis!r}
     if axis_name.startswith("Base_"):
-        axis_ref = axis_name.replace("Base_", "")
-        rev.ReferenceAxis = (body.Origin.getObject(f"{{axis_ref}}_Axis"), [""])
+        axis_role = f"{{axis_name.removeprefix('Base_')}}_Axis"
+        axis_object = next(
+            (
+                feature
+                for feature in body.Origin.OriginFeatures
+                if getattr(feature, "Role", None) == axis_role
+            ),
+            None,
+        )
+        if axis_object is None:
+            raise ValueError(f"Body origin has no axis with role {{axis_role!r}}")
+        rev.ReferenceAxis = (axis_object, [""])
     elif axis_name.startswith("Sketch_"):
         if axis_name == "Sketch_V":
             rev.ReferenceAxis = (sketch, ["V_Axis"])
@@ -724,14 +782,34 @@ try:
     groove = body.newObject("PartDesign::Groove", groove_name)
     groove.Profile = sketch
     groove.Angle = {angle}
-    groove.Symmetric = {symmetric}
+    _symmetric = {symmetric}
+    if "SideType" in groove.PropertiesList:
+        groove.SideType = "Symmetric" if _symmetric else "One side"
+    elif "Midplane" in groove.PropertiesList:
+        groove.Midplane = _symmetric
+    elif "Symmetric" in groove.PropertiesList:
+        groove.Symmetric = _symmetric
+    else:
+        raise AttributeError(
+            "PartDesign::Groove exposes no supported symmetric extrusion property"
+        )
     groove.Reversed = {reversed}
 
     # Set axis reference
     axis_name = {axis!r}
     if axis_name.startswith("Base_"):
-        axis_ref = axis_name.replace("Base_", "")
-        groove.ReferenceAxis = (body.Origin.getObject(f"{{axis_ref}}_Axis"), [""])
+        axis_role = f"{{axis_name.removeprefix('Base_')}}_Axis"
+        axis_object = next(
+            (
+                feature
+                for feature in body.Origin.OriginFeatures
+                if getattr(feature, "Role", None) == axis_role
+            ),
+            None,
+        )
+        if axis_object is None:
+            raise ValueError(f"Body origin has no axis with role {{axis_role!r}}")
+        groove.ReferenceAxis = (axis_object, [""])
     elif axis_name.startswith("Sketch_"):
         if axis_name == "Sketch_V":
             groove.ReferenceAxis = (sketch, ["V_Axis"])
@@ -2785,11 +2863,14 @@ doc.openTransaction("Add External Geometry")
 try:
     sketch.addExternal({object_name!r}, {element!r})
     doc.recompute()
+    external_geometry_count = sum(
+        len(subelements) for _, subelements in sketch.ExternalGeometry
+    )
     doc.commitTransaction()
 
     _result_ = {{
         "success": True,
-        "external_geometry_count": sketch.ExternalGeometryCount,
+        "external_geometry_count": external_geometry_count,
     }}
 except Exception:
     doc.abortTransaction()
@@ -2920,12 +3001,15 @@ sketch = doc.getObject({sketch_name!r})
 if sketch is None:
     raise ValueError(f"Sketch not found: {sketch_name!r}")
 
+external_geometry_count = sum(
+    len(subelements) for _, subelements in sketch.ExternalGeometry
+)
 _result_ = {{
     "name": sketch.Name,
     "label": sketch.Label,
     "geometry_count": sketch.GeometryCount,
     "constraint_count": sketch.ConstraintCount,
-    "external_geometry_count": sketch.ExternalGeometryCount,
+    "external_geometry_count": external_geometry_count,
     "fully_constrained": sketch.FullyConstrained if hasattr(sketch, "FullyConstrained") else None,
     "dof": sketch.solve() if hasattr(sketch, "solve") else None,
 }}

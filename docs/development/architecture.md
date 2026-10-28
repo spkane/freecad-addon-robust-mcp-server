@@ -14,7 +14,7 @@ The FreeCAD Robust MCP Server follows a **Bridge with Adapter** pattern:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         MCP Server Layer                                 │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                     FastMCP Application                             │ │
+│  │                    MCPServer Application                            │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐           │ │
 │  │  │  Tools   │  │ Resources│  │  Prompts │  │ Lifecycle│           │ │
 │  │  │ (150+)   │  │          │  │          │  │ Manager  │           │ │
@@ -95,7 +95,7 @@ class FreecadBridge(ABC):
 
     @abstractmethod
     async def execute_python(
-        self, code: str, timeout_ms: int = 30000
+        self, code: str, timeout_ms: int | None = None
     ) -> ExecutionResult: ...
 ```
 
@@ -236,7 +236,7 @@ Configuration via environment variables:
 | `FREECAD_SOCKET_HOST` | `localhost` | Socket/XML-RPC host         |
 | `FREECAD_SOCKET_PORT` | `9876`      | JSON-RPC socket port        |
 | `FREECAD_XMLRPC_PORT` | `9875`      | XML-RPC port                |
-| `FREECAD_TIMEOUT_MS`  | `30000`     | Execution timeout           |
+| `FREECAD_TIMEOUT_MS`  | `30000`     | Default execution timeout   |
 
 ---
 

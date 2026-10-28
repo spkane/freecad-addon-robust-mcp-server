@@ -33,9 +33,12 @@ To exclude standalone tests from a normal integration run::
 
 from __future__ import annotations
 
+import json
 import os
 import platform
+import secrets
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -81,24 +84,25 @@ def _is_freecad_process_running() -> bool:
         return False
 
 
-def _is_bridge_running(host: str = "localhost", port: int = 9875) -> bool:
-    """Check if an MCP bridge is already running on the given port.
+def _is_port_occupied(host: str = "127.0.0.1", port: int = 9875) -> bool:
+    """Check whether a bridge port is unavailable for binding.
 
     Args:
         host: Bridge hostname.
-        port: Bridge XML-RPC port.
+        port: Bridge port.
 
     Returns:
-        True if a bridge is responding, False otherwise.
+        True if binding fails for any reason, False otherwise. Failing closed
+        also protects listeners that cannot accept another connection.
     """
-    import xmlrpc.client
-
     try:
-        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
-        result = proxy.ping()
-        return isinstance(result, dict) and bool(result.get("pong"))
-    except Exception:
-        return False
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            if os.name == "posix":
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind((host, port))
+    except OSError:
+        return True
+    return False
 
 
 def _find_freecad_binary() -> str | None:
@@ -156,10 +160,10 @@ def _wait_for_bridge(
     Returns:
         True if bridge is available, False if timeout.
     """
-    import xmlrpc.client
-
     startTime = time.time()
-    proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+    from tests.integration.auth_support import integration_proxy
+
+    proxy = integration_proxy(host, port)
 
     while time.time() - startTime < timeout:
         try:
@@ -185,10 +189,10 @@ def _is_gui_available(host: str = "localhost", port: int = 9875) -> bool:
     Returns:
         True if FreeCAD.GuiUp is True, False on any error or if headless.
     """
-    import xmlrpc.client
+    from tests.integration.auth_support import integration_proxy
 
     try:
-        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+        proxy = integration_proxy(host, port)
         result = proxy.execute(
             "import FreeCAD\n_result_ = {'gui_up': bool(FreeCAD.GuiUp)}"
         )
@@ -211,10 +215,10 @@ def _send_quit_command(host: str = "localhost", port: int = 9875) -> bool:
     Returns:
         True if command was sent successfully.
     """
-    import xmlrpc.client
+    from tests.integration.auth_support import integration_proxy
 
     try:
-        proxy = xmlrpc.client.ServerProxy(f"http://{host}:{port}", allow_none=True)
+        proxy = integration_proxy(host, port)
         # Use FreeCADGui.getMainWindow().close() for a clean shutdown
         # This triggers the normal Qt close event which will run atexit handlers
         # Guard FreeCADGui import behind GuiUp check
@@ -285,10 +289,10 @@ class TestShutdownCrash:
                 "A FreeCAD process is already running. "
                 "These tests must run without an existing FreeCAD instance."
             )
-        if _is_bridge_running():
+        if _is_port_occupied(port=9875) or _is_port_occupied(port=9876):
             pytest.skip(
-                "MCP bridge already running on port 9875. "
-                "These tests must run without an existing FreeCAD/bridge instance."
+                "A bridge port is already occupied. "
+                "These tests must run without an existing listener on ports 9875 or 9876."
             )
 
     def test_gui_shutdown_no_crash(
@@ -375,6 +379,51 @@ class TestShutdownCrash:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
+
+    def test_gui_workbench_autostart_and_clean_shutdown(
+        self, freecad_binary: str, tmp_path: Path
+    ) -> None:
+        """The real GUI starts the paired workbench and exits without a crash."""
+        root = Path(__file__).resolve().parents[2]
+        macro = root / "tests" / "fixtures" / "freecad_gui_autostart.FCMacro"
+        result_path = tmp_path / "result.json"
+        ports = []
+        for _ in range(2):
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                ports.append(probe.getsockname()[1])
+        env = {
+            **os.environ,
+            "HOME": str(tmp_path),
+            "FREECAD_MCP_TESTING": "1",
+            "FREECAD_BRIDGE_CLIENT_ID": secrets.token_hex(16),
+            "FREECAD_BRIDGE_SECRET": secrets.token_hex(32),
+            "MCP_TEST_REPO": str(root),
+            "MCP_TEST_RESULT": str(result_path),
+            "MCP_TEST_XMLRPC_PORT": str(ports[0]),
+            "MCP_TEST_SOCKET_PORT": str(ports[1]),
+        }
+        result = subprocess.run(  # noqa: S603 - discovered FreeCAD binary
+            [
+                freecad_binary,
+                "--user-cfg",
+                str(tmp_path / "user.cfg"),
+                "--system-cfg",
+                str(tmp_path / "system.cfg"),
+                str(macro),
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result_path.exists(), result.stdout + result.stderr
+        assert json.loads(result_path.read_text(encoding="utf-8")) == {
+            "started": True,
+            "listening": True,
+        }
 
     def test_sigterm_shutdown_no_crash(
         self,

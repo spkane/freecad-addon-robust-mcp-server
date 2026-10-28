@@ -136,12 +136,20 @@ The workbench has its own preferences that control how the bridge runs inside Fr
 - **Edit → Preferences → Robust MCP Bridge** (in FreeCAD's main Preferences dialog)
 - **Robust MCP Bridge → MCP Bridge Preferences...** (from the workbench menu)
 
-| Setting               | Description                                  | Default  |
-| --------------------- | -------------------------------------------- | -------- |
-| Auto-start bridge     | Start bridge automatically on FreeCAD launch | Disabled |
-| Show status indicator | Display status in FreeCAD's status bar       | Enabled  |
-| XML-RPC Port          | Port for XML-RPC connections                 | 9875     |
-| Socket Port           | Port for JSON-RPC socket connections         | 9876     |
+| Setting                          | Description                                       | Default  |
+| -------------------------------- | ------------------------------------------------- | -------- |
+| Auto-start bridge (GUI)          | Start the bridge when the FreeCAD GUI launches    | Disabled |
+| Auto-start in console FreeCAD    | Start the bridge in long-running console sessions | Disabled |
+| Also auto-start in batch runs    | Allow console auto-start for scripts and commands | Disabled |
+| Show status indicator            | Display status in FreeCAD's status bar            | Enabled  |
+| XML-RPC Port                     | Port for XML-RPC connections                      | 9875     |
+| Socket Port                      | Port for JSON-RPC socket connections              | 9876     |
+
+Console and GUI auto-start are independent. Batch auto-start additionally
+requires console auto-start, and can cause short-lived jobs to compete for the
+same ports. Unknown command-line options are treated as batch invocations.
+Pair the bridge before enabling either auto-start option; see
+[Configuration](../getting-started/configuration.md).
 
 !!! note "Port Configuration"
     If you change the ports in the workbench preferences while the bridge is running, it will automatically restart with the new configuration.
@@ -217,7 +225,7 @@ Example MCP client configuration with custom ports:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The workbench uses a **queue-based thread safety system** to ensure FreeCAD operations run on the main GUI thread, preventing crashes from thread-unsafe operations.
+The workbench uses a **queue-based thread safety system** to ensure FreeCAD operations run on the main GUI thread, preventing crashes from thread-unsafe operations. It selects the PySide binding that matches FreeCAD's active Qt major version. When the host version cannot be detected, it prefers PySide6 and falls back to PySide2. It never falls back across a known Qt major version because Qt 5 and Qt 6 cannot safely share a process. If a GUI session cannot load its matching Qt binding, the bridge refuses to start instead of moving GUI work to a background thread. Genuine headless sessions continue to use the background queue processor.
 
 ---
 
@@ -233,6 +241,8 @@ The workbench uses a **queue-based thread safety system** to ensure FreeCAD oper
 1. Ensure no other process is using ports 9875/9876
 1. Try restarting FreeCAD
 
+If the console reports that FreeCAD's matching PySide binding could not be loaded, verify that the FreeCAD installation includes its expected Qt binding. This is a FreeCAD runtime problem; do not install PySide separately with `pip`, because its Qt and Python ABI may not match FreeCAD.
+
 ### Connection Refused from Robust MCP Server
 
 **Problem:** Robust MCP Server reports "Connection refused"
@@ -241,7 +251,14 @@ The workbench uses a **queue-based thread safety system** to ensure FreeCAD oper
 
 1. Verify the bridge is running (green status indicator)
 1. Check that ports match between workbench and Robust MCP Server config
-1. If using Docker, ensure you're using `host.docker.internal` as the host
+1. On Docker Desktop, verify that `FREECAD_SOCKET_HOST` is set to
+   `host.docker.internal`
+1. On Docker Engine for Linux, run the MCP server directly on the host; its
+   container gateway cannot reach the bridge's loopback-only listener
+
+Do not rebind the bridge to `0.0.0.0` to resolve this error. The bridge accepts
+unauthenticated Python execution, so non-loopback access is unsafe until
+protected remote transport is implemented.
 
 ### Headless Mode Hangs
 

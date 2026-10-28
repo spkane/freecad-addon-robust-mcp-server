@@ -18,7 +18,7 @@ def register_spreadsheet_tools(
     dimensions via expressions.
 
     Args:
-        mcp: The FastMCP (Robust MCP Server) instance.
+        mcp: The MCPServer instance.
         get_bridge: Async function to get the active bridge.
 
     Returns:

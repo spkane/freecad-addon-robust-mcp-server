@@ -19,11 +19,17 @@ Attribution:
 """
 
 import asyncio
+import base64
+import http.client
 import time
 import xmlrpc.client
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from freecad_mcp.bridge.authentication import request_proof_message
 from freecad_mcp.bridge.base import (
+    DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
     DocumentInfo,
     ExecutionResult,
@@ -33,11 +39,100 @@ from freecad_mcp.bridge.base import (
     ScreenshotResult,
     ViewAngle,
     WorkbenchInfo,
+    resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 
 DEFAULT_XMLRPC_HOST = "localhost"
 DEFAULT_XMLRPC_PORT = 9875
 DEFAULT_TIMEOUT = 30.0
+EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
+LEGACY_EXECUTE_ARITY_FAULT = (
+    "<class 'TypeError'>:FreecadMCPPlugin._xmlrpc_execute() takes 2 "
+    "positional arguments but 3 were given"
+)
+
+
+class AuthenticatedXmlRpcTransport(xmlrpc.client.Transport):
+    """Authenticate exact XML request bytes without automatic request retries."""
+
+    def __init__(
+        self, client_id: str, signer: Callable[[bytes], bytes], timeout: float
+    ) -> None:
+        """Initialize a transport with a paired identity and protected signer."""
+        super().__init__()
+        self._client_id = client_id
+        self._signer = signer
+        self._timeout = timeout
+
+    def request(
+        self,
+        host: str | tuple[str, dict[str, str]],
+        handler: str,
+        request_body: Any,
+        verbose: bool = False,
+    ) -> Any:
+        """Issue one challenge and send exactly one authenticated XML request."""
+        if isinstance(host, tuple):
+            host = host[0]
+        request_body = bytes(request_body)
+        connection = http.client.HTTPConnection(host, timeout=self._timeout)
+        self.verbose = verbose
+        try:
+            connection.request("GET", "/challenge")
+            response = connection.getresponse()
+            if response.status != 200:
+                raise ConnectionError("Bridge did not provide a challenge")
+            challenge_bytes = response.read(128)
+            if len(challenge_bytes) != 43:
+                raise ConnectionError("Bridge provided an invalid challenge")
+            try:
+                challenge = challenge_bytes.decode("ascii")
+                message = request_proof_message(
+                    self._client_id, challenge, "xmlrpc", request_body
+                )
+            except (UnicodeDecodeError, ValueError) as e:
+                raise ConnectionError("Bridge provided an invalid challenge") from e
+            try:
+                proof = self._signer(message)
+            except Exception as e:
+                raise ConnectionError("Bridge signer is unavailable") from e
+            if not isinstance(proof, bytes) or not proof or len(proof) > 8192:
+                raise ConnectionError("Bridge signer returned an invalid proof")
+            headers = {
+                "Content-Type": "text/xml",
+                "X-FreeCAD-Client": self._client_id,
+                "X-FreeCAD-Challenge": challenge,
+                "X-FreeCAD-Proof": base64.b64encode(proof).decode("ascii"),
+            }
+            connection.request("POST", handler, body=request_body, headers=headers)
+            response = connection.getresponse()
+            if response.status != 200:
+                raise xmlrpc.client.ProtocolError(
+                    host + handler,
+                    response.status,
+                    response.reason,
+                    dict(response.getheaders()),
+                )
+            return self.parse_response(response)
+        finally:
+            connection.close()
+
+
+def _is_legacy_execute_arity_fault(error: xmlrpc.client.Fault) -> bool:
+    """Return whether a fault identifies the previous one-argument handler.
+
+    The exact dispatcher fault from this project's previous workbench release is
+    matched so an unrelated ``TypeError`` from a different XML-RPC server cannot
+    cause state-changing Python code to be retried.
+
+    Args:
+        error: XML-RPC fault raised by the remote server.
+
+    Returns:
+        True only for the prior ``FreecadMCPPlugin._xmlrpc_execute`` signature.
+    """
+    return error.faultCode == 1 and error.faultString == LEGACY_EXECUTE_ARITY_FAULT
 
 
 class XmlRpcBridge(FreecadBridge):
@@ -58,6 +153,10 @@ class XmlRpcBridge(FreecadBridge):
         host: str = DEFAULT_XMLRPC_HOST,
         port: int = DEFAULT_XMLRPC_PORT,
         timeout: float = DEFAULT_TIMEOUT,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+        *,
+        client_id: str | None = None,
+        signer: Callable[[bytes], bytes] | None = None,
     ) -> None:
         """Initialize the XML-RPC bridge.
 
@@ -65,17 +164,31 @@ class XmlRpcBridge(FreecadBridge):
             host: XML-RPC server hostname.
             port: XML-RPC server port.
             timeout: Connection and request timeout in seconds.
+            execution_timeout_ms: Default execution timeout in milliseconds.
+            client_id: Identity of the paired client.
+            signer: Protected provider that signs request proof messages.
         """
         self._host = host
         self._port = port
         self._timeout = timeout
+        self._client_id = client_id
+        self._signer = signer
+        self._execution_timeout_ms = resolve_execution_timeout_ms(
+            execution_timeout_ms,
+            DEFAULT_EXECUTION_TIMEOUT_MS,
+        )
         self._proxy: xmlrpc.client.ServerProxy | None = None
+        self._transport: AuthenticatedXmlRpcTransport | None = None
+        self._executor: ThreadPoolExecutor | None = None
         self._connected = False
 
     @property
     def _server_url(self) -> str:
         """Get the XML-RPC server URL."""
-        return f"http://{self._host}:{self._port}"
+        host = self._host
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        return f"http://{host}:{self._port}"
 
     async def connect(self) -> None:
         """Establish connection to FreeCAD XML-RPC server.
@@ -83,24 +196,34 @@ class XmlRpcBridge(FreecadBridge):
         Raises:
             ConnectionError: If connection cannot be established.
         """
-        loop = asyncio.get_event_loop()
         try:
-            self._proxy = await loop.run_in_executor(
-                None,
-                lambda: xmlrpc.client.ServerProxy(
-                    self._server_url,
-                    allow_none=True,
-                ),
+            if self._client_id is None or self._signer is None:
+                raise ConnectionError(
+                    "A paired client and protected signer are required"
+                )
+            self._executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="freecad-xmlrpc",
+            )
+            self._transport = AuthenticatedXmlRpcTransport(
+                self._client_id, self._signer, self._timeout
+            )
+            self._proxy = xmlrpc.client.ServerProxy(
+                self._server_url,
+                allow_none=True,
+                transport=self._transport,
             )
             # Test connection with a ping
             await self.ping()
             self._connected = True
         except ConnectionRefusedError as e:
             self._connected = False
+            self._shutdown_executor()
             msg = self._get_connection_refused_message()
             raise ConnectionError(msg) from e
         except Exception as e:
             self._connected = False
+            self._shutdown_executor()
             error_str = str(e)
             if "Connection refused" in error_str or "Errno 61" in error_str:
                 msg = self._get_connection_refused_message()
@@ -140,7 +263,52 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
     async def disconnect(self) -> None:
         """Close connection to FreeCAD XML-RPC server."""
         self._proxy = None
+        self._transport = None
         self._connected = False
+        self._shutdown_executor()
+
+    def _shutdown_executor(self) -> None:
+        """Stop accepting XML-RPC calls and release executor resources."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
+
+    async def _run_proxy_call(
+        self,
+        call: Callable[[xmlrpc.client.ServerProxy], Any],
+        timeout_seconds: float,
+    ) -> Any:
+        """Run one serialized call against the shared XML-RPC proxy.
+
+        ``ServerProxy`` transports are not thread-safe. A dedicated single-worker
+        executor also prevents a timed-out background call from overlapping the
+        next request while its blocking socket operation finishes.
+
+        Args:
+            call: Blocking operation to invoke with the active proxy.
+            timeout_seconds: Maximum time to await the blocking operation.
+
+        Returns:
+            The XML-RPC response.
+
+        Raises:
+            ConnectionError: If the bridge is disconnected.
+            TimeoutError: If the response does not arrive before the deadline.
+        """
+        if self._proxy is None or self._executor is None:
+            msg = "Not connected to XML-RPC server"
+            raise ConnectionError(msg)
+
+        transport = self._transport
+
+        def invoke(proxy: xmlrpc.client.ServerProxy) -> Any:
+            if transport is not None:
+                transport._timeout = timeout_seconds
+            return call(proxy)
+
+        loop = asyncio.get_running_loop()
+        future = loop.run_in_executor(self._executor, invoke, self._proxy)
+        return await asyncio.wait_for(future, timeout=timeout_seconds)
 
     async def is_connected(self) -> bool:
         """Check if bridge is connected to FreeCAD."""
@@ -167,21 +335,12 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
             msg = "Not connected to XML-RPC server"
             raise ConnectionError(msg)
 
-        loop = asyncio.get_event_loop()
         start = time.perf_counter()
 
         try:
-            # Try standard system.listMethods or a simple execute
-            if self._proxy is None:
-                msg = "Not connected"
-                raise ConnectionError(msg)
-            proxy = self._proxy  # Local reference for lambda
-            await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: proxy.execute("_result_ = True"),
-                ),
-                timeout=self._timeout,
+            await self._run_proxy_call(
+                lambda proxy: proxy.execute("_result_ = True"),
+                self._timeout,
             )
         except TimeoutError as e:
             msg = "Ping timed out"
@@ -231,13 +390,14 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context via XML-RPC.
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The configured
+                bridge default applies when omitted.
 
         Returns:
             ExecutionResult with execution outcome.
@@ -252,18 +412,39 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
                 error_type="ConnectionError",
             )
 
-        loop = asyncio.get_event_loop()
+        try:
+            effective_timeout_ms = resolve_execution_timeout_ms(
+                timeout_ms,
+                self._execution_timeout_ms,
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=str(e),
+                execution_time_ms=0,
+                error_type="ValueError",
+            )
+
         start = time.perf_counter()
-        proxy = self._proxy  # Local reference for lambda
 
         try:
-            result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: proxy.execute(code),
-                ),
-                timeout=timeout_ms / 1000,
+            response_timeout = (
+                effective_timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS
             )
+            try:
+                result = await self._run_proxy_call(
+                    lambda proxy: proxy.execute(code, effective_timeout_ms),
+                    response_timeout,
+                )
+            except xmlrpc.client.Fault as e:
+                if not _is_legacy_execute_arity_fault(e):
+                    raise
+                result = await self._run_proxy_call(
+                    lambda proxy: proxy.execute(code),
+                    response_timeout,
+                )
             elapsed = (time.perf_counter() - start) * 1000
 
             # Parse result from XML-RPC server
@@ -272,7 +453,7 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
                     success=result.get("success", False),
                     result=result.get("result"),
                     stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
+                    stderr=(result.get("stderr") or result.get("error_message", "")),
                     execution_time_ms=elapsed,
                     error_type=result.get("error_type"),
                     error_traceback=result.get("error_traceback"),
@@ -292,8 +473,11 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
                 success=False,
                 result=None,
                 stdout="",
-                stderr=f"Execution timed out after {timeout_ms}ms",
-                execution_time_ms=float(timeout_ms),
+                stderr=(
+                    f"Execution timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                ),
+                execution_time_ms=float(effective_timeout_ms),
                 error_type="TimeoutError",
             )
         except Exception as e:
@@ -489,58 +673,23 @@ _result_ = objects
         self,
         obj_name: str,
         doc_name: str | None = None,
+        *,
+        include_properties: bool = True,
+        include_shape: bool = True,
     ) -> ObjectInfo:
         """Get detailed object information."""
-        code = f"""
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
-if doc is None:
-    raise ValueError("No document found")
-
-obj = doc.getObject({obj_name!r})
-if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
-
-props = {{}}
-for prop in obj.PropertiesList:
-    try:
-        val = getattr(obj, prop)
-        if hasattr(val, '__class__') and val.__class__.__module__ != 'builtins':
-            val = str(val)
-        props[prop] = val
-    except Exception:
-        props[prop] = "<unreadable>"
-
-shape_info = None
-if hasattr(obj, "Shape"):
-    shape = obj.Shape
-    shape_info = {{
-        "shape_type": shape.ShapeType,
-        "volume": shape.Volume if hasattr(shape, "Volume") else None,
-        "area": shape.Area if hasattr(shape, "Area") else None,
-        "is_valid": shape.isValid(),
-        "is_closed": shape.isClosed() if hasattr(shape, "isClosed") else False,
-        "vertex_count": len(shape.Vertexes) if hasattr(shape, "Vertexes") else 0,
-        "edge_count": len(shape.Edges) if hasattr(shape, "Edges") else 0,
-        "face_count": len(shape.Faces) if hasattr(shape, "Faces") else 0,
-    }}
-
-_result_ = {{
-    "name": obj.Name,
-    "label": obj.Label,
-    "type_id": obj.TypeId,
-    "properties": props,
-    "shape_info": shape_info,
-    "children": [c.Name for c in obj.OutList] if hasattr(obj, "OutList") else [],
-    "parents": [p.Name for p in obj.InList] if hasattr(obj, "InList") else [],
-    "visibility": obj.ViewObject.Visibility if hasattr(obj, "ViewObject") and obj.ViewObject else True,
-}}
-"""
+        code = build_object_inspection_code(
+            obj_name,
+            doc_name,
+            include_properties=include_properties,
+            include_shape=include_shape,
+        )
         result = await self.execute_python(code)
 
         if result.success and result.result:
             return ObjectInfo(**result.result)
 
-        error_msg = result.error_traceback or "Failed to get object"
+        error_msg = result.error_traceback or result.stderr or "Failed to get object"
         raise ValueError(error_msg)
 
     async def create_object(

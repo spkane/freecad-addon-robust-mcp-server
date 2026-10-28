@@ -2,7 +2,8 @@
 # Usage: just quality::check, just quality::format, etc.
 #
 # Note: Tools installed via mise (gitleaks, markdownlint-cli2, etc.) use `mise exec`.
-# Python tools use `uv run`. This ensures commands work even without mise shell activation.
+# Python tools use `uv run`. Safety uses an isolated, versioned `uvx` environment
+# so its Authlib dependency cannot select the MCP SDK's incompatible httpx2 fork.
 
 # Project root directory (justfile_directory() returns the main justfile's directory)
 project_root := justfile_directory()
@@ -19,13 +20,13 @@ _check-safety-auth:
         exit 0
     fi
     # Check if authenticated locally
-    if ! uv run safety auth status >/dev/null 2>&1; then
+    if ! uvx --python 3.11 --from safety==3.8.1 safety auth status >/dev/null 2>&1; then
         echo "ERROR: Safety CLI not authenticated."
         echo ""
         echo "Safety CLI requires a free account for dependency vulnerability scanning."
         echo "Run the following command to authenticate:"
         echo ""
-        echo "    uv run safety auth login"
+        echo "    uvx --python 3.11 --from safety==3.8.1 safety auth login"
         echo ""
         echo "This only needs to be done once per machine."
         echo "See CLAUDE.md for more details."
@@ -48,7 +49,7 @@ typecheck:
 # Run security scanning (code vulnerabilities)
 security:
     uv run bandit -c {{project_root}}/pyproject.toml -r {{project_root}}/src
-    cd {{project_root}} && uv run safety scan --detailed-output
+    cd {{project_root}} && uvx --python 3.11 --from safety==3.8.1 safety scan --detailed-output
 
 # Run spell checking
 spellcheck:

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from freecad_mcp.bridge.base import (
+    DEFAULT_EXECUTION_TIMEOUT_MS,
     ConnectionStatus,
     DocumentInfo,
     ExecutionResult,
@@ -29,7 +30,9 @@ from freecad_mcp.bridge.base import (
     ScreenshotResult,
     ViewAngle,
     WorkbenchInfo,
+    resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 
 
 class EmbeddedBridge(FreecadBridge):
@@ -42,14 +45,23 @@ class EmbeddedBridge(FreecadBridge):
         freecad_path: Optional path to FreeCAD's lib directory.
     """
 
-    def __init__(self, freecad_path: str | None = None) -> None:
+    def __init__(
+        self,
+        freecad_path: str | None = None,
+        execution_timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+    ) -> None:
         """Initialize the embedded bridge.
 
         Args:
             freecad_path: Path to FreeCAD's lib directory. If provided,
                 this path will be added to sys.path before importing.
+            execution_timeout_ms: Default execution timeout in milliseconds.
         """
         self._freecad_path = freecad_path
+        self._execution_timeout_ms = resolve_execution_timeout_ms(
+            execution_timeout_ms,
+            DEFAULT_EXECUTION_TIMEOUT_MS,
+        )
         self._fc_module: Any = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freecad")
         self._connected = False
@@ -92,13 +104,14 @@ class EmbeddedBridge(FreecadBridge):
     async def execute_python(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Execute Python code in FreeCAD context.
 
         Args:
             code: Python code to execute.
-            timeout_ms: Maximum execution time in milliseconds.
+            timeout_ms: Optional per-call timeout in milliseconds. The configured
+                bridge default applies when omitted.
 
         Returns:
             ExecutionResult with execution outcome.
@@ -114,6 +127,22 @@ class EmbeddedBridge(FreecadBridge):
                 error_traceback=None,
             )
 
+        try:
+            effective_timeout_ms = resolve_execution_timeout_ms(
+                timeout_ms,
+                self._execution_timeout_ms,
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=str(e),
+                execution_time_ms=0,
+                error_type="ValueError",
+                error_traceback=None,
+            )
+
         loop = asyncio.get_event_loop()
 
         try:
@@ -122,15 +151,18 @@ class EmbeddedBridge(FreecadBridge):
                     self._executor,
                     lambda: self._execute_code(code),
                 ),
-                timeout=timeout_ms / 1000,
+                timeout=effective_timeout_ms / 1000,
             )
         except TimeoutError:
             return ExecutionResult(
                 success=False,
                 result=None,
                 stdout="",
-                stderr=f"Execution timed out after {timeout_ms}ms",
-                execution_time_ms=float(timeout_ms),
+                stderr=(
+                    f"Execution timed out after {effective_timeout_ms}ms; "
+                    "code already running in FreeCAD may continue"
+                ),
+                execution_time_ms=float(effective_timeout_ms),
                 error_type="TimeoutError",
                 error_traceback=None,
             )
@@ -235,53 +267,24 @@ else:
         self,
         obj_name: str,
         doc_name: str | None = None,
+        *,
+        include_properties: bool = True,
+        include_shape: bool = True,
     ) -> ObjectInfo:
         """Get detailed object information."""
         result = await self.execute_python(
-            f"""
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
-if doc is None:
-    raise ValueError("No document found")
-
-obj = doc.getObject({obj_name!r})
-if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
-
-props = {{}}
-for prop in obj.PropertiesList:
-    try:
-        val = getattr(obj, prop)
-        if hasattr(val, '__class__') and val.__class__.__module__ != 'builtins':
-            val = str(val)
-        props[prop] = val
-    except Exception:
-        props[prop] = "<unreadable>"
-
-shape_info = None
-if hasattr(obj, "Shape"):
-    shape = obj.Shape
-    shape_info = {{
-        "type": shape.ShapeType,
-        "volume": shape.Volume if hasattr(shape, "Volume") else None,
-        "area": shape.Area if hasattr(shape, "Area") else None,
-        "is_valid": shape.isValid(),
-    }}
-
-_result_ = {{
-    "name": obj.Name,
-    "label": obj.Label,
-    "type_id": obj.TypeId,
-    "properties": props,
-    "shape_info": shape_info,
-    "children": [c.Name for c in obj.OutList] if hasattr(obj, "OutList") else [],
-}}
-"""
+            build_object_inspection_code(
+                obj_name,
+                doc_name,
+                include_properties=include_properties,
+                include_shape=include_shape,
+            )
         )
 
         if result.success and result.result:
             return ObjectInfo(**result.result)
 
-        error_msg = result.error_traceback or "Failed to get object"
+        error_msg = result.error_traceback or result.stderr or "Failed to get object"
         raise ValueError(error_msg)
 
     async def get_console_output(
@@ -433,7 +436,7 @@ _result_ = {{
             FileNotFoundError: If file doesn't exist.
             ValueError: If file is not a valid FreeCAD document.
         """
-        if not Path(path).exists():
+        if not await asyncio.to_thread(Path(path).exists):
             msg = f"File not found: {path}"
             raise FileNotFoundError(msg)
 

@@ -27,6 +27,9 @@ from typing import Any
 
 import pytest
 
+from freecad_mcp.bridge.socket import SocketBridge
+from tests.integration.auth_support import integration_credentials, integration_proxy
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +41,7 @@ def _check_gui_available() -> bool:
     and indicate GUI unavailability.
     """
     try:
-        proxy = xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
+        proxy = integration_proxy()
         result: dict[str, Any] = proxy.execute(  # type: ignore[assignment]
             """
 import FreeCAD
@@ -122,6 +125,52 @@ _result_ = {
         assert "gui_up" in thread_info
         assert "is_main_thread" in thread_info
         assert "thread_name" in thread_info
+
+    def test_xmlrpc_per_call_timeout_reaches_freecad_bridge(
+        self,
+        xmlrpc_proxy: xmlrpc.client.ServerProxy,
+    ) -> None:
+        """XML-RPC timeout overrides should control the workbench queue wait."""
+        timed_out: dict[str, Any] = xmlrpc_proxy.execute(  # type: ignore[assignment]
+            "import time; time.sleep(1.2); _result_ = 'late'",
+            1000,
+        )
+
+        assert timed_out["success"] is False
+        assert timed_out["error_type"] == "TimeoutError"
+        assert "may continue" in timed_out["error_message"]
+
+        completed: dict[str, Any] = xmlrpc_proxy.execute(  # type: ignore[assignment]
+            "import time; time.sleep(0.2); _result_ = 'done'",
+            3000,
+        )
+
+        assert completed["success"] is True
+        assert completed["result"] == "done"
+
+    @pytest.mark.asyncio
+    async def test_socket_per_call_timeout_reaches_freecad_bridge(self) -> None:
+        """Socket timeout overrides should control the workbench queue wait."""
+        bridge = SocketBridge(timeout=5.0, **integration_credentials())
+        await bridge.connect()
+
+        try:
+            timed_out = await bridge.execute_python(
+                "import time; time.sleep(1.2); _result_ = 'late'",
+                timeout_ms=1000,
+            )
+            completed = await bridge.execute_python(
+                "import time; time.sleep(0.2); _result_ = 'done'",
+                timeout_ms=3000,
+            )
+        finally:
+            await bridge.disconnect()
+
+        assert timed_out.success is False
+        assert timed_out.error_type == "TimeoutError"
+        assert "may continue" in timed_out.stderr
+        assert completed.success is True
+        assert completed.result == "done"
 
     @requires_gui
     def test_gui_mode_executes_on_main_thread(

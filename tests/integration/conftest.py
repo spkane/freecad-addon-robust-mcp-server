@@ -14,10 +14,14 @@ Instance ID Verification:
 from __future__ import annotations
 
 import os
-import xmlrpc.client
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
+
+from tests.integration.auth_support import integration_proxy
+
+if TYPE_CHECKING:
+    import xmlrpc.client
 
 # Global flag to track bridge availability (checked once per session)
 _bridge_available: bool | None = None
@@ -39,7 +43,7 @@ def _check_bridge_connection() -> tuple[bool, str | None, str | None]:
         return _bridge_available, _bridge_error, _bridge_instance_id
 
     try:
-        proxy = xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
+        proxy = integration_proxy()
         result: dict[str, Any] = proxy.ping()  # type: ignore[assignment]
         if result.get("pong"):
             _bridge_available = True
@@ -257,7 +261,7 @@ def xmlrpc_proxy() -> xmlrpc.client.ServerProxy:
     if not is_available:
         pytest.skip(error or "FreeCAD Robust MCP Bridge not available")
 
-    return xmlrpc.client.ServerProxy("http://localhost:9875", allow_none=True)
+    return integration_proxy()
 
 
 @pytest.fixture(scope="module")

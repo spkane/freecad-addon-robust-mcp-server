@@ -58,10 +58,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "latest"
 
@@ -69,7 +69,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Cache uv dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/uv
@@ -136,7 +136,7 @@ jobs:
         run: ls -la dist/
 
       - name: Upload distribution artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-package-distributions
           path: dist/
@@ -152,12 +152,12 @@ jobs:
 
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Download distribution artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-package-distributions
           path: dist/
@@ -185,13 +185,13 @@ jobs:
 
     steps:
       - name: Download distribution artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-package-distributions
           path: dist/
 
       - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
@@ -208,13 +208,13 @@ jobs:
 
     steps:
       - name: Download distribution artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-package-distributions
           path: dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
 
   docker-release:
     name: Build and Push Docker Image
@@ -225,13 +225,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup FreeCAD for integration test
         uses: ./.github/actions/setup-freecad
 
       - name: Install uv for bridge startup
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "latest"
 
@@ -241,20 +241,20 @@ jobs:
           uv sync --all-extras
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.DOCKERHUB_REPO }}
           tags: |
@@ -268,7 +268,7 @@ jobs:
             org.opencontainers.image.version=${{ needs.validate-tag.outputs.version }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -282,6 +282,7 @@ jobs:
 
       - name: Start FreeCAD headless with MCP bridge
         run: |
+          uv run freecad-mcp --pair-bridge
           # Start FreeCAD headless with MCP bridge in background
           setsid freecadcmd freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
           FREECAD_PID=$!
@@ -293,7 +294,7 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
               if curl -s --connect-timeout 1 http://localhost:9875 > /dev/null 2>&1; then
                   # Try to ping the bridge
-                  if uv run python -c "import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:9875').ping())" 2>/dev/null | grep -q "pong"; then
+                  if uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())" 2>/dev/null | grep -q "pong"; then
                       echo "FreeCAD MCP bridge is ready!"
                       break
                   fi
@@ -309,6 +310,9 @@ jobs:
 
       - name: Test pushed image with MCP communication
         run: |
+          FREECAD_BRIDGE_CLIENT_ID=$(uv run python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[0])')
+          FREECAD_BRIDGE_SECRET=$(uv run python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[1])')
+          export FREECAD_BRIDGE_CLIENT_ID FREECAD_BRIDGE_SECRET
           # Pull the image to verify it was pushed successfully
           docker pull ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }}
 
@@ -319,6 +323,8 @@ jobs:
               --network=host \
               -e FREECAD_MODE=xmlrpc \
               -e FREECAD_SOCKET_HOST=localhost \
+              -e FREECAD_BRIDGE_CLIENT_ID \
+              -e FREECAD_BRIDGE_SECRET \
               ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }} 2>&1 | \
             grep -q '"result"'
           echo "Container MCP communication test passed"
@@ -339,10 +345,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download distribution artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-package-distributions
           path: dist/
@@ -378,7 +384,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: "Robust MCP Server v${{ needs.validate-tag.outputs.version }}"
           tag_name: ${{ github.ref_name }}

@@ -5,12 +5,19 @@ set -euo pipefail
 # Validate required variables have safe defaults
 FREECAD_TAG="${FREECAD_TAG:-1.0.2}"
 APPIMAGE_DIR="${APPIMAGE_DIR:-$HOME/freecad-appimage}"
+FREECAD_BIN_DIR="${FREECAD_BIN_DIR-/usr/local/bin}"
+FREECAD_APPIMAGE_URL="${FREECAD_APPIMAGE_URL:-}"
 # Optional SHA256 checksum for verification (if provided, download will be verified)
-APPIMAGE_SHA256="${APPIMAGE_SHA256:-}"
+APPIMAGE_SHA256="${FREECAD_APPIMAGE_SHA256:-${APPIMAGE_SHA256:-}}"
 
 # Validate APPIMAGE_DIR is set and non-empty after defaults
 if [[ -z "$APPIMAGE_DIR" ]]; then
     echo "ERROR: APPIMAGE_DIR is empty - cannot determine installation path"
+    exit 1
+fi
+
+if [[ -z "$FREECAD_BIN_DIR" ]]; then
+    echo "ERROR: FREECAD_BIN_DIR is empty - cannot determine wrapper path"
     exit 1
 fi
 
@@ -49,12 +56,31 @@ is_ci_environment() {
     [[ -n "${BUILDKITE:-}" ]]
 }
 
-# In CI, require SHA256 checksum for security
-if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
-    echo "ERROR: APPIMAGE_SHA256 is required in CI environments for security verification"
-    echo "Set the APPIMAGE_SHA256 environment variable to the expected checksum"
-    exit 1
-fi
+# Verify the cached AppImage when a digest is available. Callers decide whether
+# a mismatch should trigger reinstall or stop the setup.
+verify_appimage_checksum() {
+    if [[ ! -f "$APPIMAGE_PATH" ]]; then
+        echo "ERROR: AppImage not found at $APPIMAGE_PATH"
+        return 1
+    fi
+
+    if [[ -z "$APPIMAGE_SHA256" ]]; then
+        echo "Note: No APPIMAGE_SHA256 provided, skipping checksum verification"
+        return 0
+    fi
+
+    echo "Verifying SHA256 checksum..."
+    local computed_sha256
+    computed_sha256=$(sha256sum "$APPIMAGE_PATH" | awk '{print $1}')
+    if [[ "$computed_sha256" != "$APPIMAGE_SHA256" ]]; then
+        echo "ERROR: SHA256 checksum mismatch!"
+        echo "  Expected: $APPIMAGE_SHA256"
+        echo "  Computed: $computed_sha256"
+        return 1
+    fi
+
+    echo "SHA256 checksum verified successfully"
+}
 
 echo "=== Setting up FreeCAD $FREECAD_TAG ==="
 
@@ -67,30 +93,54 @@ exec 200>"$LOCK_FILE"
 if ! flock -n 200; then
     echo "Another installation is in progress, waiting for lock..."
     flock 200
-    # Re-check marker file after acquiring lock (another process may have completed)
-    if [[ -f "$MARKER_FILE" ]] && grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
-        echo "FreeCAD $FREECAD_TAG already set up by another process, skipping"
-        exit 0
-    fi
 fi
 
-# Check for complete setup using marker file
+# CI must never accept or install an AppImage that cannot be authenticated.
+# Checked-in CI callers resolve the digest before invoking this script; local
+# callers may still resolve it from the release API below.
+if is_ci_environment && [[ -z "$APPIMAGE_SHA256" ]]; then
+    echo "ERROR: A SHA256 digest is required in CI environments"
+    exit 1
+fi
+
+# Check for complete setup using marker file. This also re-checks after waiting
+# for the lock, because another process may have completed the installation.
 if [[ -f "$MARKER_FILE" ]]; then
     # Verify marker file contains expected version
     if grep -q "^${FREECAD_TAG}$" "$MARKER_FILE" 2>/dev/null; then
-        echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
-        exit 0
+        if [[ ! -f "$APPIMAGE_PATH" ]]; then
+            echo "ERROR: AppImage not found at $APPIMAGE_PATH"
+            echo "Cached FreeCAD AppImage failed verification, will reinstall"
+            rm -f "$MARKER_FILE"
+            rm -rf "$APPIMAGE_DIR/squashfs-root"
+        elif [[ -z "$APPIMAGE_SHA256" ]]; then
+            echo "Cached FreeCAD AppImage has no digest, will resolve and verify"
+        elif verify_appimage_checksum; then
+            if [[ -x "$FREECAD_BIN_DIR/freecad" ]] \
+                && [[ -x "$FREECAD_BIN_DIR/freecadcmd" ]] \
+                && [[ -d "$APPIMAGE_DIR/squashfs-root/usr/bin" ]]; then
+                echo "FreeCAD $FREECAD_TAG already set up (marker file present), skipping"
+                exit 0
+            fi
+            echo "Cached FreeCAD AppImage verified but installation is incomplete, will repair"
+        else
+            echo "Cached FreeCAD AppImage failed verification, will reinstall"
+            rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
+            rm -rf "$APPIMAGE_DIR/squashfs-root"
+        fi
     else
         echo "Different FreeCAD version detected, will reinstall"
+        rm -f "$APPIMAGE_PATH" "$MARKER_FILE"
+        rm -rf "$APPIMAGE_DIR/squashfs-root"
     fi
 fi
 
 # Check for and clean up partial installations
 PARTIAL_INSTALL=false
-if [[ -f "/usr/local/bin/freecad" ]] && [[ ! -f "/usr/local/bin/freecadcmd" ]]; then
+if [[ -f "$FREECAD_BIN_DIR/freecad" ]] && [[ ! -f "$FREECAD_BIN_DIR/freecadcmd" ]]; then
     echo "Warning: Partial installation detected (freecad exists but freecadcmd missing)"
     PARTIAL_INSTALL=true
-elif [[ ! -f "/usr/local/bin/freecad" ]] && [[ -f "/usr/local/bin/freecadcmd" ]]; then
+elif [[ ! -f "$FREECAD_BIN_DIR/freecad" ]] && [[ -f "$FREECAD_BIN_DIR/freecadcmd" ]]; then
     echo "Warning: Partial installation detected (freecadcmd exists but freecad missing)"
     PARTIAL_INSTALL=true
 fi
@@ -98,10 +148,10 @@ fi
 if [[ "$PARTIAL_INSTALL" == "true" ]]; then
     echo "Cleaning up partial installation..."
     # Remove wrapper scripts if they exist (use sudo if needed)
-    if [[ $EUID -ne 0 ]] && command -v sudo &>/dev/null; then
-        sudo rm -f /usr/local/bin/freecad /usr/local/bin/freecadcmd 2>/dev/null || true
+    if [[ ! -w "$FREECAD_BIN_DIR" ]] && command -v sudo &>/dev/null; then
+        sudo rm -f "$FREECAD_BIN_DIR/freecad" "$FREECAD_BIN_DIR/freecadcmd" 2>/dev/null || true
     else
-        rm -f /usr/local/bin/freecad /usr/local/bin/freecadcmd 2>/dev/null || true
+        rm -f "$FREECAD_BIN_DIR/freecad" "$FREECAD_BIN_DIR/freecadcmd" 2>/dev/null || true
     fi
     # Remove marker file to force full reinstall
     rm -f "$MARKER_FILE" 2>/dev/null || true
@@ -123,10 +173,31 @@ case "$ARCH" in
 esac
 echo "Detected architecture: $ARCH -> Linux-$ARCH_SUFFIX"
 
-# Use direct download URL to avoid GitHub API rate limits
-# Format: FreeCAD_1.0.2-conda-Linux-aarch64-py311.AppImage
-APPIMAGE_URL="https://github.com/FreeCAD/FreeCAD/releases/download/${FREECAD_TAG}/FreeCAD_${FREECAD_TAG}-conda-Linux-${ARCH_SUFFIX}-py311.AppImage"
-APPIMAGE_NAME="FreeCAD_${FREECAD_TAG}-conda-Linux-${ARCH_SUFFIX}-py311.AppImage"
+# CI supplies the release URL and digest resolved by the workflow. Local builds
+# resolve the asset from the official release API so both legacy ``conda-``
+# names and current stable/weekly names are supported.
+if [[ -z "$FREECAD_APPIMAGE_URL" ]]; then
+    RELEASE_INFO=$(curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors \
+        "https://api.github.com/repos/FreeCAD/FreeCAD/releases/tags/${FREECAD_TAG}")
+    ASSET=$(jq -c --arg arch "$ARCH_SUFFIX" \
+        '[.assets[] | select(.name | test("Linux-" + $arch + ".*\\.AppImage$"))][0]' \
+        <<< "$RELEASE_INFO")
+    FREECAD_APPIMAGE_URL=$(jq -r '.browser_download_url' <<< "$ASSET")
+    ASSET_DIGEST=$(jq -r '.digest' <<< "$ASSET")
+
+    if [[ -z "$APPIMAGE_SHA256" && "$ASSET_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+        APPIMAGE_SHA256="${ASSET_DIGEST#sha256:}"
+    fi
+fi
+
+APPIMAGE_URL="$FREECAD_APPIMAGE_URL"
+APPIMAGE_NAME=$(basename "$APPIMAGE_URL")
+
+if [[ ! "$APPIMAGE_URL" =~ ^https://github.com/FreeCAD/FreeCAD/releases/download/ ]]; then
+    echo "ERROR: Could not resolve an official FreeCAD AppImage for $FREECAD_TAG"
+    exit 1
+fi
+
 # APPIMAGE_PATH is defined earlier for use in cleanup_on_error trap
 
 echo "FreeCAD release: $FREECAD_TAG"
@@ -147,22 +218,13 @@ if [ ! -f "$APPIMAGE_PATH" ]; then
         exit 1
     fi
 
-    # Verify SHA256 checksum if provided
-    if [[ -n "$APPIMAGE_SHA256" ]]; then
-        echo "Verifying SHA256 checksum..."
-        COMPUTED_SHA256=$(sha256sum "$APPIMAGE_PATH" | awk '{print $1}')
-        if [[ "$COMPUTED_SHA256" != "$APPIMAGE_SHA256" ]]; then
-            echo "ERROR: SHA256 checksum mismatch!"
-            echo "  Expected: $APPIMAGE_SHA256"
-            echo "  Computed: $COMPUTED_SHA256"
-            echo "Removing corrupted/tampered download..."
-            rm -f "$APPIMAGE_PATH"
-            exit 1
-        fi
-        echo "SHA256 checksum verified successfully"
-    else
-        echo "Note: No APPIMAGE_SHA256 provided, skipping checksum verification"
-    fi
+fi
+
+# Verify both fresh downloads and pre-existing files from partial setups.
+if ! verify_appimage_checksum; then
+    echo "Removing corrupted/tampered AppImage..."
+    rm -f "$APPIMAGE_PATH"
+    exit 1
 fi
 chmod +x "$APPIMAGE_PATH"
 
@@ -209,19 +271,19 @@ echo "Creating wrapper scripts..."
 APPDIR_PATH="$APPIMAGE_DIR/squashfs-root"
 
 # Helper function to install wrapper script
-# Uses sudo only if necessary (not root and sudo exists)
+# Uses sudo only when the selected wrapper directory is not writable.
 install_wrapper() {
     local wrapper_name="$1"
     local wrapper_content="$2"
-    local wrapper_path="/usr/local/bin/$wrapper_name"
+    local wrapper_path="$FREECAD_BIN_DIR/$wrapper_name"
     local temp_file
 
     temp_file=$(mktemp)
     echo "$wrapper_content" > "$temp_file"
     chmod +x "$temp_file"
 
-    # Install with sudo if not root and sudo is available
-    if [[ $EUID -ne 0 ]]; then
+    # Use direct writes for root or an explicitly writable test/install path.
+    if [[ ! -w "$FREECAD_BIN_DIR" ]]; then
         if command -v sudo &>/dev/null; then
             sudo mv "$temp_file" "$wrapper_path"
             sudo chmod +x "$wrapper_path"
@@ -252,32 +314,32 @@ exec \"\$APPDIR/usr/bin/freecad\" \"\$@\""
 
 install_wrapper "freecad" "$FREECAD_WRAPPER"
 
-echo "Wrapper scripts created at /usr/local/bin/freecad{,cmd}"
+echo "Wrapper scripts created at $FREECAD_BIN_DIR/freecad{,cmd}"
 
 # Verify installation - fail the script if verification fails
 # Use explicit paths to avoid PATH resolution issues
 echo "=== Verifying FreeCAD installation ==="
 
 # Check wrapper exists before running
-if [[ ! -x /usr/local/bin/freecadcmd ]]; then
-    echo "ERROR: freecadcmd wrapper not found or not executable at /usr/local/bin/freecadcmd"
+if [[ ! -x "$FREECAD_BIN_DIR/freecadcmd" ]]; then
+    echo "ERROR: freecadcmd wrapper not found or not executable at $FREECAD_BIN_DIR/freecadcmd"
     exit 1
 fi
 
 echo "--- freecadcmd --version ---"
-if ! /usr/local/bin/freecadcmd --version; then
+if ! "$FREECAD_BIN_DIR/freecadcmd" --version; then
     echo "ERROR: freecadcmd version check failed"
     exit 1
 fi
 
 echo "--- freecadcmd Python test ---"
-if ! /usr/local/bin/freecadcmd -c "import sys; print(f'FreeCAD Python: {sys.version}')"; then
+if ! "$FREECAD_BIN_DIR/freecadcmd" -c "import sys; print(f'FreeCAD Python: {sys.version}')"; then
     echo "ERROR: FreeCAD Python test failed"
     exit 1
 fi
 
 echo "--- FreeCAD module import test ---"
-if ! /usr/local/bin/freecadcmd -c "import FreeCAD; print(f'FreeCAD version: {FreeCAD.Version()}')"; then
+if ! "$FREECAD_BIN_DIR/freecadcmd" -c "import FreeCAD; print(f'FreeCAD version: {FreeCAD.Version()}')"; then
     echo "ERROR: FreeCAD module import failed - FreeCAD bindings may be missing or corrupted"
     exit 1
 fi

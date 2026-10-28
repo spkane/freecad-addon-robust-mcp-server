@@ -36,8 +36,53 @@ kill_port() {
 # Returns 0 (true) if bridge is running, 1 (false) otherwise
 is_bridge_running() {
     local port=${1:-9875}  # Default to port 9875
-    curl -s --connect-timeout 1 --max-time 1 "http://localhost:$port" > /dev/null 2>&1 && \
-    uv run python -c "import socket; socket.setdefaulttimeout(2); import xmlrpc.client; print(xmlrpc.client.ServerProxy('http://localhost:$port').ping())" 2>/dev/null | grep -q "pong"
+    uv run python -c 'import sys; from tests.integration.auth_support import integration_proxy; result = integration_proxy(port=int(sys.argv[1])).ping(); sys.exit(0 if isinstance(result, dict) and result.get("pong") else 1)' "$port" >/dev/null 2>&1
+}
+
+# Fail before starting FreeCAD if the client cannot load its pairing.
+require_bridge_pairing() {
+    if ! uv run python -c 'from freecad_mcp.bridge.authentication import credentials_from_config; from freecad_mcp.config import get_config; credentials_from_config(get_config())' >/dev/null 2>&1; then
+        echo "ERROR: Bridge credentials are unavailable; run freecad-mcp --pair-bridge first." >&2
+        return 1
+    fi
+}
+
+# Locate an executable that can be run directly and tracked by PID.
+find_freecad_executable() {
+    local mode=$1 candidate
+    if [[ "$OSTYPE" == darwin* ]]; then
+        if [[ "$mode" == gui ]]; then
+            candidate="/Applications/FreeCAD.app/Contents/Resources/bin/freecad"
+        else
+            candidate="/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd"
+        fi
+        if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
+        candidate="$HOME/Applications${candidate#/Applications}"
+        if [[ -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
+    else
+        if [[ "$mode" == gui ]]; then
+            if command -v freecad || command -v FreeCAD; then return 0; fi
+        else
+            if command -v freecadcmd || command -v FreeCADCmd; then return 0; fi
+        fi
+    fi
+    echo "FreeCAD $mode executable not found" >&2
+    return 1
+}
+
+# Stop only a child process launched by the test runner.
+stop_owned_freecad() {
+    local pid=${1:-}
+    [[ -n "$pid" ]] || return 0
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        for _ in {1..10}; do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+        done
+        if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fi
+        wait "$pid" 2>/dev/null || true
+    fi
 }
 
 # Force kill any processes on the default MCP bridge ports
@@ -98,7 +143,7 @@ wait_for_ports_free() {
 # (saving preferences, tearing down 3D viewer, deregistering from app services).
 # Starting a new FreeCAD before the old one fully exits causes:
 #   "Tried to run Gui::Application::initApplication() twice!" → SIGSEGV
-# If the process is still alive after the timeout, send SIGTERM then SIGKILL.
+# Return an error if any FreeCAD process remains; do not stop unrelated processes.
 # Usage: wait_for_freecad_exit [TIMEOUT_SECONDS]
 wait_for_freecad_exit() {
     local timeout=${1:-30}
@@ -120,23 +165,6 @@ wait_for_freecad_exit() {
         fi
     done
 
-    # Timed out — force-stop the lingering process.  This handles the case
-    # where blocking_bridge.py releases its ports (so graceful_kill_bridge_ports
-    # can no longer find it via lsof) but freecadcmd itself hasn't exited.
-    echo "WARNING: FreeCAD process still running after ${timeout}s, sending SIGTERM..."
-    pkill -i "freecad" 2>/dev/null || true
-    sleep 2
-
-    if pgrep -i "freecad" > /dev/null 2>&1; then
-        echo "WARNING: FreeCAD still alive after SIGTERM, sending SIGKILL..."
-        pkill -9 -i "freecad" 2>/dev/null || true
-        sleep 1
-    fi
-
-    # shellcheck disable=SC2009  # Intentionally using ps+grep for portability (pgrep may not exist)
-    if ps -eo comm= 2>/dev/null | grep -iq "freecad"; then
-        echo "ERROR: Could not stop FreeCAD process"
-        return 1
-    fi
-    return 0
+    echo "ERROR: A FreeCAD process remains running after ${timeout}s"
+    return 1
 }

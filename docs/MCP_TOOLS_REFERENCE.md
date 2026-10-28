@@ -32,14 +32,18 @@ Execute arbitrary Python code in FreeCAD's context.
 ```python
 execute_python(
     code: str,
-    timeout_ms: int = 30000
+    timeout_ms: int | None = None
 ) -> dict
 ```
 
 **Parameters:**
 
 - `code`: Python code to execute. Use `_result_ = value` to return data.
-- `timeout_ms`: Maximum execution time in milliseconds.
+- `timeout_ms`: Optional per-call execution timeout in milliseconds
+  (1000-600000). `FREECAD_TIMEOUT_MS`, then 30000, applies when omitted.
+
+If a timeout occurs after code starts inside FreeCAD, that code may continue.
+Inspect state before retrying a mutating operation.
 
 **Returns:** Execution result with stdout, stderr, and any assigned `_result_`.
 
@@ -303,6 +307,23 @@ inspect_object(
     include_shape: bool = True
 ) -> dict
 ```
+
+Property values are made safe for both XML-RPC and JSON. A link to a FreeCAD
+document object is represented by a dictionary containing `name`, `label`,
+`type_id`, and `document`; link lists and subelement references retain their
+list structure. Other FreeCAD-specific values are represented as strings.
+Integers outside XML-RPC's signed 32-bit range and non-finite floats are also
+represented as strings. Invalid XML characters are replaced with `�`.
+
+Property inspection is bounded to 100 entries per collection, eight levels of
+nesting, 512 values, and 2,048 total text characters; individual strings are
+limited to 512 characters. Truncated collections or strings include a
+`<truncated>` marker, cycles are marked `<cycle>`, excessive depth is marked
+`<max depth>`, and an unreadable property is marked `<unreadable>`. Disable
+`include_properties` or `include_shape` to avoid reading those sections in
+FreeCAD.
+Shape details are omitted if the shape is missing, null, or unreadable; other
+object information remains available.
 
 #### create_object
 
@@ -634,9 +655,14 @@ pocket_sketch(
     length: float,
     type: str = "Length",  # "Length", "ThroughAll", "UpToFirst", "UpToFace"
     name: str | None = None,
-    doc_name: str | None = None
+    doc_name: str | None = None,
+    reversed: bool = False  # Flip the cut direction
 ) -> dict
 ```
+
+The result includes `volume_before`, `volume_after`, and `volume_removed` in
+cubic millimeters. A `warning` indicates a cut that removed no material; check
+the sketch position and direction before exporting the model.
 
 #### groove_sketch
 

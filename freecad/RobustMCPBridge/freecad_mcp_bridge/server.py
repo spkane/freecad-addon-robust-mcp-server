@@ -19,12 +19,17 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import base64
+import binascii
 import contextlib
 import errno
 import io
+import ipaddress
 import json
+import math
 import os
 import queue
+import socket
 import sys
 import threading
 import time
@@ -33,7 +38,21 @@ import uuid
 import weakref
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .authentication import BridgeAuthenticator
+
+if __package__:
+    from .qt_compat import get_host_qt_binding, load_qt_core, load_qt_core_widgets
+    from .startup_policy import is_console_invocation
+else:
+    from qt_compat import (  # type: ignore[import-not-found, no-redef]
+        get_host_qt_binding,
+        load_qt_core,
+        load_qt_core_widgets,
+    )
+    from startup_policy import is_console_invocation  # type: ignore[import-not-found, no-redef]
 
 # Global registry of active servers for cleanup on Python exit
 # Uses weak references to avoid preventing garbage collection
@@ -47,16 +66,18 @@ def _get_shiboken_delete() -> Any:
     Returns:
         The shiboken delete function, or None if not available.
     """
-    # Try shiboken6 first (PySide6), then shiboken2 (PySide2)
-    with contextlib.suppress(ImportError):
-        import shiboken6
-
-        return shiboken6.delete
-
-    with contextlib.suppress(ImportError):
-        import shiboken2
-
-        return shiboken2.delete
+    host_binding = get_host_qt_binding()
+    candidates = (
+        ("shiboken6",)
+        if host_binding == "PySide6"
+        else ("shiboken2",)
+        if host_binding == "PySide2"
+        else ("shiboken6", "shiboken2")
+    )
+    for module_name in candidates:
+        with contextlib.suppress(ImportError):
+            shiboken = __import__(module_name)
+            return shiboken.delete
 
     return None
 
@@ -107,11 +128,29 @@ def _cleanup_all_servers() -> None:
 # These imports only work inside FreeCAD
 try:
     import FreeCAD
-    import FreeCADGui
 
     FREECAD_AVAILABLE = True
 except ImportError:
     FREECAD_AVAILABLE = False
+
+try:
+    import FreeCADGui
+except ImportError:
+    FreeCADGui = None  # type: ignore[assignment]
+
+
+def _freecad_gui_up() -> bool:
+    """Return True when FreeCAD is present and its GUI is up.
+
+    ``FreeCAD.GuiUp`` does not exist until FreeCAD's application object has
+    finished initializing.  The bridge can legitimately be auto-started from a
+    workbench ``Init.py``, which runs *before* that point in the console
+    (headless) binary, so the attribute has to be read defensively -- reading
+    it directly raised ``AttributeError: module 'FreeCAD' has no attribute
+    'GuiUp'`` and aborted the headless auto-start.
+    """
+    return bool(getattr(FreeCAD, "GuiUp", False)) if FREECAD_AVAILABLE else False
+
 
 # Default configuration
 DEFAULT_SOCKET_PORT = 9876
@@ -119,31 +158,223 @@ DEFAULT_XMLRPC_PORT = 9875
 QUEUE_POLL_INTERVAL_MS = 50
 STATUS_UPDATE_INTERVAL_MS = 5000  # Update status bar every 5 seconds
 HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
+DEFAULT_EXECUTION_TIMEOUT_MS = 30000
+MIN_EXECUTION_TIMEOUT_MS = 1000
+MAX_EXECUTION_TIMEOUT_MS = 600000
+MAX_BRIDGE_REQUEST_BYTES = 64 * 1024
+MAX_PENDING_REQUESTS = 32
+MAX_SOCKET_CLIENTS = 32
+REQUEST_READ_TIMEOUT_SECONDS = 10
+MAX_CAPTURED_OUTPUT_BYTES = 1_000_000
+OUTPUT_TRUNCATION_MARKER = "\n[output truncated]\n"
+MAX_RESULT_BUDGET = 1_000_000
+MAX_RESULT_DEPTH = 64
+_XML_TEXT_ESCAPES = {
+    **{value: f"\\x{value:02x}" for value in range(32) if value not in (9, 10, 13)},
+    0xFFFE: "\\ufffe",
+    0xFFFF: "\\uffff",
+}
+
+
+def _validate_result(value: Any) -> None:  # noqa: PLR0912
+    """Validate a bounded result that both bridge serializers can represent.
+
+    Raises:
+        ValueError: If the value is too large, too deep, or not portable.
+    """
+    budget = MAX_RESULT_BUDGET
+    pending: list[tuple[Any, int]] = [(value, 0)]
+    while pending:
+        current, depth = pending.pop()
+        budget -= 16
+        if budget < 0 or depth > MAX_RESULT_DEPTH:
+            raise ValueError("result exceeds the size or nesting limit")
+        kind = type(current)
+        if current is None or kind is bool:
+            continue
+        if kind is str:
+            if len(current) > budget:
+                raise ValueError("result exceeds the size limit")
+            if any(
+                (ord(character) < 32 and character not in "\t\n\r")
+                or character in "\ufffe\uffff"
+                for character in current
+            ):
+                raise ValueError("result contains characters invalid in XML")
+            try:
+                budget -= len(current.encode("utf-8"))
+            except UnicodeEncodeError as e:
+                raise ValueError("result contains invalid Unicode") from e
+            if budget < 0:
+                raise ValueError("result exceeds the size limit")
+        elif kind is int:
+            if not -(2**31) <= current < 2**31:
+                raise ValueError("result contains an integer outside XML-RPC range")
+        elif kind is float:
+            if not math.isfinite(current):
+                raise ValueError("result contains a non-finite number")
+        elif kind in (list, tuple):
+            if len(pending) + len(current) > budget // 16:
+                raise ValueError("result exceeds the item limit")
+            pending.extend((item, depth + 1) for item in current)
+        elif kind is dict:
+            if len(pending) + 2 * len(current) > budget // 16:
+                raise ValueError("result exceeds the item limit")
+            for key, item in current.items():
+                if type(key) is not str:
+                    raise ValueError("result contains a non-string mapping key")
+                pending.append((key, depth + 1))
+                pending.append((item, depth + 1))
+        else:
+            raise ValueError("result contains an unsupported value")
+
+
+class _BoundedCapture(io.TextIOBase):
+    """Capture a bounded amount of UTF-8 output without seekable buffers."""
+
+    def __init__(self, limit: int = MAX_CAPTURED_OUTPUT_BYTES) -> None:
+        """Initialize the maximum byte count for one output stream."""
+        super().__init__()
+        self._limit = limit
+        self._size = 0
+        self._buffer = io.StringIO()
+        self.truncated = False
+
+    def writable(self) -> bool:
+        """Return whether this output stream accepts writes."""
+        return True
+
+    def write(self, text: str) -> int:
+        """Capture as much output as fits and report the original write length."""
+        if not isinstance(text, str):
+            raise TypeError("output must be text")
+        if self.truncated:
+            return len(text)
+        remaining = max(0, self._limit - self._size)
+        sample = text[:remaining]
+        data = sample.translate(_XML_TEXT_ESCAPES).encode("utf-8", errors="replace")
+        accepted = data[:remaining].decode("utf-8", errors="ignore")
+        if accepted:
+            self._buffer.write(accepted)
+            self._size += len(accepted.encode("utf-8"))
+        if len(sample) != len(text) or len(data) > remaining:
+            self.truncated = True
+        return len(text)
+
+    def getvalue(self) -> str:
+        """Return captured output, marking truncation within the byte limit."""
+        text = self._buffer.getvalue()
+        if not self.truncated:
+            return text
+        marker = OUTPUT_TRUNCATION_MARKER.encode("utf-8")
+        if self._limit <= len(marker):
+            return marker[: self._limit].decode("utf-8", errors="ignore")
+        content = text.encode("utf-8")[: self._limit - len(marker)]
+        return content.decode("utf-8", errors="ignore") + OUTPUT_TRUNCATION_MARKER
+
+
+def _bounded_text(text: str) -> str:
+    """Limit UTF-8 text using the same policy as captured execution output."""
+    capture = _BoundedCapture()
+    capture.write(text)
+    return capture.getvalue()
+
+
+def _exception_diagnostics(error: BaseException) -> tuple[str, str]:
+    """Return bounded diagnostics even when an exception cannot be rendered."""
+    try:
+        message = _bounded_text(str(error))
+    except BaseException:
+        message = "Exception message could not be rendered"
+    capture = _BoundedCapture()
+    try:
+        traceback.print_exception(type(error), error, error.__traceback__, file=capture)
+        formatted = capture.getvalue()
+    except BaseException:
+        formatted = "Exception traceback could not be rendered"
+    return message, formatted
+
+
+def _loopback_host(host: str) -> str:
+    """Resolve the supported local host names without trusting DNS.
+
+    Args:
+        host: A loopback IP address or the special name ``localhost``.
+
+    Returns:
+        The canonical loopback IP address.
+
+    Raises:
+        ValueError: If the host is not a literal loopback address.
+    """
+    if host == "localhost":
+        return "127.0.0.1"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as e:
+        raise ValueError("Bridge host must be a loopback IP address") from e
+    if not address.is_loopback:
+        raise ValueError("Bridge host must be a loopback IP address")
+    return str(address)
+
+
+def _validate_execution_timeout_ms(timeout_ms: Any) -> int:
+    """Validate a timeout received through either bridge protocol.
+
+    Args:
+        timeout_ms: Candidate timeout value from an XML-RPC or JSON-RPC client.
+
+    Returns:
+        The validated timeout in milliseconds.
+
+    Raises:
+        ValueError: If the value is not an integer in the supported range.
+    """
+    if (
+        type(timeout_ms) is not int
+        or not MIN_EXECUTION_TIMEOUT_MS <= timeout_ms <= MAX_EXECUTION_TIMEOUT_MS
+    ):
+        msg = (
+            "Execution timeout must be an integer between "
+            f"{MIN_EXECUTION_TIMEOUT_MS} and {MAX_EXECUTION_TIMEOUT_MS} milliseconds"
+        )
+        raise ValueError(msg)
+    return timeout_ms
+
+
+def _validate_execution_code(code: Any) -> None:
+    """Reject non-text and oversized code before it reaches the work queue.
+
+    Args:
+        code: Code submitted by a bridge client.
+
+    Raises:
+        ValueError: If the code is not valid UTF-8 text within the size limit.
+    """
+    if not isinstance(code, str):
+        raise ValueError("Code must be a string")
+    try:
+        code_size = len(code.encode("utf-8"))
+    except UnicodeEncodeError as e:
+        raise ValueError("Code must be valid UTF-8 text") from e
+    if code_size > MAX_BRIDGE_REQUEST_BYTES:
+        raise ValueError("Code exceeds the bridge request size limit")
 
 
 def _get_qt_core() -> Any:
     """Get the QtCore module if GUI mode is available.
 
-    This helper checks if FreeCAD is available with GUI enabled and
-    attempts to import QtCore from PySide2 or PySide6.
+    This helper checks if FreeCAD is available with GUI enabled and loads
+    QtCore from the PySide binding compatible with FreeCAD's Qt runtime.
 
     Returns:
         The QtCore module if available in GUI mode, None otherwise.
     """
-    if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+    if not _freecad_gui_up():
         return None
 
-    # Try PySide2 first, then PySide6
-    with contextlib.suppress(ImportError):
-        from PySide2 import QtCore
-
-        return QtCore
-
-    with contextlib.suppress(ImportError):
-        from PySide6 import QtCore
-
-        return QtCore
-
+    with contextlib.suppress(RuntimeError):
+        return load_qt_core()
     return None
 
 
@@ -153,7 +384,7 @@ class ExecutionRequest:
     def __init__(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
         request_id: str | None = None,
     ) -> None:
         """Initialize execution request.
@@ -168,6 +399,38 @@ class ExecutionRequest:
         self.request_id = request_id
         self.result: dict[str, Any] | None = None
         self.completed = threading.Event()
+        self._state = "queued"
+        self._state_lock = threading.Lock()
+
+    def start(self) -> bool:
+        """Mark a queued request as running unless its caller already timed out.
+
+        Returns:
+            True when execution may start, or False when the request was cancelled.
+        """
+        with self._state_lock:
+            if self._state != "queued":
+                return False
+            self._state = "running"
+            return True
+
+    def finish(self, result: dict[str, Any]) -> None:
+        """Store the result and notify the waiting protocol thread."""
+        with self._state_lock:
+            self.result = result
+            self._state = "completed"
+            self.completed.set()
+
+    def mark_timed_out(self) -> str:
+        """Cancel queued work or report that running work cannot be interrupted.
+
+        Returns:
+            The request state after applying the timeout.
+        """
+        with self._state_lock:
+            if self._state == "queued":
+                self._state = "cancelled"
+            return self._state
 
 
 class FreecadMCPPlugin:
@@ -189,6 +452,7 @@ class FreecadMCPPlugin:
         port: int = DEFAULT_SOCKET_PORT,
         xmlrpc_port: int = DEFAULT_XMLRPC_PORT,
         enable_xmlrpc: bool = True,
+        authenticator: BridgeAuthenticator | None = None,
     ) -> None:
         """Initialize the plugin.
 
@@ -197,14 +461,16 @@ class FreecadMCPPlugin:
             port: Port for JSON-RPC socket server.
             xmlrpc_port: Port for XML-RPC server.
             enable_xmlrpc: Whether to enable XML-RPC server.
+            authenticator: Request verifier supplied by the trusted key provider.
         """
         # Generate unique instance ID for this server
         self._instance_id = str(uuid.uuid4())
 
-        self._host = host
+        self._host = _loopback_host(host)
         self._port = port
         self._xmlrpc_port = xmlrpc_port
         self._enable_xmlrpc = enable_xmlrpc
+        self._authenticator = authenticator
 
         # Server instances
         self._socket_server: asyncio.Server | None = None
@@ -217,7 +483,10 @@ class FreecadMCPPlugin:
         self._running = False
 
         # Queue-based execution for thread safety (learned from neka-nat)
-        self._request_queue: queue.Queue[ExecutionRequest] = queue.Queue()
+        self._request_queue: queue.Queue[ExecutionRequest] = queue.Queue(
+            maxsize=MAX_PENDING_REQUESTS
+        )
+        self._socket_client_count = 0
         self._timer = None
         self._queue_thread: threading.Thread | None = None
         self._headless = False
@@ -311,9 +580,23 @@ class FreecadMCPPlugin:
         }
 
     def start(self) -> None:
-        """Start all servers."""
+        """Start all servers.
+
+        Raises:
+            RuntimeError: If GUI mode is active but no supported Qt binding can
+                provide the main-thread queue timer, or if no authentication
+                provider is configured.
+        """
         if self._running:
             return
+
+        if self._authenticator is None:
+            if __package__:
+                from .authentication import authenticator_from_environment
+            else:
+                from authentication import authenticator_from_environment  # type: ignore[import-not-found,no-redef]
+
+            self._authenticator = authenticator_from_environment()
 
         self._running = True
 
@@ -326,8 +609,21 @@ class FreecadMCPPlugin:
                 flush=True,
             )
 
-        # Start the queue processing timer on the main thread
-        self._start_queue_processor()
+        # Start queue processing before opening either listener. If GUI queue
+        # setup fails, leave the plugin stopped and refuse incoming requests.
+        try:
+            self._start_queue_processor()
+        except Exception:
+            self._running = False
+            raise
+
+        # Finish GUI setup before exposing either listener. If setup fails,
+        # stop the queue processor and discard any partially created timers.
+        try:
+            self._start_status_updates()
+        except Exception:
+            self.stop()
+            raise
 
         # Start socket server
         self._socket_thread = threading.Thread(
@@ -355,9 +651,6 @@ class FreecadMCPPlugin:
                 FreeCAD.Console.PrintMessage(
                     f"  - XML-RPC: {self._host}:{self._xmlrpc_port}\n"
                 )
-
-        # Start status bar updates in GUI mode
-        self._start_status_updates()
 
     def stop(self) -> None:
         """Stop all servers.
@@ -558,6 +851,9 @@ class FreecadMCPPlugin:
         ``_cleanup_for_exit`` (via ``shiboken.delete()``) or by
         ``_stop_status_updates`` (via ``deleteLater()``).
         """
+        if not _freecad_gui_up():
+            return
+
         QtCore = _get_qt_core()
         if QtCore is None:
             return
@@ -585,13 +881,28 @@ class FreecadMCPPlugin:
             self._status_timer = None
 
         # Clear status bar message
-        if FREECAD_AVAILABLE and FreeCAD.GuiUp:
+        if _freecad_gui_up():
             self._set_status_bar("")
+            try:
+                from Qt.status_widget import update_status_stopped
+
+                update_status_stopped()
+            except Exception:
+                pass
 
     def _update_status_bar(self) -> None:
         """Update the FreeCAD status bar with MCP bridge status."""
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        if not _freecad_gui_up():
             return
+
+        # The bridge itself accepts Python from any paired client. Show this
+        # warning regardless of the optional general status-bar preference.
+        try:
+            from Qt.status_widget import update_status_running
+
+            update_status_running(self._xmlrpc_port, self._port, self._request_count)
+        except Exception:
+            pass
 
         # Build status message
         ports = f"XML-RPC:{self._xmlrpc_port}" if self._enable_xmlrpc else ""
@@ -606,11 +917,11 @@ class FreecadMCPPlugin:
                     time_ago = f"{int(elapsed)}s ago"
                 else:
                     time_ago = f"{int(elapsed / 60)}m ago"
-                status = f"🔌 MCP Bridge active{ports} | {self._request_count} requests | last: {time_ago}"
+                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests | last: {time_ago}"
             else:
-                status = f"🔌 MCP Bridge active{ports} | {self._request_count} requests"
+                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests"
         else:
-            status = f"🔌 MCP Bridge running{ports} | waiting for connections..."
+            status = f"🔌 MCP Bridge: Python execution enabled{ports} | waiting for connections..."
 
         self._set_status_bar(status)
 
@@ -620,7 +931,7 @@ class FreecadMCPPlugin:
         Args:
             message: Message to display in status bar.
         """
-        if not (FREECAD_AVAILABLE and FreeCAD.GuiUp):
+        if not _freecad_gui_up():
             return
 
         try:
@@ -654,39 +965,56 @@ class FreecadMCPPlugin:
         queue on the main thread—required because Qt widgets must only be
         touched from the thread that owns them.
 
-        In headless mode (``FreeCAD.GuiUp`` is False, or Qt is unavailable)
-        a daemon background thread polls the queue instead.  No QTimer is
-        created, so no timer cleanup is needed at shutdown.
+        In confirmed headless mode a daemon background thread polls the queue.
+        A missing or false ``GuiUp`` alone does not establish headless mode.
+        No QTimer is created, so no timer
+        cleanup is needed at shutdown. If GUI mode is active but neither Qt
+        binding is usable, startup fails rather than processing GUI-sensitive
+        work from a background thread.
 
         Note: The timer created here is destroyed during shutdown by
         ``_cleanup_for_exit`` (via ``shiboken.delete()``) or by ``stop()``
         (via ``deleteLater()``).
         """
-        # Check if we're in GUI mode using FreeCAD.GuiUp
-        # Note: Qt (PySide) may be available even in headless mode, but without
-        # a running event loop, Qt timers won't fire. Use GuiUp to detect this.
-        gui_available = FREECAD_AVAILABLE and FreeCAD.GuiUp
+        # A ready GUI must always use its owning Qt thread.
+        gui_available = _freecad_gui_up()
 
         if gui_available:
             # GUI mode: use Qt timer for thread-safe GUI operations
-            try:
-                from PySide2 import QtCore
-            except ImportError:
-                try:
-                    from PySide6 import QtCore
-                except ImportError:
-                    QtCore = None  # type: ignore[assignment]
+            QtCore = _get_qt_core()
+            if QtCore is None:
+                message = (
+                    "MCP Bridge cannot start in GUI mode because a PySide binding "
+                    "matching FreeCAD's Qt version could not provide QtCore. Refusing "
+                    "unsafe background queue processing."
+                )
+                FreeCAD.Console.PrintError(f"{message}\n")
+                raise RuntimeError(message)
 
-            if QtCore is not None:
-                timer = QtCore.QTimer()
-                timer.timeout.connect(self._process_queue)
-                timer.start(QUEUE_POLL_INTERVAL_MS)
-                self._timer = timer
-                return
+            timer = QtCore.QTimer()
+            timer.timeout.connect(self._process_queue)
+            timer.start(QUEUE_POLL_INTERVAL_MS)
+            self._timer = timer
+            return
 
-        # Headless mode: use a background thread for queue processing
-        # In headless mode, there's no GUI thread concern, so direct
-        # processing in a background thread is safe
+        # A false or missing GuiUp alone is ambiguous during GUI startup.
+        # Only a console executable or a positively identified non-GUI Qt
+        # application permits background execution.
+        confirmed_headless = False
+        try:
+            qtcore, qtwidgets = load_qt_core_widgets()
+            app = qtcore.QCoreApplication.instance()
+            if app is not None:
+                confirmed_headless = not isinstance(app, qtwidgets.QApplication)
+            else:
+                confirmed_headless = is_console_invocation(sys.executable, sys.argv[1:])
+        except RuntimeError:
+            confirmed_headless = is_console_invocation(sys.executable, sys.argv[1:])
+        if not confirmed_headless:
+            raise RuntimeError(
+                "Cannot confirm headless FreeCAD; refusing unsafe background "
+                "queue processing."
+            )
         self._headless = True
         self._queue_thread = threading.Thread(
             target=self._run_queue_processor_loop,
@@ -714,9 +1042,10 @@ class FreecadMCPPlugin:
         while not self._request_queue.empty():
             try:
                 request = self._request_queue.get_nowait()
+                if not request.start():
+                    continue
                 result = self._execute_code_sync(request.code)
-                request.result = result
-                request.completed.set()
+                request.finish(result)
                 # Track request for status bar
                 self._record_request()
             except queue.Empty:
@@ -728,7 +1057,7 @@ class FreecadMCPPlugin:
     def _execute_via_queue(
         self,
         code: str,
-        timeout_ms: int = 30000,
+        timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
     ) -> dict[str, Any]:
         """Execute code via the queue system for thread safety.
 
@@ -739,8 +1068,27 @@ class FreecadMCPPlugin:
         Returns:
             Execution result dictionary.
         """
+        try:
+            timeout_ms = _validate_execution_timeout_ms(timeout_ms)
+            _validate_execution_code(code)
+        except ValueError as e:
+            return {
+                "success": False,
+                "error_type": "ValueError",
+                "error_message": str(e),
+                "execution_time_ms": 0,
+            }
+
         request = ExecutionRequest(code, timeout_ms)
-        self._request_queue.put(request)
+        try:
+            self._request_queue.put_nowait(request)
+        except queue.Full:
+            return {
+                "success": False,
+                "error_type": "Overloaded",
+                "error_message": "Bridge execution queue is full",
+                "execution_time_ms": 0,
+            }
 
         # Wait for completion
         if request.completed.wait(timeout=timeout_ms / 1000):
@@ -749,13 +1097,21 @@ class FreecadMCPPlugin:
                 "error_type": "InternalError",
                 "error_message": "No result returned",
             }
-        else:
-            return {
-                "success": False,
-                "error_type": "TimeoutError",
-                "error_message": f"Execution timed out after {timeout_ms}ms",
-                "execution_time_ms": timeout_ms,
-            }
+        state = request.mark_timed_out()
+        if state == "completed" and request.result is not None:
+            return request.result
+
+        detail = (
+            "code already running in FreeCAD may continue"
+            if state == "running"
+            else "queued code was cancelled before execution"
+        )
+        return {
+            "success": False,
+            "error_type": "TimeoutError",
+            "error_message": f"Execution timed out after {timeout_ms}ms; {detail}",
+            "execution_time_ms": timeout_ms,
+        }
 
     def _execute_code_sync(self, code: str) -> dict[str, Any]:
         """Execute Python code synchronously (call on main thread only).
@@ -767,8 +1123,8 @@ class FreecadMCPPlugin:
             Execution result dictionary.
         """
         start = time.perf_counter()
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
+        stdout_capture = _BoundedCapture()
+        stderr_capture = _BoundedCapture()
 
         exec_globals: dict[str, Any] = {
             "__builtins__": __builtins__,
@@ -786,25 +1142,41 @@ class FreecadMCPPlugin:
                 exec(compiled, exec_globals)  # noqa: S102
 
             elapsed = (time.perf_counter() - start) * 1000
+            result = exec_globals.get("_result_")
+            try:
+                _validate_result(result)
+            except ValueError as e:
+                return {
+                    "success": False,
+                    "result": None,
+                    "stdout": stdout_capture.getvalue(),
+                    "stderr": stderr_capture.getvalue(),
+                    "execution_time_ms": elapsed,
+                    "error_type": "ResultValidationError",
+                    "error_message": (
+                        f"Code executed, but {e}; FreeCAD changes may have occurred"
+                    ),
+                }
             return {
                 "success": True,
-                "result": exec_globals.get("_result_"),
+                "result": result,
                 "stdout": stdout_capture.getvalue(),
                 "stderr": stderr_capture.getvalue(),
                 "execution_time_ms": elapsed,
             }
 
-        except Exception as e:
+        except BaseException as e:
             elapsed = (time.perf_counter() - start) * 1000
+            message, formatted_traceback = _exception_diagnostics(e)
             return {
                 "success": False,
                 "result": None,
                 "stdout": stdout_capture.getvalue(),
                 "stderr": stderr_capture.getvalue(),
                 "execution_time_ms": elapsed,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "error_traceback": traceback.format_exc(),
+                "error_type": _bounded_text(type(e).__name__),
+                "error_message": message,
+                "error_traceback": formatted_traceback,
             }
 
     # =========================================================================
@@ -833,6 +1205,18 @@ class FreecadMCPPlugin:
                     f"MCP Bridge: Failed to start JSON-RPC server: {e}\n"
                 )
         finally:
+            if self._socket_server is not None:
+                self._socket_server.close()
+            pending = asyncio.all_tasks(self._socket_loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                self._socket_loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+            if self._socket_server is not None:
+                self._socket_loop.run_until_complete(self._socket_server.wait_closed())
+                self._socket_server = None
             self._socket_loop.close()
 
     async def _start_socket_server(self) -> None:
@@ -841,6 +1225,7 @@ class FreecadMCPPlugin:
             self._handle_socket_client,
             self._host,
             self._port,
+            limit=MAX_BRIDGE_REQUEST_BYTES,
         )
 
     async def _handle_socket_client(
@@ -854,16 +1239,26 @@ class FreecadMCPPlugin:
             reader: Stream reader for incoming data.
             writer: Stream writer for outgoing data.
         """
+        if self._socket_client_count >= MAX_SOCKET_CLIENTS:
+            writer.close()
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
+            return
+        self._socket_client_count += 1
         try:
             while self._running:
-                data = await reader.readline()
+                data = await asyncio.wait_for(
+                    reader.readline(), timeout=REQUEST_READ_TIMEOUT_SECONDS
+                )
                 if not data:
+                    break
+                if len(data) > MAX_BRIDGE_REQUEST_BYTES:
                     break
 
                 try:
-                    request = json.loads(data.decode("utf-8"))
-                    response = await self._process_jsonrpc_request(request)
-                except json.JSONDecodeError as e:
+                    envelope = json.loads(data.decode("utf-8"))
+                    response = await self._process_socket_envelope(envelope)
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
                     response = {
                         "jsonrpc": "2.0",
                         "id": None,
@@ -878,17 +1273,63 @@ class FreecadMCPPlugin:
                 writer.write(response_data)
                 await writer.drain()
 
+        except TimeoutError:
+            pass  # Idle clients can reconnect with a fresh challenge.
         except Exception as e:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")
         finally:
+            self._socket_client_count -= 1
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
 
+    async def _process_socket_envelope(  # noqa: PLR0911
+        self, envelope: Any
+    ) -> dict[str, Any]:
+        """Authenticate a bounded socket envelope before parsing its request.
+
+        The unauthenticated challenge operation only issues a bounded one-use
+        nonce. Every JSON-RPC request must provide a proof over its exact bytes.
+        """
+        auth = self._authenticator
+        if auth is None or not isinstance(envelope, dict):
+            return {"error": "Bridge authentication required"}
+        if envelope == {"type": "challenge"}:
+            try:
+                return {"challenge": auth.issue_challenge()}
+            except RuntimeError:
+                return {"error": "Bridge challenge unavailable"}
+        if set(envelope) != {"client", "challenge", "proof", "body"}:
+            return {"error": "Bridge authentication required"}
+        body = envelope["body"]
+        if not isinstance(body, str):
+            return {"error": "Bridge authentication required"}
+        try:
+            raw_body = base64.b64decode(body, validate=True)
+        except (ValueError, binascii.Error):
+            return {"error": "Bridge authentication required"}
+        if not auth.verify(
+            envelope["client"],
+            envelope["challenge"],
+            "socket",
+            raw_body,
+            envelope["proof"],
+        ):
+            return {"error": "Bridge authentication required"}
+        try:
+            request = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": "Parse error"},
+            }
+        return await self._process_jsonrpc_request(request)
+
     async def _process_jsonrpc_request(
         self,
-        request: dict[str, Any],
+        request: Any,
     ) -> dict[str, Any]:
         """Process a JSON-RPC 2.0 request.
 
@@ -898,9 +1339,28 @@ class FreecadMCPPlugin:
         Returns:
             JSON-RPC response dictionary.
         """
+        if (
+            not isinstance(request, dict)
+            or request.get("jsonrpc") != "2.0"
+            or (
+                request.get("id") is not None
+                and type(request.get("id")) not in (str, int)
+            )
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Invalid request"},
+            }
         request_id = request.get("id")
         method = request.get("method")
         params = request.get("params", {})
+        if not isinstance(params, dict):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32602, "message": "Invalid params"},
+            }
 
         # Handle ping specially (no queue needed)
         if method == "ping":
@@ -925,7 +1385,7 @@ class FreecadMCPPlugin:
         # Handle execute via queue
         if method == "execute":
             code = params.get("code", "")
-            timeout_ms = params.get("timeout_ms", 30000)
+            timeout_ms = params.get("timeout_ms", DEFAULT_EXECUTION_TIMEOUT_MS)
 
             # Execute via queue for thread safety
             loop = asyncio.get_event_loop()
@@ -957,11 +1417,69 @@ class FreecadMCPPlugin:
 
     def _run_xmlrpc_server(self) -> None:
         """Run the XML-RPC server."""
+        authenticator = self._authenticator
 
         # Custom request handler that silently handles GET requests
         # instead of logging "Unsupported method ('GET')" errors
         class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
             """XML-RPC handler that responds gracefully to GET requests."""
+
+            def setup(self) -> None:
+                """Apply a total deadline to reading HTTP headers and body."""
+                super().setup()
+                self.connection.settimeout(REQUEST_READ_TIMEOUT_SECONDS)
+                self._read_timer = threading.Timer(
+                    REQUEST_READ_TIMEOUT_SECONDS, self._expire_read
+                )
+                self._read_timer.daemon = True
+                self._read_timer.start()
+
+            def _expire_read(self) -> None:
+                """Interrupt a client that has not finished sending a request."""
+                with contextlib.suppress(OSError):
+                    self.connection.shutdown(socket.SHUT_RDWR)
+
+            def finish(self) -> None:
+                """Release the read deadline when the handler finishes."""
+                self._read_timer.cancel()
+                super().finish()
+
+            def do_POST(self) -> None:
+                """Reject oversized, compressed, or ambiguously framed requests."""
+                lengths = self.headers.get_all("Content-Length", [])
+                if (
+                    len(lengths) != 1
+                    or not lengths[0].isascii()
+                    or not lengths[0].isdigit()
+                    or len(lengths[0]) > 10
+                    or self.headers.get("Transfer-Encoding") is not None
+                    or self.headers.get("Content-Encoding", "identity").lower()
+                    != "identity"
+                ):
+                    self.send_error(400, "Invalid request framing")
+                    return
+                if int(lengths[0]) > MAX_BRIDGE_REQUEST_BYTES:
+                    self.send_error(413, "Request too large")
+                    return
+                super().do_POST()
+
+            def decode_request_content(self, data: bytes) -> bytes | None:
+                """Authenticate bounded bytes before inspecting or parsing XML."""
+                self._read_timer.cancel()
+                if authenticator is None or not authenticator.verify_xmlrpc_headers(
+                    self.headers, data
+                ):
+                    self.send_error(401, "Bridge authentication required")
+                    return None
+                try:
+                    text = data.decode("utf-8")
+                except UnicodeDecodeError:
+                    self.send_error(400, "XML must be UTF-8")
+                    return None
+                if "<!DOCTYPE" in text or "<!ENTITY" in text or "\x00" in text:
+                    self.send_error(400, "XML declarations are not permitted")
+                    return None
+                return data
 
             def do_GET(self) -> None:
                 """Handle GET requests with a friendly plain-text response.
@@ -986,6 +1504,23 @@ class FreecadMCPPlugin:
                         curl http://localhost:9875/
                         # Returns: FreeCAD MCP Bridge - XML-RPC endpoint (POST only)
                 """
+                self._read_timer.cancel()
+                if self.path == "/challenge":
+                    if authenticator is None:
+                        self.send_error(503, "Bridge authentication unavailable")
+                        return
+                    try:
+                        response = authenticator.issue_challenge().encode("ascii")
+                    except RuntimeError:
+                        self.send_error(503, "Bridge challenge unavailable")
+                        return
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/plain")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(response)))
+                    self.end_headers()
+                    self.wfile.write(response)
+                    return
                 response = b"FreeCAD MCP Bridge - XML-RPC endpoint (POST only)"
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
@@ -1020,7 +1555,15 @@ class FreecadMCPPlugin:
                 pass
 
         try:
-            self._xmlrpc_server = xmlrpc.server.SimpleXMLRPCServer(
+
+            class LoopbackXMLRPCServer(xmlrpc.server.SimpleXMLRPCServer):
+                """Select the address family of the validated loopback address."""
+
+                address_family = (
+                    socket.AF_INET6 if ":" in self._host else socket.AF_INET
+                )
+
+            self._xmlrpc_server = LoopbackXMLRPCServer(
                 (self._host, self._xmlrpc_port),
                 requestHandler=QuietXMLRPCRequestHandler,
                 allow_none=True,
@@ -1075,16 +1618,22 @@ class FreecadMCPPlugin:
         """
         return {"instance_id": self._instance_id}
 
-    def _xmlrpc_execute(self, code: str) -> dict[str, Any]:
+    def _xmlrpc_execute(
+        self,
+        code: str,
+        timeout_ms: int = DEFAULT_EXECUTION_TIMEOUT_MS,
+    ) -> dict[str, Any]:
         """XML-RPC execute handler (neka-nat compatible).
 
         Args:
             code: Python code to execute.
+            timeout_ms: Execution timeout in milliseconds. The default preserves
+                compatibility with one-argument XML-RPC clients.
 
         Returns:
             Execution result dictionary.
         """
-        return self._execute_via_queue(code, 30000)
+        return self._execute_via_queue(code, timeout_ms)
 
     # Valid view types for screenshot capture
     _VALID_VIEW_TYPES = frozenset(

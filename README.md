@@ -152,7 +152,17 @@ just docker::build        # Build for local architecture
 just docker::build-multi  # Build multi-arch (amd64 + arm64)
 ```
 
-**Note:** The containerized Robust MCP Server only supports `xmlrpc` and `socket` modes since FreeCAD runs on your host machine (not in the container). The container connects to FreeCAD via `host.docker.internal`.
+The containerized Robust MCP Server only supports `xmlrpc` and `socket`
+modes because FreeCAD runs on the host. This topology currently works only
+with Docker Desktop, whose `host.docker.internal` forwarding can reach a
+host-loopback listener.
+
+> **Security and Linux limitation:** The FreeCAD bridge listens on loopback and
+> accepts unauthenticated Python execution. Docker Engine on Linux maps
+> `host.docker.internal` or `host-gateway` to a bridge-network address, which
+> cannot reach that loopback listener. Run the MCP server directly on the Linux
+> host instead. Do not expose ports 9875 or 9876 by rebinding the bridge to
+> `0.0.0.0`; protected remote transport is not implemented yet.
 
 ### Configuration
 
@@ -165,7 +175,7 @@ just docker::build-multi  # Build multi-arch (amd64 + arm64)
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                       | `localhost` |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
-| `FREECAD_TIMEOUT_MS`  | Execution timeout in ms                              | `30000`     |
+| `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
 #### Connection Modes
 
@@ -210,7 +220,7 @@ If installed from source with mise/uv:
 }
 ```
 
-If using Docker:
+If using Docker Desktop on macOS or Windows:
 
 ```json
 {
@@ -219,7 +229,6 @@ If using Docker:
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
-        "--add-host=host.docker.internal:host-gateway",
         "-e", "FREECAD_MODE=xmlrpc",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
         "spkane/freecad-robust-mcp"
@@ -233,8 +242,12 @@ If using Docker:
 
 - `--rm` removes the container after it exits
 - `-i` keeps stdin open for MCP communication
-- `--add-host=host.docker.internal:host-gateway` allows the container to connect to FreeCAD on your host (Linux only; macOS/Windows have this built-in)
 - `FREECAD_SOCKET_HOST=host.docker.internal` tells the Robust MCP Server to connect to FreeCAD on your host machine
+
+This example is not supported on Docker Engine for Linux. Its host gateway
+cannot reach the bridge's loopback-only listener. `FREECAD_SOCKET_HOST` changes
+only the address dialed by the MCP server; it does not change the address on
+which the FreeCAD bridge listens.
 
 ### Usage
 

@@ -25,8 +25,8 @@ pip install freecad-robust-mcp
 ### Method 2: From Source (for Development)
 
 ```bash
-git clone https://github.com/spkane/freecad-robust-mcp-and-more.git
-cd freecad-robust-mcp-and-more
+git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
+cd freecad-addon-robust-mcp-server
 
 # Install mise (if not already installed)
 curl https://mise.run | sh
@@ -68,7 +68,7 @@ The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection 
 
 ### Manual Installation
 
-1. Download the latest release from [GitHub Releases](https://github.com/spkane/freecad-robust-mcp-and-more/releases)
+1. Download the `freecad-mcp-workbench` archive from the latest [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true)
 1. Extract to your FreeCAD Mod directory:
    - **Linux:** `~/.local/share/FreeCAD/Mod/`
    - **macOS:** `~/Library/Application Support/FreeCAD/Mod/`
@@ -79,9 +79,29 @@ The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection 
 
 ## Verifying Installation
 
+These instructions describe the current development version. The latest published
+server and workbench releases predate bridge pairing; use matching builds that
+support pairing when following this guide.
+
 After installation, verify everything is working:
 
-### Step 1: Start FreeCAD with the Robust MCP Bridge
+### Step 1: Pair the bridge
+
+Run the pairing command on the same computer and user account as FreeCAD:
+
+```bash
+# With pip installation
+freecad-mcp --pair-bridge
+
+# From the source checkout
+uv run freecad-mcp --pair-bridge
+```
+
+A server running in a container or under a different account needs access to the
+same pairing credential; pairing the host account alone does not provision it
+there. For credential storage and alternative setups, see [Configuration](configuration.md).
+
+### Step 2: Start FreeCAD with the Robust MCP Bridge
 
 1. **Start FreeCAD** and select the **Robust MCP Bridge** workbench from the workbench selector dropdown
 1. **Click "Start MCP Bridge"** in the toolbar (or use the MCP Bridge menu)
@@ -93,7 +113,7 @@ MCP Bridge started!
   - Socket:  localhost:9876
 ```
 
-### Step 2: Verify the Robust MCP Server
+### Step 3: Verify the Robust MCP Server
 
 Test that the Robust MCP Server command is available:
 
@@ -105,15 +125,16 @@ freecad-mcp --help
 uv run freecad-mcp --help
 ```
 
-### Step 3: Test the Connection
+### Step 4: Test the Connection
 
 With FreeCAD running and the bridge started, you can verify connectivity:
 
 ```bash
-# Quick connectivity test using curl (XML-RPC)
-curl -X POST http://localhost:9875 \
-  -H "Content-Type: text/xml" \
-  -d '<?xml version="1.0"?><methodCall><methodName>ping</methodName></methodCall>'
+# With pip installation
+freecad-mcp --check --mode xmlrpc
+
+# From the source checkout
+uv run freecad-mcp --check --mode xmlrpc
 ```
 
 A successful response indicates the bridge is working correctly.

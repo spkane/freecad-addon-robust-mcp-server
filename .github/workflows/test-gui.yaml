@@ -21,6 +21,9 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/test-gui.yaml"
+  schedule:
+    # Exercise the newest FreeCAD weekly even when this repository is quiet.
+    - cron: "17 9 * * 3"
   workflow_dispatch:
 
 # Cancel in-progress runs for the same branch
@@ -30,26 +33,93 @@ concurrency:
 
 jobs:
   gui-integration-test:
-    name: Integration Tests (FreeCAD GUI)
+    name: GUI (${{ matrix.display_name }})
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - id: qt5-stable
+            display_name: FreeCAD 1.0.2 / Qt5
+            release: "1.0.2"
+            expected_binding: PySide2
+            experimental: false
+          - id: qt6-stable
+            display_name: latest stable / Qt6
+            release: latest-stable
+            expected_binding: PySide6
+            experimental: false
+          - id: qt6-weekly
+            display_name: latest weekly / Qt6 canary
+            release: latest-weekly
+            expected_binding: PySide6
+            experimental: true
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve FreeCAD release
+        id: freecad-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_RELEASE: ${{ matrix.release }}
+          TARGET_ARCH: x86_64
+        run: |
+          if [[ "$REQUESTED_RELEASE" == "latest-stable" ]]; then
+            RELEASE_INFO=$(gh api repos/FreeCAD/FreeCAD/releases/latest)
+          elif [[ "$REQUESTED_RELEASE" == "latest-weekly" ]]; then
+            RELEASES=$(gh api 'repos/FreeCAD/FreeCAD/releases?per_page=30')
+            RELEASE_INFO=$(jq -c \
+              '[.[] | select(.prerelease == true and (.tag_name | startswith("weekly-")))][0]' \
+              <<< "$RELEASES")
+          else
+            RELEASE_INFO=$(gh api \
+              "repos/FreeCAD/FreeCAD/releases/tags/$REQUESTED_RELEASE")
+          fi
+
+          TAG=$(jq -r '.tag_name' <<< "$RELEASE_INFO")
+          ASSET=$(jq -c --arg arch "$TARGET_ARCH" \
+            '[.assets[] | select(.name | test("Linux-" + $arch + ".*\\.AppImage$"))][0]' \
+            <<< "$RELEASE_INFO")
+          URL=$(jq -r '.browser_download_url' <<< "$ASSET")
+          DIGEST=$(jq -r '.digest' <<< "$ASSET")
+
+          if [[ -z "$TAG" || "$TAG" == "null" ||
+                -z "$URL" || "$URL" == "null" ||
+                ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Unable to resolve a verified Linux AppImage for $REQUESTED_RELEASE" >&2
+            echo "Release tag: $TAG" >&2
+            echo "Asset: $ASSET" >&2
+            exit 1
+          fi
+
+          {
+            echo "tag=$TAG"
+            echo "url=$URL"
+            echo "sha256=${DIGEST#sha256:}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved $REQUESTED_RELEASE to $TAG"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build GUI test image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: tests/ci-test/Dockerfile.gui-test
           push: false
           load: true
-          tags: freecad-gui-test:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: freecad-gui-test:${{ matrix.id }}
+          build-args: |
+            FREECAD_TAG=${{ steps.freecad-release.outputs.tag }}
+            FREECAD_APPIMAGE_URL=${{ steps.freecad-release.outputs.url }}
+            FREECAD_APPIMAGE_SHA256=${{ steps.freecad-release.outputs.sha256 }}
+          cache-from: type=gha,scope=freecad-gui-${{ matrix.id }}
+          cache-to: type=gha,mode=max,scope=freecad-gui-${{ matrix.id }}
 
       - name: Run GUI integration tests
         run: |
@@ -66,7 +136,9 @@ jobs:
             -e QT_QPA_PLATFORM=xcb \
             -e LIBGL_ALWAYS_SOFTWARE=1 \
             -e XDG_RUNTIME_DIR=/tmp/runtime-root \
-            freecad-gui-test:latest \
+            -e EXPECTED_QT_BINDING=${{ matrix.expected_binding }} \
+            -e FREECAD_TEST_RELEASE=${{ steps.freecad-release.outputs.tag }} \
+            freecad-gui-test:${{ matrix.id }} \
             /bin/bash -c '
               set -e
 
@@ -92,6 +164,7 @@ jobs:
               # Install project dependencies
               echo "Installing dependencies..."
               uv sync --all-extras
+              uv run freecad-mcp --pair-bridge
 
               # Start FreeCAD GUI with MCP bridge
               echo "Starting FreeCAD GUI with MCP bridge..."
@@ -119,10 +192,7 @@ jobs:
                 fi
 
                 # Check XML-RPC endpoint
-                if curl -s --max-time 1 -X POST \
-                    -H "Content-Type: text/xml" \
-                    -d "<?xml version=\"1.0\"?><methodCall><methodName>ping</methodName></methodCall>" \
-                    http://localhost:9875 2>/dev/null | grep -q "pong"; then
+                if uv run python -c "from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())" 2>/dev/null | grep -q "pong"; then
                   echo "MCP bridge is ready after ${i}s!"
                   BRIDGE_READY=1
                   break
@@ -144,13 +214,7 @@ jobs:
 
               # Verify GUI mode is active
               echo "Verifying GUI mode..."
-              RESULT=$(curl -s -X POST \
-                -H "Content-Type: text/xml" \
-                -d "<?xml version=\"1.0\"?><methodCall><methodName>execute</methodName><params><param><value><string>_result_ = FreeCAD.GuiUp</string></value></param></params></methodCall>" \
-                http://localhost:9875)
-              echo "GuiUp check result: $RESULT"
-
-              if ! echo "$RESULT" | grep -q "true\|True\|1"; then
+              if ! uv run python -m tests.integration.gui_probe; then
                 echo "ERROR: FreeCAD GUI mode not active"
                 cat /test-output/freecad_bridge.log || true
                 kill $XDOT_PID 2>/dev/null || true
@@ -162,7 +226,7 @@ jobs:
 
               # Run GUI integration tests (excluding standalone tests)
               echo "Running GUI integration tests..."
-              uv run pytest tests/integration/test_gui_mode.py -v --tb=short -x \
+              uv run pytest tests/integration/ -v --tb=short -x \
                 -m "not standalone_freecad" \
                 --junit-xml=/test-output/gui-test-results.xml \
                 || TEST_EXIT=$?
@@ -193,9 +257,9 @@ jobs:
 
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: gui-test-artifacts
+          name: gui-test-artifacts-${{ matrix.id }}
           path: test-output/
           retention-days: 7
 
@@ -204,3 +268,23 @@ jobs:
         run: |
           echo "=== FreeCAD Bridge Log ==="
           cat test-output/freecad_bridge.log 2>/dev/null || echo "No log file found"
+
+      - name: Report canary result
+        if: always() && matrix.experimental
+        env:
+          JOB_STATUS: ${{ job.status }}
+          FREECAD_TAG: ${{ steps.freecad-release.outputs.tag }}
+        run: |
+          if [[ "$JOB_STATUS" == "success" ]]; then
+            {
+              echo "### FreeCAD weekly canary passed"
+              echo "Tested $FREECAD_TAG with PySide6."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=FreeCAD weekly canary failed::$FREECAD_TAG failed the non-blocking Qt6 GUI compatibility lane. Review this job and its artifacts."
+            {
+              echo "### FreeCAD weekly canary failed"
+              echo "$FREECAD_TAG failed the non-blocking Qt6 GUI compatibility lane."
+              echo "Review the bridge log and JUnit artifacts from this job."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

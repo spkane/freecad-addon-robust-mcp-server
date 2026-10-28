@@ -1,98 +1,164 @@
-# FreeCAD Robust MCP Suite
-
-Welcome to the FreeCAD Robust MCP Suite documentation.
-
-This project provides an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server and FreeCAD workbench that enable integration between AI assistants (Claude, GPT, and other MCP-compatible tools) and [FreeCAD](https://www.freecadweb.org/), allowing AI-assisted development and debugging of 3D models, macros, and workbenches.
-
+---
+hide:
+  - toc
 ---
 
-## Features
+# Build in FreeCAD with your AI assistant
 
-- **150+ MCP Tools** - Comprehensive CAD operations including primitives, PartDesign, booleans, export
-- **Multiple Connection Modes** - XML-RPC (recommended), JSON-RPC socket, or embedded (Linux only)
-- **GUI & Headless Support** - Full modeling in headless mode, plus screenshots/colors in GUI mode
-- **Macro Development** - Create, edit, run, and template FreeCAD macros via MCP
+<div class="landing" markdown>
 
----
+<div class="landing-hero" markdown>
+<div class="landing-hero__copy" markdown>
 
-## Quick Start
+<span class="landing-eyebrow">FREECAD + MODEL CONTEXT PROTOCOL</span>
 
-```bash
-# Install the Robust MCP Server
-pip install freecad-robust-mcp
+## From an idea to a model, together
 
-# Install the workbench via FreeCAD Addon Manager
-# (search for "Robust MCP" - the package is "FreeCAD Robust MCP Suite")
+Give your MCP-compatible assistant a direct connection to FreeCAD. Create and
+inspect geometry, explore a design, and export your work while keeping FreeCAD
+at the center of the workflow.
 
-# Start FreeCAD and switch to the "Robust MCP Bridge" workbench
-# Click "Start Bridge" in the toolbar
+[Install the server](getting-started/installation.md){ .md-button .md-button--primary }
+[Explore the tools](guide/tools.md){ .md-button }
 
-# Configure your MCP client and start building!
-```
+<span class="landing-note">Open source · Local-first connection · GUI and headless modes</span>
 
-See [Installation](getting-started/installation.md) for detailed setup instructions.
+</div>
+<div class="landing-hero__visual" markdown>
 
----
+![An example mounting bracket rendered in the FreeCAD 3D view](assets/images/bracket-example.webp)
 
-## Connection Modes
+<span class="landing-image-caption">EXAMPLE MODEL · FREECAD 3D VIEW</span>
 
-| Mode       | Description                  | Platform                    |
-| ---------- | ---------------------------- | --------------------------- |
-| `xmlrpc`   | XML-RPC protocol (port 9875) | All platforms (recommended) |
-| `socket`   | JSON-RPC socket (port 9876)  | All platforms               |
-| `embedded` | In-process FreeCAD           | Linux only                  |
+</div>
+</div>
 
-See [Connection Modes](guide/connection-modes.md) for details on choosing the right mode.
+<div class="landing-section-heading" markdown>
 
----
+<span class="landing-eyebrow">A PRACTICAL CAD COMPANION</span>
 
-## GUI vs Headless Mode
+## Work in the tools you already use
 
-The Robust MCP Server works with FreeCAD in both GUI and headless mode:
+The server exposes FreeCAD operations to your assistant; the bridge workbench
+runs inside FreeCAD and carries out those operations.
 
-| Feature                  | Headless | GUI |
-| ------------------------ | -------- | --- |
-| Object creation          | Yes      | Yes |
-| Boolean operations       | Yes      | Yes |
-| Export (STEP, STL, etc.) | Yes      | Yes |
-| Screenshots              | No       | Yes |
-| Object colors/visibility | No       | Yes |
-| Camera control           | No       | Yes |
+</div>
 
----
+<div class="landing-grid" markdown>
 
-## FreeCAD Macros
+<div class="landing-card" markdown>
 
-The MCP server provides tools for working with FreeCAD macros:
+### Create and edit
 
-- **List macros** - Discover available macros in your FreeCAD installation
-- **Run macros** - Execute macros with parameter passing
-- **Create macros** - Generate new macros from templates or custom code
+Build primitives and PartDesign features, combine geometry, and work with
+documents and objects through natural-language requests.
 
-See [Macros Guide](guide/macros.md) for details on using macros with the MCP server.
+</div>
+<div class="landing-card" markdown>
 
----
+### Inspect and iterate
 
-## Documentation
+Ask about objects and properties, adjust a model, and capture views in FreeCAD's
+GUI to review the result as you work.
 
-| Section                                            | Description                                       |
-| -------------------------------------------------- | ------------------------------------------------- |
-| [Getting Started](getting-started/installation.md) | Installation, configuration, and quick start      |
-| [User Guide](guide/connection-modes.md)            | Connection modes, workbench, macros, and tools    |
-| [Tools Reference](MCP_TOOLS_REFERENCE.md)          | Complete API reference for all 150+ MCP tools     |
-| [API Reference](api/server.md)                     | Python API documentation                          |
-| [Development](development/contributing.md)         | Contributing, architecture, and development setup |
-| [Comparison](COMPARISON.md)                        | Compare with other FreeCAD MCP implementations    |
+</div>
+<div class="landing-card" markdown>
 
----
+### Export and automate
 
-## Links
+Prepare STEP, STL, and other supported exports, or use headless FreeCAD for
+workflows that do not need a visible 3D view.
 
-- [GitHub Repository](https://github.com/spkane/freecad-robust-mcp-and-more) - Source code and issue tracker
-- [PyPI Package](https://pypi.org/project/freecad-robust-mcp/) - Python package for pip installation
-- [Docker Hub](https://hub.docker.com/r/spkane/freecad-robust-mcp) - Pre-built Docker images
+</div>
+</div>
 
----
+<div class="landing-feature" markdown>
+<div class="landing-feature__visual" markdown>
 
-!!! tip "Share This Documentation"
-    Direct link: **[https://spkane.github.io/freecad-robust-mcp-and-more/](https://spkane.github.io/freecad-robust-mcp-and-more/)**
+![An example bearing mount rendered in FreeCAD](assets/images/bearing-mount-example.webp)
+
+<span class="landing-image-caption">EXAMPLE MODEL · FREECAD 3D VIEW</span>
+
+</div>
+<div class="landing-feature__copy" markdown>
+
+<span class="landing-eyebrow">IDEAS TO TRY</span>
+
+## Start with a useful request
+
+- “Create a mounting bracket with four bolt holes.”
+- “Inspect this part and tell me its dimensions and volume.”
+- “Export the current model to STEP and STL.”
+- “Show an isometric view and capture a screenshot.”
+
+These are example requests; review the generated geometry and dimensions
+before using a model for manufacturing.
+
+[See the quick start](getting-started/quickstart.md) · [View all tools](guide/tools.md)
+
+</div>
+</div>
+
+<div class="landing-section-heading" markdown>
+
+<span class="landing-eyebrow">GET CONNECTED</span>
+
+## Three pieces, one workflow
+
+</div>
+<div class="landing-steps" markdown>
+
+<div markdown>
+
+### 01 · Install
+
+Install the MCP server and the Robust MCP Bridge workbench in FreeCAD.
+
+</div>
+<div markdown>
+
+### 02 · Pair and start
+
+Run `freecad-mcp --pair-bridge`, then start the bridge in FreeCAD.
+
+</div>
+<div markdown>
+
+### 03 · Connect your assistant
+
+Configure an MCP-compatible client and start with a small request.
+
+</div>
+</div>
+
+<div class="landing-status" markdown>
+<div markdown>
+
+### See when the bridge is running
+
+The workbench toolbar starts and stops the bridge. Its status indicator shows
+when the local connection is available.
+
+[Workbench guide](guide/workbench.md) · [Connection and security settings](getting-started/configuration.md)
+
+</div>
+<div class="landing-status__images" markdown>
+
+![FreeCAD Robust MCP Bridge toolbar](assets/images/bridge-toolbar.png)
+
+![FreeCAD bridge running status indicator](assets/images/bridge-status.png)
+
+</div>
+</div>
+
+<div class="landing-bottom" markdown>
+
+## Ready to connect?
+
+Follow the installation guide to set up FreeCAD, the bridge, and your MCP client.
+
+[Get started](getting-started/installation.md){ .md-button .md-button--primary }
+[View on GitHub](https://github.com/spkane/freecad-addon-robust-mcp-server){ .md-button }
+
+</div>
+</div>

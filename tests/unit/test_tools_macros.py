@@ -39,7 +39,7 @@ class TestMacroTools:
         async def get_bridge():
             return mock_bridge
 
-        register_macro_tools(mock_mcp, get_bridge)
+        register_macro_tools(mock_mcp, get_bridge, allow_unsafe_code=True)
         return mock_mcp._registered_tools
 
     @pytest.mark.asyncio
@@ -351,7 +351,8 @@ class TestMacroTools:
         # Verify gui template code was used
         call_args = mock_bridge.create_macro.call_args
         code_arg = call_args[0][1]
-        assert "QtWidgets" in code_arg or "PySide" in code_arg
+        assert "freecad_mcp_bridge.qt_compat" in code_arg
+        assert 'load_qt_modules("QtWidgets")' in code_arg
 
     @pytest.mark.asyncio
     async def test_create_macro_from_template_selection(
