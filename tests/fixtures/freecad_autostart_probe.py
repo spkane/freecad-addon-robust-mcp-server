@@ -1,30 +1,39 @@
 """Exercise the actual workbench initializer inside a disposable FreeCAD process."""
 
+import importlib
+import importlib.util
 import json
 import os
-import runpy
 import sys
 import time
 from pathlib import Path
 
+import FreeCAD
+
 root = Path(__file__).resolve().parents[2] / "freecad" / "RobustMCPBridge"
-sys.path.insert(0, str(root))
-# Ensure a previously installed workbench cannot satisfy this regression.
-for name in list(sys.modules):
-    if name in {"preferences", "commands", "freecad_mcp_bridge"} or name.startswith(
-        "freecad_mcp_bridge."
-    ):
-        del sys.modules[name]
+sys.path.insert(0, str(root.parents[1]))
+params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/RobustMCPBridge")
+params.SetBool("AutoStart", False)
+params.SetBool("AutoStartHeadless", os.environ["MCP_TEST_HEADLESS"] == "1")
+params.SetBool("AutoStartHeadlessBatch", os.environ["MCP_TEST_BATCH"] == "1")
+params.SetInt("XMLRPCPort", int(os.environ["MCP_TEST_XMLRPC_PORT"]))
+params.SetInt("SocketPort", int(os.environ["MCP_TEST_SOCKET_PORT"]))
+package_name = "freecad.MCPActualProbe"
 
-import preferences  # noqa: E402
 
-preferences.set_auto_start(False)
-preferences.set_auto_start_headless(os.environ["MCP_TEST_HEADLESS"] == "1")
-preferences.set_auto_start_headless_batch(os.environ["MCP_TEST_BATCH"] == "1")
-preferences.set_xmlrpc_port(int(os.environ["MCP_TEST_XMLRPC_PORT"]))
-preferences.set_socket_port(int(os.environ["MCP_TEST_SOCKET_PORT"]))
-runpy.run_path(str(root / "__init__.py"), run_name="mcp_autostart_probe")
-import commands  # noqa: E402
+def load_workbench():
+    """Load this checkout as a FreeCAD namespace workbench."""
+    spec = importlib.util.spec_from_file_location(
+        package_name, root / "__init__.py", submodule_search_locations=[str(root)]
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = module
+    spec.loader.exec_module(module)
+
+
+load_workbench()
+commands = importlib.import_module(package_name + ".commands")
 
 plugin = commands._mcp_plugin
 started = plugin is not None and plugin.is_running

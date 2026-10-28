@@ -212,7 +212,9 @@ def test_gui_status_warns_that_bridge_accepts_python(
     monkeypatch.setattr(server_mod, "FreeCAD", MagicMock(GuiUp=True), raising=False)
     status_module = types.ModuleType("Qt.status_widget")
     status_module.update_status_running = MagicMock()  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "Qt.status_widget", status_module)
+    monkeypatch.setitem(
+        sys.modules, "freecad.RobustMCPBridge.Qt.status_widget", status_module
+    )
     plugin = server_mod.FreecadMCPPlugin()
     plugin._set_status_bar = MagicMock()
     plugin._update_status_bar()
@@ -256,7 +258,9 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     """The permanent widget describes what an authorized client can do."""
     del server_mod
     path = ADDON_DIR / "Qt" / "status_widget.py"
-    spec = importlib.util.spec_from_file_location("test_bridge_status_widget", path)
+    spec = importlib.util.spec_from_file_location(
+        "freecad.RobustMCPBridge.Qt.status_widget", path
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

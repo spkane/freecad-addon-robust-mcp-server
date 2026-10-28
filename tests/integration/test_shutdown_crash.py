@@ -37,6 +37,7 @@ import json
 import os
 import platform
 import secrets
+import shutil
 import signal
 import socket
 import subprocess
@@ -379,6 +380,74 @@ class TestShutdownCrash:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
+
+    @pytest.mark.parametrize("layout", ["addon-manager", "release-archive"])
+    def test_namespace_workbench_imports(
+        self, freecad_binary: str, tmp_path: Path, layout: str
+    ) -> None:
+        """FreeCAD discovers packaged workbench siblings from both install layouts."""
+        root = Path(__file__).resolve().parents[2]
+        folder = (
+            "RobustMCPBridge"
+            if layout == "addon-manager"
+            else "freecad-mcp-workbench-1.0.0"
+        )
+        addon = tmp_path / "Mod" / folder
+        package = addon / "freecad" / "MCPImportProbe"
+        shutil.copytree(root / "freecad" / "RobustMCPBridge", package)
+        result_path = tmp_path / "imports.json"
+        with (package / "__init__.py").open("a", encoding="utf-8") as initializer:
+            initializer.write(
+                "\nimport importlib, json, os\n"
+                "from pathlib import Path\n"
+                "names = ['preferences', 'commands', 'path_utils', "
+                "'freecad_mcp_bridge.server', 'Qt.status_widget']\n"
+                "modules = [importlib.import_module('.' + name, __package__) for name in names]\n"
+                "Path(os.environ['MCP_IMPORT_RESULT']).write_text(json.dumps([m.__file__ for m in modules]))\n"
+            )
+        macro = tmp_path / "close.FCMacro"
+        macro.write_text(
+            "import importlib, json, os\n"
+            "from pathlib import Path\n"
+            "from PySide import QtCore\n"
+            "def finish():\n"
+            "    path = Path(os.environ['MCP_IMPORT_RESULT'])\n"
+            "    modules = json.loads(path.read_text())\n"
+            "    modules.append(importlib.import_module('freecad.MCPImportProbe.init_gui').__file__)\n"
+            "    path.write_text(json.dumps(modules))\n"
+            "    FreeCADGui.getMainWindow().close()\n"
+            "QtCore.QTimer.singleShot(1500, finish)\n",
+            encoding="utf-8",
+        )
+        env = {
+            **os.environ,
+            "HOME": str(tmp_path),
+            "FREECAD_MCP_TESTING": "1",
+            "MCP_IMPORT_RESULT": str(result_path),
+        }
+        result = subprocess.run(  # noqa: S603 - discovered FreeCAD binary
+            [
+                freecad_binary,
+                "--user-cfg",
+                str(tmp_path / "user.cfg"),
+                "--system-cfg",
+                str(tmp_path / "system.cfg"),
+                "--module-path",
+                str(addon),
+                str(macro),
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result_path.exists(), result.stdout + result.stderr
+        assert all(
+            Path(path).is_relative_to(package)
+            for path in json.loads(result_path.read_text(encoding="utf-8"))
+        )
 
     def test_gui_workbench_autostart_and_clean_shutdown(
         self, freecad_binary: str, tmp_path: Path

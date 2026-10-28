@@ -482,6 +482,17 @@ def _install_init_gui_stubs(monkeypatch: pytest.MonkeyPatch) -> Any:
     qt_status = types.ModuleType("Qt.status_widget")
     qt_status.sync_status_with_bridge = lambda: None  # type: ignore[attr-defined]
 
+    package = types.ModuleType("freecad.RobustMCPBridge")
+    package.__path__ = [str(ADDON_DIR)]
+    monkeypatch.setitem(sys.modules, "freecad.RobustMCPBridge", package)
+    for name, module in (
+        ("path_utils", path_utils),
+        ("preferences", preferences),
+        ("Qt", qt_package),
+        ("Qt.preferences_page", qt_preferences),
+        ("Qt.status_widget", qt_status),
+    ):
+        monkeypatch.setitem(sys.modules, f"freecad.RobustMCPBridge.{name}", module)
     monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
     monkeypatch.setitem(sys.modules, "FreeCADGui", freecad_gui)
     monkeypatch.setitem(sys.modules, "path_utils", path_utils)
@@ -514,7 +525,7 @@ class TestInitGuiQtFallback:
             sys.modules, "PySide2", _pyside_module("PySide2", pyside2_qtcore)
         )
 
-        runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
+        runpy.run_path(str(INIT_GUI_PATH), run_name="freecad.RobustMCPBridge.init_gui")
 
         assert pyside6_qtcore.QTimer.singleShot.call_count >= 1
         assert pyside2_qtcore.QTimer.singleShot.call_count == 0
@@ -536,7 +547,7 @@ class TestInitGuiQtFallback:
         monkeypatch.setitem(sys.modules, "PySide6", failed_binding())
         monkeypatch.setitem(sys.modules, "PySide2", _pyside_module("PySide2", qtcore))
 
-        runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
+        runpy.run_path(str(INIT_GUI_PATH), run_name="freecad.RobustMCPBridge.init_gui")
 
         assert qtcore.QTimer.singleShot.call_count >= 1
         assert not any(
@@ -551,7 +562,7 @@ class TestInitGuiQtFallback:
         monkeypatch.setitem(sys.modules, "PySide6", _NameErrorModule("PySide6"))
         monkeypatch.setitem(sys.modules, "PySide2", _NameErrorModule("PySide2"))
 
-        runpy.run_path(str(INIT_GUI_PATH), run_name="init_gui_under_test")
+        runpy.run_path(str(INIT_GUI_PATH), run_name="freecad.RobustMCPBridge.init_gui")
 
         warnings = _warnings(freecad)
         assert any("Could not schedule status bar sync" in msg for msg in warnings)

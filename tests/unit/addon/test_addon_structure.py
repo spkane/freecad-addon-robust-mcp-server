@@ -126,27 +126,6 @@ class TestAddonMetadata:
         code = init_file.read_text()
         assert "import FreeCAD" in code
 
-    def test_init_py_adds_workbench_dir_to_sys_path_before_sibling_imports(
-        self,
-    ) -> None:
-        """__init__.py should add its directory to sys.path before sibling imports.
-
-        FreeCAD loads the workbench as the namespace package
-        freecad.RobustMCPBridge, so the workbench directory is not on sys.path
-        and bare imports such as ``from preferences import ...`` fail unless
-        __init__.py adds the directory first.
-        """
-        init_file = ADDON_DIR / "__init__.py"
-        code = init_file.read_text()
-        assert "sys.path.insert(0, _workbenchDir)" in code
-        path_setup = code.index("sys.path.insert(0, _workbenchDir)")
-        for sibling_import in (
-            "from preferences import",
-            "from commands import",
-            "from freecad_mcp_bridge",
-        ):
-            assert path_setup < code.index(sibling_import)
-
     def test_init_gui_py_has_workbench_class(self) -> None:
         """init_gui.py should define the workbench class."""
         init_gui_file = ADDON_DIR / "init_gui.py"
@@ -235,3 +214,44 @@ class TestPackageXml:
     def test_workbench_icon(self, package_xml: str) -> None:
         """package.xml should reference the workbench icon (new-style path)."""
         assert "Resources/Icons/FreecadRobustMCPBridge.svg</icon>" in package_xml
+
+
+def test_workbench_imports_do_not_shadow_other_addons() -> None:
+    """Load the workbench in an isolated interpreter with conflicting module names."""
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[3]
+    code = r"""
+import importlib
+import os
+import sys
+import types
+from unittest.mock import MagicMock
+
+sys.path.insert(0, sys.argv[1])
+os.environ["FREECAD_MCP_TESTING"] = "1"
+freecad = types.ModuleType("FreeCAD")
+freecad.Console = MagicMock()
+sys.modules["FreeCAD"] = freecad
+names = ("commands", "preferences", "path_utils", "Qt", "freecad_mcp_bridge")
+sentinels = {name: types.ModuleType(name) for name in names}
+sys.modules.update(sentinels)
+before = list(sys.path)
+importlib.import_module("freecad.RobustMCPBridge")
+commands = importlib.import_module("freecad.RobustMCPBridge.commands")
+utils = importlib.import_module("freecad.RobustMCPBridge.freecad_mcp_bridge.bridge_utils")
+plugin = types.SimpleNamespace(is_running=True)
+utils.register_mcp_plugin(plugin, 1, 2)
+assert commands._mcp_plugin is plugin
+assert utils.get_running_plugin() is plugin
+assert sys.path == before
+assert all(sys.modules[name] is module for name, module in sentinels.items())
+"""
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and test code
+        [sys.executable, "-c", code, str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

@@ -13,33 +13,17 @@ must run on the main thread.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# Add the workbench directory to sys.path so the sibling modules (preferences,
-# commands, freecad_mcp_bridge, etc.) can be imported by their bare names.
-# FreeCAD loads this file as the namespace package freecad.RobustMCPBridge and
-# only puts Mod/RobustMCPBridge on sys.path, not this directory.
-_workbenchDir = str(Path(__file__).resolve().parent)
-if _workbenchDir not in sys.path:
-    sys.path.insert(0, _workbenchDir)
-
 # Import FreeCAD first so we can log early
-import FreeCAD  # noqa: E402
+import FreeCAD
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init.py loaded\n")
 
 from typing import TYPE_CHECKING, Any  # noqa: E402
 
 if TYPE_CHECKING:
-    from freecad_mcp_bridge.bridge_utils import GuiWaiter
+    from .freecad_mcp_bridge.bridge_utils import GuiWaiter
 
-try:
-    from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
-except ImportError:
-    # Repository tests import this module through freecad.RobustMCPBridge, while
-    # FreeCAD installs freecad_mcp_bridge as a top-level package.
-    from .freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+from .freecad_mcp_bridge.qt_compat import load_qt_core_widgets  # noqa: E402
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
 
@@ -78,13 +62,13 @@ def _auto_start_bridge(headless: bool = False) -> None:
             QtCore.QTimer.singleShot(1000, _auto_start_bridge)
     """
     try:
-        from preferences import get_auto_start, get_auto_start_headless
+        from .preferences import get_auto_start, get_auto_start_headless
 
         if not (get_auto_start_headless() if headless else get_auto_start()):
             return
 
         # Check if bridge is already running
-        from commands import _mcp_plugin
+        from .commands import _mcp_plugin
 
         if _mcp_plugin is not None and _mcp_plugin.is_running:
             return
@@ -94,8 +78,8 @@ def _auto_start_bridge(headless: bool = False) -> None:
         )
 
         # Import and start the bridge directly
-        from freecad_mcp_bridge.server import FreecadMCPPlugin
-        from preferences import get_socket_port, get_xmlrpc_port
+        from .freecad_mcp_bridge.server import FreecadMCPPlugin
+        from .preferences import get_socket_port, get_xmlrpc_port
 
         xmlrpc_port = get_xmlrpc_port()
         socket_port = get_socket_port()
@@ -109,7 +93,7 @@ def _auto_start_bridge(headless: bool = False) -> None:
         plugin.start()
 
         # Register plugin with commands module for restart detection
-        from freecad_mcp_bridge.bridge_utils import register_mcp_plugin
+        from .freecad_mcp_bridge.bridge_utils import register_mcp_plugin
 
         register_mcp_plugin(plugin, xmlrpc_port, socket_port)
 
@@ -148,28 +132,15 @@ def _auto_start_bridge(headless: bool = False) -> None:
 # will see GuiUp=False and use a background thread. Later, code executed on that
 # thread will try to do Qt operations, causing crashes (SIGABRT in QCocoaWindow).
 # Conservative argument classification is shared with the server startup policy.
-if __package__:
-    try:
-        from freecad_mcp_bridge.startup_policy import (
-            is_batch_invocation,
-            is_console_invocation,
-        )
-    except ImportError:
-        from .freecad_mcp_bridge.startup_policy import (
-            is_batch_invocation,
-            is_console_invocation,
-        )
-else:
-    from freecad_mcp_bridge.startup_policy import (
-        is_batch_invocation,
-        is_console_invocation,
-    )
-
+from .freecad_mcp_bridge.startup_policy import (  # noqa: E402
+    is_batch_invocation,
+    is_console_invocation,
+)
 
 try:
     import os
 
-    from preferences import (
+    from .preferences import (
         get_auto_start,
         get_auto_start_headless,
         get_auto_start_headless_batch,
@@ -273,7 +244,7 @@ try:
             FreeCAD.Console.PrintMessage(
                 "Robust MCP Bridge: GUI not ready, using GuiWaiter...\n"
             )
-            from freecad_mcp_bridge.bridge_utils import GuiWaiter
+            from .freecad_mcp_bridge.bridge_utils import GuiWaiter
 
             _gui_waiter = GuiWaiter(
                 callback=_auto_start_bridge,
@@ -303,8 +274,8 @@ def _release_startup_timers() -> None:
     import contextlib
 
     try:
-        from freecad_mcp_bridge.qt_compat import load_qt_core
-        from freecad_mcp_bridge.server import _get_shiboken_delete
+        from .freecad_mcp_bridge.qt_compat import load_qt_core
+        from .freecad_mcp_bridge.server import _get_shiboken_delete
 
         qtcore = load_qt_core()
         delete = _get_shiboken_delete()

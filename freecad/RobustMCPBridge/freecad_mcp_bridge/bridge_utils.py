@@ -202,6 +202,20 @@ class GuiWaiter:
         # Do NOT call callback here - it would use background thread and crash
 
 
+def _workbench_commands() -> Any | None:
+    """Find the workbench's commands module without importing unrelated addons."""
+    if __package__ and "." in __package__:
+        from .. import commands
+
+        return commands
+
+    # Directly executed scripts may run before the workbench is loaded. Reuse
+    # its module only if FreeCAD has already loaded it; do not start it here.
+    import sys
+
+    return sys.modules.get("freecad.RobustMCPBridge.commands")
+
+
 def register_mcp_plugin(
     plugin: FreecadMCPPlugin,
     xmlrpc_port: int,
@@ -224,8 +238,9 @@ def register_mcp_plugin(
         be visible to the workbench UI.
     """
     try:
-        import commands
-
+        commands = _workbench_commands()
+        if commands is None:
+            return
         commands._mcp_plugin = plugin
         commands._running_config = {
             "xmlrpc_port": xmlrpc_port,
@@ -257,9 +272,10 @@ def get_running_plugin() -> FreecadMCPPlugin | None:
         return None
 
     try:
-        # Check if the workbench commands module has a running plugin
-        import commands
-
+        # Check the installed workbench's shared commands module, if loaded.
+        commands = _workbench_commands()
+        if commands is None:
+            return None
         plugin = getattr(commands, "_mcp_plugin", None)
         if plugin is not None and plugin.is_running:
             # Get actual ports from running config, with sensible defaults

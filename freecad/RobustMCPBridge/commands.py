@@ -12,8 +12,9 @@ from __future__ import annotations
 from typing import Any
 
 import FreeCAD
-from freecad_mcp_bridge.qt_compat import load_qt_modules
-from path_utils import get_addon_path, get_icon_path
+
+from .freecad_mcp_bridge.qt_compat import load_qt_modules
+from .path_utils import get_addon_path, get_icon_path
 
 # FreeCADGui is imported lazily in methods that need it, as this module
 # may be imported during headless operation where FreeCADGui is not available
@@ -46,7 +47,7 @@ class StartMCPBridgeCommand:
         """Return the command resources (icon, menu text, tooltip)."""
         # Get configured ports for tooltip (fall back to defaults if import fails)
         try:
-            from preferences import get_socket_port, get_xmlrpc_port
+            from .preferences import get_socket_port, get_xmlrpc_port
 
             xmlrpc_port = get_xmlrpc_port()
             socket_port = get_socket_port()
@@ -76,13 +77,13 @@ class StartMCPBridgeCommand:
             return
 
         try:
-            from freecad_mcp_bridge.server import FreecadMCPPlugin
-            from preferences import (
+            from .freecad_mcp_bridge.server import FreecadMCPPlugin
+            from .preferences import (
                 get_socket_port,
                 get_status_bar_enabled,
                 get_xmlrpc_port,
             )
-            from Qt.status_widget import (
+            from .Qt.status_widget import (
                 update_status_error,
                 update_status_running,
                 update_status_starting,
@@ -137,8 +138,8 @@ class StartMCPBridgeCommand:
                 "Ensure the Robust MCP Bridge addon is properly installed.\n"
             )
             try:
-                from preferences import get_status_bar_enabled
-                from Qt.status_widget import update_status_error
+                from .preferences import get_status_bar_enabled
+                from .Qt.status_widget import update_status_error
 
                 if get_status_bar_enabled():
                     update_status_error(str(e))
@@ -150,8 +151,8 @@ class StartMCPBridgeCommand:
             _running_config = None
             FreeCAD.Console.PrintError(f"Failed to start MCP Bridge: {e}\n")
             try:
-                from preferences import get_status_bar_enabled
-                from Qt.status_widget import update_status_error
+                from .preferences import get_status_bar_enabled
+                from .Qt.status_widget import update_status_error
 
                 if get_status_bar_enabled():
                     update_status_error(str(e))
@@ -189,8 +190,8 @@ class StopMCPBridgeCommand:
 
             # Update status bar widget
             try:
-                from preferences import get_status_bar_enabled
-                from Qt.status_widget import update_status_stopped
+                from .preferences import get_status_bar_enabled
+                from .Qt.status_widget import update_status_stopped
 
                 if get_status_bar_enabled():
                     update_status_stopped()
@@ -259,8 +260,8 @@ def restart_bridge_if_running() -> bool:
 
     # Update status bar widget
     try:
-        from preferences import get_status_bar_enabled
-        from Qt.status_widget import update_status_starting
+        from .preferences import get_status_bar_enabled
+        from .Qt.status_widget import update_status_starting
 
         if get_status_bar_enabled():
             update_status_starting()
@@ -275,8 +276,8 @@ def restart_bridge_if_running() -> bool:
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to stop MCP Bridge: {e}\n")
         try:
-            from preferences import get_status_bar_enabled
-            from Qt.status_widget import update_status_error
+            from .preferences import get_status_bar_enabled
+            from .Qt.status_widget import update_status_error
 
             if get_status_bar_enabled():
                 update_status_error(str(e))
@@ -286,9 +287,13 @@ def restart_bridge_if_running() -> bool:
 
     # Start with new configuration
     try:
-        from freecad_mcp_bridge.server import FreecadMCPPlugin
-        from preferences import get_socket_port, get_status_bar_enabled, get_xmlrpc_port
-        from Qt.status_widget import update_status_running
+        from .freecad_mcp_bridge.server import FreecadMCPPlugin
+        from .preferences import (
+            get_socket_port,
+            get_status_bar_enabled,
+            get_xmlrpc_port,
+        )
+        from .Qt.status_widget import update_status_running
 
         xmlrpc_port = get_xmlrpc_port()
         socket_port = get_socket_port()
@@ -318,8 +323,8 @@ def restart_bridge_if_running() -> bool:
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to restart MCP Bridge: {e}\n")
         try:
-            from preferences import get_status_bar_enabled
-            from Qt.status_widget import update_status_error
+            from .preferences import get_status_bar_enabled
+            from .Qt.status_widget import update_status_error
 
             if get_status_bar_enabled():
                 update_status_error(str(e))
@@ -354,7 +359,8 @@ class MCPBridgePreferencesCommand:
             return
         # Import here to avoid issues during module loading
         import FreeCADGui
-        from preferences import (
+
+        from .preferences import (
             get_auto_start,
             get_auto_start_headless,
             get_auto_start_headless_batch,

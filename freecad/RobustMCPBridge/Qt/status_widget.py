@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PySide import QtWidgets
 
-from freecad_mcp_bridge.qt_compat import load_qt_core_widgets, load_qt_modules
+from ..freecad_mcp_bridge.qt_compat import load_qt_core_widgets, load_qt_modules
 
 # Global reference to the status widget (protected by _status_widget_lock)
 _status_widget: MCPStatusWidget | None = None
@@ -336,8 +336,8 @@ def sync_status_with_bridge() -> None:
         if not _check_main_thread("sync_status_with_bridge"):
             return
 
-        from commands import _mcp_plugin
-        from preferences import get_status_bar_enabled
+        from ..commands import _mcp_plugin
+        from ..preferences import get_status_bar_enabled
 
         if not get_status_bar_enabled():
             return

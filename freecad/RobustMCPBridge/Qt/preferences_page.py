@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+from ..freecad_mcp_bridge.qt_compat import load_qt_core_widgets
 
 if TYPE_CHECKING:
     from PySide6 import QtCore, QtWidgets
@@ -180,7 +180,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         This method is called by FreeCAD when the Preferences dialog opens.
         """
         # Import here to avoid circular imports and ensure module is available
-        from preferences import (
+        from ..preferences import (
             get_auto_start,
             get_auto_start_headless,
             get_auto_start_headless_batch,
@@ -201,7 +201,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
 
         This method is called by FreeCAD when OK or Apply is clicked.
         """
-        from preferences import (
+        from ..preferences import (
             get_socket_port,
             get_xmlrpc_port,
             set_auto_start,

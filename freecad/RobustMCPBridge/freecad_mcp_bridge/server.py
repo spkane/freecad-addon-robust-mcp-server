@@ -884,9 +884,17 @@ class FreecadMCPPlugin:
         if _freecad_gui_up():
             self._set_status_bar("")
             try:
-                from Qt.status_widget import update_status_stopped
+                status_module: Any = None
+                if __package__ and "." in __package__:
+                    from ..Qt import status_widget as loaded_status_module
 
-                update_status_stopped()
+                    status_module = loaded_status_module
+                else:
+                    status_module = sys.modules.get(
+                        "freecad.RobustMCPBridge.Qt.status_widget"
+                    )
+                if status_module is not None:
+                    status_module.update_status_stopped()
             except Exception:
                 pass
 
@@ -898,9 +906,19 @@ class FreecadMCPPlugin:
         # The bridge itself accepts Python from any paired client. Show this
         # warning regardless of the optional general status-bar preference.
         try:
-            from Qt.status_widget import update_status_running
+            status_module: Any = None
+            if __package__ and "." in __package__:
+                from ..Qt import status_widget as loaded_status_module
 
-            update_status_running(self._xmlrpc_port, self._port, self._request_count)
+                status_module = loaded_status_module
+            else:
+                status_module = sys.modules.get(
+                    "freecad.RobustMCPBridge.Qt.status_widget"
+                )
+            if status_module is not None:
+                status_module.update_status_running(
+                    self._xmlrpc_port, self._port, self._request_count
+                )
         except Exception:
             pass
 

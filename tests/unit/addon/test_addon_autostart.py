@@ -77,7 +77,7 @@ class TestAutoStartInitLogic:
 
     def test_imports_get_auto_start(self, init_code: str) -> None:
         """__init__.py should import get_auto_start from preferences."""
-        assert "from preferences import get_auto_start" in init_code
+        assert "from .preferences import get_auto_start" in init_code
 
     def test_checks_auto_start_preference(self, init_code: str) -> None:
         """__init__.py should check the auto_start preference value."""
@@ -124,7 +124,7 @@ class TestAutoStartInitLogic:
 
     def test_imports_gui_waiter(self, init_code: str) -> None:
         """__init__.py should import GuiWaiter for waiting on GUI."""
-        assert "from freecad_mcp_bridge.bridge_utils import GuiWaiter" in init_code
+        assert "from .freecad_mcp_bridge.bridge_utils import GuiWaiter" in init_code
 
     def test_uses_single_shot_timer_for_gui_up(self, init_code: str) -> None:
         """When GUI is up, should use single-shot timer for deferred start."""

@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import FreeCAD
 import FreeCADGui
-from freecad_mcp_bridge.qt_compat import load_qt_core
+
+from .freecad_mcp_bridge.qt_compat import load_qt_core
 
 # Register icons path for preferences page icon
 # This must be done at module level, before the preferences page is registered
 try:
-    from path_utils import get_icons_dir
+    from .path_utils import get_icons_dir
 
     _icons_dir = get_icons_dir()
     if _icons_dir:
@@ -28,7 +29,7 @@ except Exception as e:
 # Register preferences page with FreeCAD's Preferences dialog
 # This must be done at module level, before the workbench is registered
 try:
-    from Qt.preferences_page import MCPBridgePreferencesPage
+    from .Qt.preferences_page import MCPBridgePreferencesPage
 
     FreeCADGui.addPreferencePage(MCPBridgePreferencesPage, "Robust MCP Bridge")
 except Exception as e:
@@ -59,7 +60,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
 
     def __init__(self) -> None:
         """Initialize workbench with icon path."""
-        from path_utils import get_workbench_icon
+        from .path_utils import get_workbench_icon
 
         self.Icon = get_workbench_icon()
 
@@ -67,7 +68,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         """Initialize the workbench - called once when first activated."""
         # Import commands module here (not at top level) to ensure
         # it's available during FreeCAD's module loading process
-        from commands import (
+        from .commands import (
             MCPBridgePreferencesCommand,
             MCPBridgeStatusCommand,
             StartMCPBridgeCommand,
@@ -104,11 +105,11 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         # This is a fallback if the module-level timer didn't fire
         # (which can happen if the module isn't loaded until workbench selection)
         try:
-            from preferences import get_auto_start
+            from .preferences import get_auto_start
 
             if get_auto_start():
                 # Check if already running (timer might have started it)
-                from commands import is_bridge_running
+                from .commands import is_bridge_running
 
                 if not is_bridge_running():
                     FreeCAD.Console.PrintMessage(
@@ -121,7 +122,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         # Sync status bar widget with current bridge state
         # (bridge may have been started by Init.py before workbench was selected)
         try:
-            from Qt.status_widget import sync_status_with_bridge
+            from .Qt.status_widget import sync_status_with_bridge
 
             sync_status_with_bridge()
         except Exception as e:
@@ -131,7 +132,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         """Called when the workbench is activated."""
         # Sync status bar widget with current bridge state
         try:
-            from Qt.status_widget import sync_status_with_bridge
+            from .Qt.status_widget import sync_status_with_bridge
 
             sync_status_with_bridge()
         except Exception as e:
@@ -157,9 +158,9 @@ try:
     def _deferred_status_bar_sync() -> None:
         """Sync status bar with bridge state after GUI is ready."""
         try:
-            from commands import is_bridge_running
-            from preferences import get_status_bar_enabled
-            from Qt.status_widget import sync_status_with_bridge
+            from .commands import is_bridge_running
+            from .preferences import get_status_bar_enabled
+            from .Qt.status_widget import sync_status_with_bridge
 
             if get_status_bar_enabled() and is_bridge_running():
                 FreeCAD.Console.PrintMessage(
@@ -217,13 +218,13 @@ try:
                 QtCore.QTimer.singleShot(500, _auto_start_bridge)
                 return
 
-            from preferences import get_auto_start
+            from .preferences import get_auto_start
 
             if not get_auto_start():
                 return
 
             # Check if bridge is already running
-            from commands import is_bridge_running
+            from .commands import is_bridge_running
 
             if is_bridge_running():
                 FreeCAD.Console.PrintMessage(
@@ -236,9 +237,9 @@ try:
             )
 
             # Import and start the bridge
-            from freecad_mcp_bridge.bridge_utils import register_mcp_plugin
-            from freecad_mcp_bridge.server import FreecadMCPPlugin
-            from preferences import get_socket_port, get_xmlrpc_port
+            from .freecad_mcp_bridge.bridge_utils import register_mcp_plugin
+            from .freecad_mcp_bridge.server import FreecadMCPPlugin
+            from .preferences import get_socket_port, get_xmlrpc_port
 
             xmlrpc_port = get_xmlrpc_port()
             socket_port = get_socket_port()
@@ -256,7 +257,7 @@ try:
 
             # Sync status bar now that bridge is running
             try:
-                from Qt.status_widget import sync_status_with_bridge
+                from .Qt.status_widget import sync_status_with_bridge
 
                 sync_status_with_bridge()
             except Exception as status_err:
@@ -276,7 +277,7 @@ try:
     # which can cause port conflicts or duplicate initialisation.
     import os
 
-    from preferences import get_auto_start
+    from .preferences import get_auto_start
 
     if os.environ.get("FREECAD_MCP_TESTING"):
         FreeCAD.Console.PrintMessage(
