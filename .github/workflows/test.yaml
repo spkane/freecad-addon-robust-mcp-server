@@ -83,6 +83,17 @@ jobs:
       - name: Verify workbench installer on Windows
         run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
 
+      - name: Install just on Windows
+        shell: pwsh
+        run: |
+          if (-not (Get-Command just -ErrorAction SilentlyContinue)) {
+            choco install just --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Exercise workbench just recipe on Windows
+        run: uv run pytest tests/just_commands/test_install.py -k test_workbench_installer_with_explicit_mod_directory -v --tb=short
+
   integration-test:
     name: Integration Tests (FreeCAD Headless)
     runs-on: ubuntu-latest

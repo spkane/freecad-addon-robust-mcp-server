@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, ClassVar
 import pytest
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from tests.just_commands.conftest import JustRunner
 
 
@@ -45,6 +47,19 @@ class TestInstallSyntax:
 
 class TestInstallRuntime:
     """Runtime tests for install commands."""
+
+    @pytest.mark.just_runtime
+    def test_workbench_installer_with_explicit_mod_directory(
+        self, just: JustRunner, tmp_path: Path
+    ) -> None:
+        """The real just recipe installs only into the explicitly selected Mod."""
+        mod_dir = tmp_path / "selected profile" / "Mod"
+        result = just.run("install::mcp-bridge-workbench", str(mod_dir), timeout=120)
+        assert result.success, result.output
+        assert (mod_dir / "RobustMCPBridge" / "package.xml").is_file()
+        assert (
+            mod_dir / "RobustMCPBridge/freecad/RobustMCPBridge/__init__.py"
+        ).is_file()
 
     @pytest.mark.just_runtime
     def test_status_runs(self, just: JustRunner) -> None:

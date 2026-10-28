@@ -130,11 +130,14 @@ uninstall-mcp-server:
 # Install the FreeCAD Robust MCP workbench addon to FreeCAD's Mod directory
 # Uses new-style namespace package format: Mod/RobustMCPBridge/freecad/RobustMCPBridge/
 [script("uv", "run", "python")]
-mcp-bridge-workbench:
+mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
+    import os
     import runpy
     import sys
-    sys.path.insert(0, "scripts")
-    runpy.run_path("scripts/install_workbench.py", run_name="__main__")
+    sys.path.insert(0, "../scripts")
+    if os.environ["FREECAD_INSTALL_MOD_DIR"]:
+        sys.argv = ["install_workbench.py", "--mod-dir", os.environ["FREECAD_INSTALL_MOD_DIR"]]
+    runpy.run_path("../scripts/install_workbench.py", run_name="__main__")
 
 # Uninstall the FreeCAD Robust MCP workbench addon
 uninstall-mcp-bridge-workbench:
