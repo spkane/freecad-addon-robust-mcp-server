@@ -66,6 +66,7 @@ The workbench includes a blocking bridge script for running in server mode (keep
 **Linux:**
 
 ```bash
+# Use FreeCADCmd instead if that is the executable installed on your system.
 freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 

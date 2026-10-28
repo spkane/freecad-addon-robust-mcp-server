@@ -88,7 +88,7 @@ Your AI assistant can now:
 uv run freecad-mcp --version
 
 # Check connection status (with FreeCAD running)
-uv run freecad-mcp --mode xmlrpc --test-connection
+uv run freecad-mcp --mode xmlrpc --check
 ```
 
 ## Full Documentation

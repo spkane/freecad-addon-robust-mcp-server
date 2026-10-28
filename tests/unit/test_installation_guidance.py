@@ -28,3 +28,18 @@ def test_installation_guide_distinguishes_archive_and_source_layouts() -> None:
     assert "Mod/RobustMCPBridge/package.xml" in text
     assert "archive's top-level package directory" in text
     assert "not currently in the public Addon Manager catalog" in text
+
+
+def test_public_guidance_avoids_obsolete_installation_instructions() -> None:
+    """Check user-facing commands and wiki paths against current packaging."""
+    readme = (ROOT / "Documentation/README.md").read_text(encoding="utf-8")
+    wiki = (ROOT / "freecad/RobustMCPBridge/wiki-source.txt").read_text(
+        encoding="utf-8"
+    )
+    overview = (ROOT / "Resources/Documents/Overview.md").read_text(encoding="utf-8")
+    assert "--test-connection" not in readme
+    assert "--check" in readme
+    assert "Via Addon Manager (recommended)" not in wiki
+    assert "Mod/FreecadRobustMCPBridge/" not in wiki
+    assert "releases?q=robust-mcp-workbench" in wiki
+    assert "pip install freecad-robust-mcp" not in overview

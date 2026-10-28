@@ -31,6 +31,7 @@ Before starting, ensure you have:
 
 ```bash
 # For a source installation in an unversioned Linux profile
+# Use FreeCADCmd instead if that is the executable installed on your system.
 freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 
 # If working from source

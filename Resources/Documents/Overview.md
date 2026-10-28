@@ -23,7 +23,8 @@ Manager catalog; see the [installation guide](https://spkane.github.io/freecad-a
 ### Robust MCP Server
 
 A standalone MCP server that connects AI assistants to the bridge.
-Install via `pip install freecad-robust-mcp` or `uv tool install freecad-robust-mcp`.
+Install matching server and workbench builds from the same source checkout;
+see the [installation guide](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/).
 
 **Capabilities:**
 

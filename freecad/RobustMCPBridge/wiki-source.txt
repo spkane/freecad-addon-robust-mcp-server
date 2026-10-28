@@ -28,25 +28,15 @@ This workbench is designed to work with the [https://pypi.org/project/freecad-ro
 
 ==Installation== <!--T:6-->
 
-===Via Addon Manager (recommended)=== <!--T:7-->
+===From a source checkout=== <!--T:7-->
 
 <!--T:8-->
-# Open FreeCAD
-# Go to {{MenuCommand|Tools → Addon Manager}}
-# Search for "Robust MCP Bridge"
-# Click {{Button|Install}}
-# Restart FreeCAD
+The workbench is not currently listed in the public Addon Manager. From a matching source checkout, run {{incode|just install::mcp-bridge-workbench}} and restart FreeCAD. The installer selects the latest versioned profile when present and installs to {{FileName|Mod/RobustMCPBridge/freecad/RobustMCPBridge/}}.
 
 ===Manual installation=== <!--T:9-->
 
 <!--T:10-->
-Download the latest release from [https://github.com/spkane/freecad-addon-robust-mcp-server/releases GitHub Releases] and extract to your FreeCAD Mod directory:
-
-</translate>
-* '''Linux''': {{FileName|~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/}}
-* '''macOS''': {{FileName|~/Library/Application Support/FreeCAD/Mod/FreecadRobustMCPBridge/}}
-* '''Windows''': {{FileName|%APPDATA%/FreeCAD/Mod/FreecadRobustMCPBridge/}}
-<translate>
+Download a pairing-capable workbench archive matching your server from the [https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true workbench releases], extract its top-level package directory into your selected FreeCAD profile's {{FileName|Mod}} directory, and restart FreeCAD. The archive contains {{FileName|package.xml}} and {{FileName|freecad/RobustMCPBridge/}}.
 
 ==Usage== <!--T:12-->
 
@@ -70,13 +60,13 @@ To stop the bridge, click {{Button|Stop Bridge}} in the toolbar.
 ===Headless mode=== <!--T:18-->
 
 <!--T:19-->
-For automation and CI/CD pipelines, the bridge can run without the GUI:
+For automation and CI/CD pipelines, the bridge can run without the GUI. These paths assume a source installation in an unversioned profile; use the actual profile and archive directory if different. On Linux use {{incode|FreeCADCmd}} if that is the installed executable:
 
 <!--T:20-->
 '''Linux:'''
 </translate>
 {{Code|code=
-freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 }}
 <translate>
 
@@ -86,7 +76,7 @@ freecadcmd ~/.local/share/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/
 </translate>
 {{Code|code=
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/FreecadRobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    ~/Library/Application\ Support/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 }}
 <translate>
 
@@ -186,7 +176,7 @@ See the [https://github.com/spkane/freecad-addon-robust-mcp-server GitHub reposi
 ==Links== <!--T:40-->
 
 <!--T:41-->
-* [https://github.com/spkane/freecad-addon-robust-mcp-server/releases Latest Release]
+* [https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true Workbench Releases]
 * [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server on PyPI] - The MCP Server that connects to this bridge.
 * [https://spkane.github.io/freecad-addon-robust-mcp-server/ Full Documentation] - Complete guides, API reference, and tutorials.
 * [https://github.com/spkane/freecad-addon-robust-mcp-server GitHub Repository] - Source code and issue tracker.
