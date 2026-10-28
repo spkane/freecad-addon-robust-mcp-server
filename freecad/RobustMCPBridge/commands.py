@@ -13,6 +13,7 @@ from typing import Any
 
 import FreeCAD
 
+from .freecad_mcp_bridge.bridge_utils import take_pending_registration
 from .freecad_mcp_bridge.qt_compat import load_qt_modules
 from .path_utils import get_addon_path, get_icon_path
 
@@ -27,6 +28,11 @@ _mcp_plugin: Any = None
 
 # Track current running configuration for restart detection
 _running_config: dict[str, int] | None = None
+
+_pending_registration = take_pending_registration()
+if _pending_registration is not None:
+    _mcp_plugin, _running_config = _pending_registration
+del _pending_registration
 
 
 def is_bridge_running() -> bool:

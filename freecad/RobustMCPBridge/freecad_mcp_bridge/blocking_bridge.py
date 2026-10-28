@@ -64,7 +64,7 @@ except ImportError:
 # Import the plugin server directly from the module file in the same directory
 script_dir = str(Path(__file__).resolve().parent)
 sys.path.insert(0, script_dir)
-from bridge_utils import get_running_plugin  # noqa: E402
+from bridge_utils import get_running_plugin, register_mcp_plugin  # noqa: E402
 from server import FreecadMCPPlugin  # noqa: E402
 
 # Check if bridge is already running (from auto-start in Init.py)
@@ -90,6 +90,7 @@ if plugin is None:
 
     # Start the plugin
     plugin.start()
+    register_mcp_plugin(plugin, xmlrpc_port, socket_port)
 
 # Print status messages with flush to ensure they appear immediately
 # (FreeCAD's Python may have buffered stdout)

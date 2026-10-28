@@ -255,3 +255,48 @@ assert all(sys.modules[name] is module for name, module in sentinels.items())
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("running", [True, False])
+def test_standalone_registration_is_claimed_when_workbench_loads(running: bool) -> None:
+    """A standalone bridge is shared with commands loaded later, unless stopped."""
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[3]
+    code = r"""
+import importlib
+import os
+import sys
+import types
+from unittest.mock import MagicMock
+
+sys.path.insert(0, sys.argv[1])
+sys.path.insert(0, sys.argv[2])
+os.environ['FREECAD_MCP_TESTING'] = '1'
+freecad = types.ModuleType('FreeCAD')
+freecad.Console = MagicMock()
+sys.modules['FreeCAD'] = freecad
+from bridge_utils import get_running_plugin, register_mcp_plugin
+plugin = types.SimpleNamespace(is_running=sys.argv[3] == 'True')
+register_mcp_plugin(plugin, 1234, 5678)
+assert get_running_plugin() is (plugin if plugin.is_running else None)
+commands = importlib.import_module('freecad.RobustMCPBridge.commands')
+assert commands._mcp_plugin is (plugin if plugin.is_running else None)
+assert commands._running_config == ({'xmlrpc_port': 1234, 'socket_port': 5678} if plugin.is_running else None)
+assert not hasattr(freecad, '_robust_mcp_bridge_pending_registration')
+"""
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and test code
+        [
+            sys.executable,
+            "-c",
+            code,
+            str(root),
+            str(ADDON_DIR / "freecad_mcp_bridge"),
+            str(running),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

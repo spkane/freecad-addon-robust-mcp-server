@@ -216,6 +216,23 @@ def _workbench_commands() -> Any | None:
     return sys.modules.get("freecad.RobustMCPBridge.commands")
 
 
+_PENDING_REGISTRATION = "_robust_mcp_bridge_pending_registration"
+
+
+def take_pending_registration() -> tuple[Any, dict[str, int]] | None:
+    """Claim a standalone bridge registered before workbench commands loaded."""
+    try:
+        import FreeCAD
+    except ImportError:
+        return None
+    pending = getattr(FreeCAD, _PENDING_REGISTRATION, None)
+    if pending is not None:
+        delattr(FreeCAD, _PENDING_REGISTRATION)
+    if pending is not None and pending[0].is_running:
+        return pending  # type: ignore[no-any-return]
+    return None
+
+
 def register_mcp_plugin(
     plugin: FreecadMCPPlugin,
     xmlrpc_port: int,
@@ -233,22 +250,21 @@ def register_mcp_plugin(
         socket_port: The JSON-RPC socket port the plugin is using.
 
     Note:
-        If the commands module isn't available (workbench not loaded yet),
-        registration silently fails. The bridge will still work but won't
-        be visible to the workbench UI.
+        Before commands are loaded, the registration is kept on the shared
+        FreeCAD module and claimed by commands when the workbench loads.
     """
+    config = {"xmlrpc_port": xmlrpc_port, "socket_port": socket_port}
     try:
         commands = _workbench_commands()
-        if commands is None:
-            return
-        commands._mcp_plugin = plugin
-        commands._running_config = {
-            "xmlrpc_port": xmlrpc_port,
-            "socket_port": socket_port,
-        }
     except ImportError:
-        # Commands module not available (workbench not loaded yet)
-        pass
+        commands = None
+    if commands is not None:
+        commands._mcp_plugin = plugin
+        commands._running_config = config
+    else:
+        import FreeCAD
+
+        setattr(FreeCAD, _PENDING_REGISTRATION, (plugin, config))
 
 
 def get_running_plugin() -> FreecadMCPPlugin | None:
@@ -275,11 +291,14 @@ def get_running_plugin() -> FreecadMCPPlugin | None:
         # Check the installed workbench's shared commands module, if loaded.
         commands = _workbench_commands()
         if commands is None:
-            return None
-        plugin = getattr(commands, "_mcp_plugin", None)
+            pending = getattr(FreeCAD, _PENDING_REGISTRATION, None)
+            plugin = pending[0] if pending is not None else None
+            config = pending[1] if pending is not None else {}
+        else:
+            plugin = getattr(commands, "_mcp_plugin", None)
+            config = getattr(commands, "_running_config", None) or {}
         if plugin is not None and plugin.is_running:
             # Get actual ports from running config, with sensible defaults
-            config = getattr(commands, "_running_config", {})
             xmlrpc_port = config.get("xmlrpc_port", 9875)
             socket_port = config.get("socket_port", 9876)
 

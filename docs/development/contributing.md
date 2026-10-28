@@ -115,7 +115,8 @@ namespace. Use package-relative imports for sibling workbench modules; adding
 the workbench directory to `sys.path` or importing siblings by bare name can
 collide with other add-ons. Standalone bridge scripts may run without the
 workbench, so they only reuse its loaded command and status modules when those
-modules are available.
+modules are available. A standalone bridge started first registers its instance
+with FreeCAD so the workbench commands can adopt it when they load.
 
 ### Testing
 
