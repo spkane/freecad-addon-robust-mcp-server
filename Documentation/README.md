@@ -105,11 +105,11 @@ For detailed guides, API reference, and advanced configuration:
 
 ### Quick Links
 
-- [Installation Guide](https://spkane.github.io/freecad-addon-robust-mcp-server/getting-started/installation/)
-- [Configuration Options](https://spkane.github.io/freecad-addon-robust-mcp-server/getting-started/configuration/)
-- [MCP Tools Reference](https://spkane.github.io/freecad-addon-robust-mcp-server/guide/tools/)
-- [Troubleshooting](https://spkane.github.io/freecad-addon-robust-mcp-server/guide/troubleshooting/)
-- [API Reference](https://spkane.github.io/freecad-addon-robust-mcp-server/reference/api/)
+- [Installation Guide](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/)
+- [Configuration Options](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/configuration/)
+- [MCP Tools Reference](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/guide/tools/)
+- [Troubleshooting](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/guide/troubleshooting/)
+- [API Reference](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/reference/api/)
 
 ## Need Help?
 

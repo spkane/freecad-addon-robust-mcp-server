@@ -29,5 +29,5 @@ just release::latest-versions
 
 For detailed release process and contribution guidelines, see:
 
-- [Release Process](https://spkane.github.io/freecad-addon-robust-mcp-server/development/releasing/)
-- [Contributing Guide](https://spkane.github.io/freecad-addon-robust-mcp-server/development/contributing/)
+- [Release Process](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/development/releasing/)
+- [Contributing Guide](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/development/contributing/)
