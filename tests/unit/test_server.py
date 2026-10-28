@@ -118,10 +118,13 @@ class TestLifespan:
 
         bridge = AsyncMock()
         bridge.get_freecad_version.return_value = {"version": "1.0"}
+        signer = MagicMock()
         with (
             patch.dict(os.environ, {}, clear=True),
             patch.object(
-                server_module, "credentials_from_config", return_value=(None, None)
+                server_module,
+                "credentials_from_config",
+                return_value=("paired", signer),
             ),
             patch(
                 "freecad_mcp.bridge.xmlrpc.XmlRpcBridge", return_value=bridge
@@ -133,12 +136,32 @@ class TestLifespan:
                     host="localhost",
                     port=9875,
                     execution_timeout_ms=30000,
-                    client_id=None,
-                    signer=None,
+                    client_id="paired",
+                    signer=signer,
                 )
                 embedded.assert_not_called()
                 bridge.connect.assert_awaited_once()
             bridge.disconnect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_default_startup_fails_without_pairing(self) -> None:
+        """An unpaired default startup fails instead of falling back to embedded."""
+        import freecad_mcp.server as server_module
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch(
+                "freecad_mcp.bridge.credential_store.read_credential",
+                side_effect=FileNotFoundError,
+            ),
+            patch("freecad_mcp.bridge.xmlrpc.XmlRpcBridge") as xmlrpc,
+            patch("freecad_mcp.bridge.embedded.EmbeddedBridge") as embedded,
+            pytest.raises(FileNotFoundError),
+        ):
+            async with server_module.lifespan(MagicMock()):
+                pytest.fail("Unpaired startup must fail")
+        xmlrpc.assert_not_called()
+        embedded.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_embedded_mode_initialization(self):

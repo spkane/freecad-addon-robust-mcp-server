@@ -14,15 +14,18 @@ This guide covers installing the FreeCAD Robust MCP Server and connecting it to 
 
 ## Installation Methods
 
-### Method 1: pip (Recommended)
+### Method 1: pip
 
-The simplest way to install the Robust MCP Server:
+The currently published package predates bridge pairing. To use the paired
+bridge described below, install matching server and workbench builds from the
+same current source checkout using Method 2. After a pairing-capable release is
+published, the package can be installed with:
 
 ```bash
 pip install freecad-robust-mcp
 ```
 
-### Method 2: From Source (for Development)
+### Method 2: From Source (recommended for paired bridge)
 
 ```bash
 git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
@@ -35,6 +38,9 @@ mise trust
 mise install
 just setup
 ```
+
+Use `uv run freecad-mcp` from this checkout for the server. Install the
+workbench from the same checkout using the source installation steps below.
 
 ### Method 3: Docker
 
@@ -58,15 +64,18 @@ docker build -t freecad-robust-mcp .
 
 The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection point for the Robust MCP Server.
 
-### Via FreeCAD Addon Manager (Recommended)
+### From the same source checkout
 
-1. Open FreeCAD
-1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD Robust MCP Suite" or "Robust MCP Bridge"
-1. Click **Install**
-1. Restart FreeCAD
+The workbench is not currently in the public Addon Manager catalog. From the
+checkout used for the server, run `just install::mcp-bridge-workbench`, then
+restart FreeCAD. On Windows, use Git Bash with the Rust `just` command and a
+working `python3` command; see [Windows installation issue #97](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/97)
+for remaining limitations.
 
 ### Manual Installation
+
+Existing published workbench archives predate pairing. Use an archive only
+when it is from a pairing-capable release that matches the server build.
 
 1. Download the `freecad-mcp-workbench` archive from the latest [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true)
 1. Extract to your FreeCAD Mod directory:

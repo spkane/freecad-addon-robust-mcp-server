@@ -268,7 +268,9 @@ freecad-mcp --pair-bridge
 For a source checkout use `uv run freecad-mcp --pair-bridge`. For container or
 different-account setups, see the [pairing instructions](docs/getting-started/installation.md#step-1-pair-the-bridge).
 Use matching server and workbench builds that support pairing; the published
-0.6.x releases predate it.
+0.6.x releases predate it. Until a pairing-capable release is published, use
+the server and workbench from the same current source checkout as described in
+the installation guide.
 
 Then start the MCP bridge inside FreeCAD:
 
