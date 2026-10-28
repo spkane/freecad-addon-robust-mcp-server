@@ -48,6 +48,12 @@ def test_container_guides_document_security_boundary(path: Path) -> None:
         "Python execution" in normalized_contents
         or "execute Python" in normalized_contents
     )
+    assert "unauthenticated Python execution" not in normalized_contents
+    assert (
+        "requires pairing before accepting Python execution" in normalized_contents
+        or "require pairing with the MCP server before accepting requests"
+        in normalized_contents
+    )
 
 
 def test_workbench_troubleshooting_rejects_non_loopback_rebind() -> None:
