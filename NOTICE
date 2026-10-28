@@ -1,0 +1,16 @@
+FreeCAD Robust MCP Suite
+Copyright 2025-2026 Sean P. Kane and contributors
+
+Contributors include Andrea Bruno, Han Zhang, John (Merlz),
+RoomWithOutRoof, and Tim Berglund. See the project history for further credits.
+
+The project includes contributions previously distributed under the MIT License.
+The original MIT terms and copyright notice are retained in LICENSE-MIT, and
+files carrying MIT license identifiers retain those notices. Existing MIT grants
+are not revoked by the adoption of Apache License 2.0 for the project.
+
+The XML-RPC protocol design and queue-based thread safety pattern were inspired
+by neka-nat/freecad-mcp, an MIT-licensed project. The implementation in this
+repository is a rewrite.
+
+The workbench icons are distributed under CC BY-NC-SA 4.0; see LICENSE-ICON.

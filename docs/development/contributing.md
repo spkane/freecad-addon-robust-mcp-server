@@ -230,4 +230,4 @@ Currently, embedded mode has only mocked unit tests. Adding live integration tes
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](https://github.com/spkane/freecad-robust-mcp-and-more/blob/main/LICENSE) for details.
+The project uses [Apache License 2.0](https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/LICENSE-CODE). Previously MIT-licensed contributions retain their [original terms](https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/LICENSE-MIT). See [NOTICE](https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/NOTICE) for attribution and [LICENSE-ICON](https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/LICENSE-ICON) for the workbench icons.

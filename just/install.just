@@ -144,6 +144,12 @@ mcp-bridge-workbench:
     # The namespace package structure is created inside: freecad/RobustMCPBridge/
     ADDON_DEST="$MOD_DIR/$ADDON_NAME"
 
+    # Build the replacement before removing an existing installation.
+    mkdir -p "$MOD_DIR"
+    STAGING_DIR=$(mktemp -d "$MOD_DIR/.robust-mcp-install.XXXXXX")
+    trap 'rm -rf "$STAGING_DIR"' EXIT
+    python3 "${PROJECT_DIR}/scripts/package_workbench.py" install "$STAGING_DIR/$ADDON_NAME"
+
     # Remove existing installation if present
     if [[ -d "$ADDON_DEST" ]]; then
         echo "Removing existing installation at: $ADDON_DEST"
@@ -168,147 +174,8 @@ mcp-bridge-workbench:
         fi
     fi
 
-    # Verify source exists before copying
-    ADDON_SRC="${PROJECT_DIR}/$ADDON_NAMESPACE/$ADDON_NAME"
-    if [[ ! -d "$ADDON_SRC" ]]; then
-        echo "Error: Addon source directory not found: $ADDON_SRC" >&2
-        exit 1
-    fi
-
-    # Create addon directory with namespace package structure
-    mkdir -p "$ADDON_DEST/$ADDON_NAMESPACE"
-
-    # Copy the workbench code to the namespace package location
-    cp -r "$ADDON_SRC" "$ADDON_DEST/$ADDON_NAMESPACE/"
-
-    # Generate package.xml for the workbench from root package.xml
-    # FreeCAD requires package.xml in the addon directory for proper workbench detection
-    ROOT_PACKAGE_XML="${PROJECT_DIR}/package.xml"
-    if [[ -f "$ROOT_PACKAGE_XML" ]]; then
-        echo "Generating package.xml from root package.xml..."
-        export ROOT_PACKAGE_XML ADDON_DEST
-        python3 << 'PYEOF'
-    import xml.etree.ElementTree as ET
-    import sys
-    import os
-
-    try:
-        root_pkg = os.environ.get('ROOT_PACKAGE_XML', '')
-        addon_dest = os.environ.get('ADDON_DEST', '')
-
-        tree = ET.parse(root_pkg)
-        root = tree.getroot()
-        ns = {'pkg': 'https://wiki.freecad.org/Package_Metadata'}
-
-        # Find the workbench content element
-        workbench = root.find('.//pkg:content/pkg:workbench', ns)
-        if workbench is None:
-            print("Warning: No workbench found in root package.xml", file=sys.stderr)
-            sys.exit(0)
-
-        # Extract workbench metadata
-        wb_name = workbench.find('pkg:name', ns)
-        wb_version = workbench.find('pkg:version', ns)
-        wb_date = workbench.find('pkg:date', ns)
-        wb_description = workbench.find('pkg:description', ns)
-        wb_classname = workbench.find('pkg:classname', ns)
-        wb_icon = workbench.find('pkg:icon', ns)
-        wb_freecadmin = workbench.find('pkg:freecadmin', ns)
-
-        # Get maintainer and license from root
-        maintainer = root.find('pkg:maintainer', ns)
-        license_el = root.find('pkg:license', ns)
-        repo_url = root.find('pkg:url[@type="repository"]', ns)
-        readme_url = root.find('pkg:url[@type="readme"]', ns)
-
-        # Create standalone package.xml
-        standalone = ET.Element('package', {
-            'format': '1',
-            'xmlns': 'https://wiki.freecad.org/Package_Metadata'
-        })
-
-        # Add metadata
-        name_text = wb_name.text if wb_name is not None else 'Robust MCP Bridge'
-        ET.SubElement(standalone, 'name').text = name_text
-        desc_text = wb_description.text if wb_description is not None else 'MCP Bridge for FreeCAD'
-        ET.SubElement(standalone, 'description').text = desc_text
-        ver_text = wb_version.text if wb_version is not None else '0.0.0'
-        ET.SubElement(standalone, 'version').text = ver_text
-        # Fall back to today's date if not specified
-        from datetime import date
-        date_text = wb_date.text if wb_date is not None else date.today().isoformat()
-        ET.SubElement(standalone, 'date').text = date_text
-
-        if maintainer is not None:
-            m = ET.SubElement(standalone, 'maintainer')
-            m.text = maintainer.text
-            if maintainer.get('email'):
-                m.set('email', maintainer.get('email'))
-
-        if license_el is not None:
-            l = ET.SubElement(standalone, 'license')
-            l.text = license_el.text
-            if license_el.get('file'):
-                l.set('file', license_el.get('file'))
-
-        if repo_url is not None:
-            u = ET.SubElement(standalone, 'url', type='repository')
-            u.text = repo_url.text
-            if repo_url.get('branch'):
-                u.set('branch', repo_url.get('branch'))
-
-        if readme_url is not None:
-            u = ET.SubElement(standalone, 'url', type='readme')
-            u.text = readme_url.text
-
-        icon_text = wb_icon.text if wb_icon is not None else 'Resources/Icons/FreecadRobustMCPBridge.svg'
-        ET.SubElement(standalone, 'icon').text = icon_text
-        fcmin_text = wb_freecadmin.text if wb_freecadmin is not None else '0.21'
-        ET.SubElement(standalone, 'freecadmin').text = fcmin_text
-
-        # Add content/workbench section
-        content = ET.SubElement(standalone, 'content')
-        wb_el = ET.SubElement(content, 'workbench')
-        cls_text = wb_classname.text if wb_classname is not None else 'FreecadRobustMCPBridgeWorkbench'
-        ET.SubElement(wb_el, 'classname').text = cls_text
-        ET.SubElement(wb_el, 'subdirectory').text = './freecad/RobustMCPBridge/'
-
-        # Add tags
-        for tag in ['MCP', 'AI', 'automation', 'Claude', 'bridge', 'headless']:
-            ET.SubElement(wb_el, 'tag').text = tag
-
-        # Helper to indent XML for Python < 3.9 compatibility
-        def indent_xml(elem, level=0, space='    '):
-            """Indent XML element tree (fallback for Python < 3.9)."""
-            indent_str = '\n' + level * space
-            if len(elem):
-                if not elem.text or not elem.text.strip():
-                    elem.text = indent_str + space
-                for child in elem:
-                    indent_xml(child, level + 1, space)
-                if not child.tail or not child.tail.strip():
-                    child.tail = indent_str
-            if level and (not elem.tail or not elem.tail.strip()):
-                elem.tail = indent_str
-
-        # Write the standalone package.xml
-        # Use ET.indent if available (Python 3.9+), otherwise use fallback
-        if hasattr(ET, 'indent'):
-            ET.indent(standalone, space='    ')
-        else:
-            indent_xml(standalone)
-        tree = ET.ElementTree(standalone)
-        output_path = os.path.join(addon_dest, 'package.xml')
-        tree.write(output_path, encoding='UTF-8', xml_declaration=True)
-        print("Generated package.xml successfully")
-
-    except Exception as e:
-        print(f"Warning: Could not generate package.xml: {e}", file=sys.stderr)
-        # Don't fail the installation if package.xml generation fails
-    PYEOF
-    else
-        echo "Warning: Root package.xml not found, skipping package.xml generation"
-    fi
+    # Install the fully built package on the same filesystem.
+    mv "$STAGING_DIR/$ADDON_NAME" "$ADDON_DEST"
 
     echo ""
     echo "=========================================="

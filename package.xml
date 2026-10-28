@@ -11,7 +11,8 @@
     <maintainer email="spkane@gmail.com">Sean P. Kane</maintainer>
     <author email="spkane@gmail.com">Sean P. Kane</author>
 
-    <license file="LICENSE">MIT</license>
+    <license file="LICENSE-CODE">Apache-2.0</license>
+    <license file="LICENSE-MIT">MIT</license>
     <license file="LICENSE-ICON">CC-BY-NC-SA-4.0</license>
 
     <freecadmin>0.21</freecadmin>

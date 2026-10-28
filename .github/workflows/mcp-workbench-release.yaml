@@ -82,70 +82,9 @@ jobs:
           echo "Version verification passed!"
 
       - name: Create workbench archive
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # Create staging directory with namespace path preserved
-          mkdir -p "staging/freecad-mcp-workbench-${VERSION}/freecad"
-
-          # Copy workbench files (preserve namespace path)
-          cp -r freecad/RobustMCPBridge "staging/freecad-mcp-workbench-${VERSION}/freecad/"
-
-          # Copy LICENSE to the workbench directory
-          cp LICENSE "staging/freecad-mcp-workbench-${VERSION}/freecad/RobustMCPBridge/"
-
-          # Create README for the archive (at archive root)
-          cat > "staging/freecad-mcp-workbench-${VERSION}/README.md" << EOF
-          # Robust MCP Bridge Workbench
-
-          **Version:** ${VERSION}
-
-          ## Installation
-
-          ### Via FreeCAD Addon Manager (Recommended)
-
-          1. Open FreeCAD
-          2. Go to **Tools → Addon Manager**
-          3. Search for "Robust MCP Bridge"
-          4. Click **Install**
-          5. Restart FreeCAD
-
-          ### Manual Installation
-
-          Extract this archive into your FreeCAD Mod directory (it includes \`freecad/RobustMCPBridge/\`):
-
-          - **macOS**: \`~/Library/Application Support/FreeCAD/Mod/\`
-          - **Linux**: \`~/.local/share/FreeCAD/Mod/\`
-          - **Windows**: \`%APPDATA%/FreeCAD/Mod/\`
-
-          ## Usage
-
-          1. Switch to the **Robust MCP Bridge** workbench
-          2. Click **Start MCP Bridge** in the toolbar
-          3. Connect your MCP client (Claude Code, etc.)
-
-          ## Documentation
-
-          Full documentation: https://github.com/spkane/freecad-robust-mcp-and-more
-
-          ## License
-
-          MIT License - see LICENSE file
-          EOF
-
-          # Create tar.gz archive
-          cd staging
-          tar -czvf "freecad-mcp-workbench-${VERSION}.tar.gz" "freecad-mcp-workbench-${VERSION}"
-
-          # Create zip archive
-          zip -r "freecad-mcp-workbench-${VERSION}.zip" "freecad-mcp-workbench-${VERSION}"
-
-          mv "freecad-mcp-workbench-${VERSION}.tar.gz" ../
-          mv "freecad-mcp-workbench-${VERSION}.zip" ../
-          cd ..
-
-          echo "Created archives:"
-          ls -la "freecad-mcp-workbench-${VERSION}."*
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 scripts/package_workbench.py archives "$VERSION" .
 
       - name: Extract release notes section
         id: changelog
@@ -175,9 +114,8 @@ jobs:
 
           ### Installation
 
-          **Recommended:** Install via FreeCAD's Addon Manager (search for "Robust MCP Bridge").
-
-          **Manual:** Download and extract to your FreeCAD Mod directory.
+          Download and extract the workbench archive into your FreeCAD Mod directory.
+          The workbench is not currently listed in the public Addon Manager catalog.
 
           ### What's Included
 
@@ -185,7 +123,7 @@ jobs:
           - XML-RPC and JSON-RPC server support
           - Toolbar commands for bridge control
 
-          See the [full documentation](https://github.com/spkane/freecad-robust-mcp-and-more) for usage instructions.
+          See the [full documentation](https://github.com/spkane/freecad-addon-robust-mcp-server) for usage instructions.
           STATIC_EOF
 
           if [ -n "$CHANGELOG_CONTENT" ]; then
@@ -227,5 +165,5 @@ jobs:
             echo ""
             echo "### Installation"
             echo ""
-            echo "Install via FreeCAD Addon Manager or extract to your Mod directory."
+            echo "Extract the workbench archive to your FreeCAD Mod directory."
           } >> "$GITHUB_STEP_SUMMARY"

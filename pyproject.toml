@@ -7,7 +7,8 @@ name = "freecad-robust-mcp"
 dynamic = ["version"]
 description = "Robust MCP Server for FreeCAD integration with Claude Code and other AI assistants"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0 AND MIT"
+license-files = ["LICENSE-CODE", "LICENSE-MIT", "NOTICE"]
 requires-python = ">=3.11"
 authors = [
     { name = "Sean P. Kane", email = "spkane@gmail.com" }
@@ -36,7 +37,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Manufacturing",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Operating System :: MacOS",

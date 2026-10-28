@@ -1,6 +1,6 @@
 # FreeCAD Robust MCP Server
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![PyPI Version](https://img.shields.io/pypi/v/freecad-robust-mcp)](https://pypi.org/project/freecad-robust-mcp/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/freecad-robust-mcp)](https://pypi.org/project/freecad-robust-mcp/)
 [![Docker Image Version](https://img.shields.io/docker/v/spkane/freecad-robust-mcp?sort=semver&label=docker)](https://hub.docker.com/r/spkane/freecad-robust-mcp)
@@ -705,4 +705,7 @@ See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed analysis of these im
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Code is distributed under [Apache License 2.0](LICENSE-CODE); previously
+MIT-licensed contributions retain their [original MIT terms](LICENSE-MIT).
+Workbench icons use [CC BY-NC-SA 4.0](LICENSE-ICON). See [NOTICE](NOTICE) for
+attribution.

@@ -43,6 +43,7 @@ import socket
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -448,6 +449,93 @@ class TestShutdownCrash:
             Path(path).is_relative_to(package)
             for path in json.loads(result_path.read_text(encoding="utf-8"))
         )
+
+    @pytest.mark.parametrize("archive_format", ["zip", "gztar"])
+    def test_release_archive_installs_and_loads(
+        self, freecad_binary: str, tmp_path: Path, archive_format: str
+    ) -> None:
+        """Install each actual release artifact into an isolated FreeCAD Mod folder."""
+        root = Path(__file__).resolve().parents[2]
+        manifest = ET.parse(root / "package.xml")  # noqa: S314 - repository metadata
+        version = manifest.findtext(
+            ".//{https://wiki.freecad.org/Package_Metadata}workbench/"
+            "{https://wiki.freecad.org/Package_Metadata}version"
+        )
+        assert version
+        output = tmp_path / "archives"
+        subprocess.run(  # noqa: S603 - fixed interpreter and repository script
+            [
+                sys.executable,
+                str(root / "scripts/package_workbench.py"),
+                "archives",
+                version,
+                str(output),
+            ],
+            check=True,
+        )
+        extension = ".zip" if archive_format == "zip" else ".tar.gz"
+        mod_dir = tmp_path / "Mod"
+        mod_dir.mkdir()
+        shutil.unpack_archive(
+            str(output / f"freecad-mcp-workbench-{version}{extension}"),
+            str(mod_dir),
+            archive_format,
+        )
+        addon = mod_dir / f"freecad-mcp-workbench-{version}"
+        result_path = tmp_path / "result.json"
+        macro = tmp_path / "test_archive.FCMacro"
+        macro.write_text(
+            "import importlib, json, os, sys\n"
+            "from pathlib import Path\n"
+            "from PySide import QtCore\n"
+            "def finish():\n"
+            "    try:\n"
+            "        sys.path.insert(0, os.environ['MCP_TEST_ADDON'])\n"
+            "        for name in list(sys.modules):\n"
+            "            if name == 'freecad.RobustMCPBridge' or name.startswith('freecad.RobustMCPBridge.'):\n"
+            "                del sys.modules[name]\n"
+            "        package = importlib.import_module('freecad.RobustMCPBridge')\n"
+            "        commands = importlib.import_module('freecad.RobustMCPBridge.commands')\n"
+            "        if 'FreecadRobustMCPBridgeWorkbench' in FreeCADGui.listWorkbenches():\n"
+            "            FreeCADGui.removeWorkbench('FreecadRobustMCPBridgeWorkbench')\n"
+            "        gui = importlib.import_module('freecad.RobustMCPBridge.init_gui')\n"
+            "        assert 'FreecadRobustMCPBridgeWorkbench' in FreeCADGui.listWorkbenches()\n"
+            "        result = {'package': package.__file__, 'commands': commands.__file__, 'gui': gui.__file__}\n"
+            "        Path(os.environ['MCP_TEST_RESULT']).write_text(json.dumps(result))\n"
+            "    finally:\n"
+            "        FreeCADGui.getMainWindow().close()\n"
+            "QtCore.QTimer.singleShot(1500, finish)\n",
+            encoding="utf-8",
+        )
+        env = {
+            **os.environ,
+            "HOME": str(tmp_path),
+            "FREECAD_MCP_TESTING": "1",
+            "MCP_TEST_ADDON": str(addon),
+            "MCP_TEST_RESULT": str(result_path),
+        }
+        result = subprocess.run(  # noqa: S603 - discovered FreeCAD binary
+            [
+                freecad_binary,
+                "--user-cfg",
+                str(tmp_path / "user.cfg"),
+                "--system-cfg",
+                str(tmp_path / "system.cfg"),
+                "--module-path",
+                str(addon),
+                str(macro),
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result_path.exists(), result.stdout + result.stderr
+        loaded = json.loads(result_path.read_text(encoding="utf-8"))
+        assert all(Path(path).is_relative_to(addon) for path in loaded.values())
+        assert (addon / "package.xml").is_file()
 
     def test_gui_workbench_autostart_and_clean_shutdown(
         self, freecad_binary: str, tmp_path: Path
