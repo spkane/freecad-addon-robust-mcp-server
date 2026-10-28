@@ -1303,7 +1303,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                         {
                             "name": "get_screenshot",
                             "description": "Capture 3D view screenshot (GUI only)",
-                            "key_params": ["file_path", "width", "height"],
+                            "key_params": ["view_angle", "width", "height", "doc_name"],
                         },
                         {
                             "name": "set_view_angle",

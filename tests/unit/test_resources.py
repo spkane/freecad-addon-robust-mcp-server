@@ -1,5 +1,6 @@
 """Tests for FreeCAD Robust MCP resources."""
 
+import inspect
 import json
 from collections.abc import Callable
 from typing import Any
@@ -481,6 +482,32 @@ class TestFreecadResources:
 
         # Should have prompts section
         assert "prompts" in data
+
+    @pytest.mark.asyncio
+    async def test_screenshot_capability_matches_registered_tool(
+        self, register_resources: dict[str, Callable[..., Any]]
+    ) -> None:
+        """Agents must receive only screenshot parameters the tool accepts."""
+        from freecad_mcp.tools.view import register_view_tools
+
+        functions: dict[str, Callable[..., Any]] = {}
+        server = MagicMock()
+
+        def tool_decorator() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            def register(func: Callable[..., Any]) -> Callable[..., Any]:
+                functions[func.__name__] = func
+                return func
+
+            return register
+
+        server.tool = tool_decorator
+        register_view_tools(server, AsyncMock())
+        data = json.loads(await register_resources["freecad://capabilities"]())
+        entries = data["tools"]["view"]["tools"]
+        screenshot = next(item for item in entries if item["name"] == "get_screenshot")
+        assert set(screenshot["key_params"]) == set(
+            inspect.signature(functions["get_screenshot"]).parameters
+        )
 
     @pytest.mark.asyncio
     async def test_resource_capabilities_includes_all_resources(
