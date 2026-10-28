@@ -357,8 +357,11 @@ just freecad::run-gui
 just freecad::run-headless
 
 # Or run directly with FreeCADCmd
-FreeCADCmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
+
+The direct path assumes a source installation in an unversioned Linux profile.
+For versioned profiles or release archives, use the actual installed directory.
 
 ---
 

@@ -9,7 +9,8 @@ Get up and running with AI-assisted FreeCAD modeling in minutes.
 Before starting, ensure you have:
 
 1. FreeCAD installed with the Robust MCP Bridge workbench
-1. The MCP server installed (`pip install freecad-robust-mcp`)
+1. Matching pairing-capable MCP server and workbench builds from the
+   [installation guide](installation.md)
 1. Your MCP client configured (see [Configuration](configuration.md))
 1. Bridge pairing completed on the same computer and user account as FreeCAD:
    run `freecad-mcp --pair-bridge`, or `uv run freecad-mcp --pair-bridge`
@@ -29,12 +30,15 @@ Before starting, ensure you have:
 ### Option B: Headless Mode (For automation)
 
 ```bash
-# If installed via Addon Manager (Linux)
-FreeCADCmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+# For a source installation in an unversioned Linux profile
+freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 
 # If working from source
 just freecad::run-headless
 ```
+
+Use the selected versioned profile and extracted package directory when they
+differ from the example above.
 
 ---
 

@@ -309,11 +309,10 @@ After starting the bridge, start/restart your MCP client (Claude Code, etc.) - i
 
 To uninstall the Robust MCP Bridge workbench:
 
-1. Open FreeCAD
-1. Go to **Edit -> Preferences -> Addon Manager**
-1. Find "Robust MCP Bridge" in the list
-1. Click **Uninstall**
-1. Restart FreeCAD
+For a source installation, run `just install::uninstall-mcp-bridge-workbench`
+from the checkout, then restart FreeCAD. For a release archive, remove its
+extracted package directory from the correct FreeCAD profile's `Mod` directory
+and restart FreeCAD.
 
 ##### Checking for Legacy Components
 

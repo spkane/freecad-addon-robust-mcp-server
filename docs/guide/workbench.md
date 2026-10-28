@@ -18,21 +18,12 @@ The workbench provides:
 
 ## Installation
 
-### Via FreeCAD Addon Manager (Recommended)
-
-1. Open FreeCAD
-1. Go to **Tools > Addon Manager**
-1. Search for "FreeCAD Robust MCP Suite" or "Robust MCP Bridge"
-1. Click **Install**
-1. Restart FreeCAD
-
-### Manual Installation
-
-Download from [GitHub Releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases) and extract to your FreeCAD Mod directory:
-
-- **Linux:** `~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/`
-- **macOS:** `~/Library/Application Support/FreeCAD/Mod/freecad/RobustMCPBridge/`
-- **Windows:** `%APPDATA%\FreeCAD\Mod\freecad\RobustMCPBridge\`
+The workbench is not yet in the public FreeCAD Addon Manager catalog. Follow
+the [installation guide](../getting-started/installation.md) to install the
+server and workbench from the same pairing-capable source checkout. The source
+installer creates `Mod/RobustMCPBridge/freecad/RobustMCPBridge/` inside the
+selected FreeCAD user profile. Release archives instead include their own
+versioned package directory; follow the guide when using a compatible archive.
 
 ---
 
@@ -75,14 +66,14 @@ The workbench includes a blocking bridge script for running in server mode (keep
 **Linux:**
 
 ```bash
-freecadcmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **macOS:**
 
 ```bash
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    ~/Library/Application\ Support/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **Using just commands (from source):**
@@ -90,6 +81,11 @@ freecadcmd ~/.local/share/FreeCAD/Mod/freecad/RobustMCPBridge/freecad_mcp_bridge
 ```bash
 just freecad::run-headless
 ```
+
+The paths above assume an unversioned FreeCAD user profile and a source
+installation. If FreeCAD uses a versioned profile, use that profile's `Mod`
+directory. For a release archive, use its extracted package directory instead
+of `RobustMCPBridge`.
 
 ### Headless Output
 

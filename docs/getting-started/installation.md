@@ -72,17 +72,27 @@ restart FreeCAD. On Windows, use Git Bash with the Rust `just` command and a
 working `python3` command; see [Windows installation issue #97](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/97)
 for remaining limitations.
 
+The source installer creates `Mod/RobustMCPBridge/package.xml` and
+`Mod/RobustMCPBridge/freecad/RobustMCPBridge/` in the selected user profile. It
+selects the latest versioned FreeCAD profile when one exists; otherwise it uses
+the unversioned profile. Do not copy the repository itself into `Mod`.
+
 ### Manual Installation
 
 Existing published workbench archives predate pairing. Use an archive only
 when it is from a pairing-capable release that matches the server build.
 
 1. Download the `freecad-mcp-workbench` archive from the latest [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true)
-1. Extract to your FreeCAD Mod directory:
+1. Extract the archive's top-level package directory into your FreeCAD Mod directory:
    - **Linux:** `~/.local/share/FreeCAD/Mod/`
    - **macOS:** `~/Library/Application Support/FreeCAD/Mod/`
    - **Windows:** `%APPDATA%\FreeCAD\Mod\`
 1. Restart FreeCAD
+
+The archive package directory contains `package.xml` and the nested
+`freecad/RobustMCPBridge/` workbench. Select the `Mod` directory belonging to
+the FreeCAD profile you actually use; versioned profiles can have a separate
+directory such as `v1-1/Mod`.
 
 ---
 
