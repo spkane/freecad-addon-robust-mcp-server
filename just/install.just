@@ -33,7 +33,7 @@ _freecad-dirs:
     if [[ -n "${FREECAD_INSTALL_MOD_DIR:-}" ]]; then
         MOD_DIR="$FREECAD_INSTALL_MOD_DIR"
     else
-        MOD_DIR=$(cd "{{project_root}}" && uv run python -c 'from scripts.install_workbench import default_mod_directory; print(default_mod_directory())') || exit 1
+        MOD_DIR=$(cd "{{project_root}}" && uv run --no-project python -c 'from scripts.install_workbench import default_mod_directory; print(default_mod_directory())') || exit 1
     fi
     MACRO_DIR="$(dirname "$MOD_DIR")/Macro"
     DIRS_EOF
@@ -98,7 +98,7 @@ uninstall-mcp-server:
 
 # Install the FreeCAD Robust MCP workbench addon to FreeCAD's Mod directory
 # Uses new-style namespace package format: Mod/RobustMCPBridge/freecad/RobustMCPBridge/
-[script("uv", "run", "python")]
+[script("uv", "run", "--no-project", "python")]
 mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
     import os
     import runpy
@@ -121,7 +121,7 @@ uninstall-mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
 
     # Resolve explicit paths before the nested just invocation changes directories.
     if [[ -n "$FREECAD_INSTALL_MOD_DIR" ]]; then
-        FREECAD_INSTALL_MOD_DIR=$(uv run python -c 'import os; from pathlib import Path; print(Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / os.environ["FREECAD_INSTALL_MOD_DIR"])')
+        FREECAD_INSTALL_MOD_DIR=$(uv run --no-project python -c 'import os; from pathlib import Path; print(Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / os.environ["FREECAD_INSTALL_MOD_DIR"])')
         export FREECAD_INSTALL_MOD_DIR
     fi
     # Set FreeCAD directories
@@ -166,7 +166,7 @@ status $FREECAD_INSTALL_MOD_DIR="":
 
     # Resolve explicit paths before the nested just invocation changes directories.
     if [[ -n "$FREECAD_INSTALL_MOD_DIR" ]]; then
-        FREECAD_INSTALL_MOD_DIR=$(uv run python -c 'import os; from pathlib import Path; print(Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / os.environ["FREECAD_INSTALL_MOD_DIR"])')
+        FREECAD_INSTALL_MOD_DIR=$(uv run --no-project python -c 'import os; from pathlib import Path; print(Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / os.environ["FREECAD_INSTALL_MOD_DIR"])')
         export FREECAD_INSTALL_MOD_DIR
     fi
     # Set FreeCAD directories
@@ -199,7 +199,7 @@ status $FREECAD_INSTALL_MOD_DIR="":
     elif [[ -f "{{project_root}}/pyproject.toml" ]] && grep -q 'name = "freecad-robust-mcp"' "{{project_root}}/pyproject.toml" 2>/dev/null; then
         # Dev environment exists - check if synced by looking for .venv
         if [[ -d "{{project_root}}/.venv" ]]; then
-            DEV_VERSION=$(cd "{{project_root}}" && uv run python -c "from freecad_mcp import __version__; print(__version__)" 2>/dev/null || echo "unknown")
+            DEV_VERSION=$(cd "{{project_root}}" && uv run --no-project python -c "from freecad_mcp import __version__; print(__version__)" 2>/dev/null || echo "unknown")
             echo "✓ Robust MCP Server: AVAILABLE (via dev environment)"
             echo "  Version: $DEV_VERSION"
             echo "  Run: just mcp::run"
