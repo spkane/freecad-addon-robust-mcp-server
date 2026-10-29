@@ -1,5 +1,6 @@
 """Verify profile selection and safe installation into disposable directories."""
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -150,3 +151,35 @@ def test_install_does_not_follow_legacy_namespace_symlink(tmp_path: Path) -> Non
         pytest.skip("Directory symlinks unavailable on this host")
     install_workbench(mod)
     assert (external / "RobustMCPBridge").is_dir()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows junctions require Windows")
+@pytest.mark.parametrize(
+    "link_name", ["freecad", "FreecadRobustMCPBridge", "RobustMCPBridge"]
+)
+def test_windows_junctions_preserve_external_directories(
+    tmp_path: Path, link_name: str
+) -> None:
+    """Junctions cannot redirect legacy cleanup or replacement outside Mod."""
+    mod = tmp_path / "Mod"
+    mod.mkdir()
+    external = tmp_path / "external"
+    (external / "RobustMCPBridge").mkdir(parents=True)
+    marker = external / "RobustMCPBridge" / "marker"
+    marker.write_text("preserve", encoding="utf-8")
+    cmd = shutil.which("cmd")
+    assert cmd is not None
+    result = subprocess.run(  # noqa: S603 - fixed cmd and temporary directories
+        [cmd, "/c", "mklink", "/J", str(mod / link_name), str(external)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    if link_name == "RobustMCPBridge":
+        with pytest.raises(ValueError, match="not a regular directory"):
+            install_workbench(mod)
+    else:
+        install_workbench(mod)
+    assert marker.read_text(encoding="utf-8") == "preserve"
