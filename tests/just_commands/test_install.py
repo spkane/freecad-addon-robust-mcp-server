@@ -123,7 +123,8 @@ class TestInstallRuntime:
         (mod_dir / "RobustMCPBridge").mkdir(parents=True)
         result = just.run("install::status", str(mod_dir), timeout=60)
         assert result.success, result.stderr
-        assert str(mod_dir / "RobustMCPBridge") in result.stdout
+        assert "Robust MCP Bridge Workbench: INSTALLED" in result.stdout
+        assert "/Mod/RobustMCPBridge" in result.stdout.replace("\\", "/")
 
     @pytest.mark.just_runtime
     def test_freecad_dirs_helper_runs(self, just: JustRunner) -> None:

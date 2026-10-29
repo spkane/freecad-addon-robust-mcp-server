@@ -35,6 +35,10 @@ _freecad-dirs:
     else
         MOD_DIR=$(cd "{{project_root}}" && uv run --no-project --python ">=3.11" python -c 'from scripts.install_workbench import default_mod_directory; print(default_mod_directory())') || exit 1
     fi
+    # Native Windows paths need conversion before Bash filesystem operations.
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then
+        MOD_DIR=$(cygpath -u "$MOD_DIR") || exit 1
+    fi
     MACRO_DIR="$(dirname "$MOD_DIR")/Macro"
     DIRS_EOF
 
