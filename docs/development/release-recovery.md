@@ -30,8 +30,8 @@ archive, and image digests and the tested FreeCAD and Python versions.
 3. If the published artifact itself is wrong, prepare a new version and tag.
    If the artifacts are correct, complete only the missing channels, verify the
    versions and digests, and document the recovery in the release record.
-4. Do not close issue #87 until the new public package is installed cleanly and
-   its FreeCAD 1.x regressions have been checked against the published artifact.
+4. Verify that the new public package installs cleanly and its FreeCAD 1.x
+   regressions pass against the published artifact, even though #87 is closed.
 
 A failed run may leave a candidate image tag, and a failure after promotion can
 leave the Docker release tag published before the Python package. Examine both

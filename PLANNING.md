@@ -10,10 +10,10 @@ identity and trusted publisher configuration; #164 corrected installation
 guidance; #165 added Windows installation; #166 fixed screenshot capabilities;
 PR #167 hardened release workflows and updated FreeCAD security guidance.
 Issue #97 was closed with attribution to the merged Windows fixes; contributor
-PR #124 was closed with thanks and links to its replacement. Issue #87 remains
-open until a newly published package is verified. Issue #73 tracks the remaining
-Addon Manager catalog work. Release-candidate publication
-and exact-artifact verification remain outstanding.
+PR #124 was closed with thanks and links to its replacement. Issue #87 was
+closed with the note that its fix is intended for the next release; publication
+and clean-install verification remain release gates. Issue #73 was closed in
+favor of #169, which tracks the remaining Addon Manager catalog work.
 
 **Repository snapshot:** `0a036ce`, PR #167 merge on remote `main`
 
@@ -105,13 +105,13 @@ PR #161 repaired workbench release packaging and adopted Apache 2.0 while
 retaining prior MIT terms and notices. Both archive formats were installed and
 loaded in real FreeCAD Qt5 and Qt6 CI; all checks and CodeRabbit passed. The
 fix has not yet been published in a new release. Issues #73, #87, and #97 were
-updated and remain open for their outstanding acceptance criteria.
+updated at the time for their outstanding acceptance criteria.
 PR #162 aligned the configuration and CLI default to XML-RPC, preserved
 explicit embedded mode, and tested default startup with real FreeCAD on Linux,
 macOS, and Windows. It also corrected pairing and source-install guidance.
 Its CI workflows passed; the final CodeRabbit re-review was rate-limited, and
-all reported findings were addressed. Issues #73, #87, and #97 remain open
-for their outstanding acceptance criteria.
+all reported findings were addressed. Issues #73, #87, and #97 were later
+closed; #169 tracks the Addon Manager listing.
 CAM feature request #153 remains deferred while the fix-first queue is active.
 Canonical issues and their active implementation pull requests remain open
 until their acceptance criteria pass.
@@ -147,7 +147,7 @@ are deferred until this queue is complete.
 | 10    | Resolved | M      | Finish screenshot compatibility, rendering, and cleanup | **Completed:** [PR #160](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/160) closed [#82](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/82) and [#92](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/92); contributor [PR #102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102) was closed with credit. | Shared capture code uses capability checks, renders and fits geometry, restores the camera and animation state, and cleans temporary files on failure. Real Qt5 and Qt6 GUI tests cover XML-RPC and socket; embedded is covered by unit tests.                                                              |
 | 11    | Resolved | XS     | Correct installation documentation                      | PR #164; contributor PR #124 closed with thanks                                                                                                                                                                                                                                                                                                                                  | Corrected guidance and retained contributor credit.                                                                                                                                                                                                                                                         |
 | 12    | Resolved | XS     | Repair capabilities metadata                            | PR #166 fixed #135                                                                                                                                                                                                                                                                                                                                                               | Screenshot parameters and response metadata now match the tool.                                                                                                                                                                                                                                             |
-| 13    | P0       | S-M    | Verify release packaging and identity                   | PR #163 fixed metadata; #87 remains open                                                                                                                                                                                                                                                                                                                                         | Exercise candidate publication and clean-install the published artifact.                                                                                                                                                                                                                                    |
+| 13    | P0       | S-M    | Verify release packaging and identity                   | PR #163 fixed metadata; #87 closed, publication verification pending                                                                                                                                                                                                                                                                                                             | Exercise candidate publication and clean-install the published artifact.                                                                                                                                                                                                                                    |
 | 14    | Resolved | S-M    | Make installation cross-platform                        | PR #165; #97 closed                                                                                                                                                                                                                                                                                                                                                              | Portable installer and Windows CI cover profile selection and status.                                                                                                                                                                                                                                       |
 
 ### Remaining release acceptance criteria
@@ -204,10 +204,9 @@ The maintenance-release queue is complete only when all of these are true:
 | [PR #100](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/100)              | Merged canonical fix                | FreeCAD 1.0.2/Qt5, stable Qt6, and weekly Qt6 canary checks passed before merge.                                    |
 | [PR #101](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/101)              | Merged canonical fix                | Live external geometry regression passed across the supported FreeCAD compatibility lanes.                          |
 
-Keep issues #73, #87, #97, #135, and #153 open until their
-acceptance criteria are met. PR #137 addresses one installed-workbench loading
-failure but does not complete the Addon Manager or cross-platform installation
-work in #73 and #97. Both issues were updated with that distinction.
+The reported installation and capability issues #73, #87, #97, and #135 are
+closed. Verify the released package despite #87 closing; #169 tracks the Addon
+Manager catalog, and #153 remains the deferred CAM feature request.
 
 ### Deferred feature/design backlog from closed PR #112
 
@@ -992,9 +991,9 @@ contract is explicit, and no P0/P1 release findings remain.
 1. Exercise the merged release workflows with a release candidate, including
    TestPyPI trusted publishing and the exact wheel and workbench archives.
 2. Verify clean installations and real tool calls with the published artifacts,
-   and rehearse partial-publication recovery. Keep #87 open until the public
-   package is verified.
-3. Keep the Addon Manager listing in #73 as a post-release task unless its
+   and rehearse partial-publication recovery. Verify the public package even
+   though #87 is closed.
+3. Keep the Addon Manager listing in #169 as a post-release task unless its
    priority changes.
 
 ## Authoritative references
