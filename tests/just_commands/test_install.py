@@ -19,6 +19,28 @@ if TYPE_CHECKING:
     from tests.just_commands.conftest import JustRunner
 
 
+def assert_status_path(output: str, expected: Path) -> None:
+    """Compare the full reported path, including Git Bash conversion on Windows."""
+    expected_path = str(expected)
+    if os.name == "nt":
+        bash = shutil.which("bash")
+        assert bash is not None
+        conversion = subprocess.run(  # noqa: S603 - fixed command and test path
+            [bash, "-c", 'cygpath -u "$1"', "bash", expected_path],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        expected_path = conversion.stdout.strip()
+    reported_path = next(
+        line.split("Path: ", 1)[1].strip()
+        for line in output.splitlines()
+        if line.startswith("  Path: ")
+    )
+    assert reported_path == expected_path
+
+
 class TestInstallSyntax:
     """Syntax validation tests for install commands."""
 
@@ -112,7 +134,7 @@ class TestInstallRuntime:
             timeout=120,
         )
         assert status.returncode == 0, status.stderr
-        assert "profile/Mod/RobustMCPBridge" in status.stdout.replace("\\", "/")
+        assert_status_path(status.stdout, target.parent)
 
     @pytest.mark.just_runtime
     def test_status_uses_selected_mod_directory(
@@ -124,9 +146,7 @@ class TestInstallRuntime:
         result = just.run("install::status", str(mod_dir), timeout=60)
         assert result.success, result.stderr
         assert "Robust MCP Bridge Workbench: INSTALLED" in result.stdout
-        assert "selected profile/Mod/RobustMCPBridge" in result.stdout.replace(
-            "\\", "/"
-        )
+        assert_status_path(result.stdout, mod_dir / "RobustMCPBridge")
 
     @pytest.mark.just_runtime
     def test_freecad_dirs_helper_runs(self, just: JustRunner) -> None:
