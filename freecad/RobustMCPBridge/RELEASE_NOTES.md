@@ -2,12 +2,29 @@
 
 ## Unreleased
 
+## Version 0.7.0-rc.1 (2026-10-29)
+
+This candidate pairs with the `0.7.0-rc.1` MCP server. The bridge executes
+FreeCAD operations with the permissions of the FreeCAD user; pairing protects
+against unauthenticated local clients but does not isolate malicious programs
+running as the same user.
+
+### Added
+
+- **Authenticated pairing**: XML-RPC and socket bridge access requires a
+  paired client credential, and the bridge listens on loopback.
+- **Release packaging**: ZIP and tarball archives share the installable
+  workbench layout and include the applicable licenses and notices.
+
 ### Changed
 
 - **FreeCAD compatibility CI**: GUI integration now runs in parallel against the final Qt5/PySide2 release, the latest stable Qt6/PySide6 release, and a non-blocking latest-weekly Qt6 canary.
 
 ### Fixed
 
+- **Installed imports and shutdown**: The workbench uses package-relative
+  imports, starts safely in headless mode, and releases its owned Qt timers on
+  the correct thread during shutdown.
 - **Execution timeout propagation**: XML-RPC and socket requests now receive the
   caller's effective timeout, while one-argument XML-RPC clients retain the
   30-second default. Requests that time out before execution are removed from
