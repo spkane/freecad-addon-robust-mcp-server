@@ -38,8 +38,9 @@ see the [installation guide](https://spkane.github.io/freecad-addon-robust-mcp-s
 
 1. Install matching server and workbench builds from the same source checkout
 2. Pair the server and bridge with `uv run freecad-mcp --pair-bridge`
-3. Start FreeCAD and the MCP Bridge workbench
-4. Configure your AI assistant to use the MCP server
+3. Start FreeCAD and select the MCP Bridge workbench
+4. Click **Start MCP Bridge** unless auto-start is enabled
+5. Configure your AI assistant to use the MCP server
 
 ## Documentation
 

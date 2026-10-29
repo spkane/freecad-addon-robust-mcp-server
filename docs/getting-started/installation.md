@@ -102,6 +102,9 @@ Existing published workbench archives predate pairing. Use an archive only
 when it is from a pairing-capable release that matches the server build.
 
 1. Download the `freecad-mcp-workbench` archive from the latest [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true)
+1. Remove older Robust MCP Bridge installations from the selected profile’s
+   `Mod` directory, including prior `freecad-mcp-workbench-*` archive folders
+   and the source-installed `RobustMCPBridge` folder.
 1. Extract the archive's top-level package directory into your FreeCAD Mod directory:
    - **Linux:** `~/.local/share/FreeCAD/Mod/`
    - **macOS:** `~/Library/Application Support/FreeCAD/Mod/`
