@@ -1302,7 +1302,10 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                     "tools": [
                         {
                             "name": "get_screenshot",
-                            "description": "Capture 3D view screenshot (GUI only)",
+                            "description": (
+                                "Capture a 3D view screenshot (GUI only); "
+                                "successful responses contain base64-encoded PNG in data"
+                            ),
                             "key_params": ["view_angle", "width", "height", "doc_name"],
                         },
                         {

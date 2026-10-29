@@ -505,6 +505,7 @@ class TestFreecadResources:
         data = json.loads(await register_resources["freecad://capabilities"]())
         entries = data["tools"]["view"]["tools"]
         screenshot = next(item for item in entries if item["name"] == "get_screenshot")
+        assert "base64-encoded PNG in data" in screenshot["description"]
         assert set(screenshot["key_params"]) == set(
             inspect.signature(functions["get_screenshot"]).parameters
         )
