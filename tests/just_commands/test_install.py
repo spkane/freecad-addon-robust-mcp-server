@@ -6,6 +6,7 @@ Note: Some tests may modify local installations.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from typing import TYPE_CHECKING, ClassVar
@@ -62,6 +63,18 @@ class TestInstallRuntime:
         assert (
             mod_dir / "RobustMCPBridge/freecad/RobustMCPBridge/__init__.py"
         ).is_file()
+
+        # Exercise relative paths through the same native Windows CI test.
+        relative_mod = tmp_path / "relative profile" / "Mod"
+        try:
+            relative_arg = os.path.relpath(relative_mod, just.project_root)
+        except ValueError:
+            pytest.skip("Temporary directory is on a different Windows drive")
+        relative_result = just.run(
+            "install::mcp-bridge-workbench", relative_arg, timeout=120
+        )
+        assert relative_result.success, relative_result.output
+        assert (relative_mod / "RobustMCPBridge/package.xml").is_file()
 
     @pytest.mark.just_runtime
     def test_status_runs(self, just: JustRunner) -> None:
