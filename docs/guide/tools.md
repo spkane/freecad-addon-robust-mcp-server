@@ -383,6 +383,9 @@ Tools marked with **GUI** only work when FreeCAD is running in GUI mode.
 | `list_workbenches`      | Both | List available workbenches         |
 | `activate_workbench`    | Both | Switch workbench                   |
 
+`get_screenshot` accepts `view_angle`, `width`, `height`, and `doc_name`. It
+returns PNG data encoded as base64 in `data`; it does not accept a file path.
+
 ---
 
 ## Export Tools
