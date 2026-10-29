@@ -230,6 +230,9 @@ completion before accepting its largest compatibility cost.
 
 #### Focused follow-up from PR #112
 
+Use [PR #112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112)
+as the source of the contributor's proposal and implementation context.
+
 - **Investigate before stable release:** reproduce transaction lifecycle behavior
   in current `main` with consecutive real FreeCAD RPC mutations, including a
   no-change transaction, failure/rollback, user-owned transactions, and GUI and
@@ -242,7 +245,11 @@ completion before accepting its largest compatibility cost.
 - **Evaluate before redesign:** compare the existing catalog against the fork's
   focused 55-tool parametric profile using the same representative tasks and
   models. Measure task completion, errors, tool calls, context size, and model
-  cost. Retain existing tools while testing any opt-in profile.
+  cost. Research the benefits and drawbacks of a focused tool profile, guided
+  multi-step modeling, structured results, and on-demand resources, including
+  client support, discoverability, compatibility, maintenance, and model
+  behavior. Document the findings and tradeoffs before proposing an approach;
+  retain existing tools while testing any opt-in profile.
 - **Prototype in small steps:** consider revision-aware document references,
   structured mutation results with explicit solver and recompute diagnostics,
   and topic-specific on-demand guides. Validate stale references, failed or
