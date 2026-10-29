@@ -78,7 +78,8 @@ To select a specific profile, pass its `Mod` directory to the Python installer:
 uv run python scripts/install_workbench.py --mod-dir "$env:APPDATA\FreeCAD\v1-1\Mod"
 ```
 
-With `just`, the Mod directory can also be supplied as an argument:
+With `just`, the Mod directory can also be supplied as an argument. Relative
+paths are resolved from the directory where you run `just`:
 
 ```powershell
 just install::mcp-bridge-workbench "$env:APPDATA\FreeCAD\v1-1\Mod"

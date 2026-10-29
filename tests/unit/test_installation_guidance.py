@@ -43,3 +43,5 @@ def test_public_guidance_avoids_obsolete_installation_instructions() -> None:
     assert "Mod/FreecadRobustMCPBridge/" not in wiki
     assert "releases?q=robust-mcp-workbench" in wiki
     assert "pip install freecad-robust-mcp" not in overview
+    assert "pip install freecad-robust-mcp" not in wiki
+    assert "uv run freecad-mcp --pair-bridge" in wiki
