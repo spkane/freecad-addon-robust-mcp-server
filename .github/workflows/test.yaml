@@ -96,7 +96,7 @@ jobs:
           add_shims_to_path: "false"
 
       - name: Exercise workbench just recipe on Windows
-        run: mise exec just -- uv run pytest tests/just_commands/test_install.py -k test_workbench_installer_with_explicit_mod_directory -v --tb=short
+        run: mise exec just -- uv run pytest tests/just_commands/test_install.py -k "test_workbench_installer_with_explicit_mod_directory or test_status_uses_selected_mod_directory" -v --tb=short
 
   integration-test:
     name: Integration Tests (FreeCAD Headless)
