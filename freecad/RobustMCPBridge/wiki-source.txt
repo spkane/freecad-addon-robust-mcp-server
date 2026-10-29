@@ -36,7 +36,7 @@ The workbench is not currently listed in the public Addon Manager. From a matchi
 ===Manual installation=== <!--T:9-->
 
 <!--T:10-->
-Download a pairing-capable workbench archive matching your server from the [https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true workbench releases], extract its top-level package directory into your selected FreeCAD profile's {{FileName|Mod}} directory, and restart FreeCAD. The archive contains {{FileName|package.xml}} and {{FileName|freecad/RobustMCPBridge/}}.
+Download a pairing-capable workbench archive matching your server from the [https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true workbench releases]. Remove older workbench copies from the selected profile's {{FileName|Mod}} directory, including previous {{FileName|freecad-mcp-workbench-*}} archive directories and the source-installed {{FileName|RobustMCPBridge}} directory. Extract the archive's top-level package directory into that {{FileName|Mod}} directory, and restart FreeCAD. The archive contains {{FileName|package.xml}} and {{FileName|freecad/RobustMCPBridge/}}.
 
 ==Usage== <!--T:12-->
 

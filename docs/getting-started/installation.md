@@ -75,7 +75,11 @@ for remaining limitations.
 The source installer creates `Mod/RobustMCPBridge/package.xml` and
 `Mod/RobustMCPBridge/freecad/RobustMCPBridge/` in the selected user profile. It
 selects the latest versioned FreeCAD profile when one exists; otherwise it uses
-the unversioned profile. Do not copy the repository itself into `Mod`.
+the unversioned profile. This selection may differ from the profile used by
+the FreeCAD version you launch. Verify the printed destination; if it is the
+wrong profile, move the installed `RobustMCPBridge` package directory into the
+correct profile’s `Mod` directory before starting FreeCAD. Do not copy the
+repository itself into `Mod`.
 
 ### Manual Installation
 
