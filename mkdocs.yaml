@@ -146,4 +146,5 @@ nav:
       - Architecture: development/architecture.md
       - Detailed Architecture: development/architecture-detailed.md
       - Release Process: development/releasing.md
+      - Release Candidate and Recovery: development/release-recovery.md
       - MkDocs Guide: development/mkdocs-guide.md

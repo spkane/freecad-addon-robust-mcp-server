@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
   workflow_call:
 
-# Cancel in-progress runs for the same tag
+# Never interrupt a publication in progress.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   DOCKERHUB_REPO: spkane/freecad-robust-mcp
@@ -148,7 +148,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.11"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - name: Set up Python ${{ matrix.python-version }}
@@ -172,11 +172,11 @@ jobs:
           set -e
           pip show freecad-robust-mcp
           freecad-mcp --help
-          python -c "import freecad_mcp; print(f'freecad-robust-mcp version: {freecad_mcp.__version__ if hasattr(freecad_mcp, \"__version__\") else \"unknown\"}')"
+          python -c 'from importlib.metadata import version; print("freecad-robust-mcp version:", version("freecad-robust-mcp"))'
 
   publish-testpypi:
     name: Publish to TestPyPI
-    needs: [validate-tag, build, test-install]
+    needs: [validate-tag, build, test-install, container-candidate, docker-release]
     runs-on: ubuntu-latest
     if: contains(needs.validate-tag.outputs.version, '-')
     environment:
@@ -199,7 +199,7 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [validate-tag, build, test-install]
+    needs: [validate-tag, build, test-install, container-candidate, docker-release]
     runs-on: ubuntu-latest
     if: ${{ !contains(needs.validate-tag.outputs.version, '-') }}
     environment:
@@ -218,12 +218,14 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
 
-  docker-release:
-    name: Build and Push Docker Image
+  container-candidate:
+    name: Build and Test Container Candidate
     needs: [validate-tag, build, test-install]
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      digest: ${{ steps.build-image.outputs.digest }}
 
     steps:
       - name: Checkout code
@@ -254,29 +256,16 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ env.DOCKERHUB_REPO }}
-          tags: |
-            type=raw,value=${{ needs.validate-tag.outputs.version }}
-            type=raw,value=${{ needs.validate-tag.outputs.version }},suffix=-mcp-server
-            type=raw,value=latest,enable=${{ needs.validate-tag.outputs.is_prerelease == 'false' }}
-          labels: |
-            org.opencontainers.image.title=FreeCAD Robust MCP Server
-            org.opencontainers.image.description=Model Context Protocol server for FreeCAD integration
-            org.opencontainers.image.vendor=spkane
-            org.opencontainers.image.version=${{ needs.validate-tag.outputs.version }}
-
-      - name: Build and push Docker image
+      - name: Build and push candidate image
+        id: build-image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.DOCKERHUB_REPO }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: |
+            VERSION=${{ needs.validate-tag.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: true
@@ -315,21 +304,11 @@ jobs:
           FREECAD_BRIDGE_CLIENT_ID=$(uv run python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[0])')
           FREECAD_BRIDGE_SECRET=$(uv run python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[1])')
           export FREECAD_BRIDGE_CLIENT_ID FREECAD_BRIDGE_SECRET
-          # Pull the image to verify it was pushed successfully
-          docker pull ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }}
-
-          # Test MCP communication with actual FreeCAD backend
-          # Use --network=host so container can reach localhost:9875 where FreeCAD bridge is running
-          echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \
-            timeout 30 docker run --rm -i \
-              --network=host \
-              -e FREECAD_MODE=xmlrpc \
-              -e FREECAD_SOCKET_HOST=localhost \
-              -e FREECAD_BRIDGE_CLIENT_ID \
-              -e FREECAD_BRIDGE_SECRET \
-              ${{ env.DOCKERHUB_REPO }}:${{ needs.validate-tag.outputs.version }} 2>&1 | \
-            grep -q '"result"'
-          echo "Container MCP communication test passed"
+          IMAGE="${{ env.DOCKERHUB_REPO }}@${{ steps.build-image.outputs.digest }}"
+          docker pull "$IMAGE"
+          ACTUAL=$(docker run --rm --entrypoint python "$IMAGE" -c 'from importlib.metadata import version; print(version("freecad-robust-mcp"))')
+          uv run python -c 'from packaging.version import Version; import sys; assert Version(sys.argv[1]) == Version(sys.argv[2]), (sys.argv[1], sys.argv[2])' "$ACTUAL" '${{ needs.validate-tag.outputs.version }}'
+          uv run python scripts/smoke_container.py --bridge "$IMAGE"
 
       - name: Stop FreeCAD
         if: always()
@@ -338,9 +317,39 @@ jobs:
               kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
           fi
 
+  docker-release:
+    name: Promote Tested Container
+    needs: [validate-tag, container-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to Docker Hub
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Promote the tested digest
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          DIGEST: ${{ needs.container-candidate.outputs.digest }}
+          PRERELEASE: ${{ needs.validate-tag.outputs.is_prerelease }}
+        run: |
+          tags=(--tag "$DOCKERHUB_REPO:$VERSION" --tag "$DOCKERHUB_REPO:$VERSION-mcp-server")
+          if [ "$PRERELEASE" = false ]; then
+            tags+=(--tag "$DOCKERHUB_REPO:latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" "$DOCKERHUB_REPO@$DIGEST"
+
   create-github-release:
     name: Create GitHub Release
-    needs: [validate-tag, build, test-install]
+    needs: [validate-tag, build, test-install, container-candidate, docker-release, publish-pypi, publish-testpypi]
+    if: >-
+      always() && needs.docker-release.result == 'success' &&
+      ((needs.validate-tag.outputs.is_prerelease == 'true' && needs.publish-testpypi.result == 'success') ||
+       (needs.validate-tag.outputs.is_prerelease == 'false' && needs.publish-pypi.result == 'success'))
     runs-on: ubuntu-latest
     permissions:
       contents: write

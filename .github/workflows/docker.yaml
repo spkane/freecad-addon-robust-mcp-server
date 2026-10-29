@@ -12,6 +12,7 @@ on:
       - "src/**/*.py"
       - "pyproject.toml"
       - "uv.lock"
+      - "scripts/smoke_container.py"
       - ".github/workflows/docker.yaml"
   pull_request:
     branches: [main, master]
@@ -21,6 +22,7 @@ on:
       - "src/**/*.py"
       - "pyproject.toml"
       - "uv.lock"
+      - "scripts/smoke_container.py"
       - ".github/workflows/docker.yaml"
   workflow_dispatch:
   workflow_call:
@@ -45,6 +47,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Install smoke-test dependencies
+        run: uv sync --locked --all-extras
+
+      - name: Set up FreeCAD for the container smoke test
+        uses: ./.github/actions/setup-freecad
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -110,13 +121,24 @@ jobs:
         run: |
           # Build for current platform only for testing (--no-cache ensures fresh build)
           docker build --no-cache --build-arg VERSION=${{ steps.version.outputs.VERSION }} -t ${{ env.IMAGE_NAME }}:test .
-
-          # Test that the container starts and responds to MCP initialize
-          echo '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | \
-            timeout 30 docker run --rm -i \
-              -e FREECAD_MODE=xmlrpc \
-              ${{ env.IMAGE_NAME }}:test 2>&1 | \
-            grep -q '"result"' && echo "Container test passed" || echo "Container test completed"
+          uv run --no-sync freecad-mcp --pair-bridge
+          setsid freecadcmd freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py > /tmp/freecad_bridge.log 2>&1 &
+          FREECAD_PID=$!
+          trap 'kill -- "-$FREECAD_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if uv run --no-sync python -c 'from tests.integration.auth_support import integration_proxy; print(integration_proxy().ping())' 2>/dev/null | grep -q pong; then
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              cat /tmp/freecad_bridge.log
+              exit 1
+            fi
+            sleep 1
+          done
+          FREECAD_BRIDGE_CLIENT_ID=$(uv run --no-sync python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[0])')
+          FREECAD_BRIDGE_SECRET=$(uv run --no-sync python -c 'from freecad_mcp.bridge.credential_store import read_credential; print(read_credential()[1])')
+          export FREECAD_BRIDGE_CLIENT_ID FREECAD_BRIDGE_SECRET
+          uv run --no-sync python scripts/smoke_container.py --bridge "${{ env.IMAGE_NAME }}:test"
 
       - name: Cache Trivy vulnerability database
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

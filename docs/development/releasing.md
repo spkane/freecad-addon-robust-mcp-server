@@ -2,6 +2,9 @@
 
 This project uses **component-specific versioning**. Each component (MCP Server, Workbench) has its own version and release cycle, allowing independent updates without affecting other components.
 
+Before publishing, follow the [release-candidate and recovery guide](release-recovery.md)
+to verify exact artifacts and handle a partial publication.
+
 ## Quick Start
 
 The complete release workflow in order:

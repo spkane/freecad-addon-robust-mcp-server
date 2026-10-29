@@ -6,9 +6,16 @@ This guide covers installing the FreeCAD Robust MCP Server and connecting it to 
 
 ## Requirements
 
-- **FreeCAD** 0.21+ or 1.0+ (with Python 3.11)
-- **Python 3.11** (must match FreeCAD's bundled Python version)
+- **FreeCAD 1.1.4 or newer** is recommended for security. Older versions may
+  work but have known vulnerabilities when opening untrusted documents.
+- **Python 3.11 or newer** for the separate MCP server. Embedded mode requires
+  a Python minor version matching the FreeCAD build and is supported on Linux.
 - An **MCP-compatible AI assistant** (Claude Code, Cursor, etc.)
+
+FreeCAD 1.1.4 fixes file-writing vulnerabilities affecting earlier releases.
+See the [FreeCAD release notes](https://github.com/FreeCAD/FreeCAD/releases/tag/1.1.4)
+and [security advisories](https://github.com/FreeCAD/FreeCAD/security/advisories).
+The Qt5 test lane checks compatibility with older FreeCAD, not its security support.
 
 ---
 

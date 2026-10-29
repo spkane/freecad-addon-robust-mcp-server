@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
   workflow_call:
 
-# Cancel in-progress runs for the same tag
+# Never interrupt a publication in progress.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate-and-release:
@@ -85,6 +85,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: python3 scripts/package_workbench.py archives "$VERSION" .
+
+      - name: Verify the release archives
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 scripts/verify_workbench_archives.py "$VERSION" .
 
       - name: Extract release notes section
         id: changelog
