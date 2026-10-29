@@ -9,7 +9,7 @@
 
 # Project root directory (justfile_directory() returns the main justfile's directory)
 project_root := justfile_directory()
-export FREECAD_MCP_INVOCATION_DIR := invocation_directory()
+export FREECAD_MCP_INVOCATION_DIR := invocation_directory_native()
 
 # =============================================================================
 # Helper: FreeCAD Directory Detection
