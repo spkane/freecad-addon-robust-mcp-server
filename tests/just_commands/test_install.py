@@ -6,6 +6,8 @@ Note: Some tests may modify local installations.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from typing import TYPE_CHECKING, ClassVar
 
 import pytest
@@ -68,6 +70,36 @@ class TestInstallRuntime:
         assert result.success, f"Status failed: {result.stderr}"
         # Should contain some expected output
         assert "Installation Status" in result.stdout
+
+    @pytest.mark.just_runtime
+    def test_relative_mod_directory_uses_invocation_directory(
+        self, just: JustRunner, tmp_path: Path
+    ) -> None:
+        """Installation and status resolve the same path relative to the caller."""
+        executable = shutil.which("just")
+        assert executable is not None
+        args = [executable, "--justfile", str(just.project_root / "justfile")]
+        install = subprocess.run(  # noqa: S603 - fixed just command and disposable path
+            [*args, "install::mcp-bridge-workbench", "profile/Mod"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert install.returncode == 0, install.stderr
+        target = tmp_path / "profile/Mod/RobustMCPBridge/package.xml"
+        assert target.is_file()
+        status = subprocess.run(  # noqa: S603 - fixed just command and disposable path
+            [*args, "install::status", "profile/Mod"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert status.returncode == 0, status.stderr
+        assert str(target.parent) in status.stdout
 
     @pytest.mark.just_runtime
     def test_status_uses_selected_mod_directory(

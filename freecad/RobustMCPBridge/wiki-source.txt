@@ -130,20 +130,11 @@ Access preferences via {{MenuCommand|Edit → Preferences → Robust MCP Bridge}
 ==Connecting MCP clients== <!--T:29-->
 
 <!--T:30-->
-This workbench provides the server that MCP clients connect to. To use with AI assistants like Claude, you need an MCP client such as the [https://pypi.org/project/freecad-robust-mcp/ Robust MCP Server]:
+The workbench provides the bridge used by the Robust MCP Server. Install matching pairing-capable server and workbench builds from the same source checkout; see the [https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/ installation guide]. With FreeCAD running and the bridge started, run:
 
 </translate>
 {{Code|code=
-pip install freecad-robust-mcp
-}}
-<translate>
-
-<!--T:31-->
-Or using uv:
-
-</translate>
-{{Code|code=
-uv tool install freecad-robust-mcp
+uv run freecad-mcp --pair-bridge
 }}
 <translate>
 

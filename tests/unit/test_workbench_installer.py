@@ -61,6 +61,7 @@ def test_installs_package_using_explicit_mod_directory(tmp_path: Path) -> None:
         text=True,
         capture_output=True,
         check=False,
+        timeout=120,
     )
     assert result.returncode == 0, result.stderr
     target = mod / "RobustMCPBridge"

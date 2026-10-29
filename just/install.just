@@ -9,6 +9,7 @@
 
 # Project root directory (justfile_directory() returns the main justfile's directory)
 project_root := justfile_directory()
+export FREECAD_MCP_INVOCATION_DIR := invocation_directory()
 
 # =============================================================================
 # Helper: FreeCAD Directory Detection
@@ -102,9 +103,12 @@ mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
     import os
     import runpy
     import sys
+    from pathlib import Path
     sys.path.insert(0, "../scripts")
     if os.environ["FREECAD_INSTALL_MOD_DIR"]:
-        sys.argv = ["install_workbench.py", "--mod-dir", os.environ["FREECAD_INSTALL_MOD_DIR"]]
+        selected = Path(os.environ["FREECAD_INSTALL_MOD_DIR"])
+        selected = Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / selected
+        sys.argv = ["install_workbench.py", "--mod-dir", str(selected)]
     runpy.run_path("../scripts/install_workbench.py", run_name="__main__")
 
 # Uninstall the FreeCAD Robust MCP workbench addon
@@ -115,6 +119,11 @@ uninstall-mcp-bridge-workbench $FREECAD_INSTALL_MOD_DIR="":
     ADDON_NAMESPACE="freecad"
     ADDON_NAME="RobustMCPBridge"
 
+    # Resolve explicit paths before the nested just invocation changes directories.
+    if [[ -n "$FREECAD_INSTALL_MOD_DIR" ]]; then
+        FREECAD_INSTALL_MOD_DIR=$(uv run python -c 'import os; from pathlib import Path; print(Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / os.environ["FREECAD_INSTALL_MOD_DIR"])')
+        export FREECAD_INSTALL_MOD_DIR
+    fi
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
 
@@ -155,6 +164,11 @@ status $FREECAD_INSTALL_MOD_DIR="":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Resolve explicit paths before the nested just invocation changes directories.
+    if [[ -n "$FREECAD_INSTALL_MOD_DIR" ]]; then
+        FREECAD_INSTALL_MOD_DIR=$(uv run python -c 'import os; from pathlib import Path; print(Path(os.environ["FREECAD_MCP_INVOCATION_DIR"]) / os.environ["FREECAD_INSTALL_MOD_DIR"])')
+        export FREECAD_INSTALL_MOD_DIR
+    fi
     # Set FreeCAD directories
     eval "$(just install::_freecad-dirs)"
 
