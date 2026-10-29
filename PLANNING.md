@@ -228,6 +228,31 @@ architecture decisions from the deletion of the existing catalog:
 This ordering lets the project measure whether the redesign improves task
 completion before accepting its largest compatibility cost.
 
+#### Focused follow-up from PR #112
+
+- **Investigate before stable release:** reproduce transaction lifecycle behavior
+  in current `main` with consecutive real FreeCAD RPC mutations, including a
+  no-change transaction, failure/rollback, user-owned transactions, and GUI and
+  headless execution. The contributor's fork reported intermittent conflicts
+  associated with application-level transactions. Current tools also call
+  document-level `openTransaction` and `commitTransaction`, but the fork's
+  conflict guard is not present here; this is a testable risk, not a confirmed
+  current regression. Do not introduce executor-owned transactions until the
+  ownership and rollback cases have been demonstrated on supported versions.
+- **Evaluate before redesign:** compare the existing catalog against the fork's
+  focused 55-tool parametric profile using the same representative tasks and
+  models. Measure task completion, errors, tool calls, context size, and model
+  cost. Retain existing tools while testing any opt-in profile.
+- **Prototype in small steps:** consider revision-aware document references,
+  structured mutation results with explicit solver and recompute diagnostics,
+  and topic-specific on-demand guides. Validate stale references, failed or
+  partial mutations, and client behavior; avoid claiming that a successful tool
+  call proves design intent or that topological references remain stable.
+- **Modeling guidance:** evaluate the fork's brief, incremental feature-tree,
+  visual evidence, early-save, and validation approach as optional guidance.
+  Keep the workflow proportional to task complexity and measure whether clients
+  actually consume MCP server instructions and resources.
+
 ## Codebase map
 
 ### Product boundaries
