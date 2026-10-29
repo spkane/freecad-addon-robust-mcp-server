@@ -84,15 +84,15 @@ jobs:
         run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
 
       - name: Install just on Windows
-        shell: pwsh
-        run: |
-          if (-not (Get-Command just -ErrorAction SilentlyContinue)) {
-            choco install just --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+        with:
+          install_args: just
+          env: "false"
+          export_path: "false"
+          add_shims_to_path: "false"
 
       - name: Exercise workbench just recipe on Windows
-        run: uv run pytest tests/just_commands/test_install.py -k test_workbench_installer_with_explicit_mod_directory -v --tb=short
+        run: mise exec just -- uv run pytest tests/just_commands/test_install.py -k test_workbench_installer_with_explicit_mod_directory -v --tb=short
 
   integration-test:
     name: Integration Tests (FreeCAD Headless)
