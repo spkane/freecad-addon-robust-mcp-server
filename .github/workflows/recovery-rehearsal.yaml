@@ -1,0 +1,60 @@
+name: Isolated recovery rehearsal
+
+on:
+  push:
+    branches: [codex/release-recovery-rehearsal]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: 'true'
+    steps:
+      - run: echo 'Candidate validated'
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Artifact built'
+  test-install:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Artifact tested'
+  container-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Candidate image tested'
+  docker-release:
+    needs: [validate-tag, container-candidate]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Simulated image promotion'
+  publish-testpypi:
+    needs: [validate-tag, build, test-install, container-candidate, docker-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Simulate failed publication on first attempt
+        run: |
+          if [ "$GITHUB_RUN_ATTEMPT" = 1 ]; then
+            echo 'Simulated publication failure' >&2
+            exit 1
+          fi
+          echo 'Simulated publication recovered'
+  publish-pypi:
+    needs: [validate-tag, build, test-install, container-candidate, docker-release]
+    if: needs.validate-tag.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Production publication not applicable'
+  create-github-release:
+    needs: [validate-tag, build, test-install, container-candidate, docker-release, publish-pypi, publish-testpypi]
+    if: >-
+      always() && needs.docker-release.result == 'success' &&
+      ((needs.validate-tag.outputs.is_prerelease == 'true' && needs.publish-testpypi.result == 'success') ||
+       (needs.validate-tag.outputs.is_prerelease == 'false' && needs.publish-pypi.result == 'success'))
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Simulated GitHub release created'
