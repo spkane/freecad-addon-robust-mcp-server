@@ -16,7 +16,8 @@ The FreeCAD Robust MCP Suite consists of two components:
 ### 1. Install the MCP Bridge in FreeCAD
 
 The workbench is not yet in the public FreeCAD Addon Manager catalog. Install
-the pairing-capable server and workbench from the same source checkout:
+the pairing-capable server and workbench from the same source checkout. Install
+[`just`](https://just.systems/) and [`uv`](https://docs.astral.sh/uv/) first:
 
 ```bash
 # Clone the repository
