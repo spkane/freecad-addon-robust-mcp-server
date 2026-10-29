@@ -112,7 +112,7 @@ class TestInstallRuntime:
             timeout=120,
         )
         assert status.returncode == 0, status.stderr
-        assert str(target.parent) in status.stdout
+        assert "profile/Mod/RobustMCPBridge" in status.stdout.replace("\\", "/")
 
     @pytest.mark.just_runtime
     def test_status_uses_selected_mod_directory(
@@ -124,7 +124,9 @@ class TestInstallRuntime:
         result = just.run("install::status", str(mod_dir), timeout=60)
         assert result.success, result.stderr
         assert "Robust MCP Bridge Workbench: INSTALLED" in result.stdout
-        assert "/Mod/RobustMCPBridge" in result.stdout.replace("\\", "/")
+        assert "selected profile/Mod/RobustMCPBridge" in result.stdout.replace(
+            "\\", "/"
+        )
 
     @pytest.mark.just_runtime
     def test_freecad_dirs_helper_runs(self, just: JustRunner) -> None:
