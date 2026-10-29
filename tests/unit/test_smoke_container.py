@@ -9,9 +9,11 @@ from scripts import smoke_container
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("valid_version", [True, False])
+@pytest.mark.parametrize(
+    "valid_version,tool_error", [(True, False), (False, False), (True, True)]
+)
 async def test_bridge_smoke_requires_a_real_version(
-    monkeypatch: pytest.MonkeyPatch, valid_version: bool
+    monkeypatch: pytest.MonkeyPatch, valid_version: bool, tool_error: bool
 ) -> None:
     """A successful protocol response alone must not hide a failed tool call."""
     session = SimpleNamespace(
@@ -27,7 +29,7 @@ async def test_bridge_smoke_requires_a_real_version(
         ),
         call_tool=AsyncMock(
             return_value=SimpleNamespace(
-                is_error=False,
+                is_error=tool_error,
                 structured_content={"version": "1.1.4"} if valid_version else {},
             )
         ),
@@ -43,9 +45,10 @@ async def test_bridge_smoke_requires_a_real_version(
 
     monkeypatch.setattr(smoke_container, "stdio_client", streams)
     monkeypatch.setattr(smoke_container, "ClientSession", client)
-    if valid_version:
+    if valid_version and not tool_error:
         await smoke_container.check_image("test-image", bridge=True)
         session.call_tool.assert_awaited_once_with("get_freecad_version")
     else:
-        with pytest.raises(RuntimeError, match="did not return a version"):
+        error = "tool call failed" if tool_error else "did not return a version"
+        with pytest.raises(RuntimeError, match=error):
             await smoke_container.check_image("test-image", bridge=True)

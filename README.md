@@ -90,8 +90,10 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 ## Installation Requirements / Dependencies
 
-- [FreeCAD](https://www.freecadweb.org/) 0.21+ or 1.0+
-- Python 3.11 (required for FreeCAD ABI compatibility)
+- [FreeCAD](https://www.freecad.org/) 1.1.4 or newer is recommended for security;
+  earlier versions have known vulnerabilities when opening untrusted files.
+- Python 3.11 or newer for the external server; embedded mode requires a Python
+  minor version matching FreeCAD's bundled Python.
 
 ---
 
@@ -526,7 +528,7 @@ This section covers development setup, contributing, and working with the codeba
 ### Prerequisites
 
 - [mise](https://mise.jdx.dev/) - Tool version manager
-- [FreeCAD](https://www.freecadweb.org/) 0.21+ or 1.0+
+- [FreeCAD](https://www.freecad.org/) 1.1.4 or newer is recommended for security.
 
 ### Initial Setup
 

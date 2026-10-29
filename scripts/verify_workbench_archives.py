@@ -12,32 +12,39 @@ from pathlib import Path, PurePosixPath
 def verify_archives(version: str, directory: Path) -> None:
     """Check archive paths, contents, manifests, and release version."""
     prefix = f"freecad-mcp-workbench-{version}"
+
+    def unsafe(name: str) -> bool:
+        path = PurePosixPath(name)
+        return (
+            "\\" in name
+            or path.is_absolute()
+            or ".." in path.parts
+            or (name.rstrip("/") != prefix and not name.startswith(f"{prefix}/"))
+        )
+
     with zipfile.ZipFile(directory / f"{prefix}.zip") as archive:
+        if any(unsafe(item.filename) for item in archive.infolist()):
+            raise ValueError("Archive contains an unsafe path")
         zipped = {
             item.filename: archive.read(item)
             for item in archive.infolist()
             if not item.is_dir()
         }
-    with tarfile.open(directory / f"{prefix}.tar.gz", "r:gz") as archive:
-        members = archive.getmembers()
+    with tarfile.open(directory / f"{prefix}.tar.gz", "r:gz") as tar_archive:
+        members = tar_archive.getmembers()
+        if any(unsafe(item.name) for item in members):
+            raise ValueError("Archive contains an unsafe path")
         if any(not item.isfile() and not item.isdir() for item in members):
             raise ValueError("Archive contains a non-regular entry")
         packed = {}
         for item in members:
             if item.isfile():
-                file = archive.extractfile(item)
+                file = tar_archive.extractfile(item)
                 if file is None:
                     raise ValueError("Archive entry cannot be read")
                 packed[item.name] = file.read()
     if zipped != packed:
         raise ValueError("Archive formats have different contents")
-    if any(
-        PurePosixPath(name).is_absolute()
-        or ".." in PurePosixPath(name).parts
-        or not name.startswith(f"{prefix}/")
-        for name in zipped
-    ):
-        raise ValueError("Archive contains an unsafe path")
     required = {
         f"{prefix}/{path}"
         for path in (

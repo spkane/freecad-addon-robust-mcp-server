@@ -1,5 +1,6 @@
 """Exercise the actual workbench release builder and archive contents."""
 
+import io
 import subprocess
 import sys
 import tarfile
@@ -68,6 +69,39 @@ def test_release_archives_contain_installable_workbench(tmp_path: Path) -> None:
     with zipfile.ZipFile(zip_path, "a") as archive:
         archive.writestr(f"{prefix}/unexpected", "modified")
     with pytest.raises(ValueError, match="different contents"):
+        verify_archives(version, tmp_path)
+
+
+def test_verifier_rejects_unsafe_tar_directory(tmp_path: Path) -> None:
+    """An unsafe directory is rejected even when regular files match the ZIP."""
+    tree = ET.parse(ROOT / "package.xml")  # noqa: S314 - repository metadata
+    version = tree.findtext(".//pkg:workbench/pkg:version", namespaces=NS)
+    assert version
+    subprocess.run(  # noqa: S603 - fixed interpreter and repository script
+        [
+            sys.executable,
+            str(ROOT / "scripts/package_workbench.py"),
+            "archives",
+            version,
+            str(tmp_path),
+        ],
+        check=True,
+    )
+    path = tmp_path / f"freecad-mcp-workbench-{version}.tar.gz"
+    with tarfile.open(path, "r:gz") as archive:
+        files = []
+        for item in archive.getmembers():
+            if item.isfile():
+                source = archive.extractfile(item)
+                assert source is not None
+                files.append((item, source.read()))
+    with tarfile.open(path, "w:gz") as archive:
+        for item, data in files:
+            archive.addfile(item, io.BytesIO(data))
+        directory = tarfile.TarInfo(f"freecad-mcp-workbench-{version}/../../outside")
+        directory.type = tarfile.DIRTYPE
+        archive.addfile(directory)
+    with pytest.raises(ValueError, match="unsafe path"):
         verify_archives(version, tmp_path)
 
 
