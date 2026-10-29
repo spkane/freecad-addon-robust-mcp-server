@@ -7,6 +7,7 @@ import contextlib
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -46,11 +47,25 @@ def default_mod_directory() -> Path:
     return select_mod_directory(base)
 
 
+def is_link_or_reparse_point(path: Path) -> bool:
+    """Detect symlinks and Windows reparse points without following them."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    return stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_file_attributes", 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    )
+
+
 def install_workbench(mod_directory: Path) -> Path:
     """Build and install the package, restoring an existing installation on failure."""
     mod_directory.mkdir(parents=True, exist_ok=True)
     destination = mod_directory / "RobustMCPBridge"
-    if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
+    if is_link_or_reparse_point(destination) or (
+        destination.exists() and not destination.is_dir()
+    ):
         raise ValueError(
             f"Installation target is not a regular directory: {destination}"
         )
@@ -74,12 +89,12 @@ def install_workbench(mod_directory: Path) -> Path:
         # A symlinked namespace could point outside the selected Mod directory.
         namespace = mod_directory / "freecad"
         legacy_paths = [mod_directory / "FreecadRobustMCPBridge"]
-        if not namespace.is_symlink():
+        if not is_link_or_reparse_point(namespace):
             legacy_paths.append(namespace / "RobustMCPBridge")
         for legacy in legacy_paths:
-            if legacy.is_dir() and not legacy.is_symlink():
+            if not is_link_or_reparse_point(legacy) and legacy.is_dir():
                 shutil.rmtree(legacy)
-        if namespace.is_dir() and not namespace.is_symlink():
+        if not is_link_or_reparse_point(namespace) and namespace.is_dir():
             with contextlib.suppress(OSError):
                 namespace.rmdir()  # Keep namespaces containing other workbenches.
     finally:

@@ -203,7 +203,7 @@ status $FREECAD_INSTALL_MOD_DIR="":
     elif [[ -f "{{project_root}}/pyproject.toml" ]] && grep -q 'name = "freecad-robust-mcp"' "{{project_root}}/pyproject.toml" 2>/dev/null; then
         # Dev environment exists - check if synced by looking for .venv
         if [[ -d "{{project_root}}/.venv" ]]; then
-            DEV_VERSION=$(cd "{{project_root}}" && uv run --no-project --python ">=3.11" python -c "from freecad_mcp import __version__; print(__version__)" 2>/dev/null || echo "unknown")
+            DEV_VERSION=$(cd "{{project_root}}" && uv run --no-sync python -c "from freecad_mcp import __version__; print(__version__)" 2>/dev/null || echo "unknown")
             echo "✓ Robust MCP Server: AVAILABLE (via dev environment)"
             echo "  Version: $DEV_VERSION"
             echo "  Run: just mcp::run"
