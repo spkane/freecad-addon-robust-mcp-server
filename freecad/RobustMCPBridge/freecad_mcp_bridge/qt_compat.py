@@ -57,6 +57,12 @@ def load_qt_modules(*module_names: str) -> tuple[ModuleType, ...]:
         raise ValueError("At least one Qt module name is required")
 
     host_binding = get_host_qt_binding()
+    if host_binding:
+        try:
+            host_pyside = __import__("PySide", fromlist=list(module_names))
+            return tuple(getattr(host_pyside, name) for name in module_names)
+        except (AttributeError, ImportError, NameError):
+            pass
     candidates = (host_binding,) if host_binding else ("PySide6", "PySide2")
     last_error: BaseException | None = None
 
