@@ -13,4 +13,6 @@ The XML-RPC protocol design and queue-based thread safety pattern were inspired
 by neka-nat/freecad-mcp, an MIT-licensed project. The implementation in this
 repository is a rewrite.
 
-The workbench icons are distributed under CC BY-NC-SA 4.0; see LICENSE-ICON.
+The workbench icons were created by Sean P. Kane and are distributed under
+CC BY-SA 4.0; see LICENSE-ICON. Icons in earlier releases remain available
+under the terms distributed with those releases.

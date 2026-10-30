@@ -269,6 +269,15 @@ as the source of the contributor's proposal and implementation context.
   Keep the workflow proportional to task complexity and measure whether clients
   actually consume MCP server instructions and resources.
 
+### Research related FreeCAD MCP projects and forks
+
+After release, inventory this repository's forks and the FreeCAD MCP servers
+that inspired it. Compare features, tooling, workflows, tests, documentation,
+and implementation approaches, including [PR #112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112).
+Record links, user value, compatibility, security, licensing and attribution,
+maintenance cost, effort, and risk; rank promising ideas and open focused issues
+for those worth adopting or independently implementing.
+
 ## Codebase map
 
 ### Product boundaries
@@ -737,8 +746,8 @@ Adopt this policy:
   references the applicable files. Existing MIT grants and file notices remain
   in effect. Python package metadata identifies Apache-2.0 AND MIT and includes
   the code licenses and notice.
-- Confirm the icon's `CC-BY-NC-SA-4.0` terms are acceptable for every intended
-  distribution, especially registry and commercial downstream use.
+- Workbench icons are licensed `CC-BY-SA-4.0`, allowing commercial use with
+  attribution and share-alike terms; preserve notices in distribution archives.
 - Verify license metadata, files, and attribution in the exact tagged wheel,
   sdist, and workbench archives before publication.
 
@@ -759,26 +768,61 @@ Adopt this policy:
 
 ## FreeCAD Addon Manager release
 
-The namespaced `freecad/RobustMCPBridge` layout aligns with current FreeCAD addon
-guidance. Before requesting inclusion in the Addon Index:
+Track submission and review in [#169](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/169). The [Index publishing guide](https://freecad.github.io/Addon-Academy/Guides/Publishing/Indexed), [quality requirements](https://freecad.github.io/Addon-Academy/Topics/Addon-Index/Index/Qualities.html), [manifest specification](https://freecad.github.io/Addon-Academy/Topics/Structuring/Manifest/), and [licensing guidance](https://freecad.github.io/Addon-Academy/Topics/Licensing/) are the review baseline.
 
-1. Resolve bridge authentication and unsafe-code defaults.
-2. Validate the PR #161 license and `package.xml` changes against the current
-   Addon Manager schema and exact release artifacts.
-3. Test install, upgrade, disable, uninstall, and reinstall through the current
-   stable FreeCAD Addon Manager on macOS arm64/x86_64, Windows, and Linux.
-4. Verify `classname`, `subdirectory`, icon, branch, minimum FreeCAD version, and
-   repository URLs from an actual index checkout or Addon Manager developer mode.
-5. Ensure import and startup do not start listeners or perform network work
-   without an explicit user action or clearly documented opt-in auto-start.
-6. Publish the security and privacy behavior expected by the Addon Index,
-   including what local ports open and what data can leave the machine.
-7. Submit the repository to the FreeCAD Addons catalog following the current
-   contribution process. Track review feedback as release-blocking until accepted.
+The repository uses the recommended namespaced layout, the manifest declares
+Apache-2.0 and retained MIT terms for code and CC-BY-SA-4.0 for icons, and
+credential pairing is required before the local bridge opens its listeners.
+GUI and headless auto-start default to off and are separate user preferences.
+Repository age and active maintenance satisfy the governance age requirement;
+real community testing and Index team approval remain necessary.
 
-Do not make GitHub release archives the primary workbench installation path once
-Addon Manager distribution is available. Keep archives as reproducible fallback
-artifacts and test their exact directory layout in a temporary FreeCAD user home.
+Before requesting inclusion:
+
+1. **Release gate:** finish the pending stable release and validate that its
+   tagged workbench and MCP server work together. Obtain independent user
+   testing and document the evidence; passing CI alone is not community feedback.
+2. **Manifest and updates:** validate the source manifest and the generated
+   archive against the Addon Manager, including top-level and workbench version
+   and date, icon, `classname`, subdirectory, license texts, and URLs. The
+   `main` repository URL currently matches the source branch, but choose a
+   dedicated stable release branch or a catalog-tracked tag before listing,
+   then make its manifest repository branch match. Bump version and date on
+   every published update.
+3. **UI and startup quality:** the optional bridge status widget adds a
+   permanent item to FreeCAD's global status bar, preferences are registered
+   globally, and explicit startup scripts modify `sys.path`. Ask the Index
+   maintainers which interactions are acceptable and revise if required.
+   Auto-start is opt-in, but the Index wording asks for startup side effects
+   to wait for a command; confirm whether a persisted opt-in satisfies it.
+4. **Qt and compatibility:** FreeCAD's neutral `PySide` wrapper detects the host
+   Qt major, and the loader then imports the matching PySide2 or PySide6. The
+   Academy describes versioned imports as an alternative for code that also
+   runs outside FreeCAD; confirm the host-aware variant with reviewers without
+   introducing mixed-Qt crashes. The manifest declares FreeCAD 0.21, whereas
+   current real GUI CI covers 1.0.2 and the latest stable Qt6; test 0.21 or
+   update the supported minimum based on evidence. Follow upstream security
+   guidance, which recommends FreeCAD 1.1.4 or later.
+5. **Privacy and security:** review the user-facing data and network description,
+   private reporting instructions, same-user credential limitation, and whether
+   the privileged local bridge is acceptable under Index policy. Record how
+   material changes to data use will be communicated and consent obtained.
+6. **Dependencies and licensing:** audit the complete installed workbench for
+   third-party code and source notices. The separate MCP server's Python
+   environment is not an Addon Manager Python dependency; do not vendor it
+   or bypass the [allow-list](https://freecad.github.io/Addon-Academy/Topics/Dependencies/Allow-List/).
+   Confirm all icon authorship and preserve historical license grants.
+7. **Actual installation:** test Index-style install, upgrade, disable,
+   uninstall, and reinstall in disposable FreeCAD profiles on macOS, Windows,
+   and Linux, including pairing, port cleanup, and no duplicate workbenches.
+   The current workbench archive tests are not a substitute for this flow.
+8. **Submission:** use the `Addon - Addition` issue on FreeCAD/Addons only
+   after the preceding work is reviewable, and provide compatibility, security,
+   license, and independent testing evidence. Follow reviewer requests and
+   publish the final reviewed version before it is indexed.
+
+Keep release archives as reproducible fallback artifacts and test their exact
+directory layout in a temporary FreeCAD user home.
 
 ## macOS signing and notarization
 

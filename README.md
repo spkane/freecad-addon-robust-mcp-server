@@ -729,5 +729,5 @@ See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed analysis of these im
 
 Code is distributed under [Apache License 2.0](LICENSE-CODE); previously
 MIT-licensed contributions retain their [original MIT terms](LICENSE-MIT).
-Workbench icons use [CC BY-NC-SA 4.0](LICENSE-ICON). See [NOTICE](NOTICE) for
+Workbench icons use [CC BY-SA 4.0](LICENSE-ICON). See [NOTICE](NOTICE) for
 attribution.
