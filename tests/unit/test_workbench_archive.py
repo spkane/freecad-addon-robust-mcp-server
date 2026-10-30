@@ -31,7 +31,10 @@ def test_index_manifest_describes_source_package() -> None:
     )
     urls = {url.get("type"): url for url in root.findall("pkg:url", NS)}
     assert urls["repository"].get("branch") == "main"
-    assert urls["readme"].text and "raw.githubusercontent.com" in urls["readme"].text
+    assert urls["readme"].text == (
+        "https://raw.githubusercontent.com/spkane/"
+        "freecad-addon-robust-mcp-server/main/README.md"
+    )
     for entry in root.findall("pkg:license", NS):
         assert (ROOT / entry.attrib["file"]).is_file()
     assert {entry.text for entry in root.findall("pkg:license", NS)} == {
