@@ -785,23 +785,26 @@ Before requesting inclusion:
 2. **Manifest and updates:** validate the source manifest and the generated
    archive against the Addon Manager, including top-level and workbench version
    and date, icon, `classname`, subdirectory, license texts, and URLs. The
-   `main` repository URL currently matches the source branch. Request a
-   catalog-tracked release tag created on `main`; confirm manifest URL and tag
-   handling with the Addon team. Update the catalog tag and bump version and
-   date for every published update.
-3. **UI and startup quality:** the optional bridge status widget adds a
-   permanent item to FreeCAD's global status bar, preferences are registered
-   globally, and explicit startup scripts modify `sys.path`. Ask the Index
-   maintainers which interactions are acceptable and revise if required.
-   Auto-start is opt-in, but the Index wording asks for startup side effects
-   to wait for a command; confirm whether a persisted opt-in satisfies it.
-4. **Qt and compatibility:** FreeCAD's neutral `PySide` wrapper detects the host
-   Qt major, and the loader then imports the matching PySide2 or PySide6. The
-   Academy describes versioned imports as an alternative for code that also
-   runs outside FreeCAD; confirm the host-aware variant with reviewers without
-   introducing mixed-Qt crashes. The manifest minimum is FreeCAD 1.0.2, the
-   oldest tested GUI version; recommend FreeCAD 1.1.4 or later for upstream
-   security fixes.
+   `main` repository URL currently matches the source branch. Use a separate
+   `released` branch for Index distribution, update its manifest repository
+   branch to `released`, and merge only reviewed releases from `main`. Increment
+   the manifest version and date for each published branch update; retain
+   immutable tags for release provenance.
+3. **UI and startup quality:** retain a visible bridge status indicator whenever
+   the bridge is listening, including when another workbench is active; confirm
+   this security rationale and the shared status-bar placement with the FreeCAD
+   team. Auto-start defaults to off; confirm whether the explicit persisted opt-in
+   meets the startup requirement. Both standalone startup scripts are used by
+   GUI/headless workflows and currently modify `sys.path`: investigate launching
+   namespaced modules or a small isolated bootstrap, with clean-start and shutdown
+   tests, rather than removing supported workflows or polluting the namespace.
+4. **Qt and compatibility:** evaluate using FreeCAD's neutral `PySide` wrapper
+   for QtCore, QtWidgets, and QtGui in the workbench, with safe fallback only
+   when running outside FreeCAD. The locally running development Qt6 build
+   exposes the needed types; verify real FreeCAD 1.0.2/Qt5 and stable Qt6 GUI
+   startup, bridge and shutdown flows before changing the loader. Never import a
+   mismatched Qt major. The manifest minimum is FreeCAD 1.0.2; recommend 1.1.4
+   or later for upstream security fixes.
 5. **Privacy and security:** review the user-facing data and network description,
    private reporting instructions, same-user credential limitation, and whether
    the privileged local bridge is acceptable under Index policy. Record how
@@ -1072,13 +1075,20 @@ contract is explicit, and no P0/P1 release findings remain.
 
 ## Recommended next work session
 
-1. Exercise the merged release workflows with a release candidate, including
+1. Implement automated Addon Manager lifecycle tests before Index submission.
+   Use an unlisted custom repository and disposable FreeCAD profiles on macOS,
+   Windows, and Linux; exercise install, startup and pairing, upgrade, disable,
+   uninstall, and reinstall through the actual manager. Verify isolation,
+   workbench loading, listener cleanup, metadata, and Report view. Keep unit
+   and archive tests, but do not treat them as lifecycle coverage.
+2. Investigate neutral Qt wrapper compatibility and namespaced standalone
+   startup as described in the Addon Manager release section. Confirm the
+   always-visible listening indicator and opt-in auto-start with the FreeCAD team.
+3. Exercise the merged release workflows with a release candidate, including
    TestPyPI trusted publishing and the exact wheel and workbench archives.
-2. Verify clean installations and real tool calls with the published artifacts,
+4. Verify clean installations and real tool calls with the published artifacts,
    and rehearse partial-publication recovery. Verify the public package even
-   though #87 is closed.
-3. Keep the Addon Manager listing in #169 as a post-release task unless its
-   priority changes.
+   though #87 is closed. Prepare the `released` branch before listing in #169.
 
 ## Authoritative references
 
