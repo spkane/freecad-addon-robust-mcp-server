@@ -204,6 +204,7 @@ class TestSymmetricExtrudeExecution:
         ("tool_name", "feature_variable", "feature_type", "operation_argument"),
         [
             ("pad_sketch", "pad", "PartDesign::Pad", {"length": 10.0}),
+            ("pocket_sketch", "pocket", "PartDesign::Pocket", {"length": 10.0}),
             (
                 "revolution_sketch",
                 "rev",
@@ -260,7 +261,7 @@ class TestSymmetricExtrudeExecution:
         else:
             expected_value = symmetric
         assert feature.assignments == {property_name: expected_value}
-        if tool_name != "pad_sketch":
+        if tool_name not in ("pad_sketch", "pocket_sketch"):
             axis_object, subelements = feature.ReferenceAxis
             assert axis_object.Role == "X_Axis"
             assert axis_object.Name == "X_Axis001"
@@ -283,6 +284,7 @@ class TestSymmetricExtrudeExecution:
         ("tool_name", "operation_argument", "feature_name"),
         [
             ("pad_sketch", {"length": 10.0}, "PartDesign::Pad"),
+            ("pocket_sketch", {"length": 10.0}, "PartDesign::Pocket"),
             ("revolution_sketch", {"angle": 180.0}, "PartDesign::Revolution"),
             ("groove_sketch", {"angle": 180.0}, "PartDesign::Groove"),
         ],
