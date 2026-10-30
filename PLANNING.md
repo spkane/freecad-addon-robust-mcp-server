@@ -794,10 +794,8 @@ Before requesting inclusion:
    the bridge is listening, including when another workbench is active; confirm
    this security rationale and the shared status-bar placement with the FreeCAD
    team. Auto-start defaults to off; confirm whether the explicit persisted opt-in
-   meets the startup requirement. Both standalone startup scripts are used by
-   GUI/headless workflows and currently modify `sys.path`: investigate launching
-   namespaced modules or a small isolated bootstrap, with clean-start and shutdown
-   tests, rather than removing supported workflows or polluting the namespace.
+   meets the startup requirement. The normal interactive workbench uses
+   namespaced imports and does not run the standalone startup scripts.
 4. **Qt and compatibility:** evaluate using FreeCAD's neutral `PySide` wrapper
    for QtCore, QtWidgets, and QtGui in the workbench, with safe fallback only
    when running outside FreeCAD. The locally running development Qt6 build
@@ -1081,14 +1079,20 @@ contract is explicit, and no P0/P1 release findings remain.
    uninstall, and reinstall through the actual manager. Verify isolation,
    workbench loading, listener cleanup, metadata, and Report view. Keep unit
    and archive tests, but do not treat them as lifecycle coverage.
-2. Investigate neutral Qt wrapper compatibility and namespaced standalone
-   startup as described in the Addon Manager release section. Confirm the
-   always-visible listening indicator and opt-in auto-start with the FreeCAD team.
+2. Investigate neutral Qt wrapper compatibility as described in the Addon
+   Manager release section. Confirm the always-visible listening indicator and
+   opt-in auto-start with the FreeCAD team.
 3. Exercise the merged release workflows with a release candidate, including
    TestPyPI trusted publishing and the exact wheel and workbench archives.
 4. Verify clean installations and real tool calls with the published artifacts,
    and rehearse partial-publication recovery. Verify the public package even
    though #87 is closed. Prepare the `released` branch before listing in #169.
+5. **Lower priority:** research whether the explicitly invoked GUI and headless
+   standalone startup scripts can avoid modifying `sys.path`, using namespaced
+   imports or an isolated bootstrap. These scripts are used for development,
+   CI, and supported headless automation, but not the normal interactive
+   workbench flow. Preserve those workflows and verify clean startup, pairing,
+   shutdown, and namespace isolation before adopting an alternative.
 
 ## Authoritative references
 
