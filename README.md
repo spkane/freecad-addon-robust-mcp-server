@@ -26,7 +26,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
   - [Robust MCP Server](#robust-mcp-server)
     - [Installation](#installation)
       - [Using pip](#using-pip)
-      - [Using mise and just (from source)](#using-mise-and-just-from-source)
+      - [Using uv (from source)](#using-uv-from-source)
       - [Using Docker](#using-docker)
     - [Configuration](#configuration)
       - [Environment Variables](#environment-variables)
@@ -116,7 +116,7 @@ This section covers installation and usage for end users who want to use the Rob
 
 ### Installation
 
-For the everyday setup, see the [Quick Start](docs/getting-started/quickstart.md)
+For the everyday setup, see the [Quick Start](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/quickstart/)
 for the server, workbench, pairing, and assistant configuration. The current
 stable 0.6.2 releases predate pairing; the pairing-capable stable workflow
 described there becomes available with the upcoming release.
@@ -127,18 +127,16 @@ described there becomes available with the upcoming release.
 pip install freecad-robust-mcp
 ```
 
-#### Using mise and just (from source)
+#### Using uv (from source)
+
+Install [Git](https://git-scm.com/install/) and
+[uv](https://docs.astral.sh/uv/getting-started/installation/) first.
 
 ```bash
 git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
 cd freecad-addon-robust-mcp-server
 
-# Install mise via the Official mise installer script (if not already installed)
-curl https://mise.run | sh
-
-mise trust
-mise install
-just setup
+uv sync --all-extras
 ```
 
 #### Using Docker

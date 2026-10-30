@@ -37,7 +37,7 @@ freecad-mcp --version
 ```
 
 If your shell cannot find it, see [uv's executable directory
-instructions](https://docs.astral.sh/uv/concepts/tools/#the-executable-directory).
+instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
 For another installation method, see [Installation](installation.md).
 
 ## 2. Install the FreeCAD workbench
@@ -69,7 +69,9 @@ The workbench is not currently listed in the public FreeCAD Addon Manager.
 
 ## 3. Pair and start the bridge
 
-In a terminal on the same computer and user account that runs FreeCAD, run:
+If you already paired this user account, keep the existing credential and skip
+this command. Otherwise, in a terminal on the same computer and user account
+that runs FreeCAD, run:
 
 ```bash
 freecad-mcp --pair-bridge
@@ -92,19 +94,63 @@ cannot find the command, specify the full executable path: `uv tool dir --bin`
 shows its directory. On Windows the executable is `freecad-mcp.exe`. Restart or
 reconnect the assistant after changing its settings.
 
-For Codex, add this to `~/.codex/config.toml`, replacing the path with the
-actual executable path on your computer:
+Choose your assistant below. Replace `/absolute/path/to/freecad-mcp` with the
+actual executable path; quote paths containing spaces. On Windows, use the path
+to `freecad-mcp.exe`.
+
+### Codex Desktop or Codex CLI
+
+Both use `~/.codex/config.toml`. Add the following entry, keeping any other
+servers already in the file:
 
 ```toml
 [mcp_servers.freecad]
 command = "/absolute/path/to/freecad-mcp"
 ```
 
-On Windows, use the path to `freecad-mcp.exe` and use forward slashes or
-escaped backslashes in the TOML string. Keep any existing server entries.
+On Windows, use forward slashes or escaped backslashes in the TOML string.
+Alternatively, the Codex CLI can add the same entry:
 
-For other clients, the [client configuration guide](configuration.md#mcp-client-configuration)
-includes examples. The default connection uses local XML-RPC, so no environment
+```bash
+codex mcp add freecad -- "/absolute/path/to/freecad-mcp"
+```
+
+Start a new Codex session after updating the configuration.
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json` in
+`~/Library/Application Support/Claude/` on macOS or `%APPDATA%\Claude\` on
+Windows. Add the `freecad` entry under `mcpServers`, preserving existing
+entries:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "/absolute/path/to/freecad-mcp"
+    }
+  }
+}
+```
+
+On Windows, use forward slashes or double each backslash in the JSON path.
+Fully quit and reopen Claude Desktop after editing the file.
+
+### Claude Code CLI
+
+Run this command to make the server available across your projects:
+
+```bash
+claude mcp add --transport stdio --scope user freecad -- "/absolute/path/to/freecad-mcp"
+```
+
+In a Claude Code session, use `/mcp` to check the connection.
+
+Other agents have similar MCP settings: add a local stdio server with the same
+executable path, following that agent's instructions. See the
+[client configuration guide](configuration.md#mcp-client-configuration) for
+more details. The default connection uses local XML-RPC, so no environment
 variables or HTTP API key are needed for this setup. Start FreeCAD and the
 bridge before asking your assistant to use the tools.
 
