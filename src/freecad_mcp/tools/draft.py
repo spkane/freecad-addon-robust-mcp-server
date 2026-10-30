@@ -328,11 +328,10 @@ _result_ = {
                 - source: Name of source ShapeString
 
         Raises:
-            ValueError: If no document is found.
-            ValueError: If the ShapeString object is not found.
-            ValueError: If the ShapeString has no shape data.
-            ValueError: If the specified Body is not found.
-            ValueError: If conversion fails.
+            ValueError: If the document, source, body, or origin plane is missing;
+                the label is ambiguous; the plane or shape is invalid; contours
+                are open or contain loose edges; edge conversion, recompute,
+                or contour preservation fails.
 
         Example:
             Convert ShapeString to sketch for extrusion::
@@ -362,12 +361,12 @@ if shape_string is None:
     if matches:
         shape_string = matches[0]
 if shape_string is None:
-    raise ValueError(f"ShapeString not found: {shapestring_name!r}")
+    raise ValueError(f"ShapeString not found: {{source_name!r}}")
 
 if not hasattr(shape_string, 'Shape') or shape_string.Shape is None or shape_string.Shape.isNull():
-    raise ValueError(f"Object has no shape: {shapestring_name!r}")
+    raise ValueError(f"Object has no shape: {{source_name!r}}")
 if not shape_string.Shape.isValid():
-    raise ValueError(f"Object has invalid shape: {shapestring_name!r}")
+    raise ValueError(f"Object has invalid shape: {{source_name!r}}")
 
 shape = shape_string.Shape.copy()
 shape.Placement = FreeCAD.Placement()

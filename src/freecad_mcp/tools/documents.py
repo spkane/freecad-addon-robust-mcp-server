@@ -199,10 +199,10 @@ if doc is None:
     raise ValueError("No document found")
 doc.recompute()
 invalid = []
-for obj in doc.Objects:
+for obj in FreeCAD.getDependentObjects(doc.Objects):
     state = list(obj.State)
     if 'Invalid' in state or 'Error' in state:
-        invalid.append({{'name': obj.Name, 'label': obj.Label, 'state': state}})
+        invalid.append({{'document': obj.Document.Name, 'name': obj.Name, 'label': obj.Label, 'state': state}})
 _result_ = {{'success': not invalid, 'invalid_objects': invalid}}
 """
         result = await bridge.execute_python(code)
