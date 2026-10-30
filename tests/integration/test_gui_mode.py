@@ -111,6 +111,45 @@ _result_ = {
         elif expected_release:
             assert freecad_version == expected_release
 
+    def test_freecad_neutral_qt_wrapper(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy
+    ) -> None:
+        """Probe the host wrapper and its widget compatibility on real FreeCAD."""
+        result = execute_code(
+            xmlrpc_proxy,
+            """
+import importlib
+from PySide import QtCore, QtGui
+try:
+    from PySide import QtWidgets
+    widgets_source = "QtWidgets"
+except (ImportError, AttributeError):
+    QtWidgets = QtGui
+    widgets_source = "QtGui"
+
+needed = ("QApplication", "QCheckBox", "QDialog", "QDialogButtonBox",
+          "QFormLayout", "QGroupBox", "QLabel", "QSpinBox", "QVBoxLayout", "QWidget")
+missing = [name for name in needed if not hasattr(QtWidgets, name)]
+major = str(QtCore.qVersion()).split(".")[0]
+binding = importlib.import_module("PySide2" if major == "5" else "PySide6")
+bound_core = importlib.import_module(binding.__name__ + ".QtCore")
+bound_widgets = importlib.import_module(binding.__name__ + ".QtWidgets")
+_result_ = {"version": QtCore.qVersion(), "widgets_source": widgets_source,
+            "missing": missing, "timer_same": QtCore.QTimer is bound_core.QTimer,
+            "widget_same": not missing and QtWidgets.QWidget is bound_widgets.QWidget,
+            "app_same": not missing and QtWidgets.QApplication is bound_widgets.QApplication,
+            "icon": hasattr(QtGui, "QIcon"), "thread": hasattr(QtCore, "QThread"),
+            "application": hasattr(QtCore, "QCoreApplication")}
+""",
+        )["result"]
+        assert result["widgets_source"] == "QtWidgets", result
+        assert result["missing"] == [], result
+        assert result["timer_same"] and result["widget_same"] and result["app_same"], (
+            result
+        )
+        assert result["icon"] and result["thread"] and result["application"], result
+        print("FreeCAD neutral Qt wrapper:", result)
+
     def test_workbench_qt_widgets(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy
     ) -> None:
