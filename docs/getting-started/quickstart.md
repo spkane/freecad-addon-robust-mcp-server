@@ -82,9 +82,20 @@ click **Start MCP Bridge**. If it is already running, leave it running. Pairing
 is shared by compatible workbench installations under your user account; you do
 not need to copy a credential into each FreeCAD profile.
 
-If the command is not found, find the executable directory with
-`uv tool dir --bin`, and run `freecad-mcp` from that directory. The bridge
-cannot start until pairing is complete. See [pairing and security
+If `freecad-mcp` is not found, run it by its full path using one of these
+commands instead:
+
+```bash
+# macOS or Linux
+"$(uv tool dir --bin)/freecad-mcp" --pair-bridge
+```
+
+```powershell
+# Windows PowerShell
+& (Join-Path (uv tool dir --bin) 'freecad-mcp.exe') --pair-bridge
+```
+
+The bridge cannot start until pairing is complete. See [pairing and security
 settings](configuration.md#pairing-the-freecad-bridge) for troubleshooting.
 
 ## 4. Connect your assistant
