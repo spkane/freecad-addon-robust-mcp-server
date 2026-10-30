@@ -90,8 +90,9 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 ## Installation Requirements / Dependencies
 
-- [FreeCAD](https://www.freecad.org/) 1.1.4 or newer is recommended for security;
-  earlier versions have known vulnerabilities when opening untrusted files.
+- [FreeCAD](https://www.freecad.org/) 1.0.2 or newer is required. FreeCAD 1.1.4
+  or newer is recommended for security; older releases have known vulnerabilities
+  when opening untrusted files.
 - Python 3.11 or newer for the external server; embedded mode requires a Python
   minor version matching FreeCAD's bundled Python.
 

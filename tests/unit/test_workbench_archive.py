@@ -26,6 +26,11 @@ def test_index_manifest_describes_source_package() -> None:
     assert root.findtext("pkg:date", namespaces=NS) == root.findtext(
         "pkg:content/pkg:workbench/pkg:date", namespaces=NS
     )
+    assert root.findtext("pkg:freecadmin", namespaces=NS) == "1.0.2"
+    assert (
+        root.findtext("pkg:content/pkg:workbench/pkg:freecadmin", namespaces=NS)
+        == "1.0.2"
+    )
     assert root.findtext("pkg:content/pkg:workbench/pkg:classname", namespaces=NS) == (
         "FreecadRobustMCPBridgeWorkbench"
     )

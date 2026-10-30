@@ -15,7 +15,7 @@
     <license file="LICENSE-MIT">MIT</license>
     <license file="LICENSE-ICON">CC-BY-SA-4.0</license>
 
-    <freecadmin>0.21</freecadmin>
+    <freecadmin>1.0.2</freecadmin>
 
     <url type="repository" branch="main">https://github.com/spkane/freecad-addon-robust-mcp-server</url>
     <url type="bugtracker">https://github.com/spkane/freecad-addon-robust-mcp-server/issues</url>
@@ -41,7 +41,7 @@
             <classname>FreecadRobustMCPBridgeWorkbench</classname>
             <subdirectory>./freecad/RobustMCPBridge/</subdirectory>
             <icon>Resources/Icons/FreecadRobustMCPBridge.svg</icon>
-            <freecadmin>0.21</freecadmin>
+            <freecadmin>1.0.2</freecadmin>
         </workbench>
 
     </content>

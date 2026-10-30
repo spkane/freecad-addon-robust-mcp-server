@@ -471,7 +471,7 @@ network policy. Use explicit capability profiles for application-level controls.
 
 **Category:** Tampering and code execution through malicious files  
 **Reachability:** A user or MCP workflow opening an untrusted FCStd file  
-**Evidence:** `package.xml` declares FreeCAD `0.21` as the minimum. FreeCAD 1.1.4
+**Evidence:** `package.xml` declares FreeCAD `1.0.2` as the compatibility minimum. FreeCAD 1.1.4
 fixes file-writing vulnerabilities affecting all earlier versions when opening
 malicious FCStd files. See the [upstream release notes](https://github.com/FreeCAD/FreeCAD/releases/tag/1.1.4).
 **Exploit:** A prompt or external workflow induces the server to open an
@@ -785,10 +785,10 @@ Before requesting inclusion:
 2. **Manifest and updates:** validate the source manifest and the generated
    archive against the Addon Manager, including top-level and workbench version
    and date, icon, `classname`, subdirectory, license texts, and URLs. The
-   `main` repository URL currently matches the source branch, but choose a
-   dedicated stable release branch or a catalog-tracked tag before listing,
-   then make its manifest repository branch match. Bump version and date on
-   every published update.
+   `main` repository URL currently matches the source branch. Request a
+   catalog-tracked release tag created on `main`; confirm manifest URL and tag
+   handling with the Addon team. Update the catalog tag and bump version and
+   date for every published update.
 3. **UI and startup quality:** the optional bridge status widget adds a
    permanent item to FreeCAD's global status bar, preferences are registered
    globally, and explicit startup scripts modify `sys.path`. Ask the Index
@@ -799,10 +799,9 @@ Before requesting inclusion:
    Qt major, and the loader then imports the matching PySide2 or PySide6. The
    Academy describes versioned imports as an alternative for code that also
    runs outside FreeCAD; confirm the host-aware variant with reviewers without
-   introducing mixed-Qt crashes. The manifest declares FreeCAD 0.21, whereas
-   current real GUI CI covers 1.0.2 and the latest stable Qt6; test 0.21 or
-   update the supported minimum based on evidence. Follow upstream security
-   guidance, which recommends FreeCAD 1.1.4 or later.
+   introducing mixed-Qt crashes. The manifest minimum is FreeCAD 1.0.2, the
+   oldest tested GUI version; recommend FreeCAD 1.1.4 or later for upstream
+   security fixes.
 5. **Privacy and security:** review the user-facing data and network description,
    private reporting instructions, same-user credential limitation, and whether
    the privileged local bridge is acceptable under Index policy. Record how
@@ -812,7 +811,7 @@ Before requesting inclusion:
    environment is not an Addon Manager Python dependency; do not vendor it
    or bypass the [allow-list](https://freecad.github.io/Addon-Academy/Topics/Dependencies/Allow-List/).
    Confirm all icon authorship and preserve historical license grants.
-7. **Actual installation:** test Index-style install, upgrade, disable,
+7. **Actual installation:** follow the [pre-listing test protocol](docs/development/addon-manager-testing.md) and automate the real Addon Manager lifecycle; test install, upgrade, disable,
    uninstall, and reinstall in disposable FreeCAD profiles on macOS, Windows,
    and Linux, including pairing, port cleanup, and no duplicate workbenches.
    The current workbench archive tests are not a substitute for this flow.

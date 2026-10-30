@@ -9,8 +9,9 @@ This page also covers source installations and other configuration options.
 
 ## Requirements
 
-- **FreeCAD 1.1.4 or newer** is recommended for security. Older versions may
-  work but have known vulnerabilities when opening untrusted documents.
+- **FreeCAD 1.0.2 or newer** is required. FreeCAD 1.1.4 or newer is recommended
+  for security; earlier releases have known vulnerabilities when opening untrusted
+  documents.
 - **Python 3.11 or newer** for the separate MCP server. Embedded mode requires
   a Python minor version matching the FreeCAD build and is supported on Linux.
 - An **MCP-compatible AI assistant** (Claude Code, Cursor, etc.)
