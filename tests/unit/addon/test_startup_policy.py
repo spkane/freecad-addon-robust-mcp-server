@@ -50,6 +50,47 @@ def _install_package_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     spec.loader.exec_module(bridge_utils)
 
 
+@pytest.mark.parametrize("missing_pairing", [True, False])
+def test_auto_start_reports_expected_pairing_without_traceback(
+    monkeypatch: pytest.MonkeyPatch, missing_pairing: bool
+) -> None:
+    """Expected setup failures stay readable; unexpected failures keep diagnostics."""
+    import atexit
+
+    monkeypatch.setenv("FREECAD_MCP_TESTING", "1")
+    monkeypatch.syspath_prepend(str(ADDON))
+    monkeypatch.setattr(atexit, "register", lambda *_args: None)
+    freecad = ModuleType("FreeCAD")
+    freecad.GuiUp = False  # type: ignore[attr-defined]
+    freecad.Console = MagicMock()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
+    preferences = MagicMock()
+    preferences.get_auto_start_headless.return_value = True
+    monkeypatch.setitem(sys.modules, "preferences", preferences)
+    commands = MagicMock()
+    commands._mcp_plugin = None
+    monkeypatch.setitem(sys.modules, "commands", commands)
+    _install_package_stubs(monkeypatch)
+    namespace = runpy.run_path(
+        str(ADDON / "__init__.py"), run_name="freecad.RobustMCPBridge.__init__"
+    )
+    from freecad_mcp_bridge import server
+
+    error = (
+        namespace["PairingRequiredError"]("Run freecad-mcp --pair-bridge")
+        if missing_pairing
+        else RuntimeError("Unexpected startup failure")
+    )
+    plugin = MagicMock()
+    plugin.start.side_effect = error
+    monkeypatch.setattr(server, "FreecadMCPPlugin", MagicMock(return_value=plugin))
+    namespace["_auto_start_bridge"](headless=True)
+
+    errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
+    assert str(error) in errors
+    assert ("Traceback" in errors) is not missing_pairing
+
+
 @pytest.mark.parametrize(
     ("arguments", "batch"),
     [
