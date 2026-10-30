@@ -2,6 +2,9 @@
 
 This guide covers installing the FreeCAD Robust MCP Server and connecting it to your AI assistant.
 
+For the everyday stable-release workflow, start with the [Quick Start](quickstart.md).
+This page also covers source installations and other configuration options.
+
 ---
 
 ## Requirements

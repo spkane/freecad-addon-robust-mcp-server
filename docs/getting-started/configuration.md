@@ -175,15 +175,19 @@ freecad-mcp
 
 ## MCP Client Configuration
 
-### Claude Code / Claude Desktop
+### Claude Desktop
 
-Add to `~/.claude/claude_desktop_config.json` or a project `.mcp.json` file:
+Add the entry below to `claude_desktop_config.json`: on macOS, the file is
+`~/Library/Application Support/Claude/claude_desktop_config.json`; on Windows,
+it is `%APPDATA%\Claude\claude_desktop_config.json`. Keep any existing entries
+and use the full path to the installed executable. Find its directory with
+`uv tool dir --bin`. Restart Claude Desktop after editing the file.
 
 ```json
 {
   "mcpServers": {
     "freecad": {
-      "command": "freecad-mcp",
+      "command": "/absolute/path/to/freecad-mcp",
       "env": {
         "FREECAD_MODE": "xmlrpc"
       }
@@ -191,6 +195,10 @@ Add to `~/.claude/claude_desktop_config.json` or a project `.mcp.json` file:
   }
 }
 ```
+
+On Windows use the path to `freecad-mcp.exe`, with backslashes escaped as
+`\\` in JSON. For Claude Code, use its MCP configuration or a project
+`.mcp.json` file; see the [MCP client guide](https://py.sdk.modelcontextprotocol.io/get-started/real-host/).
 
 If installed from source with mise/uv:
 
