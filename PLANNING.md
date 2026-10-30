@@ -796,13 +796,17 @@ Before requesting inclusion:
    team. Auto-start defaults to off; confirm whether the explicit persisted opt-in
    meets the startup requirement. The normal interactive workbench uses
    namespaced imports and does not run the standalone startup scripts.
-4. **Qt and compatibility:** evaluate using FreeCAD's neutral `PySide` wrapper
-   for QtCore, QtWidgets, and QtGui in the workbench, with safe fallback only
-   when running outside FreeCAD. The locally running development Qt6 build
-   exposes the needed types; verify real FreeCAD 1.0.2/Qt5 and stable Qt6 GUI
-   startup, bridge and shutdown flows before changing the loader. Never import a
-   mismatched Qt major. The manifest minimum is FreeCAD 1.0.2; recommend 1.1.4
-   or later for upstream security fixes.
+4. **Qt and compatibility:** an isolated wrapper-first prototype passed the
+   real GUI integration matrix on FreeCAD 1.0.2/Qt5, 1.1.4/Qt6, and the weekly
+   Qt6 canary ([workflow run](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/runs/41138575387)).
+   A separate probe verified the neutral wrapper's required Qt types and their
+   active-binding identities on the same builds ([workflow run](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/runs/41137979935)).
+   Switching to the wrapper therefore does not require raising the proposed
+   1.0.2 compatibility minimum. Before shipping, implement and review the
+   wrapper-first loader, update unit mocks that assume versioned modules, and
+   verify headless startup and failure handling. Keep a safe fallback when the
+   wrapper is unavailable and never import a mismatched Qt major. FreeCAD older
+   than 1.0.2 was not verified; recommend 1.1.4 or later for security fixes.
 5. **Privacy and security:** review the user-facing data and network description,
    private reporting instructions, same-user credential limitation, and whether
    the privileged local bridge is acceptable under Index policy. Record how
@@ -1079,9 +1083,9 @@ contract is explicit, and no P0/P1 release findings remain.
    uninstall, and reinstall through the actual manager. Verify isolation,
    workbench loading, listener cleanup, metadata, and Report view. Keep unit
    and archive tests, but do not treat them as lifecycle coverage.
-2. Investigate neutral Qt wrapper compatibility as described in the Addon
-   Manager release section. Confirm the always-visible listening indicator and
-   opt-in auto-start with the FreeCAD team.
+2. Implement and verify the neutral Qt wrapper approach described in the Addon
+   Manager release section, including updated unit and headless tests. Confirm
+   the listening indicator and opt-in auto-start with the FreeCAD team.
 3. Exercise the merged release workflows with a release candidate, including
    TestPyPI trusted publishing and the exact wheel and workbench archives.
 4. Verify clean installations and real tool calls with the published artifacts,
