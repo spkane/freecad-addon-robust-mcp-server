@@ -11,7 +11,6 @@ ROOT = Path(__file__).resolve().parents[2]
     "relative_path",
     [
         "docs/guide/workbench.md",
-        "docs/getting-started/quickstart.md",
         "docs/getting-started/configuration.md",
     ],
 )
@@ -19,6 +18,13 @@ def test_headless_guidance_uses_source_package_layout(relative_path: str) -> Non
     """Direct headless examples must use the package built by the installer."""
     text = (ROOT / relative_path).read_text(encoding="utf-8")
     assert "Mod/RobustMCPBridge/freecad/RobustMCPBridge/" in text
+    assert "Mod/freecad/RobustMCPBridge/" not in text
+
+
+def test_quick_start_links_to_connection_modes_without_stale_headless_path() -> None:
+    """The GUI-focused quick start delegates advanced modes to their guide."""
+    text = (ROOT / "docs/getting-started/quickstart.md").read_text(encoding="utf-8")
+    assert "../guide/connection-modes.md" in text
     assert "Mod/freecad/RobustMCPBridge/" not in text
 
 

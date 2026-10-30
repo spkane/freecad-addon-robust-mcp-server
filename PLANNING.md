@@ -5,6 +5,15 @@
 
 **Post-merge triage update:** 2026-10-29
 
+**Release hold, 2026-10-30:** Local candidate testing exposed ShapeString
+identifier, sketch attachment, contour conversion, and recompute-reporting
+defects. Verify their fixes against real Qt5 and Qt6 FreeCAD before the stable
+release. A separate FreeCAD 27.1 development-build crash has a macOS Qt
+accessibility stack; its cause and relationship to the modeling operation are
+unconfirmed. The MCP console-log tools returned no entries while the FreeCAD
+report view contained messages, so investigate console-log capture separately;
+do not treat an empty tool response as proof of a clean report view.
+
 PRs #163, #164, #165, #166, and #167 are merged. PR #163 corrected release
 identity and trusted publisher configuration; #164 corrected installation
 guidance; #165 added Windows installation; #166 fixed screenshot capabilities;

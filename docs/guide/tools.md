@@ -328,6 +328,15 @@ used for embossing, engraving, or standalone 3D text objects.
 | `draft_text_on_surface`       | Emboss or engrave text on a surface      |
 | `draft_extrude_shapestring`   | Extrude ShapeString to 3D solid          |
 
+`draft_shapestring` returns the internal object `name` for use with other tools;
+`label` is the displayed name. `draft_shapestring_to_sketch` accepts that
+internal name or an unambiguous label, preserves closed text contours, and
+reports conversion failures instead of returning an incomplete sketch. The
+converted sketch is a snapshot: editing the original ShapeString does not
+update it. Check placement and view direction before cutting or embossing.
+Use `recompute_document` and inspect any reported invalid objects before
+saving or exporting.
+
 <!-- markdownlint-disable MD046 -->
 !!! example "Text Embossing Workflow"
     ```python

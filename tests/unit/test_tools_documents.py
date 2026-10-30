@@ -247,7 +247,7 @@ class TestDocumentTools:
         mock_bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
-                result=True,
+                result={"success": True, "invalid_objects": []},
                 stdout="",
                 stderr="",
                 execution_time_ms=5.0,
@@ -260,6 +260,28 @@ class TestDocumentTools:
         assert result["success"] is True
         assert result.get("error") is None
         mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_recompute_reports_invalid_objects(self, register_tools, mock_bridge):
+        """A completed RPC does not imply every object recomputed successfully."""
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={
+                    "success": False,
+                    "invalid_objects": [
+                        {"name": "Sketch", "label": "Text", "state": ["Invalid"]}
+                    ],
+                },
+                stdout="",
+                stderr="",
+                execution_time_ms=5.0,
+            )
+        )
+        result = await register_tools["recompute_document"](doc_name="TestDoc")
+        assert result["success"] is False
+        assert result["invalid_objects"][0]["name"] == "Sketch"
+        assert result["error"]
 
     @pytest.mark.asyncio
     async def test_recompute_document_failure(self, register_tools, mock_bridge):
