@@ -18,7 +18,7 @@ Give your MCP-compatible assistant a direct connection to FreeCAD. Create and
 inspect geometry, explore a design, and export your work while keeping FreeCAD
 at the center of the workflow.
 
-[Install the server](getting-started/installation.md){ .md-button .md-button--primary }
+[Quick start](getting-started/quickstart.md){ .md-button .md-button--primary }
 [Explore the tools](guide/tools.md){ .md-button }
 
 <span class="landing-note">Open source · Local-first connection · GUI and headless modes</span>
@@ -112,7 +112,8 @@ before using a model for manufacturing.
 
 ### 01 · Install
 
-Install the MCP server and the Robust MCP Bridge workbench in FreeCAD.
+Install the MCP server and the Robust MCP Bridge workbench in FreeCAD. The
+[quick start](getting-started/quickstart.md) walks through both installations.
 
 </div>
 <div markdown>
@@ -155,9 +156,9 @@ when the local connection is available.
 
 ## Ready to connect?
 
-Follow the installation guide to set up FreeCAD, the bridge, and your MCP client.
+Follow the quick start to set up FreeCAD, the bridge, and your MCP client.
 
-[Get started](getting-started/installation.md){ .md-button .md-button--primary }
+[Get started](getting-started/quickstart.md){ .md-button .md-button--primary }
 [View on GitHub](https://github.com/spkane/freecad-addon-robust-mcp-server){ .md-button }
 
 </div>

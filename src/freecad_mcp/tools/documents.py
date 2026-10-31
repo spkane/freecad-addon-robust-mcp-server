@@ -190,6 +190,7 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
         Returns:
             Dictionary with recompute result:
                 - success: Whether recompute was successful
+                - invalid_objects: Objects reporting a recompute error
         """
         bridge = await get_bridge()
         code = f"""
@@ -197,10 +198,24 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 doc.recompute()
-_result_ = True
+invalid = []
+for obj in FreeCAD.getDependentObjects(doc.Objects):
+    state = list(obj.State)
+    if 'Invalid' in state or 'Error' in state:
+        invalid.append({{'document': obj.Document.Name, 'name': obj.Name, 'label': obj.Label, 'state': state}})
+_result_ = {{'success': not invalid, 'invalid_objects': invalid}}
 """
         result = await bridge.execute_python(code)
+        if result.success and isinstance(result.result, dict):
+            return {
+                **result.result,
+                "error": (
+                    "Document contains objects with recompute errors"
+                    if not result.result.get("success")
+                    else None
+                ),
+            }
         return {
-            "success": result.success,
-            "error": result.error_traceback if not result.success else None,
+            "success": False,
+            "error": result.error_traceback or "Failed to verify recompute result",
         }

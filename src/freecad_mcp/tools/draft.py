@@ -111,12 +111,12 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
                 If None, uses FreeCAD's default font.
             size: Font size in mm. Defaults to 10.0.
             position: Position as [x, y, z]. Defaults to origin [0, 0, 0].
-            name: Object name. Auto-generated if None.
+            name: Display label. The internal name is assigned by FreeCAD.
             doc_name: Target document. Uses active document if None.
 
         Returns:
             Dictionary with created ShapeString information:
-                - name: Object name (prefers Label if set, falls back to Name)
+                - name: Internal object name, accepted by other tools
                 - label: Object label
                 - type_id: Object type
                 - text: The text that was created
@@ -193,10 +193,14 @@ try:
         shape_string.Label = {name!r}
 
     doc.recompute()
+    state = list(shape_string.State)
+    if ('Invalid' in state or 'Error' in state or shape_string.Shape.isNull()
+            or not shape_string.Shape.isValid()):
+        raise ValueError(f"ShapeString failed to recompute: {{state}}")
     doc.commitTransaction()
 
     _result_ = {{
-        "name": shape_string.Label if shape_string.Label else shape_string.Name,
+        "name": shape_string.Name,
         "label": shape_string.Label,
         "type_id": shape_string.TypeId,
         "text": text,
@@ -308,9 +312,9 @@ _result_ = {
         Sketcher::SketchObject that can be used with Pad, Pocket, etc.
 
         Args:
-            shapestring_name: Name of the ShapeString object to convert.
+            shapestring_name: Internal name or unambiguous label of the ShapeString.
             body_name: Name of PartDesign Body to add sketch to. Optional.
-            plane: Plane for the sketch if creating standalone.
+            plane: Plane used to orient the sketch relative to the source.
                 Options: "XY_Plane", "XZ_Plane", "YZ_Plane".
             sketch_name: Name for the created sketch. Auto-generated if None.
             doc_name: Document containing the ShapeString. Uses active if None.
@@ -324,11 +328,10 @@ _result_ = {
                 - source: Name of source ShapeString
 
         Raises:
-            ValueError: If no document is found.
-            ValueError: If the ShapeString object is not found.
-            ValueError: If the ShapeString has no shape data.
-            ValueError: If the specified Body is not found.
-            ValueError: If conversion fails.
+            ValueError: If the document, source, body, or origin plane is missing;
+                the label is ambiguous; the plane or shape is invalid; contours
+                are open or contain loose edges; edge conversion, recompute,
+                or contour preservation fails.
 
         Example:
             Convert ShapeString to sketch for extrusion::
@@ -349,12 +352,28 @@ doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({d
 if doc is None:
     raise ValueError("No document found")
 
-shape_string = doc.getObject({shapestring_name!r})
+source_name = {shapestring_name!r}
+shape_string = doc.getObject(source_name)
 if shape_string is None:
-    raise ValueError(f"ShapeString not found: {shapestring_name!r}")
+    matches = doc.getObjectsByLabel(source_name)
+    if len(matches) > 1:
+        raise ValueError(f"ShapeString label is ambiguous: {{source_name}}; use its internal name")
+    if matches:
+        shape_string = matches[0]
+if shape_string is None:
+    raise ValueError(f"ShapeString not found: {{source_name!r}}")
 
-if not hasattr(shape_string, 'Shape') or shape_string.Shape is None:
-    raise ValueError(f"Object has no shape: {shapestring_name!r}")
+if not hasattr(shape_string, 'Shape') or shape_string.Shape is None or shape_string.Shape.isNull():
+    raise ValueError(f"Object has no shape: {{source_name!r}}")
+if not shape_string.Shape.isValid():
+    raise ValueError(f"Object has invalid shape: {{source_name!r}}")
+
+shape = shape_string.Shape.copy()
+shape.Placement = FreeCAD.Placement()
+if not shape.Wires or any(not wire.isClosed() for wire in shape.Wires):
+    raise ValueError("ShapeString must contain closed contours")
+if sum(len(wire.Edges) for wire in shape.Wires) != len(shape.Edges):
+    raise ValueError("ShapeString contains edges outside its closed contours")
 
 # Wrap in transaction for undo support
 doc.openTransaction("Convert ShapeString to Sketch")
@@ -362,67 +381,61 @@ try:
     body_name = {body_name!r}
     sketch_name = {sketch_name!r} or "TextSketch"
     plane = {plane!r}
+    rotations = {{
+        "XY_Plane": FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 0),
+        "XZ_Plane": FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90),
+        "YZ_Plane": FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90),
+    }}
+    if plane not in rotations:
+        raise ValueError(f"Invalid plane: '{{plane}}'. Must be one of: XY_Plane, XZ_Plane, YZ_Plane")
+    target_placement = shape_string.getGlobalPlacement().multiply(
+        FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), rotations[plane])
+    )
 
     # Create sketch - either in body or standalone
     if body_name:
         body = doc.getObject(body_name)
         if body is None:
             raise ValueError(f"Body not found: {{body_name}}")
+        target_placement = body.getGlobalPlacement().inverse().multiply(target_placement)
         sketch = doc.addObject("Sketcher::SketchObject", sketch_name)
-        # Attach to body's XY plane
-        sketch.AttachmentSupport = [(body.Origin.OriginFeatures[0], '')]
+        planes = [feature for feature in body.Origin.OriginFeatures
+                  if getattr(feature, 'Role', None) == plane and feature.TypeId == 'App::Plane']
+        if len(planes) != 1:
+            raise ValueError(f"Could not find body origin plane: {{plane}}")
+        sketch.AttachmentSupport = [(planes[0], '')]
         sketch.MapMode = 'FlatFace'
         body.addObject(sketch)
+        doc.recompute()
+        sketch.AttachmentOffset = sketch.Placement.inverse().multiply(target_placement)
     else:
         sketch = doc.addObject("Sketcher::SketchObject", sketch_name)
-        # Set plane orientation
-        if plane == "XY_Plane":
-            sketch.Placement = FreeCAD.Placement(
-                FreeCAD.Vector(0, 0, 0),
-                FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 0)
-            )
-        elif plane == "XZ_Plane":
-            sketch.Placement = FreeCAD.Placement(
-                FreeCAD.Vector(0, 0, 0),
-                FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
-            )
-        elif plane == "YZ_Plane":
-            sketch.Placement = FreeCAD.Placement(
-                FreeCAD.Vector(0, 0, 0),
-                FreeCAD.Rotation(FreeCAD.Vector(0, 1, 0), 90)
-            )
-        else:
-            raise ValueError(
-                f"Invalid plane: '{{plane}}'. Must be one of: XY_Plane, XZ_Plane, YZ_Plane"
-            )
+        sketch.Placement = target_placement
 
     # Get the shape and convert wires to sketch geometry
-    shape = shape_string.Shape
     wire_count = 0
 
     for wire in shape.Wires:
         for edge in wire.Edges:
-            # Add each edge to the sketch
-            # Use the sketch's addGeometry method
             try:
-                # Convert edge to sketch geometry
-                # This handles lines, arcs, and bezier curves
-                sketch.addGeometry(edge.Curve, False)
-            except Exception:
-                # Some edge types might not convert directly
-                # Try to approximate with line segments
-                try:
-                    # Discretize the edge into points and add as lines
-                    points = edge.discretize(Number=20)
-                    for i in range(len(points) - 1):
-                        line = Part.LineSegment(points[i], points[i + 1])
-                        sketch.addGeometry(line, False)
-                except Exception:
-                    pass
+                # The edge conversion preserves its trimmed parameter interval.
+                converted = edge.toNurbs().Edges
+                if len(converted) != 1:
+                    raise ValueError("edge did not convert to one curve")
+                sketch.addGeometry(converted[0].Curve, False)
+            except Exception as exc:
+                raise ValueError(f"Cannot convert ShapeString contour edge: {{exc}}") from exc
         # Count each wire once (not each edge)
         wire_count += 1
 
     doc.recompute()
+    state = list(sketch.State)
+    if ('Invalid' in state or 'Error' in state or sketch.Shape.isNull()
+            or not sketch.Shape.isValid()):
+        raise ValueError(f"Converted sketch failed to recompute: {{state}}")
+    sketch_wires = sketch.Shape.Wires
+    if len(sketch_wires) != wire_count or any(not wire.isClosed() for wire in sketch_wires):
+        raise ValueError("Converted sketch does not preserve all closed text contours")
     doc.commitTransaction()
 
     _result_ = {{

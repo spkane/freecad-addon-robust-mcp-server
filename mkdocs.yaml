@@ -124,9 +124,9 @@ extra:
 nav:
   - Home: index.md
   - Getting Started:
+      - Quick Start: getting-started/quickstart.md
       - Installation: getting-started/installation.md
       - Configuration: getting-started/configuration.md
-      - Quick Start: getting-started/quickstart.md
   - User Guide:
       - Connection Modes: guide/connection-modes.md
       - Robust MCP Bridge Workbench: guide/workbench.md

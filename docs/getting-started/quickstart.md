@@ -1,61 +1,186 @@
 # Quick Start
 
-Get up and running with AI-assisted FreeCAD modeling in minutes.
+Install the server and FreeCAD workbench, pair them once, and connect your AI
+assistant. No source checkout or developer tools are required.
 
----
+> **Stable release availability:** The current stable releases (0.6.2) predate
+> bridge pairing. The steps below describe the upcoming pairing-capable stable
+> release and will work once it is published. Until then, use the
+> [source installation guide](installation.md) for the current development
+> version; the stable 0.6.2 packages do not support the pairing steps below.
 
-## Prerequisites
+## What you need
 
-Before starting, ensure you have:
+- FreeCAD 1.1.4 or newer is recommended for security.
+- An MCP-compatible assistant, such as Codex or Claude Desktop.
+- Internet access to install the server and download the workbench.
 
-1. FreeCAD installed with the Robust MCP Bridge workbench
-1. Matching pairing-capable MCP server and workbench builds from the
-   [installation guide](installation.md)
-1. Your MCP client configured (see [Configuration](configuration.md))
-1. Bridge pairing completed on the same computer and user account as FreeCAD:
-   run `freecad-mcp --pair-bridge`, or `uv run freecad-mcp --pair-bridge`
-   from a source checkout (see [Installation](installation.md))
+The MCP server runs on the same computer and user account as FreeCAD. Install
+and run software only from sources you trust: the bridge lets your assistant
+execute Python with your FreeCAD user's permissions.
 
----
+## 1. Install the MCP server
 
-## Step 1: Start FreeCAD with the MCP Bridge
-
-### Option A: GUI Mode (Recommended for getting started)
-
-1. Open FreeCAD
-1. Switch to the **Robust MCP Bridge** workbench
-1. Click **Start Bridge** in the toolbar
-1. You should see: "MCP Bridge started! XML-RPC: localhost:9875, Socket: localhost:9876"
-
-### Option B: Headless Mode (For automation)
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
+operating system, then open a new Terminal (macOS/Linux) or PowerShell (Windows)
+and run:
 
 ```bash
-# For a source installation in an unversioned Linux profile
-# Use FreeCADCmd instead if that is the executable installed on your system.
-freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
-
-# If working from source
-just freecad::run-headless
+uv tool install freecad-robust-mcp
+uv tool update-shell
 ```
 
-Use the selected versioned profile and extracted package directory when they
-differ from the example above.
+Open a new terminal and check that the command is available:
 
----
+```bash
+freecad-mcp --version
+```
 
-## Step 2: Connect Your AI Assistant
+If your shell cannot find it, see [uv's executable directory
+instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
+For another installation method, see [Installation](installation.md).
 
-With FreeCAD and the MCP server configured, open your AI assistant (Claude Code, Cursor, etc.) and verify the connection:
+## 2. Install the FreeCAD workbench
+
+1. Quit FreeCAD.
+2. Open the [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench),
+   select the latest **stable** Robust MCP Bridge workbench release compatible
+   with your server, and download its `freecad-mcp-workbench` ZIP file. Avoid
+   releases labeled **Pre-release** unless you intend to test one.
+3. Extract the ZIP. Open the FreeCAD profile's `Mod` folder, and move the
+   extracted workbench folder into it. The folder you move must directly contain
+   `package.xml` and the `freecad` folder. If `Mod` does not exist, create it.
+
+   | Operating system | Typical profile folder |
+   | --- | --- |
+   | macOS | `~/Library/Application Support/FreeCAD/v1-1/Mod/` |
+   | Windows | `%APPDATA%\FreeCAD\v1-1\Mod\` |
+   | Linux | `~/.local/share/FreeCAD/v1-1/Mod/` |
+
+   These examples are for the FreeCAD 1.1 profile. Use the profile for the
+   version you actually start; some installations use an unversioned `Mod`
+   folder instead. In Finder, use **Go > Go to Folder** to open the macOS path;
+   on Windows, paste the path into File Explorer's address bar.
+4. If another Robust MCP Bridge installation is already in that profile, move
+   the old folder out of `Mod` so FreeCAD does not load two copies. Restart
+   FreeCAD after installing.
+
+The workbench is not currently listed in the public FreeCAD Addon Manager.
+
+## 3. Pair and start the bridge
+
+If you already paired this user account, keep the existing credential and skip
+this command. Otherwise, in a terminal on the same computer and user account
+that runs FreeCAD, run:
+
+```bash
+freecad-mcp --pair-bridge
+```
+
+Open FreeCAD, select **Robust MCP Bridge** from the workbench selector, and
+click **Start MCP Bridge**. If it is already running, leave it running. Pairing
+is shared by compatible workbench installations under your user account; you do
+not need to copy a credential into each FreeCAD profile.
+
+If `freecad-mcp` is not found, run it by its full path using one of these
+commands instead:
+
+```bash
+# macOS or Linux
+"$(uv tool dir --bin)/freecad-mcp" --pair-bridge
+```
+
+```powershell
+# Windows PowerShell
+& (Join-Path (uv tool dir --bin) 'freecad-mcp.exe') --pair-bridge
+```
+
+The bridge cannot start until pairing is complete. See [pairing and security
+settings](configuration.md#pairing-the-freecad-bridge) for troubleshooting.
+
+## 4. Connect your assistant
+
+Configure your assistant to launch `freecad-mcp` over **stdio**. If the app
+cannot find the command, specify the full executable path: `uv tool dir --bin`
+shows its directory. On Windows the executable is `freecad-mcp.exe`. Restart or
+reconnect the assistant after changing its settings.
+
+Choose your assistant below. Replace `/absolute/path/to/freecad-mcp` with the
+actual executable path; quote paths containing spaces. On Windows, use the path
+to `freecad-mcp.exe`.
+
+### Codex Desktop or Codex CLI
+
+Both use `~/.codex/config.toml`. Add the following entry, keeping any other
+servers already in the file:
+
+```toml
+[mcp_servers.freecad]
+command = "/absolute/path/to/freecad-mcp"
+```
+
+On Windows, use forward slashes or escaped backslashes in the TOML string.
+Alternatively, the Codex CLI can add the same entry:
+
+```bash
+codex mcp add freecad -- "/absolute/path/to/freecad-mcp"
+```
+
+Start a new Codex session after updating the configuration.
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json` in
+`~/Library/Application Support/Claude/` on macOS or `%APPDATA%\Claude\` on
+Windows. Add the `freecad` entry under `mcpServers`, preserving existing
+entries:
+
+```json
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "/absolute/path/to/freecad-mcp"
+    }
+  }
+}
+```
+
+On Windows, use forward slashes or double each backslash in the JSON path.
+Fully quit and reopen Claude Desktop after editing the file.
+
+### Claude Code CLI
+
+Run this command to make the server available across your projects:
+
+```bash
+claude mcp add --transport stdio --scope user freecad -- "/absolute/path/to/freecad-mcp"
+```
+
+In a Claude Code session, use `/mcp` to check the connection.
+
+Other agents have similar MCP settings: add a local stdio server with the same
+executable path, following that agent's instructions. See the
+[client configuration guide](configuration.md#mcp-client-configuration) for
+more details. The default connection uses local XML-RPC, so no environment
+variables or HTTP API key are needed for this setup. Start FreeCAD and the
+bridge before asking your assistant to use the tools.
+
+## 5. Verify the connection
+
+Ask your assistant:
 
 ```text
-"Check the FreeCAD connection status"
+Check the FreeCAD connection and tell me the FreeCAD version.
 ```
 
-The AI should respond with information about the connection mode, FreeCAD version, and whether GUI is available.
+If it cannot connect, verify the bridge is running, that the assistant is using
+the installed executable, and that FreeCAD and the assistant run as the same
+user. See [Installation](installation.md#verifying-installation) for additional
+checks.
 
 ---
 
-## Step 3: Create Your First Model
+## Try your first model
 
 Try these example prompts with your AI assistant:
 
@@ -82,7 +207,7 @@ Try these example prompts with your AI assistant:
 
 ---
 
-## Step 4: Explore Available Tools
+## Explore available tools
 
 The MCP server provides 150+ tools organized into categories:
 

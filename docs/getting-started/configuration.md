@@ -175,15 +175,33 @@ freecad-mcp
 
 ## MCP Client Configuration
 
-### Claude Code / Claude Desktop
+### Codex Desktop and CLI
 
-Add to `~/.claude/claude_desktop_config.json` or a project `.mcp.json` file:
+Both use `~/.codex/config.toml`. Add an entry with the full path to the
+installed executable, keeping any other servers already in the file:
+
+```toml
+[mcp_servers.freecad]
+command = "/absolute/path/to/freecad-mcp"
+```
+
+Alternatively, run `codex mcp add freecad -- "/absolute/path/to/freecad-mcp"`.
+Start a new Codex session after changing the configuration. On Windows, use
+`freecad-mcp.exe` and forward slashes or escaped backslashes in TOML.
+
+### Claude Desktop
+
+Add the entry below to `claude_desktop_config.json`: on macOS, the file is
+`~/Library/Application Support/Claude/claude_desktop_config.json`; on Windows,
+it is `%APPDATA%\Claude\claude_desktop_config.json`. Keep any existing entries
+and use the full path to the installed executable. Find its directory with
+`uv tool dir --bin`. Restart Claude Desktop after editing the file.
 
 ```json
 {
   "mcpServers": {
     "freecad": {
-      "command": "freecad-mcp",
+      "command": "/absolute/path/to/freecad-mcp",
       "env": {
         "FREECAD_MODE": "xmlrpc"
       }
@@ -191,6 +209,28 @@ Add to `~/.claude/claude_desktop_config.json` or a project `.mcp.json` file:
   }
 }
 ```
+
+On Windows use the path to `freecad-mcp.exe`, with backslashes escaped as
+`\\` in JSON.
+
+### Claude Code CLI
+
+Add the server for your user account, replacing the example path with the
+installed executable:
+
+```bash
+claude mcp add --transport stdio --scope user freecad -- "/absolute/path/to/freecad-mcp"
+```
+
+Run `/mcp` inside Claude Code to check the connection. See the
+[Claude Code MCP guide](https://code.claude.com/docs/en/mcp) for project-scoped
+configuration and additional options.
+
+### Other MCP clients
+
+Other agents generally support the same setup: register the installed
+`freecad-mcp` executable as a local stdio MCP server, then reconnect the agent.
+The settings and file location depend on the agent.
 
 If installed from source with mise/uv:
 

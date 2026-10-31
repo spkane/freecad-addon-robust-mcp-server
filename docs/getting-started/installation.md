@@ -2,6 +2,9 @@
 
 This guide covers installing the FreeCAD Robust MCP Server and connecting it to your AI assistant.
 
+For the everyday stable-release workflow, start with the [Quick Start](quickstart.md).
+This page also covers source installations and other configuration options.
+
 ---
 
 ## Requirements
@@ -34,20 +37,20 @@ pip install freecad-robust-mcp
 
 ### Method 2: From Source (recommended for paired bridge)
 
+Install [Git](https://git-scm.com/install/) and
+[uv](https://docs.astral.sh/uv/getting-started/installation/) first. In a new
+Terminal (macOS/Linux) or PowerShell (Windows), run:
+
 ```bash
 git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
 cd freecad-addon-robust-mcp-server
-
-# Install mise (if not already installed)
-curl https://mise.run | sh
-
-mise trust
-mise install
-just setup
+uv sync --all-extras
 ```
 
 Use `uv run freecad-mcp` from this checkout for the server. Install the
 workbench from the same checkout using the source installation steps below.
+This workflow does not require `mise` or `just`; the development setup is
+documented separately in the contributor guide.
 
 ### Method 3: Docker
 
@@ -74,10 +77,14 @@ The Robust MCP Bridge Workbench runs inside FreeCAD and provides the connection 
 ### From the same source checkout
 
 The workbench is not currently in the public Addon Manager catalog. From the
-checkout used for the server, run `just install::mcp-bridge-workbench`, then
-restart FreeCAD. The command works from PowerShell on Windows using the Rust
-`just` command and `uv`; neither Git Bash nor a `python3` wrapper is required.
-Alternatively, run `uv run python scripts/install_workbench.py` directly.
+checkout used for the server, run the following command, then restart FreeCAD:
+
+```bash
+uv run python scripts/install_workbench.py
+```
+
+This also works in Windows PowerShell. If you use `just`, the equivalent is
+`just install::mcp-bridge-workbench`.
 
 To select a specific profile, pass its `Mod` directory to the Python installer:
 
@@ -137,7 +144,9 @@ After installation, verify everything is working:
 
 ### Step 1: Pair the bridge
 
-Run the pairing command on the same computer and user account as FreeCAD:
+If this user account is already paired, keep the existing credential and skip
+this step. Otherwise, run the pairing command on the same computer and user
+account as FreeCAD:
 
 ```bash
 # With pip installation
