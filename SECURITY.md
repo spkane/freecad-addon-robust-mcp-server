@@ -10,8 +10,9 @@ Please report suspected security vulnerabilities privately to
 [spkane@gmail.com](mailto:spkane@gmail.com). Include affected versions, steps to
 reproduce, impact, and any relevant logs with credentials and private model data
 removed. Please avoid posting exploit details in a public issue before a fix is
-available. The maintainer will coordinate validation, remediation, and
-appropriate disclosure with the reporter.
+available. The maintainer will acknowledge reports within 14 calendar days
+and coordinate validation, remediation, and appropriate disclosure with the
+reporter.
 
 ## Supported versions
 
