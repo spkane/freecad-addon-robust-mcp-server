@@ -10,7 +10,8 @@ Thank you for your interest in contributing to FreeCAD Robust MCP Server!
 
 - Python 3.11 (must match FreeCAD's bundled version)
 - [mise](https://mise.jdx.dev/) for tool management
-- FreeCAD 0.21+ or 1.0+ installed
+- FreeCAD 1.0.2 or newer. FreeCAD 1.1.4 or newer is recommended for security;
+  older releases have known vulnerabilities when opening untrusted files.
 
 ### Initial Setup
 
@@ -124,6 +125,25 @@ with FreeCAD so the workbench commands can adopt it when they load.
 - Maintain test coverage
 - Run `just all` before submitting PRs (runs quality checks + unit tests)
 - Integration tests require FreeCAD (run via CI)
+
+### FreeCAD compatibility and security
+
+Changes must work across the supported FreeCAD versions, not just the version
+installed on the contributor's machine. The minimum supported version is
+FreeCAD 1.0.2; the GUI compatibility workflow tests that Qt5/PySide2 release
+and the latest stable Qt6/PySide6 release. It also runs a non-blocking weekly
+development canary. See [the GUI workflow](https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/.github/workflows/test-gui.yaml)
+for the current matrix and [installation requirements](../getting-started/installation.md)
+for user-facing security guidance.
+
+For version-dependent changes, verify the actual FreeCAD API and behavior on
+the affected releases, including failure handling and security implications.
+Add regression tests that exercise the real FreeCAD integration when practical;
+mocked tests alone cannot establish that geometry, GUI behavior, or security
+controls work in FreeCAD. Document any behavior that must differ by version.
+Run the applicable tests locally where available and describe versions tested,
+results, and any gaps in the pull request. CI can provide additional coverage;
+do not claim a platform or release was verified if its test did not run.
 
 ### Documentation
 
