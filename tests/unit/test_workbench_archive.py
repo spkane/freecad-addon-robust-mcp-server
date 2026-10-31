@@ -192,3 +192,18 @@ def test_builder_rejects_inconsistent_index_metadata(tmp_path: Path) -> None:
     manifest.write_text(source.read_text().replace("<version>", "<version>99", 1))
     with pytest.raises(ValueError, match=r"versions.*must match"):
         prepare_package(tmp_path / "package", root=tmp_path)
+
+
+def test_builder_rejects_inconsistent_index_dates(tmp_path: Path) -> None:
+    """The source manifest and workbench release dates must agree."""
+    source = ROOT / "package.xml"
+    tree = ET.parse(source)  # noqa: S314 - repository metadata
+    package_date = tree.findtext("pkg:date", namespaces=NS)
+    assert package_date
+    (tmp_path / "package.xml").write_text(
+        source.read_text().replace(
+            f"<date>{package_date}</date>", "<date>2099-01-01</date>", 1
+        )
+    )
+    with pytest.raises(ValueError, match=r"dates.*must match"):
+        prepare_package(tmp_path / "package", root=tmp_path)
