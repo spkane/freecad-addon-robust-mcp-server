@@ -9,10 +9,46 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from scripts.package_workbench import prepare_package
 from scripts.verify_workbench_archives import verify_archives
 
 ROOT = Path(__file__).resolve().parents[2]
 NS = {"pkg": "https://wiki.freecad.org/Package_Metadata"}
+
+
+def test_index_manifest_describes_source_package() -> None:
+    """The repository checkout itself has usable Addon Index metadata."""
+    manifest = ET.parse(ROOT / "package.xml")  # noqa: S314 - repository metadata
+    root = manifest.getroot()
+    assert root.findtext("pkg:version", namespaces=NS) == root.findtext(
+        "pkg:content/pkg:workbench/pkg:version", namespaces=NS
+    )
+    assert root.findtext("pkg:date", namespaces=NS) == root.findtext(
+        "pkg:content/pkg:workbench/pkg:date", namespaces=NS
+    )
+    assert root.findtext("pkg:freecadmin", namespaces=NS) == "1.0.2"
+    assert (
+        root.findtext("pkg:content/pkg:workbench/pkg:freecadmin", namespaces=NS)
+        == "1.0.2"
+    )
+    assert root.findtext("pkg:content/pkg:workbench/pkg:classname", namespaces=NS) == (
+        "FreecadRobustMCPBridgeWorkbench"
+    )
+    urls = {url.get("type"): url for url in root.findall("pkg:url", NS)}
+    assert urls["repository"].get("branch") == "main"
+    assert urls["readme"].text == (
+        "https://raw.githubusercontent.com/spkane/"
+        "freecad-addon-robust-mcp-server/main/README.md"
+    )
+    for entry in root.findall("pkg:license", NS):
+        assert (ROOT / entry.attrib["file"]).is_file()
+    assert {entry.text for entry in root.findall("pkg:license", NS)} == {
+        "Apache-2.0",
+        "MIT",
+        "CC-BY-SA-4.0",
+    }
+    icon = root.findtext("pkg:icon", namespaces=NS)
+    assert icon and (ROOT / icon).is_file()
 
 
 def test_release_archives_contain_installable_workbench(tmp_path: Path) -> None:
@@ -20,6 +56,10 @@ def test_release_archives_contain_installable_workbench(tmp_path: Path) -> None:
     tree = ET.parse(ROOT / "package.xml")  # noqa: S314 - repository metadata
     version = tree.findtext(".//pkg:workbench/pkg:version", namespaces=NS)
     assert version
+    assert tree.findtext("pkg:version", namespaces=NS) == version
+    assert tree.findtext("pkg:date", namespaces=NS) == tree.findtext(
+        ".//pkg:workbench/pkg:date", namespaces=NS
+    )
     subprocess.run(  # noqa: S603 - fixed interpreter and repository script
         [
             sys.executable,
@@ -56,6 +96,7 @@ def test_release_archives_contain_installable_workbench(tmp_path: Path) -> None:
             )
     manifest = ET.fromstring(manifest_bytes)  # noqa: S314 - archive built in this test
     assert manifest.findtext("pkg:version", namespaces=NS) == version
+    assert len(manifest.findall("pkg:version", NS)) == 1
     for license_entry in manifest.findall("pkg:license", NS):
         assert f"{prefix}/{license_entry.attrib['file']}" in files
     subdirectory = manifest.findtext(".//pkg:workbench/pkg:subdirectory", namespaces=NS)
@@ -142,3 +183,37 @@ def test_source_package_builder_creates_complete_installation(tmp_path: Path) ->
         assert (destination / name).read_bytes() == (ROOT / name).read_bytes()
     assert (destination / "NOTICE").read_bytes() == (ROOT / "NOTICE").read_bytes()
     assert (destination / "freecad/RobustMCPBridge/__init__.py").is_file()
+
+
+def test_builder_rejects_inconsistent_index_metadata(tmp_path: Path) -> None:
+    """Archive generation cannot hide an out-of-sync source manifest."""
+    source = ROOT / "package.xml"
+    manifest = tmp_path / "package.xml"
+    manifest.write_text(source.read_text().replace("<version>", "<version>99", 1))
+    with pytest.raises(ValueError, match="exactly one package version"):
+        prepare_package(tmp_path / "package", root=tmp_path)
+
+
+def test_builder_rejects_inconsistent_index_dates(tmp_path: Path) -> None:
+    """The source manifest and workbench release dates must agree."""
+    source = ROOT / "package.xml"
+    tree = ET.parse(source)  # noqa: S314 - repository metadata
+    package_date = tree.findtext("pkg:date", namespaces=NS)
+    assert package_date
+    (tmp_path / "package.xml").write_text(
+        source.read_text().replace(
+            f"<date>{package_date}</date>", "<date>2099-01-01</date>", 1
+        )
+    )
+    with pytest.raises(ValueError, match=r"dates.*must match"):
+        prepare_package(tmp_path / "package", root=tmp_path)
+
+
+def test_builder_rejects_duplicate_package_versions(tmp_path: Path) -> None:
+    """A matching first version must not conceal an extra version element."""
+    source = (ROOT / "package.xml").read_text()
+    (tmp_path / "package.xml").write_text(
+        source.replace("</version>", "</version><version>99.0.0</version>", 1)
+    )
+    with pytest.raises(ValueError, match="exactly one package version"):
+        prepare_package(tmp_path / "package", root=tmp_path)
