@@ -1383,6 +1383,37 @@ class TestSymmetricExtrudeCompatibility:
         assert code.count("_symmetric =") == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("termination", ["UpToFirst", "UpToFace", "UpToLast"])
+    async def test_pocket_midplane_branch_guards_symmetric_termination(
+        self,
+        register_tools: dict[str, Callable[..., Awaitable[dict[str, Any]]]],
+        mock_bridge: AsyncMock,
+        termination: str,
+    ) -> None:
+        """Generated pocket code must reject symmetric cuts Midplane ignores.
+
+        FreeCAD 1.0.x ignores ``Midplane`` for UpTo* termination modes, so the
+        guard must raise before the fallback assignment, inside the
+        Midplane branch only.
+        """
+        await register_tools["pocket_sketch"](
+            sketch_name="Sketch",
+            length=10.0,
+            symmetric=True,
+            type=termination,
+        )
+        code = self._generated(mock_bridge)
+
+        guard = f"if _symmetric and {termination!r} not in ("
+        assert guard in code
+        assert '"Length", "ThroughAll"):' in code
+        assert "the Midplane fallback is ignored" in code
+        # The refusal must precede the fallback assignment in the same branch.
+        assert code.index("Midplane fallback") < code.index(
+            "pocket.Midplane = _symmetric"
+        )
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("tool", "var"),
         [("revolution_sketch", "rev"), ("groove_sketch", "groove")],

@@ -10,6 +10,14 @@
   chain as `pad_sketch`, `revolution_sketch`, and `groove_sketch`, so it
   works on FreeCAD 1.0.x and 1.1+ without deprecation warnings.
 
+### Changed
+
+- **Symmetric pocket termination guard**: `pocket_sketch(symmetric=True)` with
+  a `type` whose termination FreeCAD 1.0.x ignores `Midplane` for (`UpToFirst`,
+  `UpToFace`, `UpToLast`) is rejected on the `Midplane` fallback path with a
+  clear error instead of silently producing a one-sided cut. FreeCAD 1.1+
+  (`SideType`) and `symmetric=False` keep working with every termination mode.
+
 ### Fixed
 
 - **Symmetric Part Design operations**: Pad, Revolution, and Groove now inspect

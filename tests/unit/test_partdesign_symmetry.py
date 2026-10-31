@@ -332,3 +332,79 @@ class TestSymmetricExtrudeExecution:
 
         assert freecad.ActiveDocument.committed is False
         assert freecad.ActiveDocument.aborted is True
+
+
+class TestPocketMidplaneTerminationGuard:
+    """Reject symmetric cuts the Midplane fallback cannot honour.
+
+    FreeCAD 1.0.x ``Pocket::buildExtrusion()`` ignores ``Midplane`` for the
+    UpTo* termination modes (only ``Reversed`` is consulted there), so
+    ``symmetric=True`` combined with ``type="UpToFirst"``/``"UpToFace"``/
+    ``"UpToLast"`` would silently produce a one-sided cut. The guard lives
+    only in the Midplane branch: FreeCAD 1.1+ ``SideType="Symmetric"`` mirrors
+    the prism for every termination mode, and ``symmetric=False`` never needs
+    Midplane at all.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("termination", ["UpToFirst", "UpToFace", "UpToLast"])
+    async def test_rejects_symmetric_midplane_with_unsupported_termination(
+        self,
+        termination: str,
+    ) -> None:
+        """Refuse and roll back before writing any symmetry property."""
+        freecad = _FakeFreeCAD(["Midplane"])
+        bridge = AsyncMock()
+        TestSymmetricExtrudeExecution._configure_executing_bridge(bridge, freecad)
+        tools = TestSymmetricExtrudeExecution._register_tools(bridge)
+
+        with pytest.raises(ValueError, match="is not supported with type="):
+            await tools["pocket_sketch"](
+                sketch_name="Sketch",
+                length=10.0,
+                type=termination,
+                symmetric=True,
+            )
+
+        feature = freecad.ActiveDocument.body.feature
+        assert feature is not None
+        assert feature.assignments == {}
+        assert freecad.ActiveDocument.committed is False
+        assert freecad.ActiveDocument.aborted is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("symmetry_properties", "termination", "symmetric", "expected"),
+        [
+            (["Midplane"], "ThroughAll", True, ("Midplane", True)),
+            (["Midplane"], "Length", True, ("Midplane", True)),
+            (["Midplane"], "UpToFirst", False, ("Midplane", False)),
+            (["SideType"], "UpToFirst", True, ("SideType", "Symmetric")),
+        ],
+    )
+    async def test_accepts_supported_termination_combinations(
+        self,
+        symmetry_properties: list[str],
+        termination: str,
+        symmetric: bool,
+        expected: tuple[str, Any],
+    ) -> None:
+        """Let every combination FreeCAD actually honours through."""
+        freecad = _FakeFreeCAD(symmetry_properties)
+        bridge = AsyncMock()
+        TestSymmetricExtrudeExecution._configure_executing_bridge(bridge, freecad)
+        tools = TestSymmetricExtrudeExecution._register_tools(bridge)
+
+        result = await tools["pocket_sketch"](
+            sketch_name="Sketch",
+            length=10.0,
+            type=termination,
+            symmetric=symmetric,
+        )
+
+        assert result["type_id"] == "PartDesign::Pocket"
+        feature = freecad.ActiveDocument.body.feature
+        assert feature is not None
+        assert feature.assignments == {expected[0]: expected[1]}
+        assert freecad.ActiveDocument.committed is True
+        assert freecad.ActiveDocument.aborted is False

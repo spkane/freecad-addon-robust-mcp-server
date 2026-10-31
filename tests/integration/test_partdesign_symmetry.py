@@ -179,3 +179,61 @@ _result_ = True
 """
         )
         await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_live_pocket_symmetric_through_all() -> None:
+    """Symmetric ThroughAll cuts must extend to both sides of the sketch plane.
+
+    FreeCAD 1.1+ honours ``SideType="Symmetric"`` for every termination mode,
+    including ``ThroughAll`` (the prism is mirrored around the sketch plane),
+    while FreeCAD 1.0.x ignores the ``Midplane`` fallback there. On the
+    supported branch the cut must reach both sides of z=0.
+    """
+    doc_name = f"McpSymmetry_pocket_through_{uuid4().hex}"
+    bridge = XmlRpcBridge(**integration_credentials())
+    await bridge.connect()
+
+    try:
+        setup = await bridge.execute_python(_setup_code(doc_name, True))
+        assert setup.success, setup.error_traceback or setup.stderr
+
+        tools = _register_tools(bridge)
+        result = await tools["pocket_sketch"](
+            sketch_name="Sketch",
+            doc_name=doc_name,
+            length=10.0,
+            type="ThroughAll",
+            symmetric=True,
+        )
+        assert result["type_id"] == "PartDesign::Pocket"
+        assert result["volume_removed"] > 0.0
+
+        inspection = await bridge.execute_python(
+            f"""
+doc = FreeCAD.getDocument({doc_name!r})
+feature = doc.getObject({result["name"]!r})
+if "SideType" not in feature.PropertiesList:
+    raise AssertionError("FreeCAD without SideType cannot honour this combination")
+box = feature.AddSubShape.BoundBox
+_result_ = {{
+    "side_type": str(feature.SideType),
+    "shape_valid": bool(feature.Shape.isValid()),
+    "z_min": float(box.ZMin),
+    "z_max": float(box.ZMax),
+}}
+"""
+        )
+        assert inspection.success, inspection.error_traceback or inspection.stderr
+        assert inspection.result["side_type"] == "Symmetric"
+        assert inspection.result["shape_valid"] is True
+        assert inspection.result["z_min"] < 0.0 < inspection.result["z_max"]
+    finally:
+        await bridge.execute_python(
+            f"""
+if {doc_name!r} in FreeCAD.listDocuments():
+    FreeCAD.closeDocument({doc_name!r})
+_result_ = True
+"""
+        )
+        await bridge.disconnect()
