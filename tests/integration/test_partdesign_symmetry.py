@@ -185,10 +185,10 @@ _result_ = True
 async def test_live_pocket_symmetric_through_all() -> None:
     """Symmetric ThroughAll cuts must extend to both sides of the sketch plane.
 
-    FreeCAD 1.1+ honours ``SideType="Symmetric"`` for every termination mode,
-    including ``ThroughAll`` (the prism is mirrored around the sketch plane),
-    while FreeCAD 1.0.x ignores the ``Midplane`` fallback there. On the
-    supported branch the cut must reach both sides of z=0.
+    FreeCAD 1.1+ honours ``SideType="Symmetric"``, and FreeCAD 1.0.x applies
+    ``Midplane`` for ``ThroughAll`` (unlike the UpTo* modes), so both property
+    branches are supported: the mirrored prism must reach both sides of z=0
+    whichever property the running release selects.
     """
     doc_name = f"McpSymmetry_pocket_through_{uuid4().hex}"
     bridge = XmlRpcBridge(**integration_credentials())
@@ -213,11 +213,22 @@ async def test_live_pocket_symmetric_through_all() -> None:
             f"""
 doc = FreeCAD.getDocument({doc_name!r})
 feature = doc.getObject({result["name"]!r})
-if "SideType" not in feature.PropertiesList:
-    raise AssertionError("FreeCAD without SideType cannot honour this combination")
+properties = feature.PropertiesList
+if "SideType" in properties:
+    property_name = "SideType"
+    is_symmetric = str(feature.SideType) == "Symmetric"
+elif "Midplane" in properties:
+    property_name = "Midplane"
+    is_symmetric = bool(feature.Midplane)
+elif "Symmetric" in properties:
+    property_name = "Symmetric"
+    is_symmetric = bool(feature.Symmetric)
+else:
+    raise AssertionError("Feature exposes no supported symmetric property")
 box = feature.AddSubShape.BoundBox
 _result_ = {{
-    "side_type": str(feature.SideType),
+    "property_name": property_name,
+    "is_symmetric": is_symmetric,
     "shape_valid": bool(feature.Shape.isValid()),
     "z_min": float(box.ZMin),
     "z_max": float(box.ZMax),
@@ -225,7 +236,7 @@ _result_ = {{
 """
         )
         assert inspection.success, inspection.error_traceback or inspection.stderr
-        assert inspection.result["side_type"] == "Symmetric"
+        assert inspection.result["is_symmetric"] is True
         assert inspection.result["shape_valid"] is True
         assert inspection.result["z_min"] < 0.0 < inspection.result["z_max"]
     finally:
