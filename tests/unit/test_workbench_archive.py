@@ -190,7 +190,7 @@ def test_builder_rejects_inconsistent_index_metadata(tmp_path: Path) -> None:
     source = ROOT / "package.xml"
     manifest = tmp_path / "package.xml"
     manifest.write_text(source.read_text().replace("<version>", "<version>99", 1))
-    with pytest.raises(ValueError, match=r"versions.*must match"):
+    with pytest.raises(ValueError, match="exactly one package version"):
         prepare_package(tmp_path / "package", root=tmp_path)
 
 
@@ -206,4 +206,14 @@ def test_builder_rejects_inconsistent_index_dates(tmp_path: Path) -> None:
         )
     )
     with pytest.raises(ValueError, match=r"dates.*must match"):
+        prepare_package(tmp_path / "package", root=tmp_path)
+
+
+def test_builder_rejects_duplicate_package_versions(tmp_path: Path) -> None:
+    """A matching first version must not conceal an extra version element."""
+    source = (ROOT / "package.xml").read_text()
+    (tmp_path / "package.xml").write_text(
+        source.replace("</version>", "</version><version>99.0.0</version>", 1)
+    )
+    with pytest.raises(ValueError, match="exactly one package version"):
         prepare_package(tmp_path / "package", root=tmp_path)

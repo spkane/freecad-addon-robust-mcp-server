@@ -39,9 +39,11 @@ def prepare_package(destination: Path, root: Path = ROOT) -> str:
     version = workbench.findtext("pkg:version", namespaces=namespace)
     if not version:
         raise ValueError("package.xml has no workbench version")
-    package_version = package.findtext("pkg:version", namespaces=namespace)
-    if package_version != version:
-        raise ValueError("Package and workbench versions in package.xml must match")
+    package_versions = package.findall("pkg:version", namespace)
+    if len(package_versions) != 1 or package_versions[0].text != version:
+        raise ValueError(
+            "package.xml must contain exactly one package version matching the workbench"
+        )
     package_date = package.findtext("pkg:date", namespaces=namespace)
     if not package_date or package_date != workbench.findtext(
         "pkg:date", namespaces=namespace
