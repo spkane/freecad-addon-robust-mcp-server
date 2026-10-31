@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **Symmetric pocket support**: `pocket_sketch` now accepts a `symmetric`
+  parameter that distributes the cut on both sides of the sketch plane. It
+  uses the same `SideType` → `Midplane` → `Symmetric` property fallback
+  chain as `pad_sketch`, `revolution_sketch`, and `groove_sketch`, so it
+  works on FreeCAD 1.0.x and 1.1+ without deprecation warnings.
+
 ### Fixed
 
 - **Symmetric Part Design operations**: Pad, Revolution, and Groove now inspect

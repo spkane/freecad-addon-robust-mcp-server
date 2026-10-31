@@ -965,22 +965,22 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                         {
                             "name": "pad_sketch",
                             "description": "Extrude sketch (additive)",
-                            "key_params": ["sketch_name", "length"],
+                            "key_params": ["sketch_name", "length", "symmetric"],
                         },
                         {
                             "name": "pocket_sketch",
                             "description": "Cut using sketch (subtractive)",
-                            "key_params": ["sketch_name", "length"],
+                            "key_params": ["sketch_name", "length", "symmetric"],
                         },
                         {
                             "name": "revolution_sketch",
                             "description": "Revolve sketch around axis",
-                            "key_params": ["sketch_name", "axis", "angle"],
+                            "key_params": ["sketch_name", "axis", "angle", "symmetric"],
                         },
                         {
                             "name": "groove_sketch",
                             "description": "Cut by revolving sketch (subtractive revolve)",
-                            "key_params": ["sketch_name", "axis", "angle"],
+                            "key_params": ["sketch_name", "axis", "angle", "symmetric"],
                         },
                         {
                             "name": "loft_sketches",

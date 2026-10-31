@@ -84,6 +84,7 @@ _result_ = {{"document": doc.Name, "sketch": sketch.Name}}
     ("tool_name", "feature_type", "operation_argument", "include_base_solid"),
     [
         ("pad_sketch", "PartDesign::Pad", {"length": 10.0}, False),
+        ("pocket_sketch", "PartDesign::Pocket", {"length": 10.0}, True),
         (
             "revolution_sketch",
             "PartDesign::Revolution",
@@ -121,6 +122,11 @@ async def test_live_symmetric_property_selection(
         )
         assert result["type_id"] == feature_type
 
+        # Pocket cuts into the base solid, so its Shape keeps the base
+        # bounding box; measure the cut tool (AddSubShape) instead.
+        shape_expression = (
+            "feature.AddSubShape" if tool_name == "pocket_sketch" else "feature.Shape"
+        )
         inspection = await bridge.execute_python(
             f"""
 doc = FreeCAD.getDocument({doc_name!r})
@@ -137,12 +143,13 @@ elif "Symmetric" in properties:
     value = bool(feature.Symmetric)
 else:
     raise AssertionError("Feature exposes no supported symmetric property")
+shape = {shape_expression}
 _result_ = {{
     "property_name": property_name,
     "value": value,
     "shape_valid": bool(feature.Shape and feature.Shape.isValid()),
-    "z_min": float(feature.Shape.BoundBox.ZMin),
-    "z_max": float(feature.Shape.BoundBox.ZMax),
+    "z_min": float(shape.BoundBox.ZMin),
+    "z_max": float(shape.BoundBox.ZMax),
 }}
 """
         )
@@ -156,6 +163,11 @@ _result_ = {{
         assert inspection.result["shape_valid"] is True
         if tool_name == "pad_sketch":
             expected_z_min, expected_z_max = (-5.0, 5.0) if symmetric else (0.0, 10.0)
+            assert inspection.result["z_min"] == pytest.approx(expected_z_min)
+            assert inspection.result["z_max"] == pytest.approx(expected_z_max)
+        elif tool_name == "pocket_sketch":
+            # Pocket cuts opposite the sketch normal (-Z) by default.
+            expected_z_min, expected_z_max = (-5.0, 5.0) if symmetric else (-10.0, 0.0)
             assert inspection.result["z_min"] == pytest.approx(expected_z_min)
             assert inspection.result["z_max"] == pytest.approx(expected_z_max)
     finally:
