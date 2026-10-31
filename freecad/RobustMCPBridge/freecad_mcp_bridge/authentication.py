@@ -78,7 +78,8 @@ def authenticator_from_environment() -> BridgeAuthenticator:
             raise PairingRequiredError(
                 "MCP Bridge is not paired yet. On this computer, open a terminal "
                 "and run `freecad-mcp --pair-bridge` using the installed MCP "
-                "server. Then return to FreeCAD and select Start MCP Bridge. "
+                "server. Then select Start MCP Bridge in FreeCAD, or restart "
+                "FreeCAD if running headless. "
                 "If the command is not on your PATH, use the full path to your "
                 "installed freecad-mcp executable. Installation and pairing: "
                 "https://spkane.github.io/freecad-addon-robust-mcp-server/"

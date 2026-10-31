@@ -179,6 +179,7 @@ def test_missing_pairing_explains_how_to_start_bridge(
         auth_module.authenticator_from_environment()
     assert "freecad-mcp --pair-bridge" in str(error.value)
     assert "Start MCP Bridge" in str(error.value)
+    assert "restart FreeCAD if running headless" in str(error.value)
 
 
 @pytest.mark.parametrize(
