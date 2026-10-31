@@ -248,3 +248,70 @@ _result_ = True
 """
         )
         await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_live_pocket_symmetric_up_to_first() -> None:
+    """Legacy FreeCAD must reject this mode; modern FreeCAD cuts both sides."""
+    doc_name = f"McpSymmetry_pocket_first_{uuid4().hex}"
+    probe_name = f"{doc_name}_probe"
+    bridge = XmlRpcBridge(**integration_credentials())
+    await bridge.connect()
+    try:
+        probe = await bridge.execute_python(
+            f"""
+doc = FreeCAD.newDocument({probe_name!r})
+try:
+    feature = doc.addObject("PartDesign::Pocket", "Probe")
+    _result_ = {{"side_type": "SideType" in feature.PropertiesList}}
+finally:
+    FreeCAD.closeDocument({probe_name!r})
+"""
+        )
+        assert probe.success, probe.error_traceback or probe.stderr
+        setup = await bridge.execute_python(_setup_code(doc_name, True))
+        assert setup.success, setup.error_traceback or setup.stderr
+        tools = _register_tools(bridge)
+        arguments = {
+            "sketch_name": "Sketch",
+            "doc_name": doc_name,
+            "length": 10.0,
+            "type": "UpToFirst",
+            "symmetric": True,
+        }
+        if not probe.result["side_type"]:
+            with pytest.raises(ValueError, match="Midplane fallback"):
+                await tools["pocket_sketch"](**arguments)
+            inspection = await bridge.execute_python(
+                f"""
+doc = FreeCAD.getDocument({doc_name!r})
+_result_ = {{"pockets": [obj.Name for obj in doc.Objects
+                        if obj.TypeId == "PartDesign::Pocket"]}}
+"""
+            )
+            assert inspection.success, inspection.error_traceback or inspection.stderr
+            assert inspection.result["pockets"] == []
+        else:
+            result = await tools["pocket_sketch"](**arguments)
+            inspection = await bridge.execute_python(
+                f"""
+feature = FreeCAD.getDocument({doc_name!r}).getObject({result["name"]!r})
+box = feature.AddSubShape.BoundBox
+_result_ = {{"valid": bool(feature.Shape.isValid()),
+            "z_min": float(box.ZMin), "z_max": float(box.ZMax)}}
+"""
+            )
+            assert inspection.success, inspection.error_traceback or inspection.stderr
+            assert inspection.result["valid"] is True
+            assert result["volume_removed"] > 0.0
+            assert inspection.result["z_min"] < 0.0 < inspection.result["z_max"]
+    finally:
+        await bridge.execute_python(
+            f"""
+for name in ({doc_name!r}, {probe_name!r}):
+    if name in FreeCAD.listDocuments():
+        FreeCAD.closeDocument(name)
+_result_ = True
+"""
+        )
+        await bridge.disconnect()

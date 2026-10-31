@@ -361,9 +361,9 @@ _result_ = {{
             sketch_name: Name of the sketch to pocket.
             length: Pocket depth.
             type: Pocket type: "Length", "ThroughAll", "UpToFirst", "UpToFace".
-                On FreeCAD versions without the SideType property, combining
-                "UpToFirst"/"UpToFace" with symmetric=True is rejected because
-                the Midplane fallback is ignored for these termination modes.
+                When the Midplane fallback is used, symmetric pockets support
+                only "Length" and "ThroughAll"; other termination modes are
+                rejected because FreeCAD ignores Midplane for them.
             name: Pocket feature name. Auto-generated if None.
             doc_name: Document containing the sketch. Uses active document if None.
             reversed: Flip the cut direction. Use True when the default
