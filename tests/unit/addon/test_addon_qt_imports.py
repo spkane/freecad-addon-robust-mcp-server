@@ -611,14 +611,13 @@ def test_standalone_startup_only_traces_unexpected_errors(
     monkeypatch: pytest.MonkeyPatch, missing_pairing: bool
 ) -> None:
     """Standalone startup keeps expected pairing errors readable."""
-    import os
-    import traceback
-
-    class PairingRequiredError(RuntimeError):
-        pass
-
+    monkeypatch.syspath_prepend(str(STARTUP_BRIDGE_PATH.parent))
+    for module_name in ("authentication", "challenges"):
+        monkeypatch.setitem(sys.modules, module_name, None)
+        monkeypatch.delitem(sys.modules, module_name)
+    authentication = importlib.import_module("authentication")
     error = (
-        PairingRequiredError("pair first")
+        authentication.PairingRequiredError("pair first")
         if missing_pairing
         else RuntimeError("unexpected")
     )
@@ -631,20 +630,14 @@ def test_standalone_startup_only_traces_unexpected_errors(
     monkeypatch.setitem(sys.modules, "bridge_utils", bridge)
     monkeypatch.setitem(sys.modules, "server", server)
     freecad = MagicMock()
-    tree = ast.parse(STARTUP_BRIDGE_PATH.read_text())
-    function = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_start_bridge"
-    )
-    module = ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[]))
-    namespace: dict[str, Any] = {
-        "FreeCAD": freecad,
-        "os": os,
-        "traceback": traceback,
-        "PairingRequiredError": PairingRequiredError,
-    }
-    exec(compile(module, str(STARTUP_BRIDGE_PATH), "exec"), namespace)  # noqa: S102
+    freecad.GuiUp = False
+    monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
+    qt_compat = types.ModuleType("qt_compat")
+    qt_compat.load_qt_core_widgets = lambda: (None, None)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "qt_compat", qt_compat)
+    namespace = runpy.run_path(str(STARTUP_BRIDGE_PATH), run_name="__main__")
+    assert namespace["PairingRequiredError"] is authentication.PairingRequiredError
+    freecad.Console.PrintError.reset_mock()
     namespace["_start_bridge"]()
     errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
     assert str(error) in errors
