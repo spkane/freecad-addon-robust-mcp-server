@@ -606,6 +606,51 @@ class TestInitGuiQtFallback:
         assert any("Neither PySide6 nor PySide2" in msg for msg in warnings)
 
 
+@pytest.mark.parametrize("missing_pairing", [True, False])
+def test_standalone_startup_only_traces_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch, missing_pairing: bool
+) -> None:
+    """Standalone startup keeps expected pairing errors readable."""
+    import os
+    import traceback
+
+    class PairingRequiredError(RuntimeError):
+        pass
+
+    error = (
+        PairingRequiredError("pair first")
+        if missing_pairing
+        else RuntimeError("unexpected")
+    )
+    bridge = types.ModuleType("bridge_utils")
+    bridge.get_running_plugin = lambda: None  # type: ignore[attr-defined]
+    server = types.ModuleType("server")
+    plugin = MagicMock()
+    plugin.start.side_effect = error
+    server.FreecadMCPPlugin = MagicMock(return_value=plugin)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "bridge_utils", bridge)
+    monkeypatch.setitem(sys.modules, "server", server)
+    freecad = MagicMock()
+    tree = ast.parse(STARTUP_BRIDGE_PATH.read_text())
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_start_bridge"
+    )
+    module = ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[]))
+    namespace: dict[str, Any] = {
+        "FreeCAD": freecad,
+        "os": os,
+        "traceback": traceback,
+        "PairingRequiredError": PairingRequiredError,
+    }
+    exec(compile(module, str(STARTUP_BRIDGE_PATH), "exec"), namespace)  # noqa: S102
+    namespace["_start_bridge"]()
+    errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
+    assert str(error) in errors
+    assert ("Traceback" in errors) is not missing_pairing
+
+
 def test_startup_script_prefers_pyside6_and_fails_closed() -> None:
     """The integration script should prefer Qt6 and fail closed without Qt."""
     startup_code = STARTUP_BRIDGE_PATH.read_text()
