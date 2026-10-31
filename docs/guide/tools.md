@@ -191,6 +191,15 @@ The Part workbench provides direct shape creation and manipulation tools using O
 | `partdesign_create_subtractive_pipe` | Subtractive pipe/sweep       |
 | `partdesign_create_subtractive_loft` | Subtractive loft             |
 
+!!! note "Symmetric Operations"
+    `pad_sketch`, `pocket_sketch`, `revolution_sketch`, and `groove_sketch`
+    accept `symmetric=True` to distribute the operation on both sides of the
+    sketch plane. The tools use FreeCAD's `SideType` property when available
+    (1.1+) and fall back to `Midplane`/`Symmetric` on older releases.
+    When `pocket_sketch` uses the `Midplane` fallback, symmetric pockets only
+    support `Length` and `ThroughAll`. Other termination modes are rejected
+    because FreeCAD would otherwise make a one-sided cut.
+
 ### Dress-up Features
 
 | Tool                          | Description               |

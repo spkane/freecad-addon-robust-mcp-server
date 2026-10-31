@@ -222,6 +222,8 @@ The MCP tools handle this automatically.
 - **Modifiers**: fillet_edges, chamfer_edges, draft_feature, thickness_feature
 - **Patterns**: linear_pattern, polar_pattern, mirrored_feature
 - **Datums**: create_datum_plane, create_datum_line, create_datum_point
+- **Symmetric**: pad_sketch, pocket_sketch, revolution_sketch, and groove_sketch accept symmetric=True to distribute the operation on both sides of the sketch plane (uses SideType on FreeCAD 1.1+, Midplane fallback on older releases)
+- When pocket_sketch uses the Midplane fallback, symmetric=True supports only Length and ThroughAll; other termination modes are rejected rather than producing a one-sided cut.
 
 ## Sketch Constraints
 Use constraints to fully define sketches:

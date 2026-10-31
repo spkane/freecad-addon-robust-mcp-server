@@ -353,6 +353,7 @@ _result_ = {{
         name: str | None = None,
         doc_name: str | None = None,
         reversed: bool = False,
+        symmetric: bool = False,
     ) -> dict[str, Any]:
         """Create a Pocket (cut extrusion) from a sketch.
 
@@ -360,12 +361,18 @@ _result_ = {{
             sketch_name: Name of the sketch to pocket.
             length: Pocket depth.
             type: Pocket type: "Length", "ThroughAll", "UpToFirst", "UpToFace".
+                When the Midplane fallback is used, symmetric pockets support
+                only "Length" and "ThroughAll"; other termination modes are
+                rejected because FreeCAD ignores Midplane for them.
             name: Pocket feature name. Auto-generated if None.
             doc_name: Document containing the sketch. Uses active document if None.
             reversed: Flip the cut direction. Use True when the default
                 direction points away from the material and removes nothing.
-                Defaults to False. Kept last so existing positional calls that
-                pass name before this option keep working.
+                Defaults to False.
+            symmetric: Distribute the cut equally on both sides of the sketch
+                plane. Uses the SideType property when available, falling back
+                to Midplane or Symmetric on older FreeCAD versions. Defaults
+                to False. Kept last so existing positional calls keep working.
 
         Returns:
             Dictionary with created pocket information:
@@ -411,6 +418,24 @@ try:
     pocket.Profile = sketch
     pocket.Length = {length}
     pocket.Type = {type!r}
+    _symmetric = {symmetric}
+    if "SideType" in pocket.PropertiesList:
+        pocket.SideType = "Symmetric" if _symmetric else "One side"
+    elif "Midplane" in pocket.PropertiesList:
+        if _symmetric and {type!r} not in ("Length", "ThroughAll"):
+            raise ValueError(
+                "symmetric=True is not supported with type={type!r} on this "
+                "FreeCAD version: the Midplane fallback is ignored for this "
+                "termination mode, so the cut would silently be one-sided. "
+                "Use type='Length' or type='ThroughAll'."
+            )
+        pocket.Midplane = _symmetric
+    elif "Symmetric" in pocket.PropertiesList:
+        pocket.Symmetric = _symmetric
+    else:
+        raise AttributeError(
+            "PartDesign::Pocket exposes no supported symmetric extrusion property"
+        )
     pocket.Reversed = {reversed}
 
     doc.recompute()

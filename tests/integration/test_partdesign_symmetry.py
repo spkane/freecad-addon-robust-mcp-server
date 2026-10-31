@@ -84,6 +84,7 @@ _result_ = {{"document": doc.Name, "sketch": sketch.Name}}
     ("tool_name", "feature_type", "operation_argument", "include_base_solid"),
     [
         ("pad_sketch", "PartDesign::Pad", {"length": 10.0}, False),
+        ("pocket_sketch", "PartDesign::Pocket", {"length": 10.0}, True),
         (
             "revolution_sketch",
             "PartDesign::Revolution",
@@ -121,6 +122,11 @@ async def test_live_symmetric_property_selection(
         )
         assert result["type_id"] == feature_type
 
+        # Pocket cuts into the base solid, so its Shape keeps the base
+        # bounding box; measure the cut tool (AddSubShape) instead.
+        shape_expression = (
+            "feature.AddSubShape" if tool_name == "pocket_sketch" else "feature.Shape"
+        )
         inspection = await bridge.execute_python(
             f"""
 doc = FreeCAD.getDocument({doc_name!r})
@@ -137,12 +143,13 @@ elif "Symmetric" in properties:
     value = bool(feature.Symmetric)
 else:
     raise AssertionError("Feature exposes no supported symmetric property")
+shape = {shape_expression}
 _result_ = {{
     "property_name": property_name,
     "value": value,
     "shape_valid": bool(feature.Shape and feature.Shape.isValid()),
-    "z_min": float(feature.Shape.BoundBox.ZMin),
-    "z_max": float(feature.Shape.BoundBox.ZMax),
+    "z_min": float(shape.BoundBox.ZMin),
+    "z_max": float(shape.BoundBox.ZMax),
 }}
 """
         )
@@ -158,11 +165,152 @@ _result_ = {{
             expected_z_min, expected_z_max = (-5.0, 5.0) if symmetric else (0.0, 10.0)
             assert inspection.result["z_min"] == pytest.approx(expected_z_min)
             assert inspection.result["z_max"] == pytest.approx(expected_z_max)
+        elif tool_name == "pocket_sketch":
+            # Pocket cuts opposite the sketch normal (-Z) by default.
+            expected_z_min, expected_z_max = (-5.0, 5.0) if symmetric else (-10.0, 0.0)
+            assert inspection.result["z_min"] == pytest.approx(expected_z_min)
+            assert inspection.result["z_max"] == pytest.approx(expected_z_max)
     finally:
         await bridge.execute_python(
             f"""
 if {doc_name!r} in FreeCAD.listDocuments():
     FreeCAD.closeDocument({doc_name!r})
+_result_ = True
+"""
+        )
+        await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_live_pocket_symmetric_through_all() -> None:
+    """Symmetric ThroughAll cuts must extend to both sides of the sketch plane.
+
+    FreeCAD 1.1+ honours ``SideType="Symmetric"``, and FreeCAD 1.0.x applies
+    ``Midplane`` for ``ThroughAll`` (unlike the UpTo* modes), so both property
+    branches are supported: the mirrored prism must reach both sides of z=0
+    whichever property the running release selects.
+    """
+    doc_name = f"McpSymmetry_pocket_through_{uuid4().hex}"
+    bridge = XmlRpcBridge(**integration_credentials())
+    await bridge.connect()
+
+    try:
+        setup = await bridge.execute_python(_setup_code(doc_name, True))
+        assert setup.success, setup.error_traceback or setup.stderr
+
+        tools = _register_tools(bridge)
+        result = await tools["pocket_sketch"](
+            sketch_name="Sketch",
+            doc_name=doc_name,
+            length=10.0,
+            type="ThroughAll",
+            symmetric=True,
+        )
+        assert result["type_id"] == "PartDesign::Pocket"
+        assert result["volume_removed"] > 0.0
+
+        inspection = await bridge.execute_python(
+            f"""
+doc = FreeCAD.getDocument({doc_name!r})
+feature = doc.getObject({result["name"]!r})
+properties = feature.PropertiesList
+if "SideType" in properties:
+    property_name = "SideType"
+    is_symmetric = str(feature.SideType) == "Symmetric"
+elif "Midplane" in properties:
+    property_name = "Midplane"
+    is_symmetric = bool(feature.Midplane)
+elif "Symmetric" in properties:
+    property_name = "Symmetric"
+    is_symmetric = bool(feature.Symmetric)
+else:
+    raise AssertionError("Feature exposes no supported symmetric property")
+box = feature.AddSubShape.BoundBox
+_result_ = {{
+    "property_name": property_name,
+    "is_symmetric": is_symmetric,
+    "shape_valid": bool(feature.Shape.isValid()),
+    "z_min": float(box.ZMin),
+    "z_max": float(box.ZMax),
+}}
+"""
+        )
+        assert inspection.success, inspection.error_traceback or inspection.stderr
+        assert inspection.result["is_symmetric"] is True
+        assert inspection.result["shape_valid"] is True
+        assert inspection.result["z_min"] < 0.0 < inspection.result["z_max"]
+    finally:
+        await bridge.execute_python(
+            f"""
+if {doc_name!r} in FreeCAD.listDocuments():
+    FreeCAD.closeDocument({doc_name!r})
+_result_ = True
+"""
+        )
+        await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_live_pocket_symmetric_up_to_first() -> None:
+    """Legacy FreeCAD must reject this mode; modern FreeCAD cuts both sides."""
+    doc_name = f"McpSymmetry_pocket_first_{uuid4().hex}"
+    probe_name = f"{doc_name}_probe"
+    bridge = XmlRpcBridge(**integration_credentials())
+    await bridge.connect()
+    try:
+        probe = await bridge.execute_python(
+            f"""
+doc = FreeCAD.newDocument({probe_name!r})
+try:
+    feature = doc.addObject("PartDesign::Pocket", "Probe")
+    _result_ = {{"side_type": "SideType" in feature.PropertiesList}}
+finally:
+    FreeCAD.closeDocument({probe_name!r})
+"""
+        )
+        assert probe.success, probe.error_traceback or probe.stderr
+        setup = await bridge.execute_python(_setup_code(doc_name, True))
+        assert setup.success, setup.error_traceback or setup.stderr
+        tools = _register_tools(bridge)
+        arguments = {
+            "sketch_name": "Sketch",
+            "doc_name": doc_name,
+            "length": 10.0,
+            "type": "UpToFirst",
+            "symmetric": True,
+        }
+        if not probe.result["side_type"]:
+            with pytest.raises(ValueError, match="Midplane fallback"):
+                await tools["pocket_sketch"](**arguments)
+            inspection = await bridge.execute_python(
+                f"""
+doc = FreeCAD.getDocument({doc_name!r})
+_result_ = {{"pockets": [obj.Name for obj in doc.Objects
+                        if obj.TypeId == "PartDesign::Pocket"]}}
+"""
+            )
+            assert inspection.success, inspection.error_traceback or inspection.stderr
+            assert inspection.result["pockets"] == []
+        else:
+            result = await tools["pocket_sketch"](**arguments)
+            inspection = await bridge.execute_python(
+                f"""
+feature = FreeCAD.getDocument({doc_name!r}).getObject({result["name"]!r})
+box = feature.AddSubShape.BoundBox
+_result_ = {{"valid": bool(feature.Shape.isValid()),
+            "z_min": float(box.ZMin), "z_max": float(box.ZMax)}}
+"""
+            )
+            assert inspection.success, inspection.error_traceback or inspection.stderr
+            assert inspection.result["valid"] is True
+            assert result["volume_removed"] > 0.0
+            assert inspection.result["z_min"] < 0.0 < inspection.result["z_max"]
+    finally:
+        await bridge.execute_python(
+            f"""
+for name in ({doc_name!r}, {probe_name!r}):
+    if name in FreeCAD.listDocuments():
+        FreeCAD.closeDocument(name)
 _result_ = True
 """
         )

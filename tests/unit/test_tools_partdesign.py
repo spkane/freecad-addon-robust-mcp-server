@@ -1288,10 +1288,11 @@ class TestPartDesignTools:
 class TestSymmetricExtrudeCompatibility:
     """Symmetric extrusion must target the property the running FreeCAD has.
 
-    PartDesign::Pad has never had a `Symmetric` property. FreeCAD exposes
-    `Midplane`, and 1.1+ supersedes that with `SideType`, emitting a deprecation
-    warning when `Midplane` is set. Generated code therefore probes for the
-    property rather than assuming one, so a single build works across versions.
+    PartDesign::Pad and PartDesign::Pocket have never had a `Symmetric`
+    property. FreeCAD exposes `Midplane`, and 1.1+ supersedes that with
+    `SideType`, emitting a deprecation warning when `Midplane` is set.
+    Generated code therefore probes for the property rather than assuming
+    one, so a single build works across versions.
     """
 
     @pytest.fixture
@@ -1356,26 +1357,61 @@ class TestSymmetricExtrudeCompatibility:
         return code
 
     @pytest.mark.asyncio
-    async def test_pad_prefers_sidetype_and_falls_back(
+    @pytest.mark.parametrize(
+        ("tool", "var"),
+        [("pad_sketch", "pad"), ("pocket_sketch", "pocket")],
+    )
+    async def test_pad_and_pocket_prefer_sidetype_and_fall_back(
         self,
         register_tools: dict[str, Callable[..., Awaitable[dict[str, Any]]]],
         mock_bridge: AsyncMock,
+        tool: str,
+        var: str,
     ) -> None:
-        await register_tools["pad_sketch"](
-            sketch_name="Sketch", length=10.0, symmetric=True
-        )
+        await register_tools[tool](sketch_name="Sketch", length=10.0, symmetric=True)
         code = self._generated(mock_bridge)
 
-        assert '"SideType" in pad.PropertiesList' in code
-        assert 'pad.SideType = "Symmetric" if _symmetric else "One side"' in code
-        assert 'elif "Midplane" in pad.PropertiesList' in code
-        assert "pad.Midplane = _symmetric" in code
-        assert 'elif "Symmetric" in pad.PropertiesList' in code
-        assert "pad.Symmetric = _symmetric" in code
+        assert f'"SideType" in {var}.PropertiesList' in code
+        assert f'{var}.SideType = "Symmetric" if _symmetric else "One side"' in code
+        assert f'elif "Midplane" in {var}.PropertiesList' in code
+        assert f"{var}.Midplane = _symmetric" in code
+        assert f'elif "Symmetric" in {var}.PropertiesList' in code
+        assert f"{var}.Symmetric = _symmetric" in code
         # SideType must be tried first, or 1.1 emits a deprecation warning.
         assert code.index('"SideType" in') < code.index('"Midplane" in')
         assert code.index('"Midplane" in') < code.index('"Symmetric" in')
         assert code.count("_symmetric =") == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("termination", ["UpToFirst", "UpToFace", "UpToLast"])
+    async def test_pocket_midplane_branch_guards_symmetric_termination(
+        self,
+        register_tools: dict[str, Callable[..., Awaitable[dict[str, Any]]]],
+        mock_bridge: AsyncMock,
+        termination: str,
+    ) -> None:
+        """Generated pocket code must reject symmetric cuts Midplane ignores.
+
+        FreeCAD 1.0.x ignores ``Midplane`` for UpTo* termination modes, so the
+        guard must raise before the fallback assignment, inside the
+        Midplane branch only.
+        """
+        await register_tools["pocket_sketch"](
+            sketch_name="Sketch",
+            length=10.0,
+            symmetric=True,
+            type=termination,
+        )
+        code = self._generated(mock_bridge)
+
+        guard = f"if _symmetric and {termination!r} not in ("
+        assert guard in code
+        assert '"Length", "ThroughAll"):' in code
+        assert "the Midplane fallback is ignored" in code
+        # The refusal must precede the fallback assignment in the same branch.
+        assert code.index("Midplane fallback") < code.index(
+            "pocket.Midplane = _symmetric"
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
