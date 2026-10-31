@@ -424,7 +424,7 @@ try:
     elif "Midplane" in pocket.PropertiesList:
         if _symmetric and {type!r} not in ("Length", "ThroughAll"):
             raise ValueError(
-                "symmetric=True is not supported with type={type!r} on this "
+                "symmetric=True is not supported with type=" + repr(pocket.Type) + " on this "
                 "FreeCAD version: the Midplane fallback is ignored for this "
                 "termination mode, so the cut would silently be one-sided. "
                 "Use type='Length' or type='ThroughAll'."

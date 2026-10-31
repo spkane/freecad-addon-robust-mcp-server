@@ -166,6 +166,7 @@ _result_ = {{
             assert inspection.result["z_min"] == pytest.approx(expected_z_min)
             assert inspection.result["z_max"] == pytest.approx(expected_z_max)
         elif tool_name == "pocket_sketch":
+            assert result["volume_removed"] > 0.0
             # Pocket cuts opposite the sketch normal (-Z) by default.
             expected_z_min, expected_z_max = (-5.0, 5.0) if symmetric else (-10.0, 0.0)
             assert inspection.result["z_min"] == pytest.approx(expected_z_min)

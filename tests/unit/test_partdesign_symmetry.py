@@ -347,6 +347,34 @@ class TestPocketMidplaneTerminationGuard:
     """
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("symmetric", [True, False])
+    @pytest.mark.parametrize("termination", ['bad"value', "bad'\"value\nline"])
+    async def test_termination_strings_do_not_break_generated_python(
+        self, termination: str, symmetric: bool
+    ) -> None:
+        """Quoted or multiline values remain data in the generated script."""
+        freecad = _FakeFreeCAD(["Midplane"])
+        bridge = AsyncMock()
+        TestSymmetricExtrudeExecution._configure_executing_bridge(bridge, freecad)
+        tools = TestSymmetricExtrudeExecution._register_tools(bridge)
+        if symmetric:
+            with pytest.raises(ValueError, match="Midplane fallback"):
+                await tools["pocket_sketch"](
+                    sketch_name="Sketch",
+                    length=10.0,
+                    type=termination,
+                    symmetric=True,
+                )
+        else:
+            result = await tools["pocket_sketch"](
+                sketch_name="Sketch",
+                length=10.0,
+                type=termination,
+                symmetric=False,
+            )
+            assert result["type_id"] == "PartDesign::Pocket"
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("termination", ["UpToFirst", "UpToFace", "UpToLast"])
     async def test_rejects_symmetric_midplane_with_unsupported_termination(
         self,
