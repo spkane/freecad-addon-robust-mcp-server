@@ -39,6 +39,16 @@ def prepare_package(destination: Path, root: Path = ROOT) -> str:
     version = workbench.findtext("pkg:version", namespaces=namespace)
     if not version:
         raise ValueError("package.xml has no workbench version")
+    package_versions = package.findall("pkg:version", namespace)
+    if len(package_versions) != 1 or package_versions[0].text != version:
+        raise ValueError(
+            "package.xml must contain exactly one package version matching the workbench"
+        )
+    package_date = package.findtext("pkg:date", namespaces=namespace)
+    if not package_date or package_date != workbench.findtext(
+        "pkg:date", namespaces=namespace
+    ):
+        raise ValueError("Package and workbench dates in package.xml must match")
     for license_element in package.findall("pkg:license", namespace):
         filename = license_element.get("file")
         if filename not in LICENSE_FILES or not (root / filename).is_file():
@@ -53,10 +63,6 @@ def prepare_package(destination: Path, root: Path = ROOT) -> str:
     for filename in LICENSE_FILES:
         shutil.copy2(root / filename, destination / filename)
 
-    # FreeCAD expects standalone package version and its icon path at the root.
-    version_element = ET.Element(f"{{{NAMESPACE}}}version")
-    version_element.text = version
-    package.insert(1, version_element)
     ET.register_namespace("", NAMESPACE)
     ET.indent(tree, space="    ")
     tree.write(destination / "package.xml", encoding="utf-8", xml_declaration=True)

@@ -19,6 +19,26 @@ your MCP client or explicitly load them into the environment before startup.
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
+
+## Data and network connections
+
+The workbench does not start a bridge listener by default. After you start it,
+its JSON-RPC and XML-RPC listeners bind to the local machine (by default ports
+9876 and 9875); the separately installed MCP server connects to the bridge
+using the paired credential. The workbench does not itself transmit model data
+to an external AI provider. An MCP client you configure can request document
+contents, screenshots, or other results and may send them to its own provider
+according to that client's settings and privacy policy. Review those settings
+before sharing sensitive models.
+
+The optional auto-start preferences make the bridge start in future FreeCAD
+sessions. The optional MCP HTTP transport is separate from the FreeCAD bridge;
+if configured for remote access, requests and their results can leave the
+machine. The bridge pairing credential is stored locally as described below;
+the workbench also saves its settings in FreeCAD preferences. When this data
+handling changes, release notes and this documentation should describe the
+change before users opt in.
+
 ## Pairing the FreeCAD bridge
 
 For XML-RPC and socket modes, create a pairing once under the same user account

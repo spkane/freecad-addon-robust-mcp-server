@@ -24,6 +24,7 @@ For integration testing of actual releases, use:
 from __future__ import annotations
 
 import subprocess
+import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, ClassVar
 
 import pytest
@@ -195,6 +196,16 @@ class TestReleaseBumpCommands:
         )
         content = init_file.read_text()
         assert "99.99.99-test" in content
+        manifest = ET.parse(PROJECT_ROOT / "package.xml")  # noqa: S314
+        namespace = {"pkg": "https://wiki.freecad.org/Package_Metadata"}
+        assert manifest.findtext("pkg:version", namespaces=namespace) == "99.99.99-test"
+        assert (
+            manifest.findtext(".//pkg:workbench/pkg:version", namespaces=namespace)
+            == "99.99.99-test"
+        )
+        assert manifest.findtext("pkg:date", namespaces=namespace) == manifest.findtext(
+            ".//pkg:workbench/pkg:date", namespaces=namespace
+        )
 
 
 class TestReleaseTagCommands:

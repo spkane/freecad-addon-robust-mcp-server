@@ -77,6 +77,11 @@ jobs:
               exit 1
           fi
           echo "✓ package.xml (workbench): $PKG_VERSION"
+          ROOT_VERSION=$(awk '/<content>/ {exit} /<version>/ {gsub(/.*<version>|<\/version>.*/, ""); print; exit}' package.xml)
+          if [ "$ROOT_VERSION" != "$VERSION" ]; then
+              echo "ERROR: Package version $ROOT_VERSION does not match $VERSION"
+              exit 1
+          fi
 
           echo ""
           echo "Version verification passed!"

@@ -2,24 +2,24 @@
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
 
     <name>FreeCAD Robust MCP Bridge</name>
+    <version>0.7.0-rc.1</version>
     <description>A robust MCP (Model Context Protocol) bridge workbench for AI assistant integration with FreeCAD.</description>
     <icon>freecad/RobustMCPBridge/Resources/Icons/FreecadRobustMCPBridge.svg</icon>
 
-    <!-- Note: Each component has its own version below. This top-level date is for reference only. -->
-    <date>2026-01-07</date>
+    <date>2026-10-29</date>
 
     <maintainer email="spkane@gmail.com">Sean P. Kane</maintainer>
     <author email="spkane@gmail.com">Sean P. Kane</author>
 
     <license file="LICENSE-CODE">Apache-2.0</license>
     <license file="LICENSE-MIT">MIT</license>
-    <license file="LICENSE-ICON">CC-BY-NC-SA-4.0</license>
+    <license file="LICENSE-ICON">CC-BY-SA-4.0</license>
 
-    <freecadmin>0.21</freecadmin>
+    <freecadmin>1.0.2</freecadmin>
 
     <url type="repository" branch="main">https://github.com/spkane/freecad-addon-robust-mcp-server</url>
     <url type="bugtracker">https://github.com/spkane/freecad-addon-robust-mcp-server/issues</url>
-    <url type="readme">https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/README.md</url>
+    <url type="readme">https://raw.githubusercontent.com/spkane/freecad-addon-robust-mcp-server/main/README.md</url>
     <url type="documentation">https://spkane.github.io/freecad-addon-robust-mcp-server/latest/</url>
 
     <tag>workbench</tag>
@@ -41,7 +41,7 @@
             <classname>FreecadRobustMCPBridgeWorkbench</classname>
             <subdirectory>./freecad/RobustMCPBridge/</subdirectory>
             <icon>Resources/Icons/FreecadRobustMCPBridge.svg</icon>
-            <freecadmin>0.21</freecadmin>
+            <freecadmin>1.0.2</freecadmin>
         </workbench>
 
     </content>

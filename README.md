@@ -90,8 +90,9 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 ## Installation Requirements / Dependencies
 
-- [FreeCAD](https://www.freecad.org/) 1.1.4 or newer is recommended for security;
-  earlier versions have known vulnerabilities when opening untrusted files.
+- [FreeCAD](https://www.freecad.org/) 1.0.2 or newer is required. FreeCAD 1.1.4
+  or newer is recommended for security; older releases have known vulnerabilities
+  when opening untrusted files.
 - Python 3.11 or newer for the external server; embedded mode requires a Python
   minor version matching FreeCAD's bundled Python.
 
@@ -729,5 +730,5 @@ See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed analysis of these im
 
 Code is distributed under [Apache License 2.0](LICENSE-CODE); previously
 MIT-licensed contributions retain their [original MIT terms](LICENSE-MIT).
-Workbench icons use [CC BY-NC-SA 4.0](LICENSE-ICON). See [NOTICE](NOTICE) for
+Workbench icons use [CC BY-SA 4.0](LICENSE-ICON). See [NOTICE](NOTICE) for
 attribution.

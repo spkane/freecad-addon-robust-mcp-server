@@ -61,20 +61,18 @@ bump-workbench version:
     # Update the workbench version in package.xml
     PACKAGE_XML="{{project_root}}/package.xml"
     if [ -f "$PACKAGE_XML" ]; then
-        # Use awk for precise XML editing within the workbench section
+        # Update the package and workbench version and date together.
         awk -v version="$VERSION" -v date="$TODAY" '
-            /<workbench>/ { in_workbench=1 }
-            /<\/workbench>/ { in_workbench=0 }
-            in_workbench && /<version>/ {
+            /<version>/ {
                 gsub(/<version>[^<]*<\/version>/, "<version>" version "</version>")
             }
-            in_workbench && /<date>/ {
+            /<date>/ {
                 gsub(/<date>[^<]*<\/date>/, "<date>" date "</date>")
             }
             { print }
         ' "$PACKAGE_XML" > "$PACKAGE_XML.tmp" && mv "$PACKAGE_XML.tmp" "$PACKAGE_XML"
         echo ""
-        echo "Updated $PACKAGE_XML (workbench section):"
+        echo "Updated $PACKAGE_XML (package and workbench):"
         grep -A3 '<workbench>' "$PACKAGE_XML" | head -5
     else
         echo "ERROR: File not found: $PACKAGE_XML"
@@ -169,6 +167,11 @@ tag-workbench version:
         exit 1
     fi
     echo "✓ $PACKAGE_XML (workbench): $PKG_VERSION"
+    ROOT_VERSION=$(awk '/<content>/ {exit} /<version>/ {gsub(/.*<version>|<\/version>.*/, ""); print; exit}' "$PACKAGE_XML")
+    if [ "$ROOT_VERSION" != "$VERSION" ]; then
+        echo "ERROR: Package version $ROOT_VERSION does not match $VERSION"
+        exit 1
+    fi
 
     echo ""
     echo "Version verification passed!"

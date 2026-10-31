@@ -50,4 +50,4 @@ For full documentation, visit:
 ## License
 
 - Code: Apache License 2.0; existing MIT-licensed contributions retain their terms
-- Icons: CC-BY-NC-SA-4.0
+- Icons: CC-BY-SA-4.0
