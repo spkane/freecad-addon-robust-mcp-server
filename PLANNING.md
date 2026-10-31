@@ -787,9 +787,9 @@ Before requesting inclusion:
    and date, icon, `classname`, subdirectory, license texts, and URLs. The
    `main` repository URL currently matches the source branch. Use a separate
    `released` branch for Index distribution, update its manifest repository
-   branch to `released`, and merge only reviewed releases from `main`. Increment
-   the manifest version and date for each published branch update; retain
-   immutable tags for release provenance.
+   branch to `released` and its raw README URL to `released/README.md`, and
+   merge only reviewed releases from `main`. Increment the manifest version and
+   date for each published branch update; retain immutable tags for provenance.
 3. **UI and startup quality:** retain a visible bridge status indicator whenever
    the bridge is listening, including when another workbench is active; confirm
    this security rationale and the shared status-bar placement with the FreeCAD
