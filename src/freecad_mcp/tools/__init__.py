@@ -4,6 +4,7 @@ This package contains all MCP tool definitions for interacting with FreeCAD.
 Tools are organized by category:
 
 - execution: Python code execution tools
+- cam: CAM workbench tools (jobs, tools, operations, dressups, G-code)
 - documents: Document management tools
 - objects: Object creation and manipulation tools
 - partdesign: PartDesign workbench tools
@@ -18,6 +19,7 @@ Tools are organized by category:
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools.cam import register_cam_tools
 from freecad_mcp.tools.documents import register_document_tools
 from freecad_mcp.tools.draft import register_draft_tools
 from freecad_mcp.tools.execution import register_execution_tools
@@ -31,6 +33,7 @@ from freecad_mcp.tools.view import register_view_tools
 
 __all__ = [
     "register_all_tools",
+    "register_cam_tools",
     "register_document_tools",
     "register_draft_tools",
     "register_execution_tools",
@@ -64,6 +67,7 @@ def register_all_tools(
     register_spreadsheet_tools(mcp, get_bridge_func)
     register_draft_tools(mcp, get_bridge_func)
     register_export_tools(mcp, get_bridge_func)
+    register_cam_tools(mcp, get_bridge_func)
     register_macro_tools(mcp, get_bridge_func, allow_unsafe_code=allow_unsafe_code)
     register_view_tools(mcp, get_bridge_func)
     register_validation_tools(mcp, get_bridge_func, allow_unsafe_code=allow_unsafe_code)

@@ -123,6 +123,7 @@ For detailed guidance on specific tasks, use the `freecad-guidance` prompt with:
 - `task_type="partdesign"` - Parametric modeling workflow
 - `task_type="sketching"` - 2D sketch creation
 - `task_type="boolean"` - Boolean operations
+- `task_type="cam"` - CAM jobs, toolpaths and G-code
 - `task_type="debugging"` - Troubleshooting
 - `task_type="validation"` - Checking model health
 
@@ -148,6 +149,7 @@ Or read the full `freecad://best-practices` resource for comprehensive documenta
                 - "sketching": 2D sketch creation
                 - "boolean": Boolean operations
                 - "export": File export operations
+                - "cam": CAM jobs, toolpaths and G-code
                 - "debugging": Troubleshooting issues
                 - "validation": Checking model health
 
@@ -357,6 +359,66 @@ If boolean fails:
 - **Export fails**: Object has invalid shape
 - **Missing objects**: Object not visible or wrong document
 - **Wrong file**: Path error or permission issue""",
+            "cam": """# CAM (Toolpath / G-code) Guidance
+
+## Workflow
+1. `cam_get_capabilities()` - types, post processors, templates, known issues
+2. `cam_analyze_model(object_name)` - faces and holes for operation Base
+3. `cam_create_job(model_objects, template=..., stock={..., "material": ...})`
+   Stock material: one of `stock_materials` from cam_get_capabilities;
+   later `cam_set_stock(material=...)`. FreeCAD's default "Default" is not
+   a machining material.
+4. `cam_add_tool_controller(tool=..., op_type=...)`: speeds and feeds from
+   the tool bit's preset for the stock material (FreeCAD 26.3+ feeds &
+   speeds); explicit `horiz_feed="800 mm/min"` etc. override. Check the
+   result's `feeds_speeds`. A template already holds tool controllers;
+   `cam_feeds_speeds()` compares them with the presets.
+5. `cam_add_operation(op_type, tool_controller, base, properties)`
+6. `cam_add_dressup("Tags", base_operation, tag_count=4)` etc.
+7. `cam_inspect_job()` - check every path summary: warnings and notes
+8. `cam_check_job()` - FreeCAD's job check (missing feeds, speeds, ...)
+9. `cam_simulate()` - cut the stock, report gouges into the part
+10. `cam_post_process(use_job_output=True)`: folder and file names from the
+   job's output pattern, as FreeCAD's Post Process command. With a machine
+   (FreeCAD 26.3+, Job.Machine) the machine sets post processor and
+   options; otherwise pass a legacy `post_processor`.
+
+## Program Flow and Copies
+- `cam_add_operation("Comment", properties={"Comment": "..."})`,
+  `cam_add_operation("Stop", properties={"Stop": "Mandatory"})` (M0/M1)
+- `cam_add_operation("Copy"|"Array"|"SimpleCopy", source_operations=[...])`
+- New operations are appended; `cam_set_operation_order` moves them.
+
+## Setups and Fixtures
+- Second side: a second job for the same model, then
+  `cam_place_model(rotate={"axis": "x", "angle": 180},
+  origin={"x": "min", "y": "min", "z": "top"})` (or `face_up=`).
+- Several workpieces/fixtures: Job.Fixtures (e.g. ["G54", "G55"]) and
+  Job.OrderOutputBy ("Fixture", "Tool", "Operation") via cam_set_properties.
+
+## Tool Libraries
+- `cam_import_tool_library(file_path)`: .fctl or Camotics .json.
+- `cam_export_tool_library(library, file_path)`: .fctl, .json or LinuxCNC .tbl.
+
+## Options
+- `cam_describe_type(type_name, kind)` lists every option with defaults,
+  allowed enumeration values and tooltips. Use it instead of guessing.
+- Depths are expressions by default; a value replaces the expression.
+- Quantities take units: "5 mm", "800 mm/min", "90 °". Bare feed numbers
+  are mm/s.
+
+## Safety
+- Read every path warning (feed 0, rapids below stock top, cuts outside
+  stock) before posting.
+- G-code must be checked in a simulator before it runs on a machine;
+  `cam_simulate` is a first check (3-axis, from above), not a replacement.
+- Machine/material defaults belong in job templates
+  (`cam_export_job_template`), not in ad-hoc values.
+
+## Known FreeCAD Issues
+`cam_add_dressup` fails (and is undone) if FreeCAD leaves the dressed
+operation in the job, which would cut it twice. That is a FreeCAD bug,
+reported in `cam_get_capabilities()` under known_freecad_issues.""",
             "debugging": """# Debugging Guidance
 
 ## First Steps

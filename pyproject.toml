@@ -312,6 +312,9 @@ omit = [
     "src/freecad_mcp/bridge/embedded.py",
     "src/freecad_mcp/bridge/socket.py",
     "src/freecad_mcp/bridge/xmlrpc.py",
+    # Code sent to and run inside FreeCAD (it imports FreeCAD's CAM modules);
+    # exercised by tests/integration/test_cam_workflows.py.
+    "src/freecad_mcp/freecad_side/*",
 ]
 
 [tool.coverage.report]

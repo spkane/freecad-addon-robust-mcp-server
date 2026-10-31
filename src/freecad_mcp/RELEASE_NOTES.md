@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **CAM workbench tools**: 23 `cam_*` tools create CAM jobs, stock and tool
+  controllers, add every operation and dressup type FreeCAD offers, read and
+  set their properties with validation, inspect toolpaths, run FreeCAD's job
+  check, simulate material removal, and post-process jobs to G-code, without
+  opening a dialog and with or without the GUI. The FreeCAD-side code is
+  loaded into FreeCAD once per session and checked by its SHA-256, so each
+  tool call stays within the bridge request size limit. Tested with FreeCAD
+  1.0.2, 1.1.4, 26.3 RC2 and a 27.1 weekly build.
+
 ### Fixed
 
 - **Symmetric Part Design operations**: Pad, Revolution, and Groove now inspect

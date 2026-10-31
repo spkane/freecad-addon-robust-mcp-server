@@ -26,6 +26,7 @@ For detailed documentation including parameters and examples, see [MCP Tools Ref
 | [Validation](#validation-tools)                 | 4     | Object/document health checking      |
 | [View & Display](#view-tools)                   | 11    | View control, screenshots (GUI only) |
 | [Export/Import](#export-tools)                  | 7     | File format conversion               |
+| [CAM](#cam-tools)                               | 23    | CAM jobs, toolpaths, G-code          |
 | [Macros](#macro-tools)                          | 6     | Macro management                     |
 | [Utility](#utility-tools)                       | 7     | Undo/redo, parts library             |
 
@@ -408,6 +409,70 @@ returns PNG data encoded as base64 in `data`; it does not accept a file path.
 | `export_iges` | Export to IGES format              |
 | `import_step` | Import STEP files                  |
 | `import_stl`  | Import STL files                   |
+
+---
+
+## CAM Tools
+
+Build CAM jobs and G-code without dialogs. Every operation and dressup type
+of the CAM workbench is supported; `cam_describe_type` lists all options of a
+type with defaults and allowed values.
+
+| Tool                         | Description                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `cam_get_capabilities`       | List CAM operation/dressup types, post processors, templates, known FreeCAD issues |
+| `cam_list_tool_library`      | List tool libraries, tool bits and tool shapes                                     |
+| `cam_analyze_model`          | List model faces and drillable holes to choose Base features                       |
+| `cam_create_job`             | Create a CAM job (no dialog), optional template, model offset, stock               |
+| `cam_set_stock`              | Replace job stock (from_base margins, box, cylinder) and/or set its material       |
+| `cam_add_tool_controller`    | Add tool bit; speeds and feeds from its preset for the stock material, or given    |
+| `cam_feeds_speeds`           | Compare tool controllers with FreeCAD's feeds & speeds presets; optionally apply   |
+| `cam_remove_tool_controller` | Remove an unused tool controller                                                   |
+| `cam_add_operation`          | Add any CAM operation (Profile, Pocket, Adaptive, Drilling, Helix, ...)            |
+| `cam_add_dressup`            | Add a dressup (Tags, Boundary, Dogbone, LeadInOut, RampEntry, ...)                 |
+| `cam_describe_type`          | List every option of an operation/dressup type with defaults                       |
+| `cam_get_properties`         | Read all properties of a CAM object with metadata                                  |
+| `cam_set_properties`         | Set validated properties/expressions on a CAM object                               |
+| `cam_set_operation_order`    | Reorder job operations (G-code order)                                              |
+| `cam_inspect_job`            | Describe job: stock, tools, operations with path checks                            |
+| `cam_inspect_path`           | Toolpath summary and warnings of one operation                                     |
+| `cam_post_process`           | Post-process to G-code without dialogs, write file                                 |
+| `cam_export_job_template`    | Save job settings as FreeCAD job_*.json template                                   |
+| `cam_check_job`              | FreeCAD job check (Sanity): findings, summary, optional HTML report                |
+| `cam_simulate`               | Voxel material removal simulation; gouge and material-left check against the part  |
+| `cam_place_model`            | Turn/move the part in a job (flip for a second setup), stock follows               |
+| `cam_import_tool_library`    | Import a .fctl or Camotics .json tool library with its tool bits                   |
+| `cam_export_tool_library`    | Export a tool library as .fctl, Camotics .json or LinuxCNC .tbl                    |
+
+Always check generated G-code in a simulator before running it on a machine.
+
+`cam_post_process(use_job_output=True)` writes the files where FreeCAD's Post
+Process command would, named by the job's output pattern
+(`Job.PostProcessorOutputFile`, e.g. `%D/%S-%t-%d.nc`). On FreeCAD 26.3+ a job
+with a machine (`Job.Machine`, a `.fcm` file in `CamAssets/Machines`) gets its
+post processor and options from the machine.
+
+Speeds and feeds (FreeCAD 26.3+): a tool bit can carry presets (cutting speed
+and chipload per stock material and operation type, the tool editor's
+"Presets" tab). `cam_add_tool_controller` applies the preset matching the
+job's stock material (`cam_set_stock(material=...)`, choices in
+`cam_get_capabilities` `stock_materials`), as the tool controller's "Feeds
+and Speeds Wizard" does. `feeds_speeds="resolver"` also allows FreeCAD's
+fallback to the material's generic surface speed; `"none"` turns it off.
+
+`cam_add_operation` also creates Comment, Stop, Copy, Array and SimpleCopy
+(`source_operations=[...]`); `cam_add_dressup` also Boundary2, Mirror and
+PlungeMilling (FreeCAD 26.3+, GUI only). `cam_simulate` uses FreeCAD's voxel
+simulator (3-axis, from above).
+
+FreeCAD versions: the CAM tools are tested with FreeCAD 1.0, 1.1, 26.3 and
+the weekly builds. FreeCAD 1.0 keeps tool bits as files, so it takes
+`tool={"shape": ...}` or `{"bit_file": ...}`; library bits and tool library
+import/export need FreeCAD 1.1+. Known FreeCAD bugs are reported in
+`known_freecad_issues` instead of being worked around: without the GUI,
+FreeCAD before 26.3 cannot add an operation to a job with several tool
+controllers (`tc-console-mode`), and FreeCAD 1.0 cannot create hole
+operations such as Drilling from a script (`hole-op-create`).
 
 ---
 
