@@ -164,8 +164,10 @@ there. For credential storage and alternative setups, see [Configuration](config
 If FreeCAD reports that the bridge is not paired, run the pairing command in a
 terminal as the same user who runs FreeCAD. If `freecad-mcp` is not on your
 `PATH`, use the full path to the installed executable. Then select **Start MCP
-Bridge** in FreeCAD or restart FreeCAD. One pairing is shared by compatible
-workbench installations under that user account.
+Bridge** in FreeCAD. If you restart FreeCAD instead, the bridge starts
+automatically only when auto-start is enabled; otherwise, select **Start MCP
+Bridge** after FreeCAD reopens. One pairing is shared by compatible workbench
+installations under that user account.
 
 ### Step 2: Start FreeCAD with the Robust MCP Bridge
 
