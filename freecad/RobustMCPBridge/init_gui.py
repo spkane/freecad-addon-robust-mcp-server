@@ -201,8 +201,8 @@ try:
             None. Early returns if auto-start disabled or bridge already running.
 
         Raises:
-            Exception: Any exception during bridge startup is caught, logged
-                to FreeCAD.Console.PrintError with full traceback, and suppressed.
+            PairingRequiredError: Caught and logged without a traceback.
+            Exception: Other startup errors are caught and logged with a traceback.
 
         Side Effects:
             - Creates and starts a FreecadMCPPlugin instance
