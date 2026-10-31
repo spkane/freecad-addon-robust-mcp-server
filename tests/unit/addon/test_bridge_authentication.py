@@ -165,6 +165,29 @@ def test_workbench_environment_credentials_authenticate_requests(
     assert auth.verify("client-1", challenge, "xmlrpc", b"request", proof)
 
 
+def test_missing_pairing_explains_how_to_start_bridge(
+    auth_module: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing credential gives setup instructions on every platform."""
+    monkeypatch.delenv("FREECAD_BRIDGE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FREECAD_BRIDGE_SECRET", raising=False)
+    store = importlib.import_module(f"{auth_module.__package__}.credential_store")
+
+    def missing_credential() -> None:
+        raise FileNotFoundError("no pairing")
+
+    monkeypatch.setattr(store, "read_credential", missing_credential)
+    with pytest.raises(auth_module.PairingRequiredError) as error:
+        auth_module.authenticator_from_environment()
+    assert "freecad-mcp --pair-bridge" in str(error.value)
+    assert "Start MCP Bridge" in str(error.value)
+    assert "restart FreeCAD if running headless" in str(error.value)
+    assert "use the full path" in str(error.value)
+    assert "https://spkane.github.io/freecad-addon-robust-mcp-server/" in str(
+        error.value
+    )
+
+
 @pytest.mark.parametrize(
     "client_id,secret", [("", "01" * 32), ("client", "01"), ("client", "zz" * 32)]
 )

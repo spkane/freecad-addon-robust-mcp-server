@@ -196,7 +196,7 @@ def test_start_refuses_missing_authentication_before_opening_listeners(
     )
     plugin = server_mod.FreecadMCPPlugin()
     plugin._start_queue_processor = MagicMock()
-    with pytest.raises(RuntimeError, match="authentication provider is required"):
+    with pytest.raises(RuntimeError, match="freecad-mcp --pair-bridge"):
         plugin.start()
     plugin._start_queue_processor.assert_not_called()
     assert not plugin.is_running

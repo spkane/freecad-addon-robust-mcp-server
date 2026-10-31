@@ -13,6 +13,7 @@ from __future__ import annotations
 import FreeCAD
 import FreeCADGui
 
+from .freecad_mcp_bridge.authentication import PairingRequiredError
 from .freecad_mcp_bridge.qt_compat import load_qt_core
 
 # Register icons path for preferences page icon
@@ -200,8 +201,8 @@ try:
             None. Early returns if auto-start disabled or bridge already running.
 
         Raises:
-            Exception: Any exception during bridge startup is caught, logged
-                to FreeCAD.Console.PrintError with full traceback, and suppressed.
+            PairingRequiredError: Caught and logged without a traceback.
+            Exception: Other startup errors are caught and logged with a traceback.
 
         Side Effects:
             - Creates and starts a FreecadMCPPlugin instance
@@ -266,6 +267,8 @@ try:
                 )
         except Exception as e:
             FreeCAD.Console.PrintError(f"Robust MCP Bridge: Auto-start failed: {e}\n")
+            if isinstance(e, PairingRequiredError):
+                return
             import traceback
 
             FreeCAD.Console.PrintError(traceback.format_exc())

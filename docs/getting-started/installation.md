@@ -161,6 +161,12 @@ A server running in a container or under a different account needs access to the
 same pairing credential; pairing the host account alone does not provision it
 there. For credential storage and alternative setups, see [Configuration](configuration.md).
 
+If FreeCAD reports that the bridge is not paired, run the pairing command in a
+terminal as the same user who runs FreeCAD. If `freecad-mcp` is not on your
+`PATH`, use the full path to the installed executable. Then select **Start MCP
+Bridge** in FreeCAD or restart FreeCAD. One pairing is shared by compatible
+workbench installations under that user account.
+
 ### Step 2: Start FreeCAD with the Robust MCP Bridge
 
 1. **Start FreeCAD** and select the **Robust MCP Bridge** workbench from the workbench selector dropdown

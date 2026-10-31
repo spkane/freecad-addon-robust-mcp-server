@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any  # noqa: E402
 if TYPE_CHECKING:
     from .freecad_mcp_bridge.bridge_utils import GuiWaiter
 
+from .freecad_mcp_bridge.authentication import PairingRequiredError  # noqa: E402
 from .freecad_mcp_bridge.qt_compat import load_qt_core_widgets  # noqa: E402
 
 FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
@@ -47,8 +48,8 @@ def _auto_start_bridge(headless: bool = False) -> None:
         None. Early returns if auto-start is disabled or bridge is already running.
 
     Raises:
-        Exception: Any exception during bridge startup is caught, logged to
-            FreeCAD.Console.PrintError with full traceback, and suppressed.
+        Exception: Startup errors are logged and suppressed. Unexpected errors
+            include a traceback; a missing pairing includes setup instructions.
 
     Side Effects:
         - Imports and checks auto-start preference from preferences module
@@ -109,6 +110,8 @@ def _auto_start_bridge(headless: bool = False) -> None:
 
     except Exception as e:
         FreeCAD.Console.PrintError(f"Failed to auto-start MCP Bridge: {e}\n")
+        if isinstance(e, PairingRequiredError):
+            return
         import traceback
 
         FreeCAD.Console.PrintError(f"Traceback: {traceback.format_exc()}\n")
