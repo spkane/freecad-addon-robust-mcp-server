@@ -19,7 +19,9 @@ profile containing your normal workbench or pairing credential.
    submission; branch and tag support can differ by Addon Manager version.
 3. Open **Tools → Addon manager**, find **FreeCAD Robust MCP Bridge**, and
    install it. Restart FreeCAD when prompted. Confirm that the workbench loads,
-   its commands appear, and there are no unexpected errors in Report view.
+   it appears exactly once in the workbench selector, its commands are present,
+   and there are no unexpected errors in Report view. Inspect the profile's `Mod` directory
+   for duplicate copies from older installation methods.
 4. Install a matching MCP server, create a pairing for the disposable account,
    and test starting and stopping the bridge and a basic MCP operation. Confirm
    that neither the bridge nor its listeners starts before the user enables
@@ -31,7 +33,8 @@ profile containing your normal workbench or pairing credential.
    managed; do not assume uninstall removes them.
 6. Reinstall and repeat the startup and pairing checks. For upgrade coverage,
    install a prior release first, use the Addon Manager update flow to install
-   the next release, restart, and verify version, metadata, and behavior.
+   the next release, restart, and verify version, metadata, behavior, and that
+   the workbench appears only once with no duplicate installation directories.
 
 Record the OS, FreeCAD and Addon Manager versions, source ref, installation
 method, observed results, and sanitized Report view messages for each run.
