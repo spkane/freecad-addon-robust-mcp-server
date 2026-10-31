@@ -13,6 +13,10 @@ Thank you for your interest in contributing to the FreeCAD Robust MCP Suite!
 7. **Commit** your changes with a descriptive message
 8. **Push** to your fork and open a Pull Request
 
+Target all supported FreeCAD versions and document the tests you ran and any
+coverage gaps. See [FreeCAD compatibility and security](../docs/development/contributing.md#freecad-compatibility-and-security)
+for the supported versions and CI matrix.
+
 ## Full Contributing Guide
 
 For detailed information on:
