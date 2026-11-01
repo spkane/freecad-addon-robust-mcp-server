@@ -54,6 +54,14 @@ def test_discover_requires_matching_gate_receipt() -> None:
         discover([release()])
 
 
+def test_discover_rejects_invalid_release_asset_name() -> None:
+    """A release with an unsafe asset name cannot enter the inventory."""
+    invalid = release()
+    invalid["assets"][1]["name"] = "../server.whl"
+    with pytest.raises(ValueError, match="Invalid server release"):
+        discover([invalid])
+
+
 def test_incomplete_draft_blocks_next_release() -> None:
     """An interrupted publication is resolved before another release begins."""
     with pytest.raises(RuntimeError, match="Incomplete staged CAM release"):

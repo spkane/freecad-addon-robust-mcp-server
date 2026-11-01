@@ -134,6 +134,7 @@ def discover(
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
             raise ValueError(f"Missing SHA-256 for {tag}/{asset['name']}")
         entry = {"tag": tag, "asset": asset["name"], "sha256": digest[7:]}
+        _validate_entry(entry, kind)
         marker_asset = next(a for a in assets if a["name"] == MARKER)
         marker_bytes = gh(
             "api",
@@ -144,7 +145,6 @@ def discover(
         receipt = json.loads(marker_bytes)
         if receipt != {"version": 1, **entry}:
             raise ValueError(f"CAM gate marker does not match the release asset: {tag}")
-            _validate_entry(entry, kind)
         found[kind][tag] = entry
     return found
 
