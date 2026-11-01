@@ -109,7 +109,7 @@ jobs:
       - name: Reconcile published CAM releases with reviewed inventory
         env:
           GH_TOKEN: ${{ github.token }}
-        run: uv run python -m scripts.manage_cam_inventory check
+        run: python3 -m scripts.manage_cam_inventory check
 
       - name: Exercise the exact workbench archive and candidate wheel
         uses: ./.github/actions/test-cam-release

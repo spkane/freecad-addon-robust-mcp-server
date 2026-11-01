@@ -14,6 +14,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from scripts.verify_cam_release_compatibility import _validate_entry
+
 REPO = "spkane/freecad-addon-robust-mcp-server"
 MARKER = "cam-gate-v1.json"
 INVENTORY = "cam-compatibility.toml"
@@ -36,8 +38,6 @@ def inventory(data: bytes) -> dict[str, Any]:
     }
     if set(result) != keys or any(not isinstance(result[key], list) for key in keys):
         raise ValueError("Invalid CAM compatibility inventory fields")
-    from scripts.verify_cam_release_compatibility import _validate_entry
-
     for kind, prefix in KINDS.items():
         seen = set()
         for entry in result[f"compatible_{PLURAL[kind]}"]:
@@ -144,9 +144,7 @@ def discover(
         receipt = json.loads(marker_bytes)
         if receipt != {"version": 1, **entry}:
             raise ValueError(f"CAM gate marker does not match the release asset: {tag}")
-        from scripts.verify_cam_release_compatibility import _validate_entry
-
-        _validate_entry(entry, kind)
+            _validate_entry(entry, kind)
         found[kind][tag] = entry
     return found
 
@@ -186,8 +184,6 @@ def marker(tag: str, artifact: Path, output: Path) -> None:
         "asset": artifact.name,
         "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
     }
-    from scripts.verify_cam_release_compatibility import _validate_entry
-
     _validate_entry(entry, kind)
     output.write_text(json.dumps({"version": 1, **entry}, sort_keys=True) + "\n")
 
