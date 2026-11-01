@@ -255,11 +255,12 @@ def main() -> None:
             raise RuntimeError(
                 "Published gated release was not found; no inventory update was created"
             )
-        for kind in KINDS:
-            manifest[f"compatible_{PLURAL[kind]}"].extend(
-                releases[kind][tag] for tag in missing if tag in releases[kind]
-            )
-        Path(INVENTORY).write_text(render(manifest))
+        if missing:
+            for kind in KINDS:
+                manifest[f"compatible_{PLURAL[kind]}"].extend(
+                    releases[kind][tag] for tag in missing if tag in releases[kind]
+                )
+            Path(INVENTORY).write_text(render(manifest))
 
 
 if __name__ == "__main__":

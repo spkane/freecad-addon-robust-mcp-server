@@ -78,3 +78,17 @@ retired_workbenches = []
     assert run_test.call_args_list[1].args[0] == {
         "FREECAD_RELEASE_WORKBENCH_ARCHIVE": str(tmp_path / "bridge.zip")
     }
+
+
+def test_matrix_subprocesses_do_not_receive_github_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Installing and testing published wheels cannot access release tokens."""
+    from scripts.verify_cam_release_compatibility import _run_test
+
+    monkeypatch.setenv("GH_TOKEN", "example-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "example-token")
+    with patch("scripts.verify_cam_release_compatibility.subprocess.run") as run:
+        _run_test({"FREECAD_MCP_TEST_PYTHON": str(tmp_path / "python")})
+    assert "GH_TOKEN" not in run.call_args.kwargs["env"]
+    assert "GITHUB_TOKEN" not in run.call_args.kwargs["env"]

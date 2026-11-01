@@ -196,3 +196,30 @@ def test_final_inventory_check_detects_policy_changes(
     ):
         with pytest.raises(RuntimeError, match="changed during this release"):
             main()
+
+
+def test_update_already_recorded_release_preserves_inventory_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A retry does not rewrite comments or open a formatting-only PR."""
+    from scripts.manage_cam_inventory import main
+
+    entry = {"tag": SERVER, "asset": "server.whl", "sha256": DIGEST}
+    manifest = empty()
+    manifest["compatible_servers"].append(entry)
+    original = "# Maintainer comment\n" + render(manifest)
+    releases = {"server": {SERVER: entry}, "workbench": {}}
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["manage_cam_inventory", "update", "--tag", SERVER])
+    path = tmp_path / "cam-compatibility.toml"
+    path.write_text(original)
+    with (
+        patch(
+            "scripts.manage_cam_inventory.main_inventory",
+            return_value=original.encode(),
+        ),
+        patch("scripts.manage_cam_inventory.published_releases", return_value=[]),
+        patch("scripts.manage_cam_inventory.discover", return_value=releases),
+    ):
+        main()
+    assert path.read_text() == original

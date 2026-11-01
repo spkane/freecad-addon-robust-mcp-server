@@ -67,4 +67,4 @@ runs:
         FREECAD_AUTH_TEST_REQUIRED: '1'
         FREECAD_MCP_TEST_PYTHON: ${{ runner.temp }}/cam-candidate-venv/bin/python
         FREECAD_RELEASE_WORKBENCH_ARCHIVE: ${{ inputs.workbench-archive }}
-      run: uv run python scripts/verify_cam_release_compatibility.py
+      run: .venv/bin/python scripts/verify_cam_release_compatibility.py

@@ -62,16 +62,31 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     server = _workflow("mcp-server-release.yaml")["jobs"]
     assert "stage-server-release" in server["docker-release"]["needs"]
     assert "container-candidate" in server["stage-server-release"]["needs"]
-    first_check = next(
-        step
-        for step in server["cam-release-gate"]["steps"]
+    gate_steps = server["cam-release-gate"]["steps"]
+    check = next(
+        i
+        for i, step in enumerate(gate_steps)
         if "manage_cam_inventory check" in step.get("run", "")
     )
-    assert first_check["run"].startswith("python3 ")
-    assert any(
-        "manage_cam_inventory check" in step.get("run", "")
-        for step in server["cam-release-gate"]["steps"]
+    exercise = next(
+        i
+        for i, step in enumerate(gate_steps)
+        if step.get("uses") == "./.github/actions/test-cam-release"
     )
+    assert gate_steps[check]["run"].startswith("python3 ")
+    assert check < exercise
+    stage_steps = server["stage-server-release"]["steps"]
+    stage_check = next(
+        i
+        for i, step in enumerate(stage_steps)
+        if "manage_cam_inventory check" in step.get("run", "")
+    )
+    stage = next(
+        i
+        for i, step in enumerate(stage_steps)
+        if "gh release create" in step.get("run", "")
+    )
+    assert stage_check < stage
     assert server["update-cam-inventory"]["needs"] == ["create-github-release"]
     workbench = _workflow("mcp-workbench-release.yaml")["jobs"]
     steps = workbench["validate-and-release"]["steps"]

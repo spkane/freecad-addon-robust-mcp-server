@@ -93,10 +93,15 @@ def main() -> None:
                 raise RuntimeError("uv is required for server compatibility tests")
             wheel = _download(entry, "server", temp / f"server-{index}")
             venv = temp / f"server-venv-{index}"
-            subprocess.run([uv, "venv", "--python", "3.11", str(venv)], check=True)  # nosec B603  # noqa: S603
+            subprocess.run(  # nosec B603  # noqa: S603
+                [uv, "venv", "--python", "3.11", str(venv)],
+                env=_without_github_tokens(),
+                check=True,
+            )
             python = venv / "bin/python"
             subprocess.run(  # nosec B603  # noqa: S603 - verified wheel
                 [uv, "pip", "install", "--python", str(python), str(wheel)],
+                env=_without_github_tokens(),
                 check=True,
             )
             _run_test({"FREECAD_MCP_TEST_PYTHON": str(python)})
@@ -105,9 +110,18 @@ def main() -> None:
             _run_test({"FREECAD_RELEASE_WORKBENCH_ARCHIVE": str(archive)})
 
 
+def _without_github_tokens() -> dict[str, str]:
+    """Keep the release token out of installed artifacts and test subprocesses."""
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"GH_TOKEN", "GITHUB_TOKEN"}
+    }
+
+
 def _run_test(overrides: dict[str, str]) -> None:
     """Run the real FreeCAD smoke test with the chosen release artifact."""
-    env = {**os.environ, **overrides, "FREECAD_CAM_RELEASE_GATE": "0"}
+    env = {**_without_github_tokens(), **overrides, "FREECAD_CAM_RELEASE_GATE": "0"}
     subprocess.run(  # nosec B603 - current Python and fixed test selector
         [
             sys.executable,
