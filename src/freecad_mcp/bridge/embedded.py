@@ -201,8 +201,8 @@ class EmbeddedBridge(FreecadBridge):
                     self._cam_runtime = runtime
         if self._cam_runtime is None:
             raise RuntimeError(
-                "CAM requires an updated Robust MCP Bridge workbench installed "
-                "in FreeCAD; install it and restart FreeCAD"
+                "CAM requires an updated Robust MCP Bridge; install the latest "
+                "workbench in FreeCAD and restart FreeCAD"
             )
         return self._cam_runtime.dispatch(version, operation, args)
 
