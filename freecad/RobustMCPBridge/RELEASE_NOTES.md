@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **CAM interface**: A versioned, allowlisted CAM dispatcher provides the
+  FreeCAD-side implementation for compatible MCP server CAM tools.
+
 ### Fixed
 
 - **Bridge listener startup**: An occupied JSON-RPC or XML-RPC port no longer

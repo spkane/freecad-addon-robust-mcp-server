@@ -1264,6 +1264,18 @@ class FreecadMCPPlugin:
             "execution_time_ms": timeout_ms,
         }
 
+    @staticmethod
+    def _cam_dispatch(version: int, operation: str, args: dict[str, Any]) -> Any:
+        """Load the installed CAM implementation only when it is requested."""
+        if __package__:
+            from .cam_runtime import dispatch
+
+            return dispatch(version, operation, args)
+        else:
+            from cam_runtime import dispatch as standalone_dispatch
+
+            return standalone_dispatch(version, operation, args)
+
     def _execute_code_sync(self, code: str) -> dict[str, Any]:
         """Execute Python code synchronously (call on main thread only).
 
@@ -1279,6 +1291,7 @@ class FreecadMCPPlugin:
 
         exec_globals: dict[str, Any] = {
             "__builtins__": __builtins__,
+            "_robust_mcp_cam_dispatch": self._cam_dispatch,
         }
 
         if FREECAD_AVAILABLE:

@@ -9,10 +9,13 @@ from freecad_mcp.config import get_config
 
 
 def integration_proxy(
-    host: str = "localhost", port: int = 9875
+    host: str | None = None, port: int | None = None
 ) -> xmlrpc.client.ServerProxy:
     """Return an authenticated XML-RPC proxy for the configured bridge."""
-    client_id, signer = credentials_from_config(get_config())
+    config = get_config()
+    host = host or config.socket_host
+    port = port if port is not None else config.xmlrpc_port
+    client_id, signer = credentials_from_config(config)
     transport = AuthenticatedXmlRpcTransport(client_id, signer, 10.0)
     return xmlrpc.client.ServerProxy(
         f"http://{host}:{port}", allow_none=True, transport=transport

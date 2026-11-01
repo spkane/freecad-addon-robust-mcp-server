@@ -10,6 +10,8 @@ Based on learnings from competitive analysis:
 """
 
 import asyncio
+import importlib.machinery
+import importlib.util
 import io
 import os
 import sys
@@ -64,6 +66,7 @@ class EmbeddedBridge(FreecadBridge):
             DEFAULT_EXECUTION_TIMEOUT_MS,
         )
         self._fc_module: Any = None
+        self._cam_runtime: Any = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="freecad")
         self._connected = False
 
@@ -170,6 +173,63 @@ class EmbeddedBridge(FreecadBridge):
 
         return result
 
+    def _cam_dispatch(self, version: int, operation: str, args: dict[str, Any]) -> Any:
+        """Load CAM without running the workbench's bridge auto-start code."""
+        if self._cam_runtime is None:
+            namespace = importlib.machinery.PathFinder.find_spec("freecad", sys.path)
+            workbench = (
+                importlib.machinery.PathFinder.find_spec(
+                    "RobustMCPBridge", namespace.submodule_search_locations
+                )
+                if namespace and namespace.submodule_search_locations
+                else None
+            )
+            path = None
+            if workbench and workbench.origin:
+                path = (
+                    Path(workbench.origin).parent / "freecad_mcp_bridge/cam_runtime.py"
+                )
+            if path is None or not path.is_file():
+                path = self._find_profile_cam_runtime()
+            if path is not None:
+                spec = importlib.util.spec_from_file_location(
+                    "_embedded_cam_runtime", path
+                )
+                if spec and spec.loader and path.is_file():
+                    runtime = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(runtime)
+                    self._cam_runtime = runtime
+        if self._cam_runtime is None:
+            raise RuntimeError(
+                "CAM requires an updated Robust MCP Bridge workbench installed "
+                "in FreeCAD; install it and restart FreeCAD"
+            )
+        return self._cam_runtime.dispatch(version, operation, args)
+
+    def _find_profile_cam_runtime(self) -> Path | None:
+        """Find the installed runtime in the active FreeCAD profile's Mod folder."""
+        get_user_dir = getattr(self._fc_module, "getUserAppDataDir", None)
+        if not callable(get_user_dir):
+            return None
+        mod = Path(get_user_dir()) / "Mod"
+        patterns = (
+            "*/freecad/RobustMCPBridge/freecad_mcp_bridge/cam_runtime.py",
+            "freecad/RobustMCPBridge/freecad_mcp_bridge/cam_runtime.py",
+            "RobustMCPBridge/freecad_mcp_bridge/cam_runtime.py",
+        )
+        candidates = {
+            path.resolve()
+            for pattern in patterns
+            for path in mod.glob(pattern)
+            if path.is_file()
+        }
+        if len(candidates) > 1:
+            raise RuntimeError(
+                "Multiple Robust MCP Bridge workbenches are installed in this "
+                "FreeCAD profile; remove old copies and restart FreeCAD"
+            )
+        return next(iter(candidates), None)
+
     def _execute_code(self, code: str) -> ExecutionResult:
         """Execute code synchronously (runs in thread pool)."""
         start = time.perf_counter()
@@ -181,6 +241,7 @@ class EmbeddedBridge(FreecadBridge):
             "FreeCAD": self._fc_module,
             "App": self._fc_module,
             "__builtins__": __builtins__,
+            "_robust_mcp_cam_dispatch": self._cam_dispatch,
         }
 
         # Try to add GUI module if available

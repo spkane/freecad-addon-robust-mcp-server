@@ -54,6 +54,7 @@ def verify_archives(version: str, directory: Path) -> None:
             "LICENSE-ICON",
             "NOTICE",
             "freecad/RobustMCPBridge/__init__.py",
+            "freecad/RobustMCPBridge/freecad_mcp_bridge/cam_runtime.py",
         )
     }
     if not required.issubset(zipped):

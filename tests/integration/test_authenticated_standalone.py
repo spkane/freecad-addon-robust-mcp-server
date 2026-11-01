@@ -105,6 +105,9 @@ async def _check_harness_session(session: ClientSession) -> None:
     assert any(tool.name == "get_freecad_version" for tool in tools.tools)
     call = await session.call_tool("get_freecad_version")
     assert not call.is_error
+    assert any(tool.name == "cam_get_capabilities" for tool in tools.tools)
+    cam = await session.call_tool("cam_get_capabilities")
+    assert not cam.is_error, cam
     calls = (
         ("create_document", {"name": "ReleaseSketchRegression"}),
         (
@@ -132,6 +135,22 @@ async def _check_harness_session(session: ClientSession) -> None:
             },
         ),
         ("close_document", {"doc_name": "ReleaseSketchRegression"}),
+        ("create_document", {"name": "ReleaseCamRegression"}),
+        (
+            "create_box",
+            {"name": "CamModel", "doc_name": "ReleaseCamRegression"},
+        ),
+        (
+            "cam_create_job",
+            {
+                "model_objects": ["CamModel"],
+                "doc_name": "ReleaseCamRegression",
+                "template": "",
+                "default_tool_controller": False,
+            },
+        ),
+        ("cam_inspect_job", {"doc_name": "ReleaseCamRegression"}),
+        ("close_document", {"doc_name": "ReleaseCamRegression"}),
     )
     for name, arguments in calls:
         tool_result = await session.call_tool(name, arguments=arguments)
@@ -244,9 +263,31 @@ async def _check_unauthenticated_bridge_request(port: int, mode: str) -> None:
             await writer.wait_closed()
 
 
+async def _run_cam_platform_suite(env: dict[str, str], port: int) -> None:
+    """Exercise CAM workflows against the isolated installed workbench."""
+    if os.environ.get("FREECAD_CAM_PLATFORM_SUITE") != "1":
+        return
+    cam_env = {
+        **env,
+        "FREECAD_MODE": "xmlrpc",
+        "FREECAD_SOCKET_HOST": "127.0.0.1",
+        "FREECAD_XMLRPC_PORT": str(port),
+    }
+    cam_tests = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "pytest",
+        str(ROOT / "tests/integration/test_cam_workflows.py"),
+        "-v",
+        "--tb=short",
+        env=cam_env,
+    )
+    assert await cam_tests.wait() == 0, "Real FreeCAD CAM tests failed"
+
+
 @pytest.mark.standalone_freecad
 @pytest.mark.asyncio
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(600)
 async def test_authenticated_transports_with_real_freecad(
     tmp_path: Path, isolated_pairing: tuple[str, str]
 ) -> None:
@@ -354,6 +395,7 @@ async def test_authenticated_transports_with_real_freecad(
                     await bridge.disconnect()
                 await _check_harnesses(env, ports[mode], mode)
             await _check_harnesses(env, ports["xmlrpc"], "xmlrpc", use_default=True)
+            await _run_cam_platform_suite(env, ports["xmlrpc"])
         finally:
             if process.returncode is None:
                 if os.name == "nt":

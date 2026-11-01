@@ -115,4 +115,5 @@ jobs:
         env:
           FREECAD_AUTH_TEST_REQUIRED: '1'
           FREECAD_AUTH_TEST_DISPOSABLE_WINDOWS: '1'
+          FREECAD_CAM_PLATFORM_SUITE: '1'
         run: uv run pytest tests/integration/test_authenticated_standalone.py -v --tb=short

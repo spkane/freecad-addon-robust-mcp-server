@@ -1385,6 +1385,164 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                         },
                     ],
                 },
+                "cam": {
+                    "description": "CAM workbench: jobs, tools, operations, dressups, G-code",
+                    "tools": [
+                        {
+                            "name": "cam_get_capabilities",
+                            "description": "List CAM operation/dressup types, post processors, templates, known FreeCAD issues",
+                            "key_params": [],
+                        },
+                        {
+                            "name": "cam_list_tool_library",
+                            "description": "List tool libraries, tool bits and tool shapes",
+                            "key_params": ["library"],
+                        },
+                        {
+                            "name": "cam_analyze_model",
+                            "description": "List model faces and drillable holes to choose Base features",
+                            "key_params": ["object_name", "face_types"],
+                        },
+                        {
+                            "name": "cam_create_job",
+                            "description": "Create a CAM job (no dialog), optional template, model offset, stock",
+                            "key_params": [
+                                "model_objects",
+                                "template",
+                                "model_offset",
+                                "stock",
+                            ],
+                        },
+                        {
+                            "name": "cam_set_stock",
+                            "description": "Replace job stock (from_base margins, box, cylinder) and/or set its material",
+                            "key_params": [
+                                "kind",
+                                "extent_neg",
+                                "extent_pos",
+                                "size",
+                                "material",
+                            ],
+                        },
+                        {
+                            "name": "cam_add_tool_controller",
+                            "description": "Add tool bit (library, file or shape); speeds and feeds from its preset for the stock material, or given",
+                            "key_params": [
+                                "tool",
+                                "tool_number",
+                                "spindle_speed",
+                                "horiz_feed",
+                                "vert_feed",
+                                "feeds_speeds",
+                                "op_type",
+                            ],
+                        },
+                        {
+                            "name": "cam_feeds_speeds",
+                            "description": "Compare tool controllers with FreeCAD's feeds & speeds presets; optionally apply",
+                            "key_params": [
+                                "tool_controllers",
+                                "mode",
+                                "op_type",
+                                "apply",
+                            ],
+                        },
+                        {
+                            "name": "cam_remove_tool_controller",
+                            "description": "Remove an unused tool controller",
+                            "key_params": ["tool_controller"],
+                        },
+                        {
+                            "name": "cam_add_operation",
+                            "description": "Add any CAM operation (Profile, Pocket, Adaptive, Drilling, Helix, ...)",
+                            "key_params": [
+                                "op_type",
+                                "tool_controller",
+                                "base",
+                                "properties",
+                            ],
+                        },
+                        {
+                            "name": "cam_add_dressup",
+                            "description": "Add a dressup (Tags, Boundary, Dogbone, LeadInOut, RampEntry, ...)",
+                            "key_params": [
+                                "dressup_type",
+                                "base_operation",
+                                "properties",
+                                "tag_count",
+                            ],
+                        },
+                        {
+                            "name": "cam_describe_type",
+                            "description": "List every option of an operation/dressup type with defaults",
+                            "key_params": ["type_name", "kind"],
+                        },
+                        {
+                            "name": "cam_get_properties",
+                            "description": "Read all properties of a CAM object with metadata",
+                            "key_params": ["object_name", "groups"],
+                        },
+                        {
+                            "name": "cam_set_properties",
+                            "description": "Set validated properties/expressions on a CAM object",
+                            "key_params": ["object_name", "values", "expressions"],
+                        },
+                        {
+                            "name": "cam_set_operation_order",
+                            "description": "Reorder job operations (G-code order)",
+                            "key_params": ["order"],
+                        },
+                        {
+                            "name": "cam_inspect_job",
+                            "description": "Describe job: stock, tools, operations with path checks",
+                            "key_params": ["job_name"],
+                        },
+                        {
+                            "name": "cam_inspect_path",
+                            "description": "Toolpath summary and warnings of one operation",
+                            "key_params": ["object_name", "gcode_lines"],
+                        },
+                        {
+                            "name": "cam_post_process",
+                            "description": "Post-process to G-code without dialogs, write file",
+                            "key_params": [
+                                "post_processor",
+                                "output_file",
+                                "use_job_output",
+                            ],
+                        },
+                        {
+                            "name": "cam_export_job_template",
+                            "description": "Save job settings as FreeCAD job_*.json template",
+                            "key_params": ["file_path"],
+                        },
+                        {
+                            "name": "cam_check_job",
+                            "description": "FreeCAD job check (Sanity): findings, HTML report",
+                            "key_params": ["job_name", "report_file"],
+                        },
+                        {
+                            "name": "cam_simulate",
+                            "description": "Voxel material removal simulation, gouge check",
+                            "key_params": ["operations", "resolution", "show_result"],
+                        },
+                        {
+                            "name": "cam_place_model",
+                            "description": "Turn/move the part in a job (second setup)",
+                            "key_params": ["rotate", "face_up", "origin"],
+                        },
+                        {
+                            "name": "cam_import_tool_library",
+                            "description": "Import .fctl or Camotics .json tool library",
+                            "key_params": ["file_path", "library_id"],
+                        },
+                        {
+                            "name": "cam_export_tool_library",
+                            "description": "Export tool library as .fctl, .json or .tbl",
+                            "key_params": ["library", "file_path"],
+                        },
+                    ],
+                },
                 "export_import": {
                     "description": "File export and import",
                     "tools": [
@@ -1563,7 +1721,7 @@ Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
                 },
                 {
                     "name": "freecad-guidance",
-                    "description": "Task-specific AI guidance (general, partdesign, sketching, boolean, export, debugging, validation)",
+                    "description": "Task-specific AI guidance (general, partdesign, sketching, boolean, export, cam, debugging, validation)",
                     "key_params": ["task_type"],
                 },
                 {

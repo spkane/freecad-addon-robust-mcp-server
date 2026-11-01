@@ -4,6 +4,14 @@
 
 ### Added
 
+- **CAM workbench tools**: 23 `cam_*` tools create and inspect CAM jobs,
+  generate toolpaths, simulate material removal, and post-process G-code.
+  The CAM implementation is installed with the compatible Robust MCP Bridge
+  workbench. Availability varies by FreeCAD version and GUI mode: LeadInOut,
+  RampEntry, Dragknife, AxisMap and ZCorrect require the GUI; Boundary2,
+  Mirror and PlungeMilling require the GUI on FreeCAD 26.3 and later.
+  The included simulation is limited to top-down three-axis cuts and does not
+  model tool holders or collisions; independently verify machine programs.
 - **Symmetric pocket support**: `pocket_sketch` now accepts a `symmetric`
   parameter that distributes the cut on both sides of the sketch plane. It
   uses the same `SideType` → `Midplane` → `Symmetric` property fallback
