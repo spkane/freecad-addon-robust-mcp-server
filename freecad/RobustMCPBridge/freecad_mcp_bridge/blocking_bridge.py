@@ -102,8 +102,13 @@ print("", flush=True)
 print("=" * 60, flush=True)
 gui_mode = "GUI" if FreeCAD.GuiUp else "headless"
 print(f"MCP Bridge started in {gui_mode} mode!", flush=True)
-print(f"  - XML-RPC: localhost:{actual_xmlrpc_port}", flush=True)
-print(f"  - Socket: localhost:{actual_socket_port}", flush=True)
+listeners = plugin.get_status()["listeners"]
+print(
+    f"  - XML-RPC: {listeners['xmlrpc']} (localhost:{actual_xmlrpc_port})", flush=True
+)
+print(
+    f"  - JSON-RPC: {listeners['socket']} (localhost:{actual_socket_port})", flush=True
+)
 print("", flush=True)
 if not FreeCAD.GuiUp:
     print(
