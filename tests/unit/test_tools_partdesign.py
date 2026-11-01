@@ -1368,6 +1368,7 @@ class TestSymmetricExtrudeCompatibility:
         tool: str,
         var: str,
     ) -> None:
+        """Prefer SideType, then Midplane, then Symmetric."""
         await register_tools[tool](sketch_name="Sketch", length=10.0, symmetric=True)
         code = self._generated(mock_bridge)
 
