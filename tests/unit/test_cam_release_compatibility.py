@@ -50,8 +50,12 @@ def test_empty_inventory_has_no_downloads(tmp_path: Path) -> None:
     run.assert_not_called()
 
 
-def test_inventory_tests_each_independent_component(tmp_path: Path) -> None:
+def test_inventory_tests_each_independent_component(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Each declared release is tested against the opposite candidate."""
+    monkeypatch.setenv("GH_TOKEN", "example-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "example-token")
     manifest = """
 compatible_servers = [{ tag = "robust-mcp-server-v1.0.0", asset = "server.whl", sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }]
 compatible_workbenches = [{ tag = "robust-mcp-workbench-v1.0.0", asset = "bridge.zip", sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }]
@@ -69,11 +73,17 @@ retired_workbenches = []
             "scripts.verify_cam_release_compatibility._download",
             side_effect=[tmp_path / "server.whl", tmp_path / "bridge.zip"],
         ) as download,
-        patch("scripts.verify_cam_release_compatibility.subprocess.run"),
+        patch(
+            "scripts.verify_cam_release_compatibility.subprocess.run"
+        ) as subprocess_run,
         patch("scripts.verify_cam_release_compatibility._run_test") as run_test,
     ):
         main()
     assert download.call_count == 2
+    assert subprocess_run.call_count == 2
+    for call in subprocess_run.call_args_list:
+        assert "GH_TOKEN" not in call.kwargs["env"]
+        assert "GITHUB_TOKEN" not in call.kwargs["env"]
     assert "FREECAD_MCP_TEST_PYTHON" in run_test.call_args_list[0].args[0]
     assert run_test.call_args_list[1].args[0] == {
         "FREECAD_RELEASE_WORKBENCH_ARCHIVE": str(tmp_path / "bridge.zip")
