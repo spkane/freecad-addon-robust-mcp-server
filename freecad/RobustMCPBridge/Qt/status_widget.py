@@ -163,7 +163,14 @@ class MCPStatusWidget:
         self._installed = False
 
     def set_running(
-        self, xmlrpc_port: int, socket_port: int, request_count: int = 0
+        self,
+        xmlrpc_port: int,
+        socket_port: int,
+        request_count: int = 0,
+        *,
+        xmlrpc_running: bool = True,
+        socket_running: bool = True,
+        errors: str = "",
     ) -> None:
         """Update the widget to show running status.
 
@@ -171,6 +178,9 @@ class MCPStatusWidget:
             xmlrpc_port: The XML-RPC port number.
             socket_port: The socket port number.
             request_count: Number of requests processed this session.
+            xmlrpc_running: Whether XML-RPC is listening.
+            socket_running: Whether JSON-RPC is listening.
+            errors: Listener errors and troubleshooting guidance.
         """
         if self._widget is None:
             return
@@ -179,9 +189,14 @@ class MCPStatusWidget:
         if not _check_main_thread("set_running"):
             return
 
-        self._widget.setText(
-            f"MCP: Python execution enabled ({xmlrpc_port}/{socket_port})"
+        state = (
+            "listener error"
+            if errors and not (xmlrpc_running or socket_running)
+            else "Python execution enabled, partial"
+            if errors
+            else "Python execution enabled"
         )
+        self._widget.setText(f"MCP: {state} ({xmlrpc_port}/{socket_port})")
         self._widget.setStyleSheet(
             "QLabel { "
             "background-color: #9a5700; "
@@ -193,9 +208,9 @@ class MCPStatusWidget:
         )
         self._widget.setToolTip(
             f"MCP Bridge is running and accepts Python from authorized clients\n"
-            f"XML-RPC: localhost:{xmlrpc_port}\n"
-            f"Socket: localhost:{socket_port}\n"
-            f"Requests processed: {request_count}"
+            f"XML-RPC: {'listening' if xmlrpc_running else 'unavailable'} on localhost:{xmlrpc_port}\n"
+            f"JSON-RPC: {'listening' if socket_running else 'unavailable'} on localhost:{socket_port}\n"
+            f"Requests processed: {request_count}" + (f"\n{errors}" if errors else "")
         )
 
     def set_stopped(self) -> None:
@@ -296,12 +311,25 @@ def install_status_widget() -> bool:
 
 
 def update_status_running(
-    xmlrpc_port: int, socket_port: int, request_count: int = 0
+    xmlrpc_port: int,
+    socket_port: int,
+    request_count: int = 0,
+    *,
+    xmlrpc_running: bool = True,
+    socket_running: bool = True,
+    errors: str = "",
 ) -> None:
     """Update status widget to show running state."""
     widget = get_status_widget()
     widget.install()  # Ensure installed
-    widget.set_running(xmlrpc_port, socket_port, request_count)
+    widget.set_running(
+        xmlrpc_port,
+        socket_port,
+        request_count,
+        xmlrpc_running=xmlrpc_running,
+        socket_running=socket_running,
+        errors=errors,
+    )
 
 
 def update_status_stopped() -> None:
@@ -347,10 +375,14 @@ def sync_status_with_bridge() -> None:
             return
 
         if _mcp_plugin is not None and _mcp_plugin.is_running:
+            status = _mcp_plugin.get_status()
             widget.set_running(
                 _mcp_plugin.xmlrpc_port,
                 _mcp_plugin.socket_port,
                 _mcp_plugin.request_count,
+                xmlrpc_running=status["listeners"]["xmlrpc"] == "running",
+                socket_running=status["listeners"]["socket"] == "running",
+                errors="\n".join(status["listener_errors"].values()),
             )
         else:
             widget.set_stopped()

@@ -36,6 +36,101 @@ ADDON_DIR = Path(__file__).parent.parent.parent.parent / "freecad" / "RobustMCPB
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("blocked", ["socket", "xmlrpc", "both", "neither"])
+async def test_listener_port_conflicts_preserve_authenticated_transport(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, blocked: str
+) -> None:
+    """An occupied port must not disable or bypass authentication on the other."""
+    console = MagicMock()
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(
+        server_mod, "FreeCAD", MagicMock(Console=console), raising=False
+    )
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "test" else None)
+    )
+    blockers: dict[str, socket.socket] = {}
+    ports: dict[str, int] = {}
+    for name in ("socket", "xmlrpc"):
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        ports[name] = listener.getsockname()[1]
+        if blocked in (name, "both"):
+            blockers[name] = listener
+        else:
+            listener.close()
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        port=ports["socket"],
+        xmlrpc_port=ports["xmlrpc"],
+        authenticator=authenticator,
+    )
+    plugin._start_queue_processor = MagicMock()
+    plugin._start_status_updates = MagicMock()
+    plugin._stop_status_updates = MagicMock()
+    plugin._execute_via_queue = MagicMock(
+        return_value={"success": True, "result": "ok"}
+    )
+    try:
+        if blocked == "both":
+            with pytest.raises(RuntimeError, match="could not start") as error:
+                await asyncio.to_thread(plugin.start)
+            assert "XML-RPC" in str(error.value) and "JSON-RPC" in str(error.value)
+            assert "preferences" in str(error.value)
+            assert not plugin.is_running
+        else:
+            await asyncio.to_thread(plugin.start)
+            status = plugin.get_status()
+            assert plugin.is_running
+            for name in ("socket", "xmlrpc"):
+                assert status["listeners"][name] == (
+                    "failed" if blocked == name else "running"
+                )
+                if blocked == name:
+                    assert "already in use" in status["listener_errors"][name]
+                    assert "preferences" in status["listener_errors"][name]
+                    assert status["listener_errors"][name] in "".join(
+                        args.args[0] for args in console.PrintError.call_args_list
+                    )
+                    continue
+                bridge_class = SocketBridge if name == "socket" else XmlRpcBridge
+
+                def signer(message: bytes) -> bytes:
+                    return hmac.digest(secret, message, "sha256")
+
+                bridge = bridge_class(
+                    host="127.0.0.1", port=ports[name], client_id="test", signer=signer
+                )
+                impostor = bridge_class(
+                    host="127.0.0.1",
+                    port=ports[name],
+                    client_id="test",
+                    signer=lambda message: hmac.digest(b"b" * 32, message, "sha256"),
+                )
+                try:
+                    with pytest.raises(ConnectionError):
+                        await impostor.connect()
+                    await bridge.connect()
+                    result = await bridge.execute_python("pass")
+                    assert result.success and result.result == "ok"
+                finally:
+                    await impostor.disconnect()
+                    await bridge.disconnect()
+    finally:
+        await asyncio.to_thread(plugin.stop)
+        for listener in blockers.values():
+            listener.close()
+    assert not plugin.is_running
+    for name in ("socket", "xmlrpc"):
+        with socket.socket() as probe:
+            probe.settimeout(1)
+            assert probe.connect_ex(("127.0.0.1", ports[name])) != 0
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
 @pytest.mark.parametrize("algorithm", ["ed25519", "p256"])
 async def test_real_signatures_across_client_and_listener(
@@ -719,8 +814,17 @@ def test_xmlrpc_total_read_deadline_stops_a_slow_client(
                     break
             try:
                 assert client.recv(1) == b""
-            except ConnectionResetError:
+            except (ConnectionResetError, ConnectionAbortedError):
                 pass
+        assert thread.is_alive()
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        try:
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            assert response.status == 200
+            response.read()
+        finally:
+            connection.close()
     finally:
         plugin._running = False
         thread.join(timeout=3)

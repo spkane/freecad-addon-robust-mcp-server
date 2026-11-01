@@ -481,6 +481,13 @@ class FreecadMCPPlugin:
         self._socket_thread: threading.Thread | None = None
         self._xmlrpc_thread: threading.Thread | None = None
         self._running = False
+        self._listener_lock = threading.Lock()
+        self._listener_ready = {
+            name: threading.Event() for name in ("socket", "xmlrpc")
+        }
+        self._listener_states = {"socket": "stopped", "xmlrpc": "stopped"}
+        self._listener_errors: dict[str, str] = {}
+        self._startup_complete = False
 
         # Queue-based execution for thread safety (learned from neka-nat)
         self._request_queue: queue.Queue[ExecutionRequest] = queue.Queue(
@@ -568,6 +575,9 @@ class FreecadMCPPlugin:
                 - last_request_time: Timestamp of last request (or None)
                 - headless: Whether running in headless mode
         """
+        with self._listener_lock:
+            listeners = dict(self._listener_states)
+            errors = dict(self._listener_errors)
         return {
             "running": self._running,
             "instance_id": self._instance_id,
@@ -577,7 +587,96 @@ class FreecadMCPPlugin:
             "request_count": self._request_count,
             "last_request_time": self._last_request_time,
             "headless": self._headless,
+            "listeners": listeners,
+            "listener_errors": errors,
         }
+
+    def _listener_update(self, name: str, state: str, error: str = "") -> None:
+        """Record a listener state and notify the startup coordinator."""
+        with self._listener_lock:
+            self._listener_states[name] = state
+            if error:
+                self._listener_errors[name] = error
+            elif state == "running":
+                self._listener_errors.pop(name, None)
+            self._listener_ready[name].set()
+            report = bool(error and self._startup_complete)
+        if report and FREECAD_AVAILABLE:
+            FreeCAD.Console.PrintError(f"MCP Bridge: {error}\n")
+
+    def _listener_failure(self, name: str, port: int, error: BaseException) -> str:
+        """Describe a listener error with steps that do not change security."""
+        transport = "JSON-RPC" if name == "socket" else "XML-RPC"
+        if isinstance(error, OSError) and error.errno == errno.EADDRINUSE:
+            reason = f"port {port} is already in use"
+        else:
+            reason = f"could not listen on port {port}: {error}"
+        setting = "FREECAD_SOCKET_PORT" if name == "socket" else "FREECAD_XMLRPC_PORT"
+        return (
+            f"{transport} {reason}. If the port is in use, stop the other "
+            "application or choose a different port in Robust MCP Bridge "
+            f"preferences (or set {setting} for standalone startup). Restart "
+            "the bridge and update the MCP client configuration."
+        )
+
+    def _await_listeners(self) -> dict[str, Any]:
+        """Wait for listener outcomes and reject a wholly unavailable bridge."""
+        deadline = time.monotonic() + 3.0
+        expected = ["socket"] + (["xmlrpc"] if self._enable_xmlrpc else [])
+        if not all(
+            self._listener_ready[name].wait(max(0.0, deadline - time.monotonic()))
+            for name in expected
+        ):
+            self.stop()
+            raise RuntimeError(
+                "MCP Bridge listener startup timed out. Check the FreeCAD Report "
+                "view, free the configured ports, and restart the bridge."
+            )
+        status = self.get_status()
+        errors = status["listener_errors"]
+        if not any(status["listeners"][name] == "running" for name in expected):
+            self.stop()
+            raise RuntimeError(
+                "MCP Bridge could not start: " + " ".join(errors.values())
+            )
+        with self._listener_lock:
+            self._startup_complete = True
+        if errors and FREECAD_AVAILABLE:
+            for error in errors.values():
+                FreeCAD.Console.PrintError(f"MCP Bridge: {error}\n")
+        return status
+
+    def _report_started(self, status: dict[str, Any]) -> None:
+        """Report only the transports that successfully started."""
+        if not FREECAD_AVAILABLE:
+            return
+        FreeCAD.Console.PrintMessage(
+            f"MCP Bridge started (Instance ID: {self._instance_id}):\n"
+        )
+        if status["listeners"]["socket"] == "running":
+            FreeCAD.Console.PrintMessage(f"  - JSON-RPC: {self._host}:{self._port}\n")
+        if status["listeners"]["xmlrpc"] == "running":
+            FreeCAD.Console.PrintMessage(
+                f"  - XML-RPC: {self._host}:{self._xmlrpc_port}\n"
+            )
+
+    def _launch_listeners(self) -> None:
+        """Start workers and clean up if a thread cannot be launched."""
+        name, port = "socket", self._port
+        try:
+            self._socket_thread = threading.Thread(
+                target=self._run_socket_server, daemon=True, name="MCP-Socket"
+            )
+            self._socket_thread.start()
+            if self._enable_xmlrpc:
+                name, port = "xmlrpc", self._xmlrpc_port
+                self._xmlrpc_thread = threading.Thread(
+                    target=self._run_xmlrpc_server, daemon=True, name="MCP-XMLRPC"
+                )
+                self._xmlrpc_thread.start()
+        except Exception as exc:
+            self.stop()
+            raise RuntimeError(self._listener_failure(name, port, exc)) from exc
 
     def start(self) -> None:
         """Start all servers.
@@ -589,6 +688,24 @@ class FreecadMCPPlugin:
         """
         if self._running:
             return
+        if any(
+            thread and thread.is_alive()
+            for thread in (self._socket_thread, self._xmlrpc_thread)
+        ):
+            raise RuntimeError(
+                "Previous MCP Bridge listeners are still stopping. Wait a moment "
+                "and try again; restart FreeCAD if they do not stop."
+            )
+
+        with self._listener_lock:
+            self._listener_errors.clear()
+            self._startup_complete = False
+            self._listener_states = {
+                "socket": "starting",
+                "xmlrpc": "starting" if self._enable_xmlrpc else "disabled",
+            }
+            for event in self._listener_ready.values():
+                event.clear()
 
         if self._authenticator is None:
             if __package__:
@@ -625,32 +742,10 @@ class FreecadMCPPlugin:
             self.stop()
             raise
 
-        # Start socket server
-        self._socket_thread = threading.Thread(
-            target=self._run_socket_server,
-            daemon=True,
-            name="MCP-Socket",
-        )
-        self._socket_thread.start()
+        self._launch_listeners()
+        status = self._await_listeners()
 
-        # Start XML-RPC server if enabled
-        if self._enable_xmlrpc:
-            self._xmlrpc_thread = threading.Thread(
-                target=self._run_xmlrpc_server,
-                daemon=True,
-                name="MCP-XMLRPC",
-            )
-            self._xmlrpc_thread.start()
-
-        if FREECAD_AVAILABLE:
-            FreeCAD.Console.PrintMessage(
-                f"MCP Bridge started (Instance ID: {self._instance_id}):\n"
-            )
-            FreeCAD.Console.PrintMessage(f"  - JSON-RPC: {self._host}:{self._port}\n")
-            if self._enable_xmlrpc:
-                FreeCAD.Console.PrintMessage(
-                    f"  - XML-RPC: {self._host}:{self._xmlrpc_port}\n"
-                )
+        self._report_started(status)
 
     def stop(self) -> None:
         """Stop all servers.
@@ -682,9 +777,11 @@ class FreecadMCPPlugin:
                 self._xmlrpc_server.socket.close()
 
         # Stop socket server - close the server and stop the event loop
-        if self._socket_loop and self._socket_server:
-            self._socket_loop.call_soon_threadsafe(self._socket_server.close)
-            self._socket_loop.call_soon_threadsafe(self._socket_loop.stop)
+        if self._socket_loop and not self._socket_loop.is_closed():
+            with contextlib.suppress(RuntimeError):
+                if self._socket_server:
+                    self._socket_loop.call_soon_threadsafe(self._socket_server.close)
+                self._socket_loop.call_soon_threadsafe(self._socket_loop.stop)
 
         # Wait briefly for threads - they're daemon threads so they'll
         # be killed when the main thread exits anyway
@@ -693,15 +790,16 @@ class FreecadMCPPlugin:
         self._queue_thread = None
 
         if self._socket_thread and self._socket_thread.is_alive():
-            self._socket_thread.join(timeout=0.5)
-        self._socket_thread = None
+            self._socket_thread.join(timeout=2.0)
+        if self._socket_thread and not self._socket_thread.is_alive():
+            self._socket_thread = None
 
         # Wait for XML-RPC thread to exit before clearing server reference
         if self._xmlrpc_thread and self._xmlrpc_thread.is_alive():
-            self._xmlrpc_thread.join(timeout=0.5)
-        self._xmlrpc_thread = None
-        # Now safe to clear the server reference
-        self._xmlrpc_server = None
+            self._xmlrpc_thread.join(timeout=2.0)
+        if self._xmlrpc_thread and not self._xmlrpc_thread.is_alive():
+            self._xmlrpc_thread = None
+            self._xmlrpc_server = None
 
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
@@ -903,27 +1001,16 @@ class FreecadMCPPlugin:
         if not _freecad_gui_up():
             return
 
-        # The bridge itself accepts Python from any paired client. Show this
-        # warning regardless of the optional general status-bar preference.
-        try:
-            status_module: Any = None
-            if __package__ and "." in __package__:
-                from ..Qt import status_widget as loaded_status_module
-
-                status_module = loaded_status_module
-            else:
-                status_module = sys.modules.get(
-                    "freecad.RobustMCPBridge.Qt.status_widget"
-                )
-            if status_module is not None:
-                status_module.update_status_running(
-                    self._xmlrpc_port, self._port, self._request_count
-                )
-        except Exception:
-            pass
+        self._update_status_widget()
 
         # Build status message
-        ports = f"XML-RPC:{self._xmlrpc_port}" if self._enable_xmlrpc else ""
+        listener_status = self.get_status()
+        errors = listener_status["listener_errors"]
+        ports = (
+            f"XML-RPC:{self._xmlrpc_port}"
+            if listener_status["listeners"]["xmlrpc"] == "running"
+            else ""
+        )
         if ports:
             ports = f" ({ports})"
 
@@ -941,7 +1028,44 @@ class FreecadMCPPlugin:
         else:
             status = f"🔌 MCP Bridge: Python execution enabled{ports} | waiting for connections..."
 
+        if errors:
+            status += " | Listener error: " + " ".join(errors.values())
         self._set_status_bar(status)
+
+    def _update_status_widget(self) -> None:
+        """Display listener-specific state on the main-thread status widget."""
+        # The bridge itself accepts Python from any paired client. Show this
+        # warning regardless of the optional general status-bar preference.
+        try:
+            status_module: Any = None
+            if __package__ and "." in __package__:
+                from ..Qt import status_widget as loaded_status_module
+
+                status_module = loaded_status_module
+            else:
+                status_module = sys.modules.get(
+                    "freecad.RobustMCPBridge.Qt.status_widget"
+                )
+            if status_module is not None:
+                listener_status = self.get_status()
+                errors = listener_status["listener_errors"]
+                if errors:
+                    status_module.update_status_running(
+                        self._xmlrpc_port,
+                        self._port,
+                        self._request_count,
+                        xmlrpc_running=listener_status["listeners"]["xmlrpc"]
+                        == "running",
+                        socket_running=listener_status["listeners"]["socket"]
+                        == "running",
+                        errors="\n".join(errors.values()),
+                    )
+                else:
+                    status_module.update_status_running(
+                        self._xmlrpc_port, self._port, self._request_count
+                    )
+        except Exception:
+            pass
 
     def _set_status_bar(self, message: str) -> None:
         """Set the FreeCAD main window status bar message.
@@ -1203,24 +1327,28 @@ class FreecadMCPPlugin:
 
     def _run_socket_server(self) -> None:
         """Run the asyncio event loop in background thread."""
-        self._socket_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._socket_loop)
-
+        self._socket_loop = None
+        try:
+            self._socket_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._socket_loop)
+        except Exception as e:
+            if self._socket_loop is not None:
+                self._socket_loop.close()
+            self._listener_update(
+                "socket", "failed", self._listener_failure("socket", self._port, e)
+            )
+            return
         try:
             self._socket_loop.run_until_complete(self._start_socket_server())
-            self._socket_loop.run_forever()
-        except OSError as e:
-            # Server failed to start - mark as not running
-            self._running = False
-            if e.errno == errno.EADDRINUSE:
-                if FREECAD_AVAILABLE:
-                    FreeCAD.Console.PrintWarning(
-                        f"MCP Bridge: JSON-RPC port {self._port} already in use. "
-                        f"Another instance may be running.\n"
-                    )
-            elif FREECAD_AVAILABLE:
-                FreeCAD.Console.PrintError(
-                    f"MCP Bridge: Failed to start JSON-RPC server: {e}\n"
+            if self._running:
+                self._listener_update("socket", "running")
+                self._socket_loop.run_forever()
+                if self._running:
+                    raise RuntimeError("listener stopped unexpectedly")
+        except Exception as e:
+            if self._running:
+                self._listener_update(
+                    "socket", "failed", self._listener_failure("socket", self._port, e)
                 )
         finally:
             if self._socket_server is not None:
@@ -1236,6 +1364,8 @@ class FreecadMCPPlugin:
                 self._socket_loop.run_until_complete(self._socket_server.wait_closed())
                 self._socket_server = None
             self._socket_loop.close()
+            if not self._running:
+                self._listener_update("socket", "stopped")
 
     async def _start_socket_server(self) -> None:
         """Start the TCP server."""
@@ -1442,6 +1572,13 @@ class FreecadMCPPlugin:
         class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
             """XML-RPC handler that responds gracefully to GET requests."""
 
+            def handle(self) -> None:
+                """Treat a closed client as an expected end of its request."""
+                with contextlib.suppress(
+                    ConnectionAbortedError, ConnectionResetError, BrokenPipeError
+                ):
+                    super().handle()
+
             def setup(self) -> None:
                 """Apply a total deadline to reading HTTP headers and body."""
                 super().setup()
@@ -1587,38 +1724,41 @@ class FreecadMCPPlugin:
                 allow_none=True,
                 logRequests=False,
             )
-        except OSError as e:
-            if e.errno == errno.EADDRINUSE:
-                if FREECAD_AVAILABLE:
-                    FreeCAD.Console.PrintWarning(
-                        f"MCP Bridge: XML-RPC port {self._xmlrpc_port} already in use. "
-                        f"Another instance may be running.\n"
-                    )
-            elif FREECAD_AVAILABLE:
-                FreeCAD.Console.PrintError(
-                    f"MCP Bridge: Failed to start XML-RPC server: {e}\n"
-                )
+        except Exception as e:
+            self._listener_update(
+                "xmlrpc",
+                "failed",
+                self._listener_failure("xmlrpc", self._xmlrpc_port, e),
+            )
             return
 
         # Set a timeout so handle_request() doesn't block forever
         # This allows the server to check self._running periodically
-        self._xmlrpc_server.timeout = 0.5
-
-        # Register methods (type: ignore needed - xmlrpc types are overly restrictive)
-        self._xmlrpc_server.register_function(self._xmlrpc_execute, "execute")  # type: ignore[arg-type]
-        self._xmlrpc_server.register_function(self._xmlrpc_ping, "ping")  # type: ignore[arg-type]
-        self._xmlrpc_server.register_function(
-            self._xmlrpc_get_instance_id, "get_instance_id"
-        )  # type: ignore[arg-type]
-        self._xmlrpc_server.register_function(self._xmlrpc_get_view, "get_view")  # type: ignore[arg-type]
-        self._xmlrpc_server.register_introspection_functions()
-
-        while self._running:
-            try:
+        try:
+            self._xmlrpc_server.timeout = 0.5
+            # Register methods (xmlrpc stubs are overly restrictive).
+            self._xmlrpc_server.register_function(self._xmlrpc_execute, "execute")  # type: ignore[arg-type]
+            self._xmlrpc_server.register_function(self._xmlrpc_ping, "ping")  # type: ignore[arg-type]
+            self._xmlrpc_server.register_function(
+                self._xmlrpc_get_instance_id, "get_instance_id"
+            )  # type: ignore[arg-type]
+            self._xmlrpc_server.register_function(self._xmlrpc_get_view, "get_view")  # type: ignore[arg-type]
+            self._xmlrpc_server.register_introspection_functions()
+            if self._running:
+                self._listener_update("xmlrpc", "running")
+            while self._running:
                 self._xmlrpc_server.handle_request()
-            except OSError:
-                # Socket was closed during shutdown - this is expected
-                break
+        except Exception as e:
+            if self._running:
+                self._listener_update(
+                    "xmlrpc",
+                    "failed",
+                    self._listener_failure("xmlrpc", self._xmlrpc_port, e),
+                )
+        finally:
+            self._xmlrpc_server.server_close()
+            if not self._running:
+                self._listener_update("xmlrpc", "stopped")
 
     def _xmlrpc_ping(self) -> dict[str, Any]:
         """XML-RPC ping handler."""

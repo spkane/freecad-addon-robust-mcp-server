@@ -372,6 +372,74 @@ async def test_authenticated_transports_with_real_freecad(
 
 
 @pytest.mark.standalone_freecad
+@pytest.mark.timeout(90)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocked", ["socket", "xmlrpc"])
+async def test_real_freecad_port_conflict_preserves_other_transport(
+    tmp_path: Path, isolated_pairing: tuple[str, str], blocked: str
+) -> None:
+    """Real FreeCAD reports the occupied listener and authenticates the other."""
+    executable = os.environ["FREECAD_AUTH_TEST_COMMAND"]
+    client_id, secret_hex = isolated_pairing
+    ready = tmp_path / "partial-ports.json"
+    log_path = tmp_path / "partial-freecad.log"
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "FREECAD_AUTH_TEST_READY": str(ready),
+        "FREECAD_AUTH_TEST_ALLOW_PARTIAL": "1",
+    }
+    env.pop("FREECAD_BRIDGE_CLIENT_ID", None)
+    env.pop("FREECAD_BRIDGE_SECRET", None)
+    with socket.socket() as blocker, log_path.open("w+", encoding="utf-8") as log:
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen()
+        port = blocker.getsockname()[1]
+        env[f"FREECAD_AUTH_TEST_{blocked.upper()}_PORT"] = str(port)
+        process = await asyncio.create_subprocess_exec(
+            executable, str(PROBE), stdout=log, stderr=subprocess.STDOUT, env=env
+        )
+        try:
+            deadline = time.monotonic() + 30
+            while not ready.exists() and time.monotonic() < deadline:
+                if process.returncode is not None:
+                    break
+                await asyncio.sleep(0.05)
+            if not ready.exists():
+                log.flush()
+                pytest.fail(f"FreeCAD bridge did not start: {log_path.read_text()}")
+            data = json.loads(ready.read_text(encoding="utf-8"))
+            active = "xmlrpc" if blocked == "socket" else "socket"
+            assert data["status"]["listeners"][blocked] == "failed"
+            assert data["status"]["listeners"][active] == "running"
+            message = data["status"]["listener_errors"][blocked]
+            assert str(port) in message and "already in use" in message
+            assert "preferences" in message and "client configuration" in message
+            await _check_unauthenticated_bridge_request(data[active], active)
+            bridge_class = SocketBridge if active == "socket" else XmlRpcBridge
+            bridge = bridge_class(
+                host="127.0.0.1",
+                port=data[active],
+                client_id=client_id,
+                signer=create_hmac_signer(bytes.fromhex(secret_hex)),
+            )
+            try:
+                await bridge.connect()
+                result = await bridge.execute_python("_result_ = 42")
+                assert result.success and result.result == 42
+            finally:
+                await bridge.disconnect()
+        finally:
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+
+
+@pytest.mark.standalone_freecad
 @pytest.mark.timeout(120)
 @pytest.mark.usefixtures("isolated_pairing")
 @pytest.mark.parametrize("early", [False, True], ids=["script", "workbench-init"])

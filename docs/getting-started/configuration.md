@@ -31,6 +31,15 @@ contents, screenshots, or other results and may send them to its own provider
 according to that client's settings and privacy policy. Review those settings
 before sharing sensitive models.
 
+If a bridge port is already in use, the Report view identifies the affected
+transport and the bridge keeps the other transport available when possible.
+Stop the application using the port, or choose a different port under FreeCAD
+**Preferences → Robust MCP Bridge → Network Ports** and restart the bridge.
+Set the matching `FREECAD_XMLRPC_PORT` or `FREECAD_SOCKET_PORT` in your MCP
+client configuration. XML-RPC is the default connection mode; an unavailable
+XML-RPC listener will prevent that default connection even if JSON-RPC works.
+The bridge remains restricted to loopback and paired clients.
+
 The optional auto-start preferences make the bridge start in future FreeCAD
 sessions. The optional MCP HTTP transport is separate from the FreeCAD bridge;
 if configured for remote access, requests and their results can leave the

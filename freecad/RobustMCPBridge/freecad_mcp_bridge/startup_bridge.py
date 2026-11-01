@@ -133,8 +133,13 @@ def _start_bridge() -> None:
         FreeCAD.Console.PrintMessage("\n")
         FreeCAD.Console.PrintMessage("=" * 50 + "\n")
         FreeCAD.Console.PrintMessage("MCP Bridge started (via startup script)!\n")
-        FreeCAD.Console.PrintMessage(f"  - XML-RPC: localhost:{xmlrpc_port}\n")
-        FreeCAD.Console.PrintMessage(f"  - Socket:  localhost:{socket_port}\n")
+        listeners = plugin.get_status()["listeners"]
+        FreeCAD.Console.PrintMessage(
+            f"  - XML-RPC: {listeners['xmlrpc']} (localhost:{xmlrpc_port})\n"
+        )
+        FreeCAD.Console.PrintMessage(
+            f"  - JSON-RPC: {listeners['socket']} (localhost:{socket_port})\n"
+        )
         FreeCAD.Console.PrintMessage(
             f"  - Mode:    {'GUI' if FreeCAD.GuiUp else 'Headless'}\n"
         )

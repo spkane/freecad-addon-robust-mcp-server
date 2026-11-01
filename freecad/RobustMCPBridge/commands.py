@@ -91,7 +91,6 @@ class StartMCPBridgeCommand:
             )
             from .Qt.status_widget import (
                 update_status_error,
-                update_status_running,
                 update_status_starting,
             )
 
@@ -121,15 +120,21 @@ class StartMCPBridgeCommand:
 
             # Update status bar widget
             if get_status_bar_enabled():
-                update_status_running(
-                    xmlrpc_port, socket_port, _mcp_plugin.request_count
-                )
+                from .Qt.status_widget import sync_status_with_bridge
+
+                sync_status_with_bridge()
 
             FreeCAD.Console.PrintMessage("\n")
             FreeCAD.Console.PrintMessage("=" * 50 + "\n")
             FreeCAD.Console.PrintMessage("MCP Bridge started!\n")
-            FreeCAD.Console.PrintMessage(f"  - XML-RPC: localhost:{xmlrpc_port}\n")
-            FreeCAD.Console.PrintMessage(f"  - Socket:  localhost:{socket_port}\n")
+            listeners = plugin.get_status()["listeners"]
+            for label, key, port in (
+                ("XML-RPC", "xmlrpc", xmlrpc_port),
+                ("JSON-RPC", "socket", socket_port),
+            ):
+                FreeCAD.Console.PrintMessage(
+                    f"  - {label}: {listeners[key]} (localhost:{port})\n"
+                )
             FreeCAD.Console.PrintMessage("=" * 50 + "\n")
             FreeCAD.Console.PrintMessage(
                 "\nYou can now connect your MCP client (Claude Code, etc.) to FreeCAD.\n"
@@ -240,10 +245,21 @@ class MCPBridgeStatusCommand:
         elif not _mcp_plugin.is_running:
             FreeCAD.Console.PrintMessage("Status: Stopped\n")
         else:
-            FreeCAD.Console.PrintMessage("Status: Running\n")
+            status = _mcp_plugin.get_status()
+            FreeCAD.Console.PrintMessage(
+                "Status: Partially running\n"
+                if status["listener_errors"]
+                else "Status: Running\n"
+            )
             FreeCAD.Console.PrintMessage(f"  Instance ID: {_mcp_plugin.instance_id}\n")
-            FreeCAD.Console.PrintMessage(f"  XML-RPC Port: {_mcp_plugin.xmlrpc_port}\n")
-            FreeCAD.Console.PrintMessage(f"  Socket Port: {_mcp_plugin.socket_port}\n")
+            FreeCAD.Console.PrintMessage(
+                f"  XML-RPC: {status['listeners']['xmlrpc']} (port {_mcp_plugin.xmlrpc_port})\n"
+            )
+            FreeCAD.Console.PrintMessage(
+                f"  JSON-RPC: {status['listeners']['socket']} (port {_mcp_plugin.socket_port})\n"
+            )
+            for error in status["listener_errors"].values():
+                FreeCAD.Console.PrintError(f"  {error}\n")
             FreeCAD.Console.PrintMessage(
                 f"  Requests processed: {_mcp_plugin.request_count}\n"
             )
@@ -299,7 +315,7 @@ def restart_bridge_if_running() -> bool:
             get_status_bar_enabled,
             get_xmlrpc_port,
         )
-        from .Qt.status_widget import update_status_running
+        from .Qt.status_widget import sync_status_with_bridge
 
         xmlrpc_port = get_xmlrpc_port()
         socket_port = get_socket_port()
@@ -319,11 +335,16 @@ def restart_bridge_if_running() -> bool:
 
         # Update status bar widget
         if get_status_bar_enabled():
-            update_status_running(xmlrpc_port, socket_port, _mcp_plugin.request_count)
+            sync_status_with_bridge()
 
         FreeCAD.Console.PrintMessage("MCP Bridge restarted successfully.\n")
-        FreeCAD.Console.PrintMessage(f"  - XML-RPC: localhost:{xmlrpc_port}\n")
-        FreeCAD.Console.PrintMessage(f"  - Socket:  localhost:{socket_port}\n")
+        listeners = _mcp_plugin.get_status()["listeners"]
+        FreeCAD.Console.PrintMessage(
+            f"  - XML-RPC: {listeners['xmlrpc']} (localhost:{xmlrpc_port})\n"
+        )
+        FreeCAD.Console.PrintMessage(
+            f"  - JSON-RPC: {listeners['socket']} (localhost:{socket_port})\n"
+        )
         return True
 
     except Exception as e:

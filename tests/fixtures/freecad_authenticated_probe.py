@@ -31,15 +31,23 @@ plugin = FreecadMCPPlugin(
     xmlrpc_port=int(os.environ.get("FREECAD_AUTH_TEST_XMLRPC_PORT", "0")),
 )
 plugin.start()
+allow_partial = os.environ.get("FREECAD_AUTH_TEST_ALLOW_PARTIAL") == "1"
 deadline = time.monotonic() + 10
 while (
-    plugin._socket_server is None or plugin._xmlrpc_server is None
+    not allow_partial
+    and (plugin._socket_server is None or plugin._xmlrpc_server is None)
 ) and time.monotonic() < deadline:
     time.sleep(0.02)
-assert plugin._socket_server is not None and plugin._xmlrpc_server is not None
+if not allow_partial:
+    assert plugin._socket_server is not None and plugin._xmlrpc_server is not None
 ready = {
-    "socket": plugin._socket_server.sockets[0].getsockname()[1],
-    "xmlrpc": plugin._xmlrpc_server.server_address[1],
+    "socket": plugin._socket_server.sockets[0].getsockname()[1]
+    if plugin._socket_server
+    else None,
+    "xmlrpc": plugin._xmlrpc_server.server_address[1]
+    if plugin._xmlrpc_server
+    else None,
+    "status": plugin.get_status(),
 }
 ready_path = Path(os.environ["FREECAD_AUTH_TEST_READY"])
 temporary_path = ready_path.with_suffix(".tmp")

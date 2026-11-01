@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Bridge listener startup**: An occupied JSON-RPC or XML-RPC port no longer
+  disables the other listener. The bridge reports the affected port and recovery
+  steps, and fails cleanly if neither listener can start.
+
 ## Version 0.7.0-rc.1 (2026-10-29)
 
 This candidate pairs with the `0.7.0-rc.1` MCP server. The bridge executes
