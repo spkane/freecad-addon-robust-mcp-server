@@ -1065,21 +1065,14 @@ class FreecadMCPPlugin:
             if status_module is not None:
                 listener_status = self.get_status()
                 errors = listener_status["listener_errors"]
-                if errors:
-                    status_module.update_status_running(
-                        self._xmlrpc_port,
-                        self._port,
-                        self._request_count,
-                        xmlrpc_running=listener_status["listeners"]["xmlrpc"]
-                        == "running",
-                        socket_running=listener_status["listeners"]["socket"]
-                        == "running",
-                        errors="\n".join(errors.values()),
-                    )
-                else:
-                    status_module.update_status_running(
-                        self._xmlrpc_port, self._port, self._request_count
-                    )
+                status_module.update_status_running(
+                    self._xmlrpc_port,
+                    self._port,
+                    self._request_count,
+                    xmlrpc_running=listener_status["listeners"]["xmlrpc"] == "running",
+                    socket_running=listener_status["listeners"]["socket"] == "running",
+                    errors="\n".join(errors.values()),
+                )
         except Exception:
             pass
 

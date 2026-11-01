@@ -365,10 +365,18 @@ def test_gui_status_warns_that_bridge_accepts_python(
         sys.modules, "freecad.RobustMCPBridge.Qt.status_widget", status_module
     )
     plugin = server_mod.FreecadMCPPlugin()
+    plugin._listener_states = {"xmlrpc": "running", "socket": "running"}
     plugin._set_status_bar = MagicMock()
     plugin._update_status_bar()
     assert "Python execution enabled" in plugin._set_status_bar.call_args.args[0]
-    status_module.update_status_running.assert_called_once_with(9875, 9876, 0)
+    status_module.update_status_running.assert_called_once_with(
+        9875, 9876, 0, xmlrpc_running=True, socket_running=True, errors=""
+    )
+    plugin._listener_states["xmlrpc"] = "disabled"
+    plugin._update_status_bar()
+    status_module.update_status_running.assert_called_with(
+        9875, 9876, 0, xmlrpc_running=False, socket_running=True, errors=""
+    )
 
 
 @pytest.mark.parametrize("freecad_available", [False, True])
