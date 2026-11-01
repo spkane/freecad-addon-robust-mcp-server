@@ -508,6 +508,43 @@ def _warnings(freecad: Any) -> list[str]:
     return [call.args[0] for call in freecad.Console.PrintWarning.call_args_list]
 
 
+@pytest.mark.parametrize("missing_pairing", [True, False])
+def test_deferred_gui_startup_reports_pairing_without_traceback(
+    monkeypatch: pytest.MonkeyPatch, missing_pairing: bool
+) -> None:
+    """Only unexpected deferred GUI failures produce a traceback."""
+    freecad = _install_init_gui_stubs(monkeypatch)
+    preferences = sys.modules["freecad.RobustMCPBridge.preferences"]
+    preferences.get_auto_start = lambda: True  # type: ignore[attr-defined]
+    preferences.get_socket_port = lambda: 9876  # type: ignore[attr-defined]
+    preferences.get_xmlrpc_port = lambda: 9875  # type: ignore[attr-defined]
+    commands = types.ModuleType("commands")
+    commands.is_bridge_running = lambda: False  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "freecad.RobustMCPBridge.commands", commands)
+    qtcore = MagicMock()
+    monkeypatch.setitem(sys.modules, "PySide6", _pyside_module("PySide6", qtcore))
+    namespace = runpy.run_path(
+        str(INIT_GUI_PATH), run_name="freecad.RobustMCPBridge.init_gui"
+    )
+    error = (
+        namespace["PairingRequiredError"]("Run freecad-mcp --pair-bridge")
+        if missing_pairing
+        else RuntimeError("Unexpected startup failure")
+    )
+    server = types.ModuleType("server")
+    plugin = MagicMock()
+    plugin.start.side_effect = error
+    server.FreecadMCPPlugin = MagicMock(return_value=plugin)  # type: ignore[attr-defined]
+    monkeypatch.setitem(
+        sys.modules, "freecad.RobustMCPBridge.freecad_mcp_bridge.server", server
+    )
+    namespace["_auto_start_bridge"]()
+
+    errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
+    assert str(error) in errors
+    assert ("Traceback" in errors) is not missing_pairing
+
+
 class TestInitGuiQtFallback:
     """Tests for the PySide import fallback in ``init_gui.py``."""
 
@@ -567,6 +604,58 @@ class TestInitGuiQtFallback:
         warnings = _warnings(freecad)
         assert any("Could not schedule status bar sync" in msg for msg in warnings)
         assert any("Neither PySide6 nor PySide2" in msg for msg in warnings)
+
+
+@pytest.mark.parametrize("missing_pairing", [True, False])
+def test_standalone_startup_only_traces_unexpected_errors(
+    monkeypatch: pytest.MonkeyPatch, missing_pairing: bool
+) -> None:
+    """Standalone startup keeps expected pairing errors readable."""
+    monkeypatch.syspath_prepend(str(STARTUP_BRIDGE_PATH.parent))
+    for module_name in (
+        "authentication",
+        "challenges",
+        "credential_store",
+        "server",
+        "qt_compat",
+    ):
+        monkeypatch.setitem(sys.modules, module_name, None)
+        monkeypatch.delitem(sys.modules, module_name)
+    authentication = importlib.import_module("authentication")
+    bridge = types.ModuleType("bridge_utils")
+    bridge.get_running_plugin = lambda: None  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "bridge_utils", bridge)
+    freecad = MagicMock()
+    freecad.GuiUp = False
+    monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
+    qt_compat = importlib.import_module("qt_compat")
+    monkeypatch.setattr(qt_compat, "load_qt_core_widgets", lambda: (None, None))
+    if missing_pairing:
+        credential_store = importlib.import_module("credential_store")
+        missing = MagicMock(side_effect=FileNotFoundError("not paired"))
+        monkeypatch.setattr(credential_store, "read_credential", missing)
+        monkeypatch.delenv("FREECAD_BRIDGE_CLIENT_ID", raising=False)
+        monkeypatch.delenv("FREECAD_BRIDGE_SECRET", raising=False)
+        server = importlib.import_module("server")
+        monkeypatch.setattr(server.atexit, "register", MagicMock())
+    else:
+        server = types.ModuleType("server")
+        plugin = MagicMock()
+        plugin.start.side_effect = RuntimeError("unexpected")
+        server.FreecadMCPPlugin = MagicMock(return_value=plugin)  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "server", server)
+    namespace = runpy.run_path(str(STARTUP_BRIDGE_PATH), run_name="__main__")
+    assert namespace["PairingRequiredError"] is authentication.PairingRequiredError
+    freecad.Console.PrintError.reset_mock()
+    namespace["_start_bridge"]()
+    errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
+    if missing_pairing:
+        missing.assert_called_once_with()
+        assert "freecad-mcp --pair-bridge" in errors
+        assert "Start MCP Bridge" in errors
+    else:
+        assert "unexpected" in errors
+    assert ("Traceback" in errors) is not missing_pairing
 
 
 def test_startup_script_prefers_pyside6_and_fails_closed() -> None:

@@ -53,6 +53,10 @@ def create_hmac_verifier(
     return verify
 
 
+class PairingRequiredError(RuntimeError):
+    """The shared per-user bridge pairing has not been created yet."""
+
+
 def authenticator_from_environment() -> BridgeAuthenticator:
     """Load an explicitly configured shared credential for this bridge.
 
@@ -70,6 +74,17 @@ def authenticator_from_environment() -> BridgeAuthenticator:
             from credential_store import read_credential  # type: ignore[import-not-found,no-redef]
         try:
             client_id, secret_hex = read_credential()
+        except FileNotFoundError as exc:
+            raise PairingRequiredError(
+                "MCP Bridge is not paired yet. On this computer, open a terminal "
+                "and run `freecad-mcp --pair-bridge` using the installed MCP "
+                "server. Then select Start MCP Bridge in FreeCAD, or restart "
+                "FreeCAD if running headless. "
+                "If the command is not on your PATH, use the full path to your "
+                "installed freecad-mcp executable. Installation and pairing: "
+                "https://spkane.github.io/freecad-addon-robust-mcp-server/"
+                "latest/getting-started/installation/"
+            ) from exc
         except (OSError, ValueError, RuntimeError) as exc:
             raise RuntimeError(
                 "Cannot start the FreeCAD bridge: a trusted client authentication "
