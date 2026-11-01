@@ -627,14 +627,26 @@ class FreecadMCPPlugin:
         """Wait for listener outcomes and reject a wholly unavailable bridge."""
         deadline = time.monotonic() + 3.0
         expected = ["socket"] + (["xmlrpc"] if self._enable_xmlrpc else [])
-        if not all(
-            self._listener_ready[name].wait(max(0.0, deadline - time.monotonic()))
+        timed_out = [
+            name
             for name in expected
-        ):
+            if not self._listener_ready[name].wait(
+                max(0.0, deadline - time.monotonic())
+            )
+        ]
+        if timed_out:
+            pending = [
+                f"{'JSON-RPC' if name == 'socket' else 'XML-RPC'} "
+                f"(port {self._port if name == 'socket' else self._xmlrpc_port})"
+                for name in timed_out
+            ]
             self.stop()
             raise RuntimeError(
-                "MCP Bridge listener startup timed out. Check the FreeCAD Report "
-                "view, free the configured ports, and restart the bridge."
+                "MCP Bridge listener startup timed out: "
+                + ", ".join(pending)
+                + ". Check the FreeCAD Report view, free the configured ports or "
+                "change them in bridge preferences, then restart the bridge and "
+                "update the MCP client configuration."
             )
         status = self.get_status()
         errors = status["listener_errors"]

@@ -135,6 +135,55 @@ async def test_listener_port_conflicts_preserve_authenticated_transport(
             assert probe.connect_ex(("127.0.0.1", ports[name])) != 0
 
 
+def test_partial_start_can_stop_and_restart_after_port_is_freed(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stopping a degraded bridge releases its listener and allows recovery."""
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", False)
+    with socket.socket() as blocker:
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen()
+        port = blocker.getsockname()[1]
+        plugin = server_mod.FreecadMCPPlugin(
+            host="127.0.0.1", port=port, xmlrpc_port=0, authenticator=MagicMock()
+        )
+        plugin._start_queue_processor = MagicMock()
+        plugin._start_status_updates = MagicMock()
+        plugin._stop_status_updates = MagicMock()
+        try:
+            plugin.start()
+            assert plugin.get_status()["listeners"] == {
+                "socket": "failed",
+                "xmlrpc": "running",
+            }
+            plugin.stop()
+        finally:
+            plugin.stop()
+    try:
+        plugin.start()
+        assert plugin.get_status()["listeners"] == {
+            "socket": "running",
+            "xmlrpc": "running",
+        }
+    finally:
+        plugin.stop()
+
+
+def test_listener_startup_timeout_names_transport_and_cleans_up(
+    server_mod: Any,
+) -> None:
+    """A stalled listener produces actionable transport-specific guidance."""
+    plugin = server_mod.FreecadMCPPlugin(port=9876, xmlrpc_port=9875)
+    plugin._listener_ready["socket"] = MagicMock()
+    plugin._listener_ready["socket"].wait.return_value = False
+    plugin._listener_ready["xmlrpc"] = MagicMock()
+    plugin._listener_ready["xmlrpc"].wait.return_value = True
+    plugin.stop = MagicMock()
+    with pytest.raises(RuntimeError, match=r"JSON-RPC.*9876.*preferences"):
+        plugin._await_listeners()
+    plugin.stop.assert_called_once_with()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("transport", ["socket", "xmlrpc"])
 @pytest.mark.parametrize("algorithm", ["ed25519", "p256"])

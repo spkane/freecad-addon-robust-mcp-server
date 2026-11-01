@@ -95,7 +95,7 @@ jobs:
           }
 
       - name: Verify port conflict recovery on Windows
-        run: uv run pytest tests/unit/addon/test_addon_timeouts.py -k test_listener_port_conflicts_preserve_authenticated_transport -v --tb=short
+        run: uv run pytest tests/unit/addon/test_addon_timeouts.py -k "listener_port_conflicts or partial_start_can_stop" -v --tb=short
 
       - name: Verify workbench installer on Windows
         run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
