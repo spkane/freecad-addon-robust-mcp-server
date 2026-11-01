@@ -115,13 +115,13 @@ def discover(
                 and source_has_cam(tag, kind)
             ):
                 raise RuntimeError(
-                    f"Published CAM-capable release {tag} has no gate receipt; investigate before publishing. See the release recovery guide."
+                    f"Published CAM-capable release {tag} has no gate receipt; investigate before publishing. See docs/development/release-recovery.md."
                 )
             continue
         if release["draft"]:
             raise RuntimeError(
                 f"Incomplete staged CAM release {tag}; finish or resolve it before "
-                "publishing another component. See the release recovery guide."
+                "publishing another component. See docs/development/release-recovery.md."
             )
         if tag in (retired or set()):
             continue
@@ -252,7 +252,7 @@ def main() -> None:
             raise RuntimeError(
                 "CAM inventory update required before publication: "
                 + ", ".join(missing)
-                + ". Merge the generated inventory PR (or follow the release recovery guide)."
+                + ". Merge the generated inventory PR (or see docs/development/release-recovery.md)."
             )
     else:
         if not args.tag or not any(args.tag in releases[kind] for kind in KINDS):

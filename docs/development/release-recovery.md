@@ -36,3 +36,41 @@ archive, and image digests and the tested FreeCAD and Python versions.
 A failed run may leave a candidate image tag, and a failure after promotion can
 leave the Docker release tag published before the Python package. Examine both
 before recovery. Candidate tags are not evidence that a release passed.
+
+## Recovering an interrupted CAM release
+
+The component workflows stage a GitHub draft release containing
+`cam-gate-v1.json` before exposing the release. A later release stops if it finds
+such a draft. The receipt records the tested component tag, asset name and
+SHA-256; it does not prove that publication to every channel completed.
+
+1. Inspect the failed workflow and the draft release. Record the receipt and
+   the SHA-256 of the staged wheel or workbench zip. Verify the staged asset
+   matches both the receipt and the candidate artifact from the successful CAM
+   gate. Confirm that the companion component used in the gate was tested as
+   described in the workflow output.
+2. Inspect every relevant publication channel independently. For a server,
+   this includes PyPI or TestPyPI, Docker Hub, and GitHub Releases; for the
+   workbench, inspect GitHub Releases. Record which channels contain the
+   candidate version and compare the actual bytes or image digest. A published
+   package or image is not rolled back when a later job fails.
+3. If all published artifacts are the tested candidates, complete only the
+   missing publication steps. If an immutable package already exists, verify
+   it rather than trying to replace it. If any artifact is wrong or cannot be
+   verified, do not publish the draft; follow the channel's correction or
+   withdrawal process and prepare a new version and tag.
+4. Once publication is complete, check that the draft is published and still
+   contains its matching receipt and release asset. Retry the inventory-update
+   job, or create a PR from its existing `automation/cam-inventory-<tag>`
+   branch if GitHub rejected PR creation. Review and merge the exact asset and
+   digest before tagging the next component. If the branch no longer matches
+   the current proposal, regenerate it from current `main` and review the
+   resulting diff rather than merging a stale inventory.
+
+Do not delete a draft merely to clear the release gate. If a partially
+published version is intentionally withdrawn, first resolve each channel and
+record the decision; then remove or retire the draft through a reviewed
+recovery procedure. A published CAM-capable release without a receipt also
+requires investigation. Restore a receipt only if the successful CAM gate and
+exact published asset can be verified from the original run. Otherwise correct
+or withdraw the affected publication and create a new, properly gated release.
