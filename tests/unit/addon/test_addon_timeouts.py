@@ -90,12 +90,17 @@ async def test_listener_port_conflicts_preserve_authenticated_transport(
                     "failed" if blocked == name else "running"
                 )
                 if blocked == name:
-                    assert "already in use" in status["listener_errors"][name]
+                    assert "in use" in status["listener_errors"][name]
                     assert "preferences" in status["listener_errors"][name]
                     assert status["listener_errors"][name] in "".join(
                         args.args[0] for args in console.PrintError.call_args_list
                     )
                     continue
+                if sys.platform == "win32":
+                    with socket.socket() as competing:
+                        competing.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                        with pytest.raises(OSError):
+                            competing.bind(("127.0.0.1", ports[name]))
                 bridge_class = SocketBridge if name == "socket" else XmlRpcBridge
 
                 def signer(message: bytes) -> bytes:
@@ -371,6 +376,18 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     widget.set_running(9875, 9876, 1)
     assert "Python execution enabled" in widget._widget.setText.call_args.args[0]
     assert "authorized clients" in widget._widget.setToolTip.call_args.args[0]
+    widget.set_running(
+        9875,
+        9876,
+        1,
+        xmlrpc_running=True,
+        socket_running=False,
+        errors="JSON-RPC port 9876 is in use; check preferences",
+    )
+    assert "partial" in widget._widget.setText.call_args.args[0]
+    tooltip = widget._widget.setToolTip.call_args.args[0]
+    assert "XML-RPC: listening" in tooltip and "JSON-RPC: unavailable" in tooltip
+    assert "check preferences" in tooltip and "authorized clients" in tooltip
 
 
 @pytest.fixture

@@ -413,7 +413,7 @@ async def test_real_freecad_port_conflict_preserves_other_transport(
             assert data["status"]["listeners"][blocked] == "failed"
             assert data["status"]["listeners"][active] == "running"
             message = data["status"]["listener_errors"][blocked]
-            assert str(port) in message and "already in use" in message
+            assert str(port) in message and "in use" in message
             assert "preferences" in message and "client configuration" in message
             await _check_unauthenticated_bridge_request(data[active], active)
             bridge_class = SocketBridge if active == "socket" else XmlRpcBridge

@@ -609,6 +609,10 @@ class FreecadMCPPlugin:
         transport = "JSON-RPC" if name == "socket" else "XML-RPC"
         if isinstance(error, OSError) and error.errno == errno.EADDRINUSE:
             reason = f"port {port} is already in use"
+        elif isinstance(error, OSError) and (
+            error.errno == errno.EACCES or getattr(error, "winerror", None) == 10013
+        ):
+            reason = f"port {port} was denied; it may be in use or blocked by system permissions"
         else:
             reason = f"could not listen on port {port}: {error}"
         setting = "FREECAD_SOCKET_PORT" if name == "socket" else "FREECAD_XMLRPC_PORT"
@@ -1369,12 +1373,31 @@ class FreecadMCPPlugin:
 
     async def _start_socket_server(self) -> None:
         """Start the TCP server."""
-        self._socket_server = await asyncio.start_server(
-            self._handle_socket_client,
-            self._host,
-            self._port,
-            limit=MAX_BRIDGE_REQUEST_BYTES,
-        )
+        if os.name == "nt":
+            family = socket.AF_INET6 if ":" in self._host else socket.AF_INET
+            listener = socket.socket(family, socket.SOCK_STREAM)
+            try:
+                listener.setsockopt(
+                    socket.SOL_SOCKET, vars(socket)["SO_EXCLUSIVEADDRUSE"], 1
+                )
+                listener.bind((self._host, self._port))
+                listener.listen(socket.SOMAXCONN)
+                listener.setblocking(False)
+                self._socket_server = await asyncio.start_server(
+                    self._handle_socket_client,
+                    sock=listener,
+                    limit=MAX_BRIDGE_REQUEST_BYTES,
+                )
+            except BaseException:
+                listener.close()
+                raise
+        else:
+            self._socket_server = await asyncio.start_server(
+                self._handle_socket_client,
+                self._host,
+                self._port,
+                limit=MAX_BRIDGE_REQUEST_BYTES,
+            )
 
     async def _handle_socket_client(
         self,
@@ -1717,6 +1740,15 @@ class FreecadMCPPlugin:
                 address_family = (
                     socket.AF_INET6 if ":" in self._host else socket.AF_INET
                 )
+                allow_reuse_address = os.name != "nt"
+
+                def server_bind(self) -> None:
+                    """Prevent another Windows process from sharing the listener."""
+                    if os.name == "nt":
+                        self.socket.setsockopt(
+                            socket.SOL_SOCKET, vars(socket)["SO_EXCLUSIVEADDRUSE"], 1
+                        )
+                    super().server_bind()
 
             self._xmlrpc_server = LoopbackXMLRPCServer(
                 (self._host, self._xmlrpc_port),
