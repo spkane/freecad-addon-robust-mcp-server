@@ -375,8 +375,14 @@ async def _check_cam_interface_mismatches(
         signer=create_hmac_signer(bytes.fromhex(secret_hex)),
     )
     await bridge.connect()
+    initial = await bridge.execute_python(
+        "import freecad_mcp_bridge.cam_runtime as cam_runtime\n"
+        "_result_ = cam_runtime.CAM_API_VERSION"
+    )
+    assert initial.success, initial.error_traceback
+    initial_api = int(initial.result)
     try:
-        for api, direction in ((0, "older"), (2, "newer")):
+        for api, direction in ((initial_api - 1, "older"), (initial_api + 1, "newer")):
             result = await bridge.execute_python(
                 "import freecad_mcp_bridge.cam_runtime as cam_runtime\n"
                 f"cam_runtime.CAM_API_VERSION = {api}\n_result_ = True"
@@ -405,7 +411,7 @@ async def _check_cam_interface_mismatches(
     finally:
         await bridge.execute_python(
             "import freecad_mcp_bridge.cam_runtime as cam_runtime\n"
-            "cam_runtime.CAM_API_VERSION = 1\n_result_ = True"
+            f"cam_runtime.CAM_API_VERSION = {initial_api}\n_result_ = True"
         )
         await bridge.disconnect()
 
