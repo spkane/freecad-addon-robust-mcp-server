@@ -71,7 +71,12 @@ def main() -> None:
     """Run each declared server/workbench pairing with the opposite candidate."""
     with (ROOT / "cam-compatibility.toml").open("rb") as manifest_file:
         manifest = tomllib.load(manifest_file)
-    if set(manifest) != {"compatible_servers", "compatible_workbenches"}:
+    if set(manifest) != {
+        "compatible_servers",
+        "compatible_workbenches",
+        "retired_servers",
+        "retired_workbenches",
+    }:
         raise ValueError("Invalid CAM compatibility inventory")
     server_entries = manifest["compatible_servers"]
     workbench_entries = manifest["compatible_workbenches"]

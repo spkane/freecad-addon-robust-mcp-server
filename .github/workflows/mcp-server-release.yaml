@@ -10,7 +10,7 @@ on:
 
 # Never interrupt a publication in progress.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: cam-component-publication
   cancel-in-progress: false
 
 env:
@@ -219,6 +219,10 @@ jobs:
           archives=(workbench-candidate/*.zip)
           test "${#archives[@]}" -eq 1
           echo "archive=${archives[0]}" >> "$GITHUB_OUTPUT"
+      - name: Reconcile published CAM releases with reviewed inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python -m scripts.manage_cam_inventory check
       - name: Exercise candidate artifacts
         uses: ./.github/actions/test-cam-release
         with:
@@ -368,9 +372,42 @@ jobs:
               kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
           fi
 
+  stage-server-release:
+    name: Stage release for recovery
+    needs: [validate-tag, build, container-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download tested distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Recheck reviewed inventory before staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check
+      - name: Stage tested server and CAM gate marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python3 -m scripts.manage_cam_inventory marker --tag "$TAG" --artifact "${wheels[0]}" --output cam-gate-v1.json
+          gh release create "$TAG" --repo "${{ github.repository }}" --verify-tag --draft --title "Staged CAM release $TAG" cam-gate-v1.json "${wheels[0]}"
+
   docker-release:
     name: Promote Tested Container
-    needs: [validate-tag, container-candidate]
+    needs: [validate-tag, container-candidate, stage-server-release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -453,9 +490,25 @@ jobs:
           prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
           body_path: ${{ steps.changelog.outputs.found == 'true' && 'changelog_section.md' || '' }}
+          draft: false
           files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-cam-inventory:
+    name: Propose CAM inventory update
+    needs: [create-github-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout release workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Propose reviewed inventory update
+        uses: ./.github/actions/update-cam-inventory
 
   generate-summary:
     name: Generate Release Summary

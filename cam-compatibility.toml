@@ -4,3 +4,5 @@
 # Each release gate tests the candidate against every listed opposite component.
 compatible_servers = []
 compatible_workbenches = []
+retired_servers = []
+retired_workbenches = []

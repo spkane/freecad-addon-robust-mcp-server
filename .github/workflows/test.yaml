@@ -13,6 +13,7 @@ on:
       - "scripts/package_workbench.py"
       - "scripts/verify_workbench_archives.py"
       - "scripts/verify_cam_release_compatibility.py"
+      - "scripts/manage_cam_inventory.py"
       - "cam-compatibility.toml"
       - "scripts/install_workbench.py"
       - "just/install.just"
@@ -21,6 +22,7 @@ on:
       - ".github/workflows/test.yaml"
       - ".github/actions/setup-freecad/**"
       - ".github/actions/test-cam-release/**"
+      - ".github/actions/update-cam-inventory/**"
       - ".github/workflows/mcp-server-release.yaml"
       - ".github/workflows/mcp-workbench-release.yaml"
   pull_request:
@@ -35,6 +37,7 @@ on:
       - "scripts/package_workbench.py"
       - "scripts/verify_workbench_archives.py"
       - "scripts/verify_cam_release_compatibility.py"
+      - "scripts/manage_cam_inventory.py"
       - "cam-compatibility.toml"
       - "scripts/install_workbench.py"
       - "just/install.just"
@@ -43,6 +46,7 @@ on:
       - ".github/workflows/test.yaml"
       - ".github/actions/setup-freecad/**"
       - ".github/actions/test-cam-release/**"
+      - ".github/actions/update-cam-inventory/**"
       - ".github/workflows/mcp-server-release.yaml"
       - ".github/workflows/mcp-workbench-release.yaml"
   workflow_dispatch:

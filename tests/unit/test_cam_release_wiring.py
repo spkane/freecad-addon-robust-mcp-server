@@ -46,3 +46,35 @@ def test_workbench_archive_gate_precedes_release() -> None:
     )
     assert gate < publish
     assert not steps[gate].get("continue-on-error", False)
+
+
+def test_component_releases_share_serial_publication_group() -> None:
+    """Both component workflows serialize all publication and inventory work."""
+    server = _workflow("mcp-server-release.yaml")
+    workbench = _workflow("mcp-workbench-release.yaml")
+    assert server["concurrency"]["group"] == workbench["concurrency"]["group"]
+    assert server["concurrency"].get("cancel-in-progress") is False
+    assert workbench["concurrency"].get("cancel-in-progress") is False
+
+
+def test_staging_and_inventory_reconciliation_precede_publication() -> None:
+    """Reconciliation and durable staging happen before external publication."""
+    server = _workflow("mcp-server-release.yaml")["jobs"]
+    assert "stage-server-release" in server["docker-release"]["needs"]
+    assert "container-candidate" in server["stage-server-release"]["needs"]
+    assert any(
+        "manage_cam_inventory check" in step.get("run", "")
+        for step in server["cam-release-gate"]["steps"]
+    )
+    assert server["update-cam-inventory"]["needs"] == ["create-github-release"]
+    workbench = _workflow("mcp-workbench-release.yaml")["jobs"]
+    steps = workbench["validate-and-release"]["steps"]
+    positions = {step.get("name"): i for i, step in enumerate(steps)}
+    assert (
+        positions["Reconcile published CAM releases with reviewed inventory"]
+        < positions["Stage GitHub Release"]
+        < positions["Create GitHub Release"]
+    )
+    assert workbench["update-cam-inventory"]["needs"] == ["validate-and-release"]
+    for job in (server["update-cam-inventory"], workbench["update-cam-inventory"]):
+        assert job["permissions"] == {"contents": "write", "pull-requests": "write"}

@@ -10,7 +10,7 @@ on:
 
 # Never interrupt a publication in progress.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: cam-component-publication
   cancel-in-progress: false
 
 jobs:
@@ -106,6 +106,11 @@ jobs:
           SETUPTOOLS_SCM_PRETEND_VERSION: '0.0.0'
         run: uv build --wheel --out-dir "$RUNNER_TEMP/cam-wheel"
 
+      - name: Reconcile published CAM releases with reviewed inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python -m scripts.manage_cam_inventory check
+
       - name: Exercise the exact workbench archive and candidate wheel
         uses: ./.github/actions/test-cam-release
         with:
@@ -161,6 +166,32 @@ jobs:
               } >> release_body.md
           fi
 
+      - name: Recheck reviewed inventory before staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check
+
+      - name: Create CAM gate marker
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 -m scripts.manage_cam_inventory marker --tag "$TAG" --artifact "freecad-mcp-workbench-${VERSION}.zip" --output cam-gate-v1.json
+
+      - name: Stage GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          name: "Robust MCP Bridge Workbench v${{ steps.version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          body_path: release_body.md
+          files: |
+            cam-gate-v1.json
+            freecad-mcp-workbench-${{ steps.version.outputs.version }}.zip
+            freecad-mcp-workbench-${{ steps.version.outputs.version }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -168,6 +199,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
+          draft: false
           body_path: release_body.md
           files: |
             freecad-mcp-workbench-${{ steps.version.outputs.version }}.tar.gz
@@ -193,3 +225,18 @@ jobs:
             echo ""
             echo "Extract the workbench archive to your FreeCAD Mod directory."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  update-cam-inventory:
+    name: Propose CAM inventory update
+    needs: [validate-and-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout release workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Propose reviewed inventory update
+        uses: ./.github/actions/update-cam-inventory

@@ -211,18 +211,45 @@ FreeCAD CAM job. The server release uses the exact wheel to be published; the
 workbench release uses the exact zip to be published. The companion artifact
 built in either workflow is not itself published by that workflow.
 
-The gate additionally checks an actual pre-CAM workbench and simulates older
-and newer CAM interface versions, requiring clear MCP errors. CAM interface
-version 1 is compatible with version 1; different interface versions are not
-assumed compatible. The first CAM-capable component release is not yet
-published, so `cam-compatibility.toml` initially contains no compatible released
-components. Once a CAM-capable server or workbench is published, add its GitHub
-release tag, exact asset name, and SHA-256 to the corresponding inventory. The
-gate tests each declared server against the candidate workbench, and each
-declared workbench against the candidate server. Update the inventory whenever
-the supported releases change; it defines the independent versions that the
-release gate promises to exercise. The gate does not automatically infer support
-from every published release.
+The gate also checks an actual pre-CAM workbench and simulates older and newer
+CAM interfaces, requiring clear errors. Server and workbench release workflows
+share a concurrency group. Only one runs at a time; GitHub's default queue keeps
+one pending run, so another queued run replaces it. Check canceled runs and
+rerun them after the active release finishes. Do not manually publish a
+component outside these workflows.
+
+After the artifact gate succeeds, a release carries `cam-gate-v1.json`, which
+binds its tag, asset name, and SHA-256 to the tested artifact. Server releases
+are staged as a GitHub draft before Docker promotion or PyPI publication; the
+workbench archive is staged before its GitHub Release is published. A remaining
+CAM draft blocks subsequent releases. Investigate the actual PyPI, Docker and
+GitHub states before recovering a partial release; do not delete the draft just
+to bypass this check. A CAM-capable published tag without a receipt also blocks
+publication until investigated.
+
+After publication, CI opens an inventory PR against current `main` using the
+published GitHub Release metadata and receipt. Review the asset names and
+SHA-256 digests and merge it before tagging the next component. The next release
+fails if a gated release is absent or a pinned asset has changed. It also fails
+if its tagged inventory differs from current `main`; create its tag from the
+updated branch. This check prevents an unmerged inventory PR from silently
+reducing coverage. The gate then exercises every listed release against the
+opposite candidate.
+
+The support policy includes every CAM-gated component release, including
+prereleases, until a reviewed PR moves its tag into `retired_servers` or
+`retired_workbenches` with a reason. Retiring a release is a deliberate support
+change; do not simply remove its entry. An incompatible future interface needs
+an explicit compatibility-policy change before release.
+
+The inventory-update job needs `contents: write` and `pull-requests: write` and
+repository settings must allow GitHub Actions to create pull requests. If PR
+creation is disabled, the release remains published but the job fails with the
+branch name; create the PR from that branch or enable the setting and retry.
+Pull request workflows triggered by `GITHUB_TOKEN` require a maintainer to
+approve the workflow runs. Alternatively, an appropriately scoped GitHub App
+token can trigger them without that approval. Merging the inventory PR remains
+a reviewed maintainer action.
 
 PyPI and TestPyPI use separate Trusted Publisher registrations. In each
 registry, verify the publisher for `freecad-robust-mcp` names GitHub owner

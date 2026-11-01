@@ -36,7 +36,7 @@ def test_rejects_invalid_compatibility_entries(field: str, value: str) -> None:
 def test_empty_inventory_has_no_downloads(tmp_path: Path) -> None:
     """An empty initial inventory succeeds without fetching releases."""
     (tmp_path / "cam-compatibility.toml").write_text(
-        "compatible_servers = []\ncompatible_workbenches = []\n"
+        "compatible_servers = []\ncompatible_workbenches = []\nretired_servers = []\nretired_workbenches = []\n"
     )
     with (
         patch("scripts.verify_cam_release_compatibility.ROOT", tmp_path),
@@ -55,6 +55,8 @@ def test_inventory_tests_each_independent_component(tmp_path: Path) -> None:
     manifest = """
 compatible_servers = [{ tag = "robust-mcp-server-v1.0.0", asset = "server.whl", sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }]
 compatible_workbenches = [{ tag = "robust-mcp-workbench-v1.0.0", asset = "bridge.zip", sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }]
+retired_servers = []
+retired_workbenches = []
 """
     (tmp_path / "cam-compatibility.toml").write_text(manifest)
     with (
