@@ -62,6 +62,12 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     server = _workflow("mcp-server-release.yaml")["jobs"]
     assert "stage-server-release" in server["docker-release"]["needs"]
     assert "container-candidate" in server["stage-server-release"]["needs"]
+    first_check = next(
+        step
+        for step in server["cam-release-gate"]["steps"]
+        if "manage_cam_inventory check" in step.get("run", "")
+    )
+    assert first_check["run"].startswith("python3 ")
     assert any(
         "manage_cam_inventory check" in step.get("run", "")
         for step in server["cam-release-gate"]["steps"]
