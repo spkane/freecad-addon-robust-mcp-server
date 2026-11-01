@@ -132,6 +132,14 @@ jobs:
       - name: Check package
         run: uv run twine check dist/*
 
+      - name: Build workbench candidate from this release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(awk '/<workbench>/,/<\/workbench>/' package.xml | grep -o '<version>[^<]*</version>' | head -1 | sed 's/<[^>]*>//g')
+          python3 scripts/package_workbench.py archives "$VERSION" dist/workbench
+          python3 scripts/verify_workbench_archives.py "$VERSION" dist/workbench
+
       - name: List built artifacts
         run: ls -la dist/
 
@@ -173,6 +181,34 @@ jobs:
           pip show freecad-robust-mcp
           freecad-mcp --help
           python -c 'from importlib.metadata import version; print("freecad-robust-mcp version:", version("freecad-robust-mcp"))'
+
+  cam-release-gate:
+    name: Test CAM release candidates
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download the exact candidate artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Select workbench archive
+        id: workbench
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(dist/workbench/*.zip)
+          test "${#archives[@]}" -eq 1
+          echo "archive=${archives[0]}" >> "$GITHUB_OUTPUT"
+      - name: Exercise candidate artifacts
+        uses: ./.github/actions/test-cam-release
+        with:
+          wheel-directory: dist
+          workbench-archive: ${{ steps.workbench.outputs.archive }}
 
   publish-testpypi:
     name: Publish to TestPyPI
@@ -220,7 +256,7 @@ jobs:
 
   container-candidate:
     name: Build and Test Container Candidate
-    needs: [validate-tag, build, test-install]
+    needs: [validate-tag, build, test-install, cam-release-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: read

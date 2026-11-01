@@ -204,8 +204,25 @@ just release::tag-mcp-server 1.0.0
 
 Before tagging, confirm the cross-platform authentication workflow has passed
 against its freshly built, isolated wheel, including the sketch operations
-reported in issue #87. The release workflow tests the built tag artifacts for
-installation; verify the actual candidate against FreeCAD before publication.
+reported in issue #87. Each component release also runs the CAM artifact gate
+before publication: it installs the exact candidate artifact, builds the other
+component from the same tagged commit, pairs them, and exercises an actual
+FreeCAD CAM job. The server release uses the exact wheel to be published; the
+workbench release uses the exact zip to be published. The companion artifact
+built in either workflow is not itself published by that workflow.
+
+The gate additionally checks an actual pre-CAM workbench and simulates older
+and newer CAM interface versions, requiring clear MCP errors. CAM interface
+version 1 is compatible with version 1; different interface versions are not
+assumed compatible. The first CAM-capable component release is not yet
+published, so `cam-compatibility.toml` initially contains no compatible released
+components. Once a CAM-capable server or workbench is published, add its GitHub
+release tag, exact asset name, and SHA-256 to the corresponding inventory. The
+gate tests each declared server against the candidate workbench, and each
+declared workbench against the candidate server. Update the inventory whenever
+the supported releases change; it defines the independent versions that the
+release gate promises to exercise. The gate does not automatically infer support
+from every published release.
 
 PyPI and TestPyPI use separate Trusted Publisher registrations. In each
 registry, verify the publisher for `freecad-robust-mcp` names GitHub owner

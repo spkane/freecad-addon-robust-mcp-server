@@ -1,0 +1,70 @@
+name: Test CAM release artifacts
+description: Install the candidate wheel and workbench archive and exercise CAM in FreeCAD
+inputs:
+  wheel-directory:
+    description: Directory containing exactly one candidate wheel
+    required: true
+  workbench-archive:
+    description: Path to the candidate workbench zip archive
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install FreeCAD
+      uses: ./.github/actions/setup-freecad
+    - name: Install uv
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+    - name: Install test dependencies and candidate wheel
+      shell: bash
+      env:
+        WHEEL_DIRECTORY: ${{ inputs.wheel-directory }}
+      run: |
+        set -euo pipefail
+        uv sync --all-extras
+        shopt -s nullglob
+        wheels=("$WHEEL_DIRECTORY"/*.whl)
+        if [ "${#wheels[@]}" -ne 1 ]; then
+          echo "Expected exactly one candidate wheel" >&2
+          exit 1
+        fi
+        uv venv --python 3.11 "$RUNNER_TEMP/cam-candidate-venv"
+        uv pip install --python "$RUNNER_TEMP/cam-candidate-venv/bin/python" "${wheels[0]}"
+        "$RUNNER_TEMP/cam-candidate-venv/bin/python" -c 'import freecad_mcp, pathlib; p = pathlib.Path(freecad_mcp.__file__).resolve(); assert not p.is_relative_to(pathlib.Path.cwd().resolve()), p; print("Candidate wheel:", p)'
+    - name: Test installed candidates and interface mismatches
+      shell: bash
+      env:
+        FREECAD_AUTH_TEST_COMMAND: freecadcmd
+        FREECAD_AUTH_TEST_REQUIRED: '1'
+        FREECAD_CAM_RELEASE_GATE: '1'
+        FREECAD_RELEASE_WORKBENCH_ARCHIVE: ${{ inputs.workbench-archive }}
+        FREECAD_MCP_TEST_PYTHON: ${{ runner.temp }}/cam-candidate-venv/bin/python
+      run: uv run pytest tests/integration/test_authenticated_standalone.py::test_authenticated_transports_with_real_freecad -v --tb=short
+    - name: Download and verify the published pre-CAM workbench
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/pre-cam-workbench"
+        gh release download robust-mcp-workbench-v0.7.0-rc.1 \
+          --repo spkane/freecad-addon-robust-mcp-server \
+          --pattern freecad-mcp-workbench-0.7.0-rc.1.zip \
+          --dir "$RUNNER_TEMP/pre-cam-workbench"
+        echo '2d563bb69cb8b93aacd313372ec4b083e373535e7482d852116b0c1507e63d11  '"$RUNNER_TEMP"'/pre-cam-workbench/freecad-mcp-workbench-0.7.0-rc.1.zip' | sha256sum -c -
+    - name: Verify the published older workbench fails clearly
+      shell: bash
+      env:
+        FREECAD_AUTH_TEST_COMMAND: freecadcmd
+        FREECAD_AUTH_TEST_REQUIRED: '1'
+        FREECAD_MCP_TEST_PYTHON: ${{ runner.temp }}/cam-candidate-venv/bin/python
+        FREECAD_PRE_CAM_WORKBENCH_ARCHIVE: ${{ runner.temp }}/pre-cam-workbench/freecad-mcp-workbench-0.7.0-rc.1.zip
+      run: uv run pytest tests/integration/test_authenticated_standalone.py::test_candidate_server_with_pre_cam_workbench -v --tb=short
+    - name: Test independently released compatible components
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        FREECAD_AUTH_TEST_COMMAND: freecadcmd
+        FREECAD_AUTH_TEST_REQUIRED: '1'
+        FREECAD_MCP_TEST_PYTHON: ${{ runner.temp }}/cam-candidate-venv/bin/python
+        FREECAD_RELEASE_WORKBENCH_ARCHIVE: ${{ inputs.workbench-archive }}
+      run: uv run python scripts/verify_cam_release_compatibility.py

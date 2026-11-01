@@ -2731,9 +2731,12 @@ _CAM_OPERATIONS = frozenset(
 def dispatch(version: int, operation: str, args: dict[str, Any]) -> Any:
     """Dispatch an explicitly supported CAM operation for a compatible client."""
     if version != CAM_API_VERSION:
+        direction = "older" if version > CAM_API_VERSION else "newer"
         raise RuntimeError(
-            "Incompatible CAM interface: update the Robust MCP Bridge and MCP "
-            "server to compatible releases, then restart FreeCAD"
+            f"Incompatible CAM interface: the Robust MCP Bridge is {direction} "
+            f"than the MCP server (bridge API {CAM_API_VERSION}, server API "
+            f"{version}). Install compatible server and workbench releases, "
+            "then restart FreeCAD"
         )
     if operation not in _CAM_OPERATIONS:
         raise ValueError(f"Unknown CAM operation: {operation!r}")

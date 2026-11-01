@@ -17,6 +17,9 @@ on:
       - "uv.lock"
       - ".github/workflows/test.yaml"
       - ".github/actions/setup-freecad/**"
+      - ".github/actions/test-cam-release/**"
+      - ".github/workflows/mcp-server-release.yaml"
+      - ".github/workflows/mcp-workbench-release.yaml"
   pull_request:
     branches: [main, master]
     paths:
@@ -33,6 +36,9 @@ on:
       - "uv.lock"
       - ".github/workflows/test.yaml"
       - ".github/actions/setup-freecad/**"
+      - ".github/actions/test-cam-release/**"
+      - ".github/workflows/mcp-server-release.yaml"
+      - ".github/workflows/mcp-workbench-release.yaml"
   workflow_dispatch:
   workflow_call:
 
@@ -42,6 +48,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cam-release-gate:
+    name: Test exact CAM release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Build candidate artifacts
+        id: candidates
+        shell: bash
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: '0.0.0'
+        run: |
+          set -euo pipefail
+          uv build --wheel --out-dir "$RUNNER_TEMP/cam-wheel"
+          VERSION=$(awk '/<workbench>/,/<\/workbench>/' package.xml | grep -o '<version>[^<]*</version>' | head -1 | sed 's/<[^>]*>//g')
+          python3 scripts/package_workbench.py archives "$VERSION" "$RUNNER_TEMP/cam-workbench"
+          python3 scripts/verify_workbench_archives.py "$VERSION" "$RUNNER_TEMP/cam-workbench"
+          echo "archive=$RUNNER_TEMP/cam-workbench/freecad-mcp-workbench-$VERSION.zip" >> "$GITHUB_OUTPUT"
+      - name: Exercise candidate artifacts
+        uses: ./.github/actions/test-cam-release
+        with:
+          wheel-directory: ${{ runner.temp }}/cam-wheel
+          workbench-archive: ${{ steps.candidates.outputs.archive }}
+
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest

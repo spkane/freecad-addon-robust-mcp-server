@@ -242,6 +242,31 @@ class TestCamTools:
                 object_name="Profile", values={"Side": "X"}
             )
 
+    async def test_incompatible_bridge_exposes_only_safe_guidance(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+    ) -> None:
+        """CAM version errors are deliberately sent to the MCP client."""
+        from mcp.server.mcpserver.exceptions import ToolError
+
+        tools, bridge = tools_and_bridge
+        bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr="",
+                execution_time_ms=1.0,
+                error_type="RuntimeError",
+                error_traceback=(
+                    "Traceback includes private local paths\n"
+                    "RuntimeError: Incompatible CAM interface: bridge is older"
+                ),
+            )
+        )
+        with pytest.raises(ToolError, match="bridge is older") as exc:
+            await tools["cam_get_capabilities"]()
+        assert "private local paths" not in str(exc.value)
+
     async def test_describe_type_passes_type_as_type(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
@@ -409,6 +434,15 @@ def test_dispatch_rejects_incompatible_version_and_unknown_operation(
         runtime.dispatch(999, "capabilities", {})
     with pytest.raises(ValueError, match="Unknown CAM operation"):
         runtime.dispatch(1, "_write_output_file", {})
+
+
+@pytest.mark.parametrize("server_api,direction", [(2, "older"), (0, "newer")])
+def test_dispatch_reports_incompatible_bridge_direction(
+    runtime: Any, server_api: int, direction: str
+) -> None:
+    """Mismatched components identify the older or newer bridge."""
+    with pytest.raises(RuntimeError, match=direction):
+        runtime.dispatch(server_api, "capabilities", {})
 
 
 def test_split_output_collision_does_not_write(runtime: Any, tmp_path: Path) -> None:

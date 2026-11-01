@@ -6,13 +6,15 @@ import json
 import os
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from collections.abc import Iterator
 from ctypes import wintypes
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import httpx2
 import pytest
@@ -32,6 +34,33 @@ PROBE = ROOT / "tests" / "fixtures" / "freecad_authenticated_probe.py"
 def _server_python() -> str:
     """Use the installed wheel's interpreter in release verification jobs."""
     return os.environ.get("FREECAD_MCP_TEST_PYTHON", sys.executable)
+
+
+def _remove_server_source_path(env: dict[str, str]) -> None:
+    """Keep source checkouts from shadowing an explicitly installed server."""
+    if os.environ.get("FREECAD_MCP_TEST_PYTHON"):
+        env.pop("PYTHONPATH", None)
+
+
+def _extract_candidate_archive(archive: Path, mod_dir: Path) -> Path:
+    """Install a release zip into an isolated FreeCAD profile."""
+    root_name = archive.stem
+    with zipfile.ZipFile(archive) as package:
+        for item in package.infolist():
+            path = PurePosixPath(item.filename)
+            parts = path.parts
+            mode = item.external_attr >> 16
+            if (
+                not parts
+                or parts[0] != root_name
+                or path.is_absolute()
+                or ".." in parts
+                or "\\" in item.filename
+                or stat.S_ISLNK(mode)
+            ):
+                pytest.fail(f"Unsafe workbench archive member: {item.filename}")
+        package.extractall(mod_dir)
+    return mod_dir / root_name / "freecad" / "RobustMCPBridge"
 
 
 @pytest.fixture
@@ -59,6 +88,7 @@ def isolated_pairing(
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     pair_env = {**os.environ, "HOME": str(tmp_path)}
+    _remove_server_source_path(pair_env)
     result = subprocess.run(  # noqa: S603 - test interpreter selected by CI
         [_server_python(), "-m", "freecad_mcp.server", "--pair-bridge"],
         env=pair_env,
@@ -108,6 +138,12 @@ async def _check_harness_session(session: ClientSession) -> None:
     assert any(tool.name == "cam_get_capabilities" for tool in tools.tools)
     cam = await session.call_tool("cam_get_capabilities")
     assert not cam.is_error, cam
+    caps = cam.structured_content
+    assert caps is not None
+    posts = caps["post_processors"]
+    post_processor = next(
+        name for name in ("linuxcnc_legacy", "linuxcnc") if name in posts
+    )
     calls = (
         ("create_document", {"name": "ReleaseSketchRegression"}),
         (
@@ -149,12 +185,53 @@ async def _check_harness_session(session: ClientSession) -> None:
                 "default_tool_controller": False,
             },
         ),
+        (
+            "cam_add_tool_controller",
+            {
+                "doc_name": "ReleaseCamRegression",
+                "tool": {
+                    "shape": "endmill",
+                    "name": "Release test endmill",
+                    "parameters": {
+                        "Diameter": "4 mm",
+                        "Flutes": 2,
+                        "CuttingEdgeHeight": "12 mm",
+                        "Length": "40 mm",
+                        "ShankDiameter": "4 mm",
+                    },
+                },
+                "feeds_speeds": "none",
+                "spindle_speed": 10000,
+                "horiz_feed": "600 mm/min",
+                "vert_feed": "150 mm/min",
+            },
+        ),
+        (
+            "cam_add_operation",
+            {
+                "doc_name": "ReleaseCamRegression",
+                "op_type": "Profile",
+                "properties": {"Side": "Outside", "StepDown": "2 mm"},
+            },
+        ),
         ("cam_inspect_job", {"doc_name": "ReleaseCamRegression"}),
+        (
+            "cam_post_process",
+            {
+                "doc_name": "ReleaseCamRegression",
+                "post_processor": post_processor,
+                "return_lines": 10000,
+            },
+        ),
         ("close_document", {"doc_name": "ReleaseCamRegression"}),
     )
     for name, arguments in calls:
         tool_result = await session.call_tool(name, arguments=arguments)
         assert not tool_result.is_error, (name, tool_result)
+        if name == "cam_post_process":
+            assert tool_result.structured_content is not None
+            lines = tool_result.structured_content["gcode"]
+            assert any(line.startswith(("G1", "G01")) for line in lines)
 
 
 async def _check_harnesses(
@@ -285,6 +362,69 @@ async def _run_cam_platform_suite(env: dict[str, str], port: int) -> None:
     assert await cam_tests.wait() == 0, "Real FreeCAD CAM tests failed"
 
 
+async def _check_cam_interface_mismatches(
+    env: dict[str, str], port: int, client_id: str, secret_hex: str
+) -> None:
+    """Exercise both mismatch directions through the installed MCP wheel."""
+    if os.environ.get("FREECAD_CAM_RELEASE_GATE") != "1":
+        return
+    bridge = XmlRpcBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id=client_id,
+        signer=create_hmac_signer(bytes.fromhex(secret_hex)),
+    )
+    await bridge.connect()
+    try:
+        for api, direction in ((0, "older"), (2, "newer")):
+            result = await bridge.execute_python(
+                "import freecad_mcp_bridge.cam_runtime as cam_runtime\n"
+                f"cam_runtime.CAM_API_VERSION = {api}\n_result_ = True"
+            )
+            assert result.success, result.error_traceback
+            settings = {
+                **env,
+                "FREECAD_MODE": "xmlrpc",
+                "FREECAD_SOCKET_HOST": "127.0.0.1",
+                "FREECAD_XMLRPC_PORT": str(port),
+                "FREECAD_TRANSPORT": "stdio",
+            }
+            params = StdioServerParameters(
+                command=_server_python(),
+                args=["-m", "freecad_mcp.server"],
+                env=settings,
+            )
+            with tempfile.TemporaryFile(mode="w+") as stderr:
+                async with stdio_client(params, errlog=stderr) as streams:
+                    async with ClientSession(*streams) as session:
+                        await session.initialize()
+                        response = await session.call_tool("cam_get_capabilities")
+                        assert response.is_error
+                        assert direction in str(response.content)
+                        assert "compatible" in str(response.content)
+    finally:
+        await bridge.execute_python(
+            "import freecad_mcp_bridge.cam_runtime as cam_runtime\n"
+            "cam_runtime.CAM_API_VERSION = 1\n_result_ = True"
+        )
+        await bridge.disconnect()
+
+
+async def _prepare_workbench(mod_dir: Path) -> Path:
+    """Install the candidate archive or prepare a source-based test workbench."""
+    candidate_archive = os.environ.get("FREECAD_RELEASE_WORKBENCH_ARCHIVE")
+    if candidate_archive:
+        return _extract_candidate_archive(Path(candidate_archive), mod_dir)
+    installer = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(ROOT / "scripts/install_workbench.py"),
+        "--mod-dir",
+        str(mod_dir),
+    )
+    assert await installer.wait() == 0
+    return mod_dir / "RobustMCPBridge" / "freecad" / "RobustMCPBridge"
+
+
 @pytest.mark.standalone_freecad
 @pytest.mark.asyncio
 @pytest.mark.timeout(600)
@@ -298,22 +438,15 @@ async def test_authenticated_transports_with_real_freecad(
     ready = tmp_path / "ports.json"
     log_path = tmp_path / "freecad.log"
     mod_dir = tmp_path / "Mod"
-    installer = await asyncio.create_subprocess_exec(
-        sys.executable,
-        str(ROOT / "scripts/install_workbench.py"),
-        "--mod-dir",
-        str(mod_dir),
-    )
-    assert await installer.wait() == 0
+    workbench_path = await _prepare_workbench(mod_dir)
     env = {
         **os.environ,
         "FREECAD_MCP_TESTING": "1",
         "FREECAD_AUTH_TEST_READY": str(ready),
         "HOME": str(tmp_path),
-        "FREECAD_AUTH_TEST_WORKBENCH_PATH": str(
-            mod_dir / "RobustMCPBridge" / "freecad" / "RobustMCPBridge"
-        ),
+        "FREECAD_AUTH_TEST_WORKBENCH_PATH": str(workbench_path),
     }
+    _remove_server_source_path(env)
     env.pop("FREECAD_BRIDGE_CLIENT_ID", None)
     env.pop("FREECAD_BRIDGE_SECRET", None)
     with log_path.open("w+", encoding="utf-8") as log:
@@ -396,6 +529,9 @@ async def test_authenticated_transports_with_real_freecad(
                 await _check_harnesses(env, ports[mode], mode)
             await _check_harnesses(env, ports["xmlrpc"], "xmlrpc", use_default=True)
             await _run_cam_platform_suite(env, ports["xmlrpc"])
+            await _check_cam_interface_mismatches(
+                env, ports["xmlrpc"], client_id, secret_hex
+            )
         finally:
             if process.returncode is None:
                 if os.name == "nt":
@@ -431,6 +567,7 @@ async def test_real_freecad_port_conflict_preserves_other_transport(
         "FREECAD_AUTH_TEST_READY": str(ready),
         "FREECAD_AUTH_TEST_ALLOW_PARTIAL": "1",
     }
+    _remove_server_source_path(env)
     env.pop("FREECAD_BRIDGE_CLIENT_ID", None)
     env.pop("FREECAD_BRIDGE_SECRET", None)
     with socket.socket() as blocker, log_path.open("w+", encoding="utf-8") as log:
@@ -572,3 +709,68 @@ def test_headless_workbench_autostart(
         "started": expected,
         "listening": expected,
     }, result.stdout + result.stderr
+
+
+@pytest.mark.standalone_freecad
+@pytest.mark.asyncio
+@pytest.mark.timeout(120)
+@pytest.mark.usefixtures("isolated_pairing")
+async def test_candidate_server_with_pre_cam_workbench(tmp_path: Path) -> None:
+    """An actual older workbench returns clear update guidance through MCP."""
+    archive = os.environ.get("FREECAD_PRE_CAM_WORKBENCH_ARCHIVE")
+    if not archive:
+        pytest.skip("No historical workbench artifact configured")
+    executable = os.environ["FREECAD_AUTH_TEST_COMMAND"]
+    workbench = _extract_candidate_archive(
+        Path(os.environ["FREECAD_PRE_CAM_WORKBENCH_ARCHIVE"]), tmp_path / "Mod"
+    )
+    ready = tmp_path / "legacy-ports.json"
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "FREECAD_MCP_TESTING": "1",
+        "FREECAD_AUTH_TEST_READY": str(ready),
+        "FREECAD_AUTH_TEST_WORKBENCH_PATH": str(workbench),
+    }
+    _remove_server_source_path(env)
+    env.pop("FREECAD_BRIDGE_CLIENT_ID", None)
+    env.pop("FREECAD_BRIDGE_SECRET", None)
+    with tempfile.TemporaryFile(mode="w+") as log:
+        process = await asyncio.create_subprocess_exec(
+            executable, str(PROBE), stdout=log, stderr=subprocess.STDOUT, env=env
+        )
+        try:
+            deadline = time.monotonic() + 30
+            while not ready.exists() and time.monotonic() < deadline:
+                if process.returncode is not None:
+                    break
+                await asyncio.sleep(0.05)
+            if not ready.exists():
+                log.seek(0)
+                pytest.fail(f"Historical FreeCAD bridge did not start: {log.read()}")
+            port = json.loads(ready.read_text(encoding="utf-8"))["xmlrpc"]
+            env.update(
+                FREECAD_MODE="xmlrpc",
+                FREECAD_SOCKET_HOST="127.0.0.1",
+                FREECAD_XMLRPC_PORT=str(port),
+                FREECAD_TRANSPORT="stdio",
+            )
+            params = StdioServerParameters(
+                command=_server_python(), args=["-m", "freecad_mcp.server"], env=env
+            )
+            with tempfile.TemporaryFile(mode="w+") as stderr:
+                async with stdio_client(params, errlog=stderr) as streams:
+                    async with ClientSession(*streams) as session:
+                        await session.initialize()
+                        response = await session.call_tool("cam_get_capabilities")
+                        assert response.is_error
+                        assert "updated Robust MCP Bridge" in str(response.content)
+                        assert "restart FreeCAD" in str(response.content)
+        finally:
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()

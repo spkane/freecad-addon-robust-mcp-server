@@ -1,0 +1,6 @@
+# Published releases explicitly supported with the current CAM interface.
+# The first CAM-capable release has not been published yet. Add each supported
+# published component here, including its exact GitHub release asset SHA-256.
+# Each release gate tests the candidate against every listed opposite component.
+compatible_servers = []
+compatible_workbenches = []

@@ -96,6 +96,20 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: python3 scripts/verify_workbench_archives.py "$VERSION" .
 
+      - name: Build the MCP server candidate from this release commit
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Build candidate wheel
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: '0.0.0'
+        run: uv build --wheel --out-dir "$RUNNER_TEMP/cam-wheel"
+
+      - name: Exercise the exact workbench archive and candidate wheel
+        uses: ./.github/actions/test-cam-release
+        with:
+          wheel-directory: ${{ runner.temp }}/cam-wheel
+          workbench-archive: freecad-mcp-workbench-${{ steps.version.outputs.version }}.zip
+
       - name: Extract release notes section
         id: changelog
         run: |
