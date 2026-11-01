@@ -86,6 +86,14 @@ jobs:
       - name: Verify Credential Manager pairing
         run: uv run pytest tests/unit/test_windows_bridge_credential_store.py -v --tb=short
 
+      - name: Verify XML-RPC slow-client deadline on Windows
+        shell: pwsh
+        run: |
+          1..10 | ForEach-Object {
+            uv run pytest tests/unit/addon/test_addon_timeouts.py -k test_xmlrpc_total_read_deadline_stops_a_slow_client -v --tb=short
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
       - name: Verify workbench installer on Windows
         run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
 
