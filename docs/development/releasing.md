@@ -234,7 +234,9 @@ fails if a gated release is absent or a pinned asset has changed. It also fails
 if its tagged inventory differs from current `main`; create its tag from the
 updated branch. This check prevents an unmerged inventory PR from silently
 reducing coverage. The gate then exercises every listed release against the
-opposite candidate.
+opposite candidate. The workflows recheck the inventory before publishing each
+component, but those checks cannot lock merges to `main`. Do not merge inventory
+or support-policy changes while a component release is running.
 
 The support policy includes every CAM-gated component release, including
 prereleases, until a reviewed PR moves its tag into `retired_servers` or

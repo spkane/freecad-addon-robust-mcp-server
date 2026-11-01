@@ -238,9 +238,18 @@ jobs:
       name: testpypi
       url: https://test.pypi.org/p/freecad-robust-mcp
     permissions:
+      contents: read
       id-token: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recheck inventory before package publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
       - name: Download distribution artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -261,9 +270,18 @@ jobs:
       name: pypi
       url: https://pypi.org/p/freecad-robust-mcp
     permissions:
+      contents: read
       id-token: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recheck inventory before package publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
       - name: Download distribution artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -412,6 +430,14 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recheck inventory before container promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to Docker Hub

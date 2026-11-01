@@ -168,3 +168,23 @@ def test_update_records_exact_published_entry(
     updated = inventory((tmp_path / "cam-compatibility.toml").read_bytes())
     assert updated["compatible_servers"] == [entry]
     assert not updated["compatible_workbenches"]
+
+
+def test_final_inventory_check_detects_policy_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Changed support policy stops publication after a release is staged."""
+    from scripts.manage_cam_inventory import main
+
+    old = empty()
+    newer = empty()
+    newer["retired_servers"].append({"tag": SERVER, "reason": "Support ended"})
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["manage_cam_inventory", "check-current"])
+    (tmp_path / "cam-compatibility.toml").write_text(render(old))
+    with patch(
+        "scripts.manage_cam_inventory.main_inventory",
+        return_value=render(newer).encode(),
+    ):
+        with pytest.raises(RuntimeError, match="changed during this release"):
+            main()

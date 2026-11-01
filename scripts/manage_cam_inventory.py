@@ -218,7 +218,9 @@ def render(manifest: dict[str, Any]) -> str:
 def main() -> None:
     """Prepare a gate marker or reconcile the release inventory."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("marker", "check", "update"))
+    parser.add_argument(
+        "command", choices=("marker", "check", "check-current", "update")
+    )
     parser.add_argument("--tag")
     parser.add_argument("--artifact", type=Path)
     parser.add_argument("--output", type=Path)
@@ -230,6 +232,12 @@ def main() -> None:
         return
     reviewed = main_inventory()
     manifest = inventory(reviewed)
+    if args.command == "check-current":
+        if inventory(Path(INVENTORY).read_bytes()) != manifest:
+            raise RuntimeError(
+                "The reviewed CAM inventory changed during this release; resolve the staged release and rerun the gate from current main."
+            )
+        return
     retired = {
         entry["tag"] for kind in KINDS for entry in manifest[f"retired_{PLURAL[kind]}"]
     }

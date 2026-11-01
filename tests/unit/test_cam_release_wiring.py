@@ -84,3 +84,35 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     assert workbench["update-cam-inventory"]["needs"] == ["validate-and-release"]
     for job in (server["update-cam-inventory"], workbench["update-cam-inventory"]):
         assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
+
+
+def test_reviewed_inventory_rechecked_before_each_publication() -> None:
+    """Inventory changes during a release stop each publication step."""
+    server = _workflow("mcp-server-release.yaml")["jobs"]
+    for job_name, publication in (
+        ("docker-release", "Promote the tested digest"),
+        ("publish-pypi", "Publish to PyPI"),
+        ("publish-testpypi", "Publish to TestPyPI"),
+    ):
+        steps = server[job_name]["steps"]
+        check = next(
+            i
+            for i, step in enumerate(steps)
+            if "manage_cam_inventory check-current" in step.get("run", "")
+        )
+        publish = next(
+            i for i, step in enumerate(steps) if step.get("name") == publication
+        )
+        assert check < publish
+    steps = _workflow("mcp-workbench-release.yaml")["jobs"]["validate-and-release"][
+        "steps"
+    ]
+    check = next(
+        i
+        for i, step in enumerate(steps)
+        if "manage_cam_inventory check-current" in step.get("run", "")
+    )
+    publish = next(
+        i for i, step in enumerate(steps) if step.get("name") == "Create GitHub Release"
+    )
+    assert check < publish

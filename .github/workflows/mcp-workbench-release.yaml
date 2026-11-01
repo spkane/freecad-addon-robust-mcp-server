@@ -192,6 +192,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Recheck inventory before release publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
