@@ -19,17 +19,21 @@ def test_server_publication_depends_on_cam_artifact_gate() -> None:
     assert "container-candidate" in jobs["docker-release"]["needs"]
     for publication in ("publish-pypi", "publish-testpypi"):
         assert "container-candidate" in jobs[publication]["needs"]
+    assert not jobs["cam-release-gate"].get("continue-on-error", False)
     gate_steps = jobs["cam-release-gate"]["steps"]
-    assert any(
-        step.get("uses") == "./.github/actions/test-cam-release" for step in gate_steps
+    gate = next(
+        step
+        for step in gate_steps
+        if step.get("uses") == "./.github/actions/test-cam-release"
     )
+    assert not gate.get("continue-on-error", False)
 
 
 def test_workbench_archive_gate_precedes_release() -> None:
     """The archive is exercised before the release action can publish it."""
-    steps = _workflow("mcp-workbench-release.yaml")["jobs"]["validate-and-release"][
-        "steps"
-    ]
+    job = _workflow("mcp-workbench-release.yaml")["jobs"]["validate-and-release"]
+    assert not job.get("continue-on-error", False)
+    steps = job["steps"]
     gate = next(
         i
         for i, step in enumerate(steps)
@@ -41,3 +45,4 @@ def test_workbench_archive_gate_precedes_release() -> None:
         if str(step.get("uses", "")).startswith("softprops/action-gh-release@")
     )
     assert gate < publish
+    assert not steps[gate].get("continue-on-error", False)
