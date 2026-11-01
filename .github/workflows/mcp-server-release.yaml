@@ -473,6 +473,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download distribution artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -509,6 +511,11 @@ jobs:
               echo "found=false" >> "$GITHUB_OUTPUT"
               echo "No release notes found for version $VERSION (will use auto-generated notes)"
           fi
+
+      - name: Recheck inventory before GitHub release publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

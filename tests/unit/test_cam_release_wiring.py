@@ -108,6 +108,7 @@ def test_reviewed_inventory_rechecked_before_each_publication() -> None:
         ("docker-release", "Promote the tested digest"),
         ("publish-pypi", "Publish to PyPI"),
         ("publish-testpypi", "Publish to TestPyPI"),
+        ("create-github-release", "Create GitHub Release"),
     ):
         steps = server[job_name]["steps"]
         check = next(
