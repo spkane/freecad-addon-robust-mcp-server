@@ -1,0 +1,53 @@
+name: Propose CAM compatibility inventory update
+description: Pin the just-published gated assets in a reviewable pull request
+runs:
+  using: composite
+  steps:
+    - name: Checkout current main for inventory update
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: main
+        path: cam-inventory-update
+        persist-credentials: false
+    - name: Generate and propose inventory update
+      shell: bash
+      working-directory: cam-inventory-update
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        python3 -m scripts.manage_cam_inventory update --tag "$RELEASE_TAG"
+        if git diff --quiet -- cam-compatibility.toml; then
+          echo 'The published release is already in the reviewed inventory.'
+          exit 0
+        fi
+        branch="automation/cam-inventory-${RELEASE_TAG}"
+        existing_pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$branch" --json url --jq '.[0].url // empty')
+        if git ls-remote --exit-code --heads origin "refs/heads/$branch" >/dev/null; then
+          git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+          if ! git diff --quiet "origin/$branch" -- cam-compatibility.toml; then
+            echo "Existing inventory branch $branch differs from the proposed update; review it manually." >&2
+            exit 1
+          fi
+          if [ -n "$existing_pr" ]; then
+            echo "An inventory update PR already exists: $existing_pr"
+            exit 0
+          fi
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "Record CAM compatibility for ${RELEASE_TAG}" \
+            --body "Record the published gated CAM release assets and their SHA-256 digests. Review and merge this update before the next component release."
+          exit 0
+        fi
+        git switch -c "$branch"
+        git config user.name 'github-actions[bot]'
+        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        git add cam-compatibility.toml
+        git commit -m "chore: record CAM release ${RELEASE_TAG}"
+        git -c credential.helper='!gh auth git-credential' push origin "HEAD:refs/heads/$branch"
+        if ! gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+          --title "Record CAM compatibility for ${RELEASE_TAG}" \
+          --body "Record the published gated CAM release assets and their SHA-256 digests. Review and merge this update before the next component release."; then
+          echo 'Could not create inventory PR. Allow GitHub Actions to create pull requests or create it from the pushed branch manually.' >&2
+          exit 1
+        fi

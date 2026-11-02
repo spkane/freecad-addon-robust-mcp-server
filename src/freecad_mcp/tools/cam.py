@@ -17,6 +17,8 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from mcp.server.mcpserver.exceptions import ToolError
+
 from freecad_mcp.tools.utils import wrap_with_transaction
 
 CAM_TIMEOUT_MS = 600_000
@@ -87,6 +89,18 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         result = await bridge.execute_python(code, timeout_ms=CAM_TIMEOUT_MS)
         if result.success:
             return result.result
+        detail = result.error_traceback or result.stderr or ""
+        last = detail.strip().splitlines()[-1] if detail.strip() else ""
+        prefix = "RuntimeError: "
+        if last.startswith(prefix):
+            message = last.removeprefix(prefix)
+            if message.startswith(
+                (
+                    "Incompatible CAM interface:",
+                    "CAM requires an updated Robust MCP Bridge;",
+                )
+            ):
+                raise ToolError(message)
         raise ValueError(_error_message(result))
 
     @mcp.tool()

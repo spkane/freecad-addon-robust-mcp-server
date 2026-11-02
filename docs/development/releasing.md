@@ -197,15 +197,62 @@ just release::tag-mcp-server 1.0.0
 1. GitHub Actions validates the tag format
 2. Builds Python wheel and source distribution (version from tag)
 3. Tests wheel installation on Ubuntu, macOS, and Windows
-4. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
-5. Builds multi-architecture Docker image (amd64 + arm64)
-6. Pushes to Docker Hub as `spkane/freecad-robust-mcp:1.0.0`
+4. Builds and tests a multi-architecture Docker image (amd64 + arm64)
+5. Promotes the tested Docker image to `spkane/freecad-robust-mcp:1.0.0`
+6. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
 7. Creates GitHub Release with wheel and tar.gz artifacts
 
 Before tagging, confirm the cross-platform authentication workflow has passed
 against its freshly built, isolated wheel, including the sketch operations
-reported in issue #87. The release workflow tests the built tag artifacts for
-installation; verify the actual candidate against FreeCAD before publication.
+reported in issue #87. Each component release also runs the CAM artifact gate
+before publication: it installs the exact candidate artifact, builds the other
+component from the same tagged commit, pairs them, and exercises an actual
+FreeCAD CAM job. The server release uses the exact wheel to be published; the
+workbench release uses the exact zip to be published. The companion artifact
+built in either workflow is not itself published by that workflow.
+
+The gate also checks an actual pre-CAM workbench and simulates older and newer
+CAM interfaces, requiring clear errors. Server and workbench release workflows
+share a concurrency group. Only one runs at a time; GitHub's default queue keeps
+one pending run, so another queued run replaces it. Wait for the active release
+to finish before pushing the next component tag. Check canceled runs and rerun
+them after the active release finishes. Do not manually publish a
+component outside these workflows.
+
+After the artifact gate succeeds, a release carries `cam-gate-v1.json`, which
+binds its tag, asset name, and SHA-256 to the tested artifact. Server releases
+are staged as a GitHub draft before Docker promotion or PyPI publication; the
+workbench archive is staged before its GitHub Release is published. A remaining
+CAM draft blocks subsequent releases. Investigate the actual PyPI, Docker and
+GitHub states before recovering a partial release; do not delete the draft just
+to bypass this check. A CAM-capable published tag without a receipt also blocks
+publication until investigated.
+
+After publication, CI opens an inventory PR against current `main` using the
+published GitHub Release metadata and receipt. Review the asset names and
+SHA-256 digests and merge it before tagging the next component. The next release
+fails if a gated release is absent or a pinned asset has changed. It also fails
+if its tagged inventory differs from current `main`; create its tag from the
+updated branch. This check prevents an unmerged inventory PR from silently
+reducing coverage. The gate then exercises every listed release against the
+opposite candidate. The workflows recheck the inventory before publishing each
+component, but those checks cannot lock merges to `main`. Do not merge inventory
+or support-policy changes while a component release is running.
+
+The support policy includes every CAM-gated component release, including
+prereleases, until a reviewed PR moves its tag into `retired_servers` or
+`retired_workbenches` with a reason. Retiring a release is a deliberate support
+change; do not simply remove its entry. An incompatible future interface needs
+an explicit compatibility-policy change before release.
+
+The inventory-update job needs `contents: write` and `pull-requests: write` and
+repository settings must allow GitHub Actions to create pull requests. If PR
+creation is disabled, the release remains published but the job fails with the
+branch name; create the PR from that branch or enable the setting and retry.
+Pull request workflows triggered by `GITHUB_TOKEN` require a maintainer to
+approve the workflow runs. Alternatively, an appropriately scoped GitHub App
+token can trigger them without that approval. Merging the inventory PR remains
+a reviewed maintainer action.
 
 PyPI and TestPyPI use separate Trusted Publisher registrations. In each
 registry, verify the publisher for `freecad-robust-mcp` names GitHub owner

@@ -182,12 +182,16 @@ class TestCamTools:
 
     @pytest.mark.parametrize("tool_name", sorted(TOOL_ARGS))
     async def test_tool_calls_existing_runtime_function(
-        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock], tool_name: str
+        self,
+        tools_and_bridge: tuple[RegisteredTools, AsyncMock],
+        tool_name: str,
+        runtime: Any,
     ) -> None:
         tools, bridge = tools_and_bridge
         assert await tools[tool_name](**TOOL_ARGS[tool_name]) == {"ok": True}
         code = bridge.execute_python.call_args.args[0]
         assert _called_function(code) in _runtime_functions()
+        assert _called_function(code) in runtime._CAM_OPERATIONS
         has_txn = "openTransaction" in code
         assert has_txn == (tool_name in MODIFYING_TOOLS)
 
@@ -241,6 +245,37 @@ class TestCamTools:
             await tools["cam_set_properties"](
                 object_name="Profile", values={"Side": "X"}
             )
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Incompatible CAM interface: bridge is older",
+            "CAM requires an updated Robust MCP Bridge; install it and restart FreeCAD",
+        ],
+    )
+    async def test_incompatible_bridge_exposes_only_safe_guidance(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock], message: str
+    ) -> None:
+        """CAM version errors are deliberately sent to the MCP client."""
+        from mcp.server.mcpserver.exceptions import ToolError
+
+        tools, bridge = tools_and_bridge
+        bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr="",
+                execution_time_ms=1.0,
+                error_type="RuntimeError",
+                error_traceback=(
+                    f"Traceback includes private local paths\nRuntimeError: {message}"
+                ),
+            )
+        )
+        with pytest.raises(ToolError, match=message) as exc:
+            await tools["cam_get_capabilities"]()
+        assert "private local paths" not in str(exc.value)
 
     async def test_describe_type_passes_type_as_type(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
@@ -409,6 +444,15 @@ def test_dispatch_rejects_incompatible_version_and_unknown_operation(
         runtime.dispatch(999, "capabilities", {})
     with pytest.raises(ValueError, match="Unknown CAM operation"):
         runtime.dispatch(1, "_write_output_file", {})
+
+
+@pytest.mark.parametrize("server_api,direction", [(2, "older"), (0, "newer")])
+def test_dispatch_reports_incompatible_bridge_direction(
+    runtime: Any, server_api: int, direction: str
+) -> None:
+    """Mismatched components identify the older or newer bridge."""
+    with pytest.raises(RuntimeError, match=direction):
+        runtime.dispatch(server_api, "capabilities", {})
 
 
 def test_split_output_collision_does_not_write(runtime: Any, tmp_path: Path) -> None:

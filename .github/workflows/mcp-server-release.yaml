@@ -10,7 +10,7 @@ on:
 
 # Never interrupt a publication in progress.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: cam-component-publication
   cancel-in-progress: false
 
 env:
@@ -55,10 +55,14 @@ jobs:
     name: Build Distribution
     needs: validate-tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -132,6 +136,20 @@ jobs:
       - name: Check package
         run: uv run twine check dist/*
 
+      - name: Build workbench candidate from this release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(awk '/<workbench>/,/<\/workbench>/' package.xml | grep -o '<version>[^<]*</version>' | head -1 | sed 's/<[^>]*>//g')
+          python3 scripts/package_workbench.py archives "$VERSION" workbench-candidate
+          python3 scripts/verify_workbench_archives.py "$VERSION" workbench-candidate
+
+      - name: Upload workbench candidate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cam-workbench-candidate
+          path: workbench-candidate/
+
       - name: List built artifacts
         run: ls -la dist/
 
@@ -174,6 +192,45 @@ jobs:
           freecad-mcp --help
           python -c 'from importlib.metadata import version; print("freecad-robust-mcp version:", version("freecad-robust-mcp"))'
 
+  cam-release-gate:
+    name: Test CAM release candidates
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the exact candidate artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Download the candidate workbench archive
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cam-workbench-candidate
+          path: workbench-candidate/
+      - name: Select workbench archive
+        id: workbench
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(workbench-candidate/*.zip)
+          test "${#archives[@]}" -eq 1
+          echo "archive=${archives[0]}" >> "$GITHUB_OUTPUT"
+      - name: Reconcile published CAM releases with reviewed inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check
+      - name: Exercise candidate artifacts
+        uses: ./.github/actions/test-cam-release
+        with:
+          wheel-directory: dist
+          workbench-archive: ${{ steps.workbench.outputs.archive }}
+
   publish-testpypi:
     name: Publish to TestPyPI
     needs: [validate-tag, build, test-install, container-candidate, docker-release]
@@ -183,9 +240,18 @@ jobs:
       name: testpypi
       url: https://test.pypi.org/p/freecad-robust-mcp
     permissions:
+      contents: read
       id-token: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recheck inventory before package publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
       - name: Download distribution artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -206,9 +272,18 @@ jobs:
       name: pypi
       url: https://pypi.org/p/freecad-robust-mcp
     permissions:
+      contents: read
       id-token: write
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recheck inventory before package publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
       - name: Download distribution artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -220,7 +295,7 @@ jobs:
 
   container-candidate:
     name: Build and Test Container Candidate
-    needs: [validate-tag, build, test-install]
+    needs: [validate-tag, build, test-install, cam-release-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -317,13 +392,54 @@ jobs:
               kill -- "-$FREECAD_PID" 2>/dev/null || kill "$FREECAD_PID" 2>/dev/null || true
           fi
 
+  stage-server-release:
+    name: Stage release for recovery
+    needs: [validate-tag, build, container-candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download tested distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Recheck reviewed inventory before staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check
+      - name: Stage tested server and CAM gate marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python3 -m scripts.manage_cam_inventory marker --tag "$TAG" --artifact "${wheels[0]}" --output cam-gate-v1.json
+          gh release create "$TAG" --repo "${{ github.repository }}" --verify-tag --draft --title "Staged CAM release $TAG" cam-gate-v1.json "${wheels[0]}"
+
   docker-release:
     name: Promote Tested Container
-    needs: [validate-tag, container-candidate]
+    needs: [validate-tag, container-candidate, stage-server-release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Recheck inventory before container promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to Docker Hub
@@ -357,6 +473,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download distribution artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -394,6 +512,11 @@ jobs:
               echo "No release notes found for version $VERSION (will use auto-generated notes)"
           fi
 
+      - name: Recheck inventory before GitHub release publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.manage_cam_inventory check-current
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -402,9 +525,25 @@ jobs:
           prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
           body_path: ${{ steps.changelog.outputs.found == 'true' && 'changelog_section.md' || '' }}
+          draft: false
           files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-cam-inventory:
+    name: Propose CAM inventory update
+    needs: [create-github-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout release workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Propose reviewed inventory update
+        uses: ./.github/actions/update-cam-inventory
 
   generate-summary:
     name: Generate Release Summary
