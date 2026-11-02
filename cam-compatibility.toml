@@ -1,7 +1,7 @@
 # CAM releases covered by the release gate. Retire versions by reviewed PR.
 compatible_servers = []
 compatible_workbenches = [
-  { tag = "robust-mcp-workbench-v0.7.0-rc.3", asset = "freecad-mcp-workbench-0.7.0-rc.3.zip", sha256 = "dfa2ce5eecb7721e59c44e6bed85468c3799fede4202a3c907c154ee10e64ada" },
+  { tag = "robust-mcp-workbench-v0.7.0-rc.3", asset = "freecad-mcp-workbench-0.7.0-rc.3.zip", sha256 = "dfa2ce5eecb7721e59c44e6bed85468c3799fede4202a3c907c154ee10e64ada" },  # pragma: allowlist secret
 ]
 retired_servers = []
 retired_workbenches = []
