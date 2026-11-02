@@ -15,6 +15,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "spkane/freecad-addon-robust-mcp-server"
+NETWORK_TIMEOUT_SECONDS = 300
 
 
 def _validate_entry(entry: Any, kind: str) -> tuple[str, str, str]:
@@ -59,6 +60,7 @@ def _download(entry: Any, kind: str, directory: Path) -> Path:
             str(directory),
         ],
         check=True,
+        timeout=NETWORK_TIMEOUT_SECONDS,
     )
     path = directory / name
     actual = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -103,6 +105,7 @@ def main() -> None:
                 [uv, "pip", "install", "--python", str(python), str(wheel)],
                 env=_without_github_tokens(),
                 check=True,
+                timeout=NETWORK_TIMEOUT_SECONDS,
             )
             _run_test({"FREECAD_MCP_TEST_PYTHON": str(python)})
         for index, entry in enumerate(workbench_entries):

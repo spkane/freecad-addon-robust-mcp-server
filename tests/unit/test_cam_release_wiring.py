@@ -31,22 +31,25 @@ def test_server_publication_depends_on_cam_artifact_gate() -> None:
 
 
 def test_workbench_archive_gate_precedes_release() -> None:
-    """The archive is exercised before the release action can publish it."""
-    job = _workflow("mcp-workbench-release.yaml")["jobs"]["validate-and-release"]
-    assert not job.get("continue-on-error", False)
-    steps = job["steps"]
-    gate = next(
-        i
-        for i, step in enumerate(steps)
+    """The exact uploaded archive is exercised before the release is published."""
+    jobs = _workflow("mcp-workbench-release.yaml")["jobs"]
+    assert jobs["prepare"]["permissions"] == {"contents": "read"}
+    assert jobs["cam-release-gate"]["permissions"] == {"contents": "read"}
+    assert "prepare" in jobs["cam-release-gate"]["needs"]
+    assert "cam-release-gate" in jobs["validate-and-release"]["needs"]
+    gate = jobs["cam-release-gate"]
+    assert not gate.get("continue-on-error", False)
+    step = next(
+        step
+        for step in gate["steps"]
         if step.get("uses") == "./.github/actions/test-cam-release"
     )
-    publish = next(
-        i
-        for i, step in enumerate(steps)
-        if str(step.get("uses", "")).startswith("softprops/action-gh-release@")
+    assert not step.get("continue-on-error", False)
+    assert step["with"]["workbench-archive"].startswith("workbench-candidate/")
+    assert any(
+        step.get("name") == "Download tested workbench archives"
+        for step in jobs["validate-and-release"]["steps"]
     )
-    assert gate < publish
-    assert not steps[gate].get("continue-on-error", False)
 
 
 def test_component_releases_share_serial_publication_group() -> None:
@@ -93,9 +96,15 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     steps = workbench["validate-and-release"]["steps"]
     positions = {step.get("name"): i for i, step in enumerate(steps)}
     assert (
-        positions["Reconcile published CAM releases with reviewed inventory"]
+        positions["Recheck reviewed inventory before staging"]
         < positions["Stage GitHub Release"]
         < positions["Create GitHub Release"]
+    )
+    gate_steps = workbench["cam-release-gate"]["steps"]
+    gate_positions = {step.get("name"): i for i, step in enumerate(gate_steps)}
+    assert (
+        gate_positions["Reconcile published CAM releases with reviewed inventory"]
+        < gate_positions["Exercise the exact workbench archive and candidate wheel"]
     )
     assert workbench["update-cam-inventory"]["needs"] == ["validate-and-release"]
     for job in (server["update-cam-inventory"], workbench["update-cam-inventory"]):

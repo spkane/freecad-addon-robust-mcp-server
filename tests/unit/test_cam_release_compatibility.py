@@ -84,6 +84,7 @@ retired_workbenches = []
     for call in subprocess_run.call_args_list:
         assert "GH_TOKEN" not in call.kwargs["env"]
         assert "GITHUB_TOKEN" not in call.kwargs["env"]
+    assert subprocess_run.call_args_list[1].kwargs["timeout"] == 300
     assert "FREECAD_MCP_TEST_PYTHON" in run_test.call_args_list[0].args[0]
     assert run_test.call_args_list[1].args[0] == {
         "FREECAD_RELEASE_WORKBENCH_ARCHIVE": str(tmp_path / "bridge.zip")
@@ -117,7 +118,8 @@ def test_download_rejects_digest_mismatch(tmp_path: Path) -> None:
             "scripts.verify_cam_release_compatibility.shutil.which",
             return_value="/usr/bin/gh",
         ),
-        patch("scripts.verify_cam_release_compatibility.subprocess.run"),
+        patch("scripts.verify_cam_release_compatibility.subprocess.run") as download,
         pytest.raises(ValueError, match="SHA-256 mismatch"),
     ):
         _download(entry, "workbench", tmp_path)
+    assert download.call_args.kwargs["timeout"] == 300

@@ -14,11 +14,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate-and-release:
-    name: Validate Tag and Create Release
+  prepare:
+    name: Build Workbench Release Artifacts
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
 
     steps:
       - name: Checkout code
@@ -106,21 +109,70 @@ jobs:
           SETUPTOOLS_SCM_PRETEND_VERSION: '0.0.0'
         run: uv build --wheel --out-dir "$RUNNER_TEMP/cam-wheel"
 
+      - name: Upload workbench archives
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workbench-release-archives
+          path: freecad-mcp-workbench-${{ steps.version.outputs.version }}.*
+          if-no-files-found: error
+      - name: Upload companion candidate wheel
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workbench-release-companion-wheel
+          path: ${{ runner.temp }}/cam-wheel/*.whl
+          if-no-files-found: error
+
+  cam-release-gate:
+    name: Test CAM Workbench Release Artifacts
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download workbench archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: workbench-release-archives
+          path: workbench-candidate
+      - name: Download companion wheel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: workbench-release-companion-wheel
+          path: cam-wheel
       - name: Reconcile published CAM releases with reviewed inventory
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -m scripts.manage_cam_inventory check
-
       - name: Exercise the exact workbench archive and candidate wheel
         uses: ./.github/actions/test-cam-release
         with:
-          wheel-directory: ${{ runner.temp }}/cam-wheel
-          workbench-archive: freecad-mcp-workbench-${{ steps.version.outputs.version }}.zip
+          wheel-directory: cam-wheel
+          workbench-archive: workbench-candidate/freecad-mcp-workbench-${{ needs.prepare.outputs.version }}.zip
 
+  validate-and-release:
+    name: Publish Workbench Release
+    needs: [prepare, cam-release-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download tested workbench archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: workbench-release-archives
+          path: .
       - name: Extract release notes section
         id: changelog
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
           RELEASE_NOTES="freecad/RobustMCPBridge/RELEASE_NOTES.md"
 
           # Extract section for this version from RELEASE_NOTES.md
@@ -139,7 +191,7 @@ jobs:
 
           # Build release body with changelog content if available
           cat > release_body.md << 'STATIC_EOF'
-          ## Robust MCP Bridge Workbench v${{ steps.version.outputs.version }}
+          ## Robust MCP Bridge Workbench v${{ needs.prepare.outputs.version }}
 
           This release contains the Robust MCP Bridge workbench for FreeCAD.
 
@@ -174,21 +226,21 @@ jobs:
       - name: Create CAM gate marker
         env:
           TAG: ${{ github.ref_name }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: python3 -m scripts.manage_cam_inventory marker --tag "$TAG" --artifact "freecad-mcp-workbench-${VERSION}.zip" --output cam-gate-v1.json
 
       - name: Stage GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          name: "Robust MCP Bridge Workbench v${{ steps.version.outputs.version }}"
+          name: "Robust MCP Bridge Workbench v${{ needs.prepare.outputs.version }}"
           tag_name: ${{ github.ref_name }}
           draft: true
-          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
           body_path: release_body.md
           files: |
             cam-gate-v1.json
-            freecad-mcp-workbench-${{ steps.version.outputs.version }}.zip
-            freecad-mcp-workbench-${{ steps.version.outputs.version }}.tar.gz
+            freecad-mcp-workbench-${{ needs.prepare.outputs.version }}.zip
+            freecad-mcp-workbench-${{ needs.prepare.outputs.version }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -200,21 +252,21 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          name: "Robust MCP Bridge Workbench v${{ steps.version.outputs.version }}"
+          name: "Robust MCP Bridge Workbench v${{ needs.prepare.outputs.version }}"
           tag_name: ${{ github.ref_name }}
-          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
           draft: false
           body_path: release_body.md
           files: |
-            freecad-mcp-workbench-${{ steps.version.outputs.version }}.tar.gz
-            freecad-mcp-workbench-${{ steps.version.outputs.version }}.zip
+            freecad-mcp-workbench-${{ needs.prepare.outputs.version }}.tar.gz
+            freecad-mcp-workbench-${{ needs.prepare.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate summary
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
 
           {
             echo "## Robust MCP Bridge Workbench Release"

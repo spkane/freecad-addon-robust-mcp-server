@@ -2736,7 +2736,7 @@ def dispatch(version: int, operation: str, args: dict[str, Any]) -> Any:
             f"Incompatible CAM interface: the Robust MCP Bridge is {direction} "
             f"than the MCP server (bridge API {CAM_API_VERSION}, server API "
             f"{version}). Install compatible server and workbench releases, "
-            "then restart FreeCAD"
+            "then restart FreeCAD or, in embedded mode, restart the MCP server"
         )
     if operation not in _CAM_OPERATIONS:
         raise ValueError(f"Unknown CAM operation: {operation!r}")
