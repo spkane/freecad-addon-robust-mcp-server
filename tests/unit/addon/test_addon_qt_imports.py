@@ -737,6 +737,9 @@ def test_neutral_wrapper_preferred_and_missing_module_uses_host_binding(
         matching_core,
         widgets,
     )
+    host_widgets = MagicMock()
+    host.QtWidgets = host_widgets  # type: ignore[attr-defined]
+    assert namespace["load_qt_core_widgets"]() == (host_core, host_widgets)
 
 
 def test_unsupported_host_qt_version_fails_closed(
