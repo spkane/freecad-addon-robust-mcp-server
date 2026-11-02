@@ -533,6 +533,7 @@ jobs:
   update-cam-inventory:
     name: Propose CAM inventory update
     needs: [create-github-release]
+    if: always() && needs.create-github-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

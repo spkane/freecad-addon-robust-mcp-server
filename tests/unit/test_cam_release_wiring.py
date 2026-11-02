@@ -92,6 +92,9 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     )
     assert stage_check < stage
     assert server["update-cam-inventory"]["needs"] == ["create-github-release"]
+    assert server["update-cam-inventory"]["if"] == (
+        "always() && needs.create-github-release.result == 'success'"
+    )
     workbench = _workflow("mcp-workbench-release.yaml")["jobs"]
     steps = workbench["validate-and-release"]["steps"]
     positions = {step.get("name"): i for i, step in enumerate(steps)}
