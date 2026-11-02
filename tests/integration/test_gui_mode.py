@@ -87,7 +87,8 @@ if qt_core is None:
     raise RuntimeError("The GUI bridge did not resolve a QtCore module")
 
 _result_ = {
-    "binding": qt_core.__name__.split(".", 1)[0],
+    "binding": bridge_server.get_host_qt_binding(),
+    "wrapper_used": qt_core is __import__("PySide", fromlist=["QtCore"]).QtCore,
     "qt_version": qt_core.qVersion(),
     "freecad_version": ".".join(str(part) for part in FreeCAD.Version()[:3]),
 }
@@ -97,6 +98,7 @@ _result_ = {
         qt_version = result["result"]["qt_version"]
         freecad_version = result["result"]["freecad_version"]
 
+        assert result["result"]["wrapper_used"] is True
         assert binding in {"PySide2", "PySide6"}
         expected_qt_major = {"PySide2": "5", "PySide6": "6"}[binding]
         assert qt_version.split(".", 1)[0] == expected_qt_major

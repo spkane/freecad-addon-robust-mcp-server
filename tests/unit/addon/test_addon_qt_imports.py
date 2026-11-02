@@ -177,7 +177,7 @@ class TestGetQtCore:
             sys.modules, "PySide2", _pyside_module("PySide2", pyside2_qtcore)
         )
 
-        assert server_mod._get_qt_core() is pyside2_qtcore
+        assert server_mod._get_qt_core() is host_qtcore
 
     def test_qt5_host_does_not_cross_fallback_to_pyside6(
         self,
@@ -197,7 +197,10 @@ class TestGetQtCore:
             sys.modules, "PySide6", _pyside_module("PySide6", MagicMock())
         )
 
-        assert server_mod._get_qt_core() is None
+        from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+
+        with pytest.raises(RuntimeError, match="Refusing to load PySide6"):
+            load_qt_core_widgets()
 
     @pytest.mark.parametrize(
         "failed_binding",
@@ -712,4 +715,37 @@ def test_qt_compat_reports_clear_dual_binding_failure(
     monkeypatch.setitem(sys.modules, "PySide2", None)
 
     with pytest.raises(RuntimeError, match="Neither PySide6 nor PySide2"):
+        namespace["load_qt_modules"]("QtCore")
+
+
+@pytest.mark.parametrize(("major", "binding"), [("5", "PySide2"), ("6", "PySide6")])
+def test_neutral_wrapper_preferred_and_missing_module_uses_host_binding(
+    monkeypatch: pytest.MonkeyPatch, major: str, binding: str
+) -> None:
+    """Prefer the wrapper and use only the matching binding for missing modules."""
+    namespace = runpy.run_path(str(QT_COMPAT_PATH))
+    host_core = MagicMock()
+    host_core.qVersion.return_value = f"{major}.15.0"
+    host = _pyside_module("PySide", host_core)
+    monkeypatch.setitem(sys.modules, "PySide", host)
+    matching_core, widgets = MagicMock(), MagicMock()
+    matching = _pyside_module(binding, matching_core)
+    matching.QtWidgets = widgets  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, binding, matching)
+    assert namespace["load_qt_modules"]("QtCore") == (host_core,)
+    assert namespace["load_qt_modules"]("QtCore", "QtWidgets") == (
+        matching_core,
+        widgets,
+    )
+
+
+def test_unsupported_host_qt_version_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unknown Qt majors must not trigger either versioned binding."""
+    namespace = runpy.run_path(str(QT_COMPAT_PATH))
+    core = MagicMock()
+    core.qVersion.return_value = "7.0.0"
+    monkeypatch.setitem(sys.modules, "PySide", _pyside_module("PySide", core))
+    with pytest.raises(RuntimeError, match="Unsupported FreeCAD Qt major version: 7"):
         namespace["load_qt_modules"]("QtCore")

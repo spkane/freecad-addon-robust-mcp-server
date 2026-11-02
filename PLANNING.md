@@ -801,12 +801,11 @@ Before requesting inclusion:
    Qt6 canary ([workflow run](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/runs/41138575387)).
    A separate probe verified the neutral wrapper's required Qt types and their
    active-binding identities on the same builds ([workflow run](https://github.com/spkane/freecad-addon-robust-mcp-server/actions/runs/41137979935)).
-   Switching to the wrapper therefore does not require raising the proposed
-   1.0.2 compatibility minimum. Before shipping, implement and review the
-   wrapper-first loader, update unit mocks that assume versioned modules, and
-   verify headless startup and failure handling. Keep a safe fallback when the
-   wrapper is unavailable and never import a mismatched Qt major. FreeCAD older
-   than 1.0.2 was not verified; recommend 1.1.4 or later for security fixes.
+   The wrapper-first loader uses the neutral modules when available, with a
+   host-matched versioned fallback; unsupported Qt majors fail closed. Qt5 and
+   Qt6 integration and fallback tests cover this behavior without raising the
+   1.0.2 minimum. FreeCAD older than 1.0.2 was not verified; recommend 1.1.4
+   or later for security fixes.
 5. **Privacy and security:** review the user-facing data and network description,
    private reporting instructions, same-user credential limitation, and whether
    the privileged local bridge is acceptable under Index policy. Record how
@@ -1083,9 +1082,8 @@ contract is explicit, and no P0/P1 release findings remain.
    uninstall, and reinstall through the actual manager. Verify isolation,
    workbench loading, listener cleanup, metadata, and Report view. Keep unit
    and archive tests, but do not treat them as lifecycle coverage.
-2. Implement and verify the neutral Qt wrapper approach described in the Addon
-   Manager release section, including updated unit and headless tests. Confirm
-   the listening indicator and opt-in auto-start with the FreeCAD team.
+2. Confirm the listening indicator and opt-in auto-start with the FreeCAD team.
+   Exercise the wrapper-first loader in the next workbench release candidate.
 3. Exercise the merged release workflows with a release candidate, including
    TestPyPI trusted publishing and the exact wheel and workbench archives.
 4. Verify clean installations and real tool calls with the published artifacts,
