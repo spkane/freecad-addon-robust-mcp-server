@@ -1,9 +1,9 @@
 """Resolve the PySide binding that matches FreeCAD's loaded Qt runtime.
 
 Qt 5 and Qt 6 cannot safely coexist in one process. FreeCAD exposes a
-version-neutral ``PySide`` module for its active Qt runtime, so this module uses
-that signal before importing a versioned binding. If the host signal is not
-available, PySide6 is preferred and PySide2 remains the compatibility fallback.
+version-neutral ``PySide`` module for its active Qt runtime. Prefer its modules
+after validating the host Qt version, falling back only to the matching binding.
+If the host signal is unavailable, prefer PySide6 and then PySide2.
 """
 
 from __future__ import annotations
@@ -57,6 +57,12 @@ def load_qt_modules(*module_names: str) -> tuple[ModuleType, ...]:
         raise ValueError("At least one Qt module name is required")
 
     host_binding = get_host_qt_binding()
+    if host_binding:
+        try:
+            host_pyside = __import__("PySide", fromlist=list(module_names))
+            return tuple(getattr(host_pyside, name) for name in module_names)
+        except (AttributeError, ImportError, NameError):
+            pass
     candidates = (host_binding,) if host_binding else ("PySide6", "PySide2")
     last_error: BaseException | None = None
 
