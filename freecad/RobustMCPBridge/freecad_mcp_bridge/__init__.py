@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .server import FreecadMCPPlugin
 
-__version__ = "0.7.0-rc.1"  # Updated by release workflow
+__version__ = "0.7.0-rc.3"  # Updated by release workflow
 __all__ = ["FreecadMCPPlugin", "__version__"]
 
 

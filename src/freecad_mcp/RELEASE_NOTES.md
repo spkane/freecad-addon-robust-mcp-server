@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## Version 0.7.0-rc.3 (2026-11-01)
+
 ### Added
 
 - **CAM workbench tools**: 23 `cam_*` tools create and inspect CAM jobs,
