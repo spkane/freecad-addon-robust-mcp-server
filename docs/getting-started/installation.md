@@ -188,26 +188,29 @@ Restart or reconnect the assistant, then ask it to check the FreeCAD connection.
 
 #### MCP server
 
-Run the Robust MCP Server in a container:
+The untagged `latest` image currently points to stable 0.6.2, which predates
+pairing. For the paired RC4 workflow, pull the matching candidate tag:
 
 ```bash
-# Pull from Docker Hub
-docker pull spkane/freecad-robust-mcp
-
-# Or build locally
-docker build -t freecad-robust-mcp .
+docker pull spkane/freecad-robust-mcp:0.7.0-rc.4
 ```
+
+For another release, use its matching image tag and compatible workbench. To
+build from source instead, run `docker build -t freecad-robust-mcp .` from the
+checkout and use a workbench built from that same checkout.
 
 #### FreeCAD workbench bridge
 
-Install a compatible workbench in the FreeCAD profile you use, following the
+Install a compatible workbench in the FreeCAD profile you use. For the RC4
+image, use the RC4 workbench archive and follow the
 [release archive instructions](#manual-installation-from-a-release-archive).
 
 #### Pair and configure
 
-Pair the host user, start the bridge in FreeCAD, and give the container access
-to that pairing credential. Configure the container and your assistant using
-the [container configuration guide](configuration.md#docker-desktop-configuration).
+The paired container-to-host workflow does not yet have a validated portable
+credential provisioning procedure. Run the MCP server on the host for the
+normal paired setup. See the [container configuration guide](configuration.md#docker-desktop-configuration)
+for its current limits.
 
 **Note:** The Docker container runs the Robust MCP Server only—it does not include FreeCAD itself. You must run FreeCAD with the Robust MCP Bridge workbench on your host machine (or in a separate container) and configure the Robust MCP Server to connect via `xmlrpc` or `socket` mode.
 

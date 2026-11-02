@@ -280,7 +280,7 @@ If installed from source with mise/uv:
 ### Docker Desktop Configuration
 
 Docker Desktop forwards `host.docker.internal` to services listening on the
-host loopback interface. This example configures networking only: the
+host loopback interface. The RC4 image example below configures networking only: the
 container must also receive the existing bridge pairing credential. Pairing on
 the host does not automatically provision the container, and a portable secure
 provisioning procedure has not yet been validated. Run the MCP server on the
@@ -295,7 +295,7 @@ host until the container's credential has been provisioned securely.
         "run", "--rm", "-i",
         "-e", "FREECAD_MODE=xmlrpc",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
-        "spkane/freecad-robust-mcp"
+        "spkane/freecad-robust-mcp:0.7.0-rc.4"
       ]
     }
   }
