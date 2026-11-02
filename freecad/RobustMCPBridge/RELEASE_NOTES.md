@@ -138,7 +138,9 @@ The MCP Bridge has been completely rewritten from a simple macro (`Start MCP Bri
 
 **Manual Installation:**
 
-Copy the `FreecadRobustMCPBridge` folder to your FreeCAD Mod directory:
+For current installation instructions, including finding the active profile,
+see the [installation guide](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/).
+Historical unversioned profile examples from this release:
 
 - **macOS**: `~/Library/Application Support/FreeCAD/Mod/`
 - **Linux**: `~/.local/share/FreeCAD/Mod/`

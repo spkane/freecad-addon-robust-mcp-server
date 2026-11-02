@@ -67,14 +67,14 @@ The workbench includes a blocking bridge script for running in server mode (keep
 
 ```bash
 # Use FreeCADCmd instead if that is the executable installed on your system.
-freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/v1-1/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **macOS:**
 
 ```bash
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    ~/Library/Application\ Support/FreeCAD/v1-1/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
 **Using just commands (from source):**
@@ -83,10 +83,10 @@ freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/fr
 just freecad::run-headless
 ```
 
-The paths above assume an unversioned FreeCAD user profile and a source
-installation. If FreeCAD uses a versioned profile, use that profile's `Mod`
-directory. For a release archive, use its extracted package directory instead
-of `RobustMCPBridge`.
+The paths above are FreeCAD 1.1 examples for a source installation. Use the
+active FreeCAD profile’s `Mod` directory; in FreeCAD’s Python console, print
+`App.getUserAppDataDir()` to find its user data directory. For a release
+archive, use its extracted package directory instead of `RobustMCPBridge`.
 
 ### Headless Output
 

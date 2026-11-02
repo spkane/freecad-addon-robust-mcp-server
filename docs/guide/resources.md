@@ -238,7 +238,7 @@ Gets list of available FreeCAD macros.
 [
   {
     "name": "ExportSTL",
-    "path": "/home/user/.local/share/FreeCAD/Macro/ExportSTL.FCMacro",
+    "path": "/home/user/.local/share/FreeCAD/v1-1/Macro/ExportSTL.FCMacro",
     "description": "Export selected objects to STL",
     "is_system": false
   }

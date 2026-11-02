@@ -427,11 +427,12 @@ just freecad::run-headless
 
 # Or run directly with FreeCADCmd
 # Use FreeCADCmd instead if that is the executable installed on your system.
-freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/v1-1/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
-The direct path assumes a source installation in an unversioned Linux profile.
-For versioned profiles or release archives, use the actual installed directory.
+The direct path is a FreeCAD 1.1 source-installation example. Use the active
+profile’s `Mod` directory and the actual package directory; run
+`App.getUserAppDataDir()` in FreeCAD’s Python console to find its user data directory.
 
 ---
 

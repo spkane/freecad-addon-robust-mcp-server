@@ -71,8 +71,8 @@ This document describes the architecture for a Model Context Protocol (MCP) serv
   - [Deployment Modes](#deployment-modes)
     - [Mode 1: XML-RPC Mode (Recommended)](#mode-1-xml-rpc-mode-recommended)
     - [Mode 2: Local Embedded (Linux Only)](#mode-2-local-embedded-linux-only)
-    - [Mode 3: Local GUI with Plugin](#mode-3-local-gui-with-plugin)
-    - [Mode 4: Remote/Docker](#mode-4-remotedocker)
+    - [Mode 3: Local GUI with Workbench](#mode-3-local-gui-with-workbench)
+    - [Mode 4: Server in Docker](#mode-4-server-in-docker)
   - [Error Handling](#error-handling)
     - [Error Categories](#error-categories)
     - [Error Response Format](#error-response-format)
@@ -1541,35 +1541,18 @@ FREECAD_MODE = "embedded"
 FREECAD_PATH = "/usr/lib/freecad/lib"  # Linux only
 ```
 
-### Mode 3: Local GUI with Plugin
+### Mode 3: Local GUI with Workbench
 
-1. Install FreeCAD plugin:
+Install the Robust MCP Bridge workbench in the profile used by FreeCAD, pair
+it with the server, and start it in the GUI. See the
+[installation guide](../getting-started/installation.md) for profile discovery
+and the [connection modes guide](../guide/connection-modes.md) for settings.
 
-   ```bash
-   just install-freecad-plugin
-   ```
+### Mode 4: Server in Docker
 
-1. Configure MCP server:
-
-   ```yaml
-   FREECAD_MODE = "socket"
-   FREECAD_SOCKET_HOST = "localhost"
-   FREECAD_SOCKET_PORT = "9876"
-   ```
-
-### Mode 4: Remote/Docker
-
-```dockerfile
-FROM freecad/freecad:latest
-
-# Install MCP plugin
-COPY freecad_plugin /root/.FreeCAD/Mod/MCPBridge
-
-# Expose socket port
-EXPOSE 9876
-
-CMD ["freecadcmd", "-c", "from freecad_mcp.plugin import start; start()"]
-```
+The container runs the MCP server; FreeCAD and its paired bridge run separately.
+See [container configuration](../getting-started/configuration.md) for the
+connection and credential requirements.
 
 ---
 

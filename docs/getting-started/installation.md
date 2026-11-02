@@ -25,71 +25,133 @@ The Qt5 test lane checks compatibility with older FreeCAD, not its security supp
 
 ## Installation Methods
 
-### Method 1: pip
+### Method 1: Public releases with pip
 
-The currently published package predates bridge pairing. To use the paired
-bridge described below, install a matching server and workbench from a
-pairing-capable release candidate using Method 2, or use matching builds from
-the same source checkout using Method 3. After a pairing-capable stable release
-is published, the package can be installed with:
+> **Current stable release:** PyPI and the stable workbench are at 0.6.2 and
+> predate pairing. For the pairing workflow below, use matching RC4 assets via
+> [Method 2](#method-2-github-release-assets) until a pairing-capable stable
+> release is published.
+
+#### MCP server
+
+In the Python environment your assistant will use, install or update the stable
+server package:
 
 ```bash
-pip install freecad-robust-mcp
+python -m pip install --upgrade freecad-robust-mcp
+freecad-mcp --version
 ```
+
+On Windows, `py -m pip` can be used in place of `python -m pip`. If the
+executable is not on your PATH, configure the assistant with its full path in
+that Python environment. The [Quick Start](quickstart.md#1-install-the-mcp-server)
+provides an alternative using `uv`.
+
+#### FreeCAD workbench bridge
+
+1. Quit FreeCAD. Download the compatible stable workbench ZIP or `.tar.gz`
+   from [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench).
+2. Extract its package folder into the active FreeCAD profile's `Mod` folder.
+   The folder must directly contain `package.xml` and `freecad`. Move any older
+   Robust MCP Bridge package out of that profile's `Mod` first.
+3. Repeat for each FreeCAD profile you use. See the
+   [profile and archive instructions](#manual-installation-from-a-release-archive)
+   to find the active path.
+
+#### Pair and configure
+
+For a pairing-capable server and workbench, run this once as the same user who
+runs FreeCAD; retain your existing credential if already paired:
+
+```bash
+freecad-mcp --pair-bridge
+```
+
+Start FreeCAD, select **Robust MCP Bridge**, and click **Start MCP Bridge**.
+Configure your assistant to launch the installed `freecad-mcp` executable over
+stdio, using the [Codex and Claude setup examples](quickstart.md#4-connect-your-assistant).
+Restart or reconnect the assistant, then ask it to check the FreeCAD connection.
+For troubleshooting, see [pairing and verification](#verifying-installation).
 
 ### Method 2: GitHub release assets
 
-Install **both components**: the MCP server runs as a separate process, and the
-Robust MCP Bridge workbench runs inside FreeCAD. Use a compatible server and
-workbench pair. For RC testing, choose the same RC version of each component;
-pre-release assets are not installed by the ordinary stable PyPI command.
+Install **both components**. Choose compatible releases; for RC testing, use
+matching RC versions of the server and workbench. Ordinary PyPI installation
+selects stable releases, not these pre-release assets.
+
+#### MCP server
 
 1. Open [server releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-server)
-   and select the desired release. Under **Assets**, download the server wheel
-   named `freecad_robust_mcp-<version>-py3-none-any.whl`. Choose a release
-   marked **Pre-release** only if you intend to test it.
-2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), open
-   a terminal, and install the downloaded wheel. Replace the example path with
-   the actual file in your Downloads folder; keep the quotes around paths with
-   spaces. `--force` replaces an existing uv-managed installation as well.
+   and select the desired release. Under **Assets**, download
+   `freecad_robust_mcp-<version>-py3-none-any.whl`. Choose a **Pre-release**
+   only when you intend to test it.
+2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and
+   open a new Terminal (macOS/Linux) or PowerShell (Windows). The following
+   commands install the downloaded **0.7.0-rc.4** wheel from Downloads. For a
+   different release or download location, substitute the actual filename and
+   path. The wheel uses `0.7.0rc4` without a hyphen; the workbench archive uses
+   `0.7.0-rc.4`.
 
    On macOS or Linux:
 
    ```bash
-   uv tool install --force "/absolute/path/to/freecad_robust_mcp-<version>-py3-none-any.whl"
+   uv tool install --force "$HOME/Downloads/freecad_robust_mcp-0.7.0rc4-py3-none-any.whl"
    uv tool update-shell
    ```
 
    On Windows PowerShell:
 
    ```powershell
-   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-<version>-py3-none-any.whl"
+   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-0.7.0rc4-py3-none-any.whl"
    uv tool update-shell
    ```
 
-   Open a new terminal and run `freecad-mcp --version`. If the command is not
-   found, see [uv's executable directory instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
-   Alternatively, install the downloaded wheel with `python -m pip install
-   --upgrade "/absolute/path/to/the/downloaded.whl"` in your chosen Python
-   environment; configure your assistant to use that environment's executable.
-   If an older server was installed by another method, update or remove that
-   installation and confirm your assistant points to the new executable.
-3. Open [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench)
-   and select the corresponding compatible release. Download either its
-   `freecad-mcp-workbench-<version>.zip` or `.tar.gz` archive; both contain the
-   same workbench. Install it using the [manual workbench steps](#manual-installation-from-a-release-archive).
+   `--force` replaces an existing uv-managed installation. Open a new terminal
+   and run `freecad-mcp --version`. If the command is not found, see [uv's
+   executable directory instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
+   Alternatively, use `python -m pip install --upgrade` with the downloaded
+   wheel path inside your chosen Python environment. If an older server was
+   installed by another method, update or remove it and confirm the assistant
+   points to the intended executable.
 
-The `cam-gate-v1.json` file is a CI compatibility receipt. It is not needed for
-installation. GitHub's **Source code** archives are repository snapshots, not
-substitutes for the wheel or packaged workbench archive.
+#### FreeCAD workbench bridge
 
-To update, quit FreeCAD and stop the assistant's MCP server, then install the
-new server wheel and replace the workbench in each FreeCAD profile you use.
-Restart FreeCAD and reconnect your assistant. Keep the existing pairing unless
-you intend to replace it; check the new release's compatibility notes before
-mixing versions. Merely downloading a wheel or archive does not install it.
+1. Quit FreeCAD. Open [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench)
+   and select the matching compatible release. For RC4, download
+   `freecad-mcp-workbench-0.7.0-rc.4.zip`. Its `.tar.gz` alternative contains
+   the same workbench.
+2. Extract the package folder into the active FreeCAD profile's `Mod` folder.
+   It must directly contain `package.xml` and `freecad`. Move any older Robust
+   MCP Bridge package out of that profile's `Mod` first, and repeat for each
+   profile you use. The [profile and archive instructions](#manual-installation-from-a-release-archive)
+   show how to find the active path.
+
+The `cam-gate-v1.json` asset is a CI receipt and is not needed for installation.
+GitHub's **Source code** archives are repository snapshots, not substitutes for
+the server wheel or packaged workbench archive.
+
+#### Pair and configure
+
+If this user account is already paired, keep its credential. Otherwise run:
+
+```bash
+freecad-mcp --pair-bridge
+```
+
+Start FreeCAD, select **Robust MCP Bridge**, and click **Start MCP Bridge**.
+Configure the assistant to launch the installed `freecad-mcp` executable over
+stdio using the [Codex and Claude setup examples](quickstart.md#4-connect-your-assistant).
+Restart or reconnect the assistant, then ask it to check the FreeCAD connection.
+For troubleshooting, see [pairing and verification](#verifying-installation).
+
+**To update:** Quit FreeCAD and stop the assistant's MCP server, then install
+both the new server wheel and the compatible workbench in every FreeCAD profile
+you use. Restart FreeCAD and reconnect the assistant. Keep the existing pairing
+unless you intend to replace it. Check release notes before mixing versions.
 
 ### Method 3: From Source (development builds)
+
+#### MCP server
 
 Install [Git](https://git-scm.com/install/) and
 [uv](https://docs.astral.sh/uv/getting-started/installation/) first. In a new
@@ -101,12 +163,30 @@ cd freecad-addon-robust-mcp-server
 uv sync --all-extras
 ```
 
-Use `uv run freecad-mcp` from this checkout for the server. Install the
-workbench from the same checkout using the source installation steps below.
-This workflow does not require `mise` or `just`; the development setup is
-documented separately in the contributor guide.
+Use `uv run freecad-mcp` from this checkout for the server. This workflow does
+not require `mise` or `just`; the development setup is documented separately
+in the contributor guide.
+
+#### FreeCAD workbench bridge
+
+Quit FreeCAD and run `uv run python scripts/install_workbench.py` from the
+checkout. Verify the printed installation path is the profile you use; the
+installer can select a different versioned profile. Use the
+[source installation instructions](#from-the-same-source-checkout) to select a
+specific `Mod` directory and repeat for other profiles.
+
+#### Pair and configure
+
+If this user account is not already paired, run
+`uv run freecad-mcp --pair-bridge` from the checkout. Start FreeCAD, select
+**Robust MCP Bridge**, and click **Start MCP Bridge**. Configure your assistant
+to launch `uv` with arguments `run`, `--project`, the absolute checkout path,
+and `freecad-mcp`; see [client configuration](configuration.md#mcp-client-configuration).
+Restart or reconnect the assistant, then ask it to check the FreeCAD connection.
 
 ### Method 4: Docker
+
+#### MCP server
 
 Run the Robust MCP Server in a container:
 
@@ -117,6 +197,17 @@ docker pull spkane/freecad-robust-mcp
 # Or build locally
 docker build -t freecad-robust-mcp .
 ```
+
+#### FreeCAD workbench bridge
+
+Install a compatible workbench in the FreeCAD profile you use, following the
+[release archive instructions](#manual-installation-from-a-release-archive).
+
+#### Pair and configure
+
+Pair the host user, start the bridge in FreeCAD, and give the container access
+to that pairing credential. Configure the container and your assistant using
+the [container configuration guide](configuration.md#docker-desktop-configuration).
 
 **Note:** The Docker container runs the Robust MCP Server only—it does not include FreeCAD itself. You must run FreeCAD with the Robust MCP Bridge workbench on your host machine (or in a separate container) and configure the Robust MCP Server to connect via `xmlrpc` or `socket` mode.
 
@@ -178,15 +269,24 @@ versions when testing a candidate.
    `Mod` directory, including prior `freecad-mcp-workbench-*` archive folders
    and the source-installed `RobustMCPBridge` folder.
 1. Extract the archive's top-level package directory into your FreeCAD Mod directory:
-   - **Linux:** `~/.local/share/FreeCAD/Mod/`
-   - **macOS:** `~/Library/Application Support/FreeCAD/Mod/`
-   - **Windows:** `%APPDATA%\FreeCAD\Mod\`
+   - **Linux:** `~/.local/share/FreeCAD/v1-1/Mod/`
+   - **macOS:** `~/Library/Application Support/FreeCAD/v1-1/Mod/`
+   - **Windows:** `%APPDATA%\FreeCAD\v1-1\Mod\`
 1. Restart FreeCAD
 
-The archive package directory contains `package.xml` and the nested
-`freecad/RobustMCPBridge/` workbench. Select the `Mod` directory belonging to
-the FreeCAD profile you actually use; versioned profiles can have a separate
-directory such as `v1-1/Mod`.
+These paths are examples for FreeCAD 1.1. Select the profile for the FreeCAD
+version you actually use: for example, a development build may use `v27-1/Mod`.
+Custom and older profiles may use a different or unversioned location. In the
+running FreeCAD version, open **View > Panels > Python console** and run:
+
+```python
+import os
+print(os.path.join(App.getUserAppDataDir(), "Mod"))
+```
+
+Use the printed directory, creating it if needed. The extracted package folder
+must directly contain `package.xml` and the nested `freecad/RobustMCPBridge/`
+workbench. Repeat the installation for each profile you use.
 
 ---
 

@@ -22,7 +22,14 @@ execute Python with your FreeCAD user's permissions.
 
 ## 1. Install the MCP server
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
+Choose one server installation method:
+
+- **Stable package:** use the `uv` command below, or [install with pip](installation.md#method-1-public-releases-with-pip).
+- **GitHub release, including RC testing:** download the server wheel and follow
+  the [release asset steps](installation.md#method-2-github-release-assets).
+  The instructions include an RC4 example for macOS, Linux, and Windows.
+
+For the stable `uv` method, install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
 operating system, then open a new Terminal (macOS/Linux) or PowerShell (Windows)
 and run:
 
@@ -46,9 +53,10 @@ For a downloaded server wheel, including a release candidate, see the
 
 1. Quit FreeCAD.
 2. Open the [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench),
-   select the latest **stable** Robust MCP Bridge workbench release compatible
-   with your server, and download its `freecad-mcp-workbench` ZIP file. Avoid
-   releases labeled **Pre-release** unless you intend to test one.
+   select a Robust MCP Bridge workbench release compatible with your server,
+   and download its `freecad-mcp-workbench` ZIP file. For stable installations,
+   choose a stable release; for RC testing, choose the matching pre-release
+   version. For example, server RC4 pairs with workbench `0.7.0-rc.4`.
 3. Extract the ZIP. Open the FreeCAD profile's `Mod` folder, and move the
    extracted workbench folder into it. The folder you move must directly contain
    `package.xml` and the `freecad` folder. If `Mod` does not exist, create it.
@@ -59,10 +67,13 @@ For a downloaded server wheel, including a release candidate, see the
    | Windows | `%APPDATA%\FreeCAD\v1-1\Mod\` |
    | Linux | `~/.local/share/FreeCAD/v1-1/Mod/` |
 
-   These examples are for the FreeCAD 1.1 profile. Use the profile for the
-   version you actually start; some installations use an unversioned `Mod`
-   folder instead. In Finder, use **Go > Go to Folder** to open the macOS path;
-   on Windows, paste the path into File Explorer's address bar.
+   These examples are for FreeCAD 1.1. Use the profile for the version you
+   actually start; for example, a development build may use `v27-1/Mod`.
+   Custom and older profiles can use different locations. To find the active
+   profile, open **View > Panels > Python console** in that FreeCAD version and
+   enter `import os; print(os.path.join(App.getUserAppDataDir(), "Mod"))`.
+   In Finder, use **Go > Go to Folder** to open the macOS path; on Windows,
+   paste the path into File Explorer's address bar.
 4. If another Robust MCP Bridge installation is already in that profile, move
    the old folder out of `Mod` so FreeCAD does not load two copies. Restart
    FreeCAD after installing.
