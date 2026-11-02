@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## Version 0.7.0-rc.4 (2026-11-01)
+
+### Changed
+
+- **CAM release compatibility**: This candidate is tested with the matching
+  workbench candidate artifacts, including the Qt wrapper update in workbench
+  rc.4.
+
 ## Version 0.7.0-rc.3 (2026-11-01)
 
 ### Added

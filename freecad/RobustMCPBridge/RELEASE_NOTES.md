@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## Version 0.7.0-rc.4 (2026-11-01)
+
+### Changed
+
+- **FreeCAD Qt compatibility**: Prefer FreeCAD’s neutral PySide wrapper on Qt5
+  and Qt6. If the wrapper lacks a module, fallback uses the detected host
+  binding. If the host Qt version cannot be detected, it tries PySide6 and
+  then PySide2, so the selected binding may not match the host.
+
 ## Version 0.7.0-rc.3 (2026-11-01)
 
 ### Added
