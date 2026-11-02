@@ -1,8 +1,7 @@
-# Published releases explicitly supported with the current CAM interface.
-# The first CAM-capable release has not been published yet. Add each supported
-# published component here, including its exact GitHub release asset SHA-256.
-# Each release gate tests the candidate against every listed opposite component.
+# CAM releases covered by the release gate. Retire versions by reviewed PR.
 compatible_servers = []
-compatible_workbenches = []
+compatible_workbenches = [
+  { tag = "robust-mcp-workbench-v0.7.0-rc.3", asset = "freecad-mcp-workbench-0.7.0-rc.3.zip", sha256 = "dfa2ce5eecb7721e59c44e6bed85468c3799fede4202a3c907c154ee10e64ada" },
+]
 retired_servers = []
 retired_workbenches = []
