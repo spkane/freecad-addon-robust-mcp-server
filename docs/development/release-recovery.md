@@ -69,8 +69,16 @@ SHA-256; it does not prove that publication to every channel completed.
 
 Do not delete a draft merely to clear the release gate. If a partially
 published version is intentionally withdrawn, first resolve each channel and
-record the decision; then remove or retire the draft through a reviewed
-recovery procedure. A published CAM-capable release without a receipt also
+record the decision. Then remove the withdrawn draft through a reviewed
+recovery procedure, or publish the verified draft and retire the published
+release in the compatibility inventory. Adding an unpublished draft to
+`retired_servers` or `retired_workbenches` does not unblock subsequent releases:
+the gate rejects staged drafts before checking retirements. A published CAM-capable release without a receipt also
 requires investigation. Restore a receipt only if the successful CAM gate and
 exact published asset can be verified from the original run. Otherwise correct
 or withdraw the affected publication and create a new, properly gated release.
+
+The server and workbench workflows share one release queue. Wait for the active
+release run to finish before pushing the next component tag. If a queued run
+was canceled because a newer run replaced it, rerun the canceled release after
+the active run finishes.

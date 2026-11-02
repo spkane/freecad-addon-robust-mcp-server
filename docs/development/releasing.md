@@ -197,9 +197,9 @@ just release::tag-mcp-server 1.0.0
 1. GitHub Actions validates the tag format
 2. Builds Python wheel and source distribution (version from tag)
 3. Tests wheel installation on Ubuntu, macOS, and Windows
-4. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
-5. Builds multi-architecture Docker image (amd64 + arm64)
-6. Pushes to Docker Hub as `spkane/freecad-robust-mcp:1.0.0`
+4. Builds and tests a multi-architecture Docker image (amd64 + arm64)
+5. Promotes the tested Docker image to `spkane/freecad-robust-mcp:1.0.0`
+6. Publishes to PyPI (or TestPyPI for alpha, beta, and rc versions)
 7. Creates GitHub Release with wheel and tar.gz artifacts
 
 Before tagging, confirm the cross-platform authentication workflow has passed
@@ -214,8 +214,9 @@ built in either workflow is not itself published by that workflow.
 The gate also checks an actual pre-CAM workbench and simulates older and newer
 CAM interfaces, requiring clear errors. Server and workbench release workflows
 share a concurrency group. Only one runs at a time; GitHub's default queue keeps
-one pending run, so another queued run replaces it. Check canceled runs and
-rerun them after the active release finishes. Do not manually publish a
+one pending run, so another queued run replaces it. Wait for the active release
+to finish before pushing the next component tag. Check canceled runs and rerun
+them after the active release finishes. Do not manually publish a
 component outside these workflows.
 
 After the artifact gate succeeds, a release carries `cam-gate-v1.json`, which

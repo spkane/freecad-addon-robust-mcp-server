@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from scripts.verify_cam_release_compatibility import _validate_entry, main
+from scripts.verify_cam_release_compatibility import _download, _validate_entry, main
 
 
 def test_compatible_release_entry_is_validated() -> None:
@@ -102,3 +102,22 @@ def test_matrix_subprocesses_do_not_receive_github_tokens(
         _run_test({"FREECAD_MCP_TEST_PYTHON": str(tmp_path / "python")})
     assert "GH_TOKEN" not in run.call_args.kwargs["env"]
     assert "GITHUB_TOKEN" not in run.call_args.kwargs["env"]
+
+
+def test_download_rejects_digest_mismatch(tmp_path: Path) -> None:
+    """A substituted release asset must fail the pinned integrity check."""
+    entry = {
+        "tag": "robust-mcp-workbench-v1.0.0",
+        "asset": "bridge.zip",
+        "sha256": "b" * 64,
+    }
+    (tmp_path / "bridge.zip").write_bytes(b"tampered")
+    with (
+        patch(
+            "scripts.verify_cam_release_compatibility.shutil.which",
+            return_value="/usr/bin/gh",
+        ),
+        patch("scripts.verify_cam_release_compatibility.subprocess.run"),
+        pytest.raises(ValueError, match="SHA-256 mismatch"),
+    ):
+        _download(entry, "workbench", tmp_path)

@@ -21,11 +21,17 @@ MARKER = "cam-gate-v1.json"
 INVENTORY = "cam-compatibility.toml"
 KINDS = {"server": "robust-mcp-server-v", "workbench": "robust-mcp-workbench-v"}
 PLURAL = {"server": "servers", "workbench": "workbenches"}
+GH_TIMEOUT_SECONDS = 120
 
 
 def gh(*args: str) -> bytes:
     """Run GitHub CLI without exposing authentication credentials."""
-    return subprocess.check_output(["gh", *args])  # nosec B603 B607  # noqa: S603, S607
+    executable = shutil.which("gh")
+    if not executable:
+        raise RuntimeError("GitHub CLI is required for CAM release reconciliation")
+    return subprocess.check_output(  # nosec B603  # noqa: S603
+        [executable, *args], timeout=GH_TIMEOUT_SECONDS
+    )
 
 
 def inventory(data: bytes) -> dict[str, Any]:
@@ -83,6 +89,7 @@ def source_has_cam(tag: str, kind: str) -> bool:
         stderr=subprocess.PIPE,
         text=True,
         check=False,
+        timeout=GH_TIMEOUT_SECONDS,
     )
     if result.returncode == 0:
         return True
@@ -266,6 +273,11 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
+    except (
+        ValueError,
+        RuntimeError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ) as exc:
         print(f"CAM release inventory: {exc}", file=sys.stderr)
         sys.exit(1)

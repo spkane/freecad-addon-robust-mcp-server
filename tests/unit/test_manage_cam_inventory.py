@@ -223,3 +223,21 @@ def test_update_already_recorded_release_preserves_inventory_text(
     ):
         main()
     assert path.read_text() == original
+
+
+def test_github_queries_have_a_bounded_timeout() -> None:
+    """A stalled GitHub query cannot block a release job indefinitely."""
+    import subprocess
+
+    from scripts.manage_cam_inventory import GH_TIMEOUT_SECONDS, gh
+
+    with (
+        patch("scripts.manage_cam_inventory.shutil.which", return_value="/usr/bin/gh"),
+        patch(
+            "scripts.manage_cam_inventory.subprocess.check_output",
+            side_effect=subprocess.TimeoutExpired("gh", GH_TIMEOUT_SECONDS),
+        ) as command,
+        pytest.raises(subprocess.TimeoutExpired),
+    ):
+        gh("api", "repos/example")
+    assert command.call_args.kwargs["timeout"] == GH_TIMEOUT_SECONDS

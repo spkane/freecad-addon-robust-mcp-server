@@ -4,6 +4,7 @@ import asyncio
 import ctypes
 import json
 import os
+import re
 import signal
 import socket
 import stat
@@ -231,7 +232,7 @@ async def _check_harness_session(session: ClientSession) -> None:
         if name == "cam_post_process":
             assert tool_result.structured_content is not None
             lines = tool_result.structured_content["gcode"]
-            assert any(line.startswith(("G1", "G01")) for line in lines)
+            assert any(re.match(r"\s*(?:N\d+\s+)?G0?1(?!\d)", line) for line in lines)
 
 
 async def _check_harnesses(
