@@ -84,7 +84,7 @@ retired_workbenches = []
     for call in subprocess_run.call_args_list:
         assert "GH_TOKEN" not in call.kwargs["env"]
         assert "GITHUB_TOKEN" not in call.kwargs["env"]
-    assert subprocess_run.call_args_list[1].kwargs["timeout"] == 300
+    assert all(call.kwargs["timeout"] == 300 for call in subprocess_run.call_args_list)
     assert "FREECAD_MCP_TEST_PYTHON" in run_test.call_args_list[0].args[0]
     assert run_test.call_args_list[1].args[0] == {
         "FREECAD_RELEASE_WORKBENCH_ARCHIVE": str(tmp_path / "bridge.zip")

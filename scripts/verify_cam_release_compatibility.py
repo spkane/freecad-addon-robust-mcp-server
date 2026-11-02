@@ -99,6 +99,7 @@ def main() -> None:
                 [uv, "venv", "--python", "3.11", str(venv)],
                 env=_without_github_tokens(),
                 check=True,
+                timeout=NETWORK_TIMEOUT_SECONDS,
             )
             python = venv / "bin/python"
             subprocess.run(  # nosec B603  # noqa: S603 - verified wheel
