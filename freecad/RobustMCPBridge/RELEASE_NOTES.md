@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## Version 0.7.0-rc.4 (2026-11-01)
+
+### Changed
+
+- **FreeCAD Qt compatibility**: Prefer FreeCAD’s neutral PySide wrapper on Qt5
+  and Qt6, with a host-matched fallback that avoids mixing Qt major versions.
+
 ## Version 0.7.0-rc.3 (2026-11-01)
 
 ### Added
