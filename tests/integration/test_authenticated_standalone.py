@@ -143,8 +143,10 @@ async def _check_harness_session(session: ClientSession) -> None:
     assert caps is not None
     posts = caps["post_processors"]
     post_processor = next(
-        name for name in ("linuxcnc_legacy", "linuxcnc") if name in posts
+        (name for name in ("linuxcnc_legacy", "linuxcnc") if name in posts), None
     )
+    if post_processor is None:
+        pytest.fail(f"No LinuxCNC post processor available: {posts}")
     calls = (
         ("create_document", {"name": "ReleaseSketchRegression"}),
         (

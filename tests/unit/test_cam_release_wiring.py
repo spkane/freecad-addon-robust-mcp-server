@@ -1,5 +1,6 @@
 """Verify CAM candidate checks cannot be bypassed by publication jobs."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -66,7 +67,7 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     check = next(
         i
         for i, step in enumerate(gate_steps)
-        if "manage_cam_inventory check" in step.get("run", "")
+        if re.search(r"manage_cam_inventory check(?:\s|$)", step.get("run", ""))
     )
     exercise = next(
         i
@@ -79,7 +80,7 @@ def test_staging_and_inventory_reconciliation_precede_publication() -> None:
     stage_check = next(
         i
         for i, step in enumerate(stage_steps)
-        if "manage_cam_inventory check" in step.get("run", "")
+        if re.search(r"manage_cam_inventory check(?:\s|$)", step.get("run", ""))
     )
     stage = next(
         i
