@@ -213,7 +213,11 @@ def render(manifest: dict[str, Any]) -> str:
                     f"{field} = {json.dumps(value, ensure_ascii=True)}"
                     for field, value in entry.items()
                 )
-                result.append(f"  {{ {fields} }},")
+                # Release asset digests are public integrity values, not secrets.
+                suffix = (
+                    "  # pragma: allowlist secret" if status == "compatible" else ""
+                )
+                result.append(f"  {{ {fields} }},{suffix}")
             result.append("]")
     return "\n".join(result) + "\n"
 

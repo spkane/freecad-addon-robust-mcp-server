@@ -241,3 +241,15 @@ def test_github_queries_have_a_bounded_timeout() -> None:
     ):
         gh("api", "repos/example")
     assert command.call_args.kwargs["timeout"] == GH_TIMEOUT_SECONDS
+
+
+def test_render_marks_public_hashes_for_secret_scanner() -> None:
+    """Generated public digest entries include a narrow inline scanner exemption."""
+    manifest = empty()
+    manifest["compatible_servers"].append(
+        {"tag": SERVER, "asset": "server.whl", "sha256": DIGEST}
+    )
+    manifest["retired_workbenches"].append({"tag": BENCH, "reason": "Unsupported"})
+    text = render(manifest)
+    assert text.count("# pragma: allowlist secret") == 1
+    assert inventory(text.encode()) == manifest
