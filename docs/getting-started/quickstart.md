@@ -6,8 +6,9 @@ assistant. No source checkout or developer tools are required.
 > **Stable release availability:** The current stable releases (0.6.2) predate
 > bridge pairing. The steps below describe the upcoming pairing-capable stable
 > release and will work once it is published. Until then, use the
-> [source installation guide](installation.md) for the current development
-> version; the stable 0.6.2 packages do not support the pairing steps below.
+> [release asset installation guide](installation.md#method-2-github-release-assets)
+> for matching release candidates or the source installation guide for development
+> builds; the stable 0.6.2 packages do not support the pairing steps below.
 
 ## What you need
 
@@ -38,7 +39,8 @@ freecad-mcp --version
 
 If your shell cannot find it, see [uv's executable directory
 instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
-For another installation method, see [Installation](installation.md).
+For a downloaded server wheel, including a release candidate, see the
+[GitHub release asset installation steps](installation.md#method-2-github-release-assets).
 
 ## 2. Install the FreeCAD workbench
 
@@ -66,6 +68,13 @@ For another installation method, see [Installation](installation.md).
    FreeCAD after installing.
 
 The workbench is not currently listed in the public FreeCAD Addon Manager.
+The `.tar.gz` workbench asset contains the same package as the ZIP. You do not
+need `cam-gate-v1.json`, which is used by release CI.
+
+**When updating, update both components:** install the new server version and
+replace the workbench archive in every FreeCAD profile you use. Quit FreeCAD
+first, then restart it and reconnect your assistant. Keep your existing pairing
+unless you intend to replace it. See the [release asset update steps](installation.md#method-2-github-release-assets).
 
 ## 3. Pair and start the bridge
 

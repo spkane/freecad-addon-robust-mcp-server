@@ -28,15 +28,68 @@ The Qt5 test lane checks compatibility with older FreeCAD, not its security supp
 ### Method 1: pip
 
 The currently published package predates bridge pairing. To use the paired
-bridge described below, install matching server and workbench builds from the
-same current source checkout using Method 2. After a pairing-capable release is
-published, the package can be installed with:
+bridge described below, install a matching server and workbench from a
+pairing-capable release candidate using Method 2, or use matching builds from
+the same source checkout using Method 3. After a pairing-capable stable release
+is published, the package can be installed with:
 
 ```bash
 pip install freecad-robust-mcp
 ```
 
-### Method 2: From Source (recommended for paired bridge)
+### Method 2: GitHub release assets
+
+Install **both components**: the MCP server runs as a separate process, and the
+Robust MCP Bridge workbench runs inside FreeCAD. Use a compatible server and
+workbench pair. For RC testing, choose the same RC version of each component;
+pre-release assets are not installed by the ordinary stable PyPI command.
+
+1. Open [server releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-server)
+   and select the desired release. Under **Assets**, download the server wheel
+   named `freecad_robust_mcp-<version>-py3-none-any.whl`. Choose a release
+   marked **Pre-release** only if you intend to test it.
+2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), open
+   a terminal, and install the downloaded wheel. Replace the example path with
+   the actual file in your Downloads folder; keep the quotes around paths with
+   spaces. `--force` replaces an existing uv-managed installation as well.
+
+   On macOS or Linux:
+
+   ```bash
+   uv tool install --force "/absolute/path/to/freecad_robust_mcp-<version>-py3-none-any.whl"
+   uv tool update-shell
+   ```
+
+   On Windows PowerShell:
+
+   ```powershell
+   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-<version>-py3-none-any.whl"
+   uv tool update-shell
+   ```
+
+   Open a new terminal and run `freecad-mcp --version`. If the command is not
+   found, see [uv's executable directory instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
+   Alternatively, install the downloaded wheel with `python -m pip install
+   --upgrade "/absolute/path/to/the/downloaded.whl"` in your chosen Python
+   environment; configure your assistant to use that environment's executable.
+   If an older server was installed by another method, update or remove that
+   installation and confirm your assistant points to the new executable.
+3. Open [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench)
+   and select the corresponding compatible release. Download either its
+   `freecad-mcp-workbench-<version>.zip` or `.tar.gz` archive; both contain the
+   same workbench. Install it using the [manual workbench steps](#manual-installation-from-a-release-archive).
+
+The `cam-gate-v1.json` file is a CI compatibility receipt. It is not needed for
+installation. GitHub's **Source code** archives are repository snapshots, not
+substitutes for the wheel or packaged workbench archive.
+
+To update, quit FreeCAD and stop the assistant's MCP server, then install the
+new server wheel and replace the workbench in each FreeCAD profile you use.
+Restart FreeCAD and reconnect your assistant. Keep the existing pairing unless
+you intend to replace it; check the new release's compatibility notes before
+mixing versions. Merely downloading a wheel or archive does not install it.
+
+### Method 3: From Source (development builds)
 
 Install [Git](https://git-scm.com/install/) and
 [uv](https://docs.astral.sh/uv/getting-started/installation/) first. In a new
@@ -53,7 +106,7 @@ workbench from the same checkout using the source installation steps below.
 This workflow does not require `mise` or `just`; the development setup is
 documented separately in the contributor guide.
 
-### Method 3: Docker
+### Method 4: Docker
 
 Run the Robust MCP Server in a container:
 
@@ -113,13 +166,15 @@ If you selected a profile explicitly, pass the same `Mod` directory to
 `just install::status` or `just install::uninstall-mcp-bridge-workbench`. These
 status and uninstall recipes require Bash, including on Windows.
 
-### Manual Installation
+### Manual installation from a release archive
 
-Existing published workbench archives predate pairing. Use an archive only
-when it is from a pairing-capable release that matches the server build.
+Pairing-capable release candidates are available. Use a workbench archive
+compatible with the MCP server you installed, and choose the matching RC
+versions when testing a candidate.
 
-1. Download the `freecad-mcp-workbench` archive from the latest [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true)
-1. Remove older Robust MCP Bridge installations from the selected profile’s
+1. Quit FreeCAD. Download the `freecad-mcp-workbench-<version>.zip` or `.tar.gz`
+   asset from the desired [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true).
+1. Move older Robust MCP Bridge installations out of the selected profile’s
    `Mod` directory, including prior `freecad-mcp-workbench-*` archive folders
    and the source-installed `RobustMCPBridge` folder.
 1. Extract the archive's top-level package directory into your FreeCAD Mod directory:
@@ -137,9 +192,9 @@ directory such as `v1-1/Mod`.
 
 ## Verifying Installation
 
-These instructions describe the current development version. The latest published
-server and workbench releases predate bridge pairing; use matching builds that
-support pairing when following this guide.
+These instructions require pairing-capable server and workbench builds. The
+stable 0.6.2 releases predate pairing; use matching pairing-capable candidates
+or matching source builds until a newer stable release is available.
 
 After installation, verify everything is working:
 
