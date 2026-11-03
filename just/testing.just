@@ -116,7 +116,7 @@ integration-freecad-auto:
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
             echo "ERROR: The authenticated bridge readiness check timed out."
-            echo "FreeCAD may have started, but the bridge did not answer the probe."
+            echo "FreeCAD may have started, but the bridge did not pass the authenticated probe."
             echo "--- Authenticated readiness probe ---"
             if is_bridge_running 9875 verbose; then
                 echo "The probe succeeded on the diagnostic retry."
@@ -459,7 +459,7 @@ integration-headless-release:
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
             echo "ERROR: The authenticated bridge readiness check timed out."
-            echo "FreeCAD may have started, but the bridge did not answer the probe."
+            echo "FreeCAD may have started, but the bridge did not pass the authenticated probe."
             echo "--- Authenticated readiness probe ---"
             if is_bridge_running 9875 verbose; then
                 echo "The probe succeeded on the diagnostic retry."
@@ -549,7 +549,7 @@ integration-gui-release:
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
             echo "ERROR: The authenticated bridge readiness check timed out."
-            echo "FreeCAD may have started, but the bridge did not answer the probe."
+            echo "FreeCAD may have started, but the bridge did not pass the authenticated probe."
             echo "--- Authenticated readiness probe ---"
             if is_bridge_running 9875 verbose; then
                 echo "The probe succeeded on the diagnostic retry."
