@@ -146,6 +146,8 @@ _result_ = {
     "preferences_title": preferences_page.windowTitle(),
     "status_installed": status_installed,
     "status_widget_created": status_widget._widget is not None,
+    "status_tooltip": status_widget._widget.toolTip() if status_installed else "",
+    "bridge_version": status_module.__version__,
 }
 
 status_widget.remove()
@@ -153,11 +155,10 @@ preferences_page.deleteLater()
 """,
         )
 
-        assert result["result"] == {
-            "preferences_title": "General",
-            "status_installed": True,
-            "status_widget_created": True,
-        }
+        assert result["result"]["preferences_title"] == "General"
+        assert result["result"]["status_installed"] is True
+        assert result["result"]["status_widget_created"] is True
+        assert result["result"]["bridge_version"] in result["result"]["status_tooltip"]
 
 
 class TestGUIObjectCreation:
