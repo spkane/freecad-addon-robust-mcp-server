@@ -6,6 +6,7 @@ Note: We avoid running integration tests here to prevent recursion.
 
 from __future__ import annotations
 
+import os
 import socket
 import subprocess
 from pathlib import Path
@@ -125,9 +126,46 @@ class TestTestingRuntime:
         assert 'stop_owned_freecad "$FREECAD_PID"' in result.output
         assert "graceful_kill_bridge_ports" not in result.output
         assert "kill_port" not in result.output
+        assert "is_bridge_running 9875 verbose" in result.output
         assert result.output.index("require_bridge_pairing") < result.output.index(
             "FREECAD_CMD=$(find_freecad_executable"
         )
+
+    @pytest.mark.just_runtime
+    def test_readiness_probe_reports_failure_only_in_verbose_mode(self) -> None:
+        """A failed authenticated probe exposes its exception on request."""
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+        helper = Path(__file__).resolve().parents[2] / "scripts/bridge-helpers.sh"
+        env = {
+            **os.environ,
+            "FREECAD_SOCKET_HOST": "127.0.0.1",
+            "FREECAD_BRIDGE_CLIENT_ID": "readiness-test",
+            "FREECAD_BRIDGE_SECRET": "61" * 32,
+        }
+        for mode in ("quiet", "verbose"):
+            result = subprocess.run(  # noqa: S603
+                [
+                    "/bin/bash",
+                    "-c",
+                    '. "$1"; is_bridge_running "$2" "$3"',
+                    "bash",
+                    str(helper),
+                    str(port),
+                    mode,
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+            )
+            assert result.returncode != 0
+            if mode == "verbose":
+                assert "ConnectionRefusedError" in result.stderr
+            else:
+                assert not result.stdout and not result.stderr
 
     @pytest.mark.just_runtime
     def test_kill_bridge_runs(self, just: JustRunner) -> None:

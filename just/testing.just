@@ -115,7 +115,12 @@ integration-freecad-auto:
     while ! is_bridge_running; do
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-            echo "ERROR: FreeCAD Robust MCP Bridge did not start within timeout"
+            echo "ERROR: The authenticated bridge readiness check timed out."
+            echo "FreeCAD may have started, but the bridge did not answer the probe."
+            echo "--- Authenticated readiness probe ---"
+            if is_bridge_running 9875 verbose; then
+                echo "The probe succeeded on the diagnostic retry."
+            fi
             echo "Check log file for details: $FREECAD_LOG"
             if [ -f "$FREECAD_LOG" ]; then
                 echo "--- Last 20 lines of log ---"
@@ -453,7 +458,12 @@ integration-headless-release:
     while ! is_bridge_running; do
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-            echo "ERROR: FreeCAD Robust MCP Bridge did not start within timeout"
+            echo "ERROR: The authenticated bridge readiness check timed out."
+            echo "FreeCAD may have started, but the bridge did not answer the probe."
+            echo "--- Authenticated readiness probe ---"
+            if is_bridge_running 9875 verbose; then
+                echo "The probe succeeded on the diagnostic retry."
+            fi
             if [ -f "$FREECAD_LOG" ]; then
                 echo "--- Last 20 lines of log ---"
                 tail -20 "$FREECAD_LOG"
@@ -538,7 +548,12 @@ integration-gui-release:
     while ! is_bridge_running; do
         RETRY_COUNT=$((RETRY_COUNT + 1))
         if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-            echo "ERROR: FreeCAD Robust MCP Bridge did not start within timeout"
+            echo "ERROR: The authenticated bridge readiness check timed out."
+            echo "FreeCAD may have started, but the bridge did not answer the probe."
+            echo "--- Authenticated readiness probe ---"
+            if is_bridge_running 9875 verbose; then
+                echo "The probe succeeded on the diagnostic retry."
+            fi
             if [ -f "$FREECAD_LOG" ]; then
                 echo "--- Last 20 lines of log ---"
                 tail -20 "$FREECAD_LOG"

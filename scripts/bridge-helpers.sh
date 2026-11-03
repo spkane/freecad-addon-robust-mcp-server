@@ -36,7 +36,13 @@ kill_port() {
 # Returns 0 (true) if bridge is running, 1 (false) otherwise
 is_bridge_running() {
     local port=${1:-9875}  # Default to port 9875
-    uv run python -c 'import sys; from tests.integration.auth_support import integration_proxy; result = integration_proxy(port=int(sys.argv[1])).ping(); sys.exit(0 if isinstance(result, dict) and result.get("pong") else 1)' "$port" >/dev/null 2>&1
+    local diagnostic=${2:-quiet}
+    local probe='import sys; from tests.integration.auth_support import integration_proxy; result = integration_proxy(port=int(sys.argv[1])).ping(); sys.exit(0 if isinstance(result, dict) and result.get("pong") else 1)'
+    if [[ "$diagnostic" == verbose ]]; then
+        uv run python -c "$probe" "$port"
+    else
+        uv run python -c "$probe" "$port" >/dev/null 2>&1
+    fi
 }
 
 # Fail before starting FreeCAD if the client cannot load its pairing.
