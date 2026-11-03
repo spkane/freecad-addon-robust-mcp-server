@@ -79,19 +79,19 @@ Create tabs for platform-specific or alternative content:
 === "macOS"
 
     ```bash
-    ~/Library/Application Support/FreeCAD/Macro/
+    ~/Library/Application Support/FreeCAD/v1-1/Macro/
     ```
 
 === "Linux"
 
     ```bash
-    ~/.local/share/FreeCAD/Macro/
+    ~/.local/share/FreeCAD/v1-1/Macro/
     ```
 
 === "Windows"
 
     ```bash
-    %APPDATA%/FreeCAD/Macro/
+    %APPDATA%/FreeCAD/v1-1/Macro/
     ```
 ```
 
@@ -101,19 +101,19 @@ Create tabs for platform-specific or alternative content:
 === "macOS"
 
     ```bash
-    ~/Library/Application Support/FreeCAD/Macro/
+    ~/Library/Application Support/FreeCAD/v1-1/Macro/
     ```
 
 === "Linux"
 
     ```bash
-    ~/.local/share/FreeCAD/Macro/
+    ~/.local/share/FreeCAD/v1-1/Macro/
     ```
 
 === "Windows"
 
     ```bash
-    %APPDATA%/FreeCAD/Macro/
+    %APPDATA%/FreeCAD/v1-1/Macro/
     ```
 <!-- markdownlint-enable MD046 -->
 

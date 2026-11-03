@@ -280,7 +280,7 @@ If installed from source with mise/uv:
 ### Docker Desktop Configuration
 
 Docker Desktop forwards `host.docker.internal` to services listening on the
-host loopback interface. This example configures networking only: the
+host loopback interface. The RC4 image example below configures networking only: the
 container must also receive the existing bridge pairing credential. Pairing on
 the host does not automatically provision the container, and a portable secure
 provisioning procedure has not yet been validated. Run the MCP server on the
@@ -295,7 +295,7 @@ host until the container's credential has been provisioned securely.
         "run", "--rm", "-i",
         "-e", "FREECAD_MODE=xmlrpc",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
-        "spkane/freecad-robust-mcp"
+        "spkane/freecad-robust-mcp:0.7.0-rc.4"
       ]
     }
   }
@@ -427,11 +427,12 @@ just freecad::run-headless
 
 # Or run directly with FreeCADCmd
 # Use FreeCADCmd instead if that is the executable installed on your system.
-freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/v1-1/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 ```
 
-The direct path assumes a source installation in an unversioned Linux profile.
-For versioned profiles or release archives, use the actual installed directory.
+The direct path is a FreeCAD 1.1 source-installation example. Use the active
+profile’s `Mod` directory and the actual package directory; run
+`App.getUserAppDataDir()` in FreeCAD’s Python console to find its user data directory.
 
 ---
 

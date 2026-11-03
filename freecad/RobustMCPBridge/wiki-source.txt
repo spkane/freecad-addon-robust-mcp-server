@@ -60,13 +60,13 @@ To stop the bridge, click {{Button|Stop Bridge}} in the toolbar.
 ===Headless mode=== <!--T:18-->
 
 <!--T:19-->
-For automation and CI/CD pipelines, pair the bridge first as described in the [https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/ installation and pairing guide], then run it without the GUI. These paths assume a source installation in an unversioned profile; use the actual profile and archive directory if different. On Linux use {{incode|FreeCADCmd}} if that is the installed executable:
+For automation and CI/CD pipelines, pair the bridge first as described in the [https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/ installation and pairing guide], then run it without the GUI. These paths are FreeCAD 1.1 source-installation examples; use the active profile and actual archive directory. Run {{incode|App.getUserAppDataDir()}} in the FreeCAD Python console to find its user data directory. On Linux use {{incode|FreeCADCmd}} if that is the installed executable:
 
 <!--T:20-->
 '''Linux:'''
 </translate>
 {{Code|code=
-freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+freecadcmd ~/.local/share/FreeCAD/v1-1/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 }}
 <translate>
 
@@ -76,7 +76,7 @@ freecadcmd ~/.local/share/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/fr
 </translate>
 {{Code|code=
 /Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd \
-    ~/Library/Application\ Support/FreeCAD/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
+    ~/Library/Application\ Support/FreeCAD/v1-1/Mod/RobustMCPBridge/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py
 }}
 <translate>
 

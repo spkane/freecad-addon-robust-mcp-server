@@ -26,6 +26,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
   - [Robust MCP Server](#robust-mcp-server)
     - [Installation](#installation)
       - [Using pip](#using-pip)
+      - [Using GitHub release assets](#using-github-release-assets)
       - [Using uv (from source)](#using-uv-from-source)
       - [Using Docker](#using-docker)
     - [Configuration](#configuration)
@@ -127,6 +128,13 @@ described there becomes available with the upcoming release.
 ```bash
 pip install freecad-robust-mcp
 ```
+
+#### Using GitHub release assets
+
+Download the server wheel and matching workbench archive for your chosen release.
+The [release asset installation guide](docs/getting-started/installation.md#method-2-github-release-assets)
+covers installation, updates, FreeCAD profiles, and release candidates. Install
+and update both components; `cam-gate-v1.json` is not needed for installation.
 
 #### Using uv (from source)
 
@@ -332,17 +340,11 @@ just install::status
 
 ##### Manual Cleanup (if needed)
 
-Remove any legacy files that may conflict with the workbench:
-
-```bash
-# macOS - remove legacy plugin and macro
-rm -rf ~/Library/Application\ Support/FreeCAD/Mod/MCPBridge/
-rm -f ~/Library/Application\ Support/FreeCAD/Macro/StartMCPBridge.FCMacro
-
-# Linux - remove legacy plugin and macro
-rm -rf ~/.local/share/FreeCAD/Mod/MCPBridge/
-rm -f ~/.local/share/FreeCAD/Macro/StartMCPBridge.FCMacro
-```
+Check each FreeCAD profile you use for legacy `MCPBridge` workbench folders
+and `StartMCPBridge.FCMacro` macro files. Move obsolete copies out of the
+profile after confirming they are no longer needed. Profile paths vary by
+FreeCAD version; see the [installation guide](docs/getting-started/installation.md#manual-installation-from-a-release-archive)
+for how to find the active user data directory.
 
 #### Running Modes
 

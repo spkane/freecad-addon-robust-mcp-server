@@ -6,8 +6,9 @@ assistant. No source checkout or developer tools are required.
 > **Stable release availability:** The current stable releases (0.6.2) predate
 > bridge pairing. The steps below describe the upcoming pairing-capable stable
 > release and will work once it is published. Until then, use the
-> [source installation guide](installation.md) for the current development
-> version; the stable 0.6.2 packages do not support the pairing steps below.
+> [release asset installation guide](installation.md#method-2-github-release-assets)
+> for matching release candidates or the source installation guide for development
+> builds; the stable 0.6.2 packages do not support the pairing steps below.
 
 ## What you need
 
@@ -21,7 +22,14 @@ execute Python with your FreeCAD user's permissions.
 
 ## 1. Install the MCP server
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
+Choose one server installation method:
+
+- **Stable package:** use the `uv` command below, or [install with pip](installation.md#method-1-public-releases-with-pip).
+- **GitHub release, including RC testing:** download the server wheel and follow
+  the [release asset steps](installation.md#method-2-github-release-assets).
+  The instructions include an RC4 example for macOS, Linux, and Windows.
+
+For the stable `uv` method, install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
 operating system, then open a new Terminal (macOS/Linux) or PowerShell (Windows)
 and run:
 
@@ -38,15 +46,17 @@ freecad-mcp --version
 
 If your shell cannot find it, see [uv's executable directory
 instructions](https://docs.astral.sh/uv/reference/storage/#executable-directory).
-For another installation method, see [Installation](installation.md).
+For a downloaded server wheel, including a release candidate, see the
+[GitHub release asset installation steps](installation.md#method-2-github-release-assets).
 
 ## 2. Install the FreeCAD workbench
 
 1. Quit FreeCAD.
 2. Open the [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench),
-   select the latest **stable** Robust MCP Bridge workbench release compatible
-   with your server, and download its `freecad-mcp-workbench` ZIP file. Avoid
-   releases labeled **Pre-release** unless you intend to test one.
+   select a Robust MCP Bridge workbench release compatible with your server,
+   and download its `freecad-mcp-workbench` ZIP file. For stable installations,
+   choose a stable release; for RC testing, choose the matching pre-release
+   version. For example, server RC4 pairs with workbench `0.7.0-rc.4`.
 3. Extract the ZIP. Open the FreeCAD profile's `Mod` folder, and move the
    extracted workbench folder into it. The folder you move must directly contain
    `package.xml` and the `freecad` folder. If `Mod` does not exist, create it.
@@ -57,15 +67,25 @@ For another installation method, see [Installation](installation.md).
    | Windows | `%APPDATA%\FreeCAD\v1-1\Mod\` |
    | Linux | `~/.local/share/FreeCAD/v1-1/Mod/` |
 
-   These examples are for the FreeCAD 1.1 profile. Use the profile for the
-   version you actually start; some installations use an unversioned `Mod`
-   folder instead. In Finder, use **Go > Go to Folder** to open the macOS path;
-   on Windows, paste the path into File Explorer's address bar.
+   These examples are for FreeCAD 1.1. Use the profile for the version you
+   actually start; for example, a development build may use `v27-1/Mod`.
+   Custom and older profiles can use different locations. To find the active
+   profile, open **View > Panels > Python console** in that FreeCAD version and
+   enter `import os; print(os.path.join(App.getUserAppDataDir(), "Mod"))`.
+   In Finder, use **Go > Go to Folder** to open the macOS path; on Windows,
+   paste the path into File Explorer's address bar.
 4. If another Robust MCP Bridge installation is already in that profile, move
    the old folder out of `Mod` so FreeCAD does not load two copies. Restart
    FreeCAD after installing.
 
 The workbench is not currently listed in the public FreeCAD Addon Manager.
+The `.tar.gz` workbench asset contains the same package as the ZIP. You do not
+need `cam-gate-v1.json`, which is used by release CI.
+
+**When updating, update both components:** install the new server version and
+replace the workbench archive in every FreeCAD profile you use. Quit FreeCAD
+first, then restart it and reconnect your assistant. Keep your existing pairing
+unless you intend to replace it. See the [release asset update steps](installation.md#method-2-github-release-assets).
 
 ## 3. Pair and start the bridge
 

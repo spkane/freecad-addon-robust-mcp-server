@@ -15,14 +15,14 @@ docker_url: https://hub.docker.com/r/spkane/freecad-robust-mcp
 xmlrpc_port: 9875
 socket_port: 9876
 
-# Paths (platform-specific)
+# Example FreeCAD 1.1 paths; installations may use another profile.
 paths:
   macos:
-    macro: ~/Library/Application Support/FreeCAD/Macro/
-    mod: ~/Library/Application Support/FreeCAD/Mod/
+    macro: ~/Library/Application Support/FreeCAD/v1-1/Macro/
+    mod: ~/Library/Application Support/FreeCAD/v1-1/Mod/
   linux:
-    macro: ~/.local/share/FreeCAD/Macro/
-    mod: ~/.local/share/FreeCAD/Mod/
+    macro: ~/.local/share/FreeCAD/v1-1/Macro/
+    mod: ~/.local/share/FreeCAD/v1-1/Mod/
   windows:
-    macro: "%APPDATA%/FreeCAD/Macro/"
-    mod: "%APPDATA%/FreeCAD/Mod/"
+    macro: "%APPDATA%/FreeCAD/v1-1/Macro/"
+    mod: "%APPDATA%/FreeCAD/v1-1/Mod/"
