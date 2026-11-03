@@ -266,7 +266,9 @@ Pairing-capable release candidates are available. Use a workbench archive
 compatible with the MCP server you installed, and choose the matching RC
 versions when testing a candidate.
 
-1. Quit FreeCAD. Download the `freecad-mcp-workbench-<version>.zip` or `.tar.gz`
+1. If you need to find the active profile, follow the Python console step
+   below while that version of FreeCAD is open. Then quit FreeCAD. Download the
+   `freecad-mcp-workbench-<version>.zip` or `.tar.gz`
    asset from the desired [workbench release](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench&expanded=true).
 1. Move older Robust MCP Bridge installations out of the selected profile’s
    `Mod` directory, including prior `freecad-mcp-workbench-*` archive folders
@@ -287,9 +289,29 @@ import os
 print(os.path.join(App.getUserAppDataDir(), "Mod"))
 ```
 
-Use the printed directory, creating it if needed. The extracted package folder
-must directly contain `package.xml` and the nested `freecad/RobustMCPBridge/`
-workbench. Repeat the installation for each profile you use.
+Use the printed directory, creating it if needed. Move the **entire top-level
+package folder** into `Mod`, not just the inner `freecad` or
+`RobustMCPBridge` folder. For RC4, the installed layout is:
+
+```text
+Mod/
+└── freecad-mcp-workbench-0.7.0-rc.4/
+    ├── package.xml
+    ├── LICENSE-CODE
+    ├── LICENSE-MIT
+    ├── LICENSE-ICON
+    ├── NOTICE
+    └── freecad/
+        └── RobustMCPBridge/
+            ├── __init__.py
+            ├── init_gui.py
+            └── freecad_mcp_bridge/
+```
+
+Other releases use their version in the top-level folder name. The package
+folder must directly contain `package.xml`; check that extraction did not create
+an extra folder of the same name. Repeat the installation for each profile you
+use.
 
 ---
 

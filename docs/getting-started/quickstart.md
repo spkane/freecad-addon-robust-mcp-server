@@ -51,7 +51,8 @@ For a downloaded server wheel, including a release candidate, see the
 
 ## 2. Install the FreeCAD workbench
 
-1. Quit FreeCAD.
+1. If you need to find the active profile, follow the Python console step below
+   while that version of FreeCAD is open. Then quit FreeCAD.
 2. Open the [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench),
    select a Robust MCP Bridge workbench release compatible with your server,
    and download its `freecad-mcp-workbench` ZIP file. For stable installations,
@@ -60,6 +61,27 @@ For a downloaded server wheel, including a release candidate, see the
 3. Extract the ZIP. Open the FreeCAD profile's `Mod` folder, and move the
    extracted workbench folder into it. The folder you move must directly contain
    `package.xml` and the `freecad` folder. If `Mod` does not exist, create it.
+   For RC4, move the entire `freecad-mcp-workbench-0.7.0-rc.4` folder, not the
+   inner `freecad` or `RobustMCPBridge` folder. The resulting structure is:
+
+   ```text
+   Mod/
+   └── freecad-mcp-workbench-0.7.0-rc.4/
+       ├── package.xml
+       ├── LICENSE-CODE
+       ├── LICENSE-MIT
+       ├── LICENSE-ICON
+       ├── NOTICE
+       └── freecad/
+           └── RobustMCPBridge/
+               ├── __init__.py
+               ├── init_gui.py
+               └── freecad_mcp_bridge/
+   ```
+
+   For other releases, the top-level folder contains that release's version.
+   Check that extraction did not add a second folder of the same name between
+   `Mod` and `package.xml`.
 
    | Operating system | Typical profile folder |
    | --- | --- |
