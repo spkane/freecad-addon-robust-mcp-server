@@ -445,6 +445,15 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     tooltip = widget._widget.setToolTip.call_args.args[0]
     assert "XML-RPC: listening" in tooltip and "JSON-RPC: unavailable" in tooltip
     assert "check preferences" in tooltip and "authorized clients" in tooltip
+    assert module.__version__ in tooltip
+    for method, args in (
+        (widget.set_stopped, ()),
+        (widget.set_starting, ()),
+        (widget.set_error, ("Example error",)),
+    ):
+        method(*args)
+        assert module.__version__ in widget._widget.setToolTip.call_args.args[0]
+    assert "Example error" in widget._widget.setToolTip.call_args.args[0]
 
 
 @pytest.fixture

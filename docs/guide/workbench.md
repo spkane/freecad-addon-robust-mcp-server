@@ -49,6 +49,9 @@ Click **Stop Bridge** in the toolbar. The status indicator turns red.
 
 ### Status Indicator
 
+Hover over the status indicator to see the installed bridge version and its
+current status.
+
 | Color  | Status                                |
 | ------ | ------------------------------------- |
 | Green  | Bridge running, accepting connections |

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PySide import QtWidgets
 
+from ..freecad_mcp_bridge import __version__
 from ..freecad_mcp_bridge.qt_compat import load_qt_core_widgets, load_qt_modules
 
 # Global reference to the status widget (protected by _status_widget_lock)
@@ -120,7 +121,7 @@ class MCPStatusWidget:
             # Create the status label widget
             self._widget = QtWidgets.QLabel()
             self._widget.setObjectName("mcp_bridge_status_widget")
-            self._widget.setToolTip("MCP Bridge Status")
+            self._widget.setToolTip(f"MCP Bridge {__version__} Status")
 
             # Style it to stand out slightly
             self._widget.setStyleSheet(
@@ -207,7 +208,7 @@ class MCPStatusWidget:
             "}"
         )
         self._widget.setToolTip(
-            f"MCP Bridge is running and accepts Python from authorized clients\n"
+            f"MCP Bridge {__version__} is running and accepts Python from authorized clients\n"
             f"XML-RPC: {'listening' if xmlrpc_running else 'unavailable'} on localhost:{xmlrpc_port}\n"
             f"JSON-RPC: {'listening' if socket_running else 'unavailable'} on localhost:{socket_port}\n"
             f"Requests processed: {request_count}" + (f"\n{errors}" if errors else "")
@@ -232,7 +233,7 @@ class MCPStatusWidget:
             "font-size: 11px; "
             "}"
         )
-        self._widget.setToolTip("MCP Bridge is not running")
+        self._widget.setToolTip(f"MCP Bridge {__version__} is not running")
 
     def set_starting(self) -> None:
         """Update the widget to show starting status."""
@@ -253,7 +254,7 @@ class MCPStatusWidget:
             "font-size: 11px; "
             "}"
         )
-        self._widget.setToolTip("MCP Bridge is starting...")
+        self._widget.setToolTip(f"MCP Bridge {__version__} is starting...")
 
     def set_error(self, message: str) -> None:
         """Update the widget to show error status.
@@ -278,7 +279,7 @@ class MCPStatusWidget:
             "font-size: 11px; "
             "}"
         )
-        self._widget.setToolTip(f"MCP Bridge Error: {message}")
+        self._widget.setToolTip(f"MCP Bridge {__version__} Error: {message}")
 
 
 def get_status_widget() -> MCPStatusWidget:
