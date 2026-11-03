@@ -37,11 +37,13 @@ kill_port() {
 is_bridge_running() {
     local port=${1:-9875}  # Default to port 9875
     local diagnostic=${2:-quiet}
+    local project_root
+    project_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
     local probe='import sys; from tests.integration.auth_support import integration_proxy; result = integration_proxy(port=int(sys.argv[1])).ping(); sys.exit(0 if isinstance(result, dict) and result.get("pong") else 1)'
     if [[ "$diagnostic" == verbose ]]; then
-        uv run python -c "$probe" "$port"
+        (cd "$project_root" && uv run python -c "$probe" "$port")
     else
-        uv run python -c "$probe" "$port" >/dev/null 2>&1
+        (cd "$project_root" && uv run python -c "$probe" "$port") >/dev/null 2>&1
     fi
 }
 

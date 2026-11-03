@@ -132,7 +132,10 @@ class TestTestingRuntime:
         )
 
     @pytest.mark.just_runtime
-    def test_readiness_probe_reports_failure_only_in_verbose_mode(self) -> None:
+    @pytest.mark.parametrize("cwd", [".", "just"])
+    def test_readiness_probe_reports_failure_only_in_verbose_mode(
+        self, cwd: str
+    ) -> None:
         """A failed authenticated probe exposes its exception on request."""
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
@@ -156,6 +159,7 @@ class TestTestingRuntime:
                     mode,
                 ],
                 env=env,
+                cwd=helper.parent.parent / cwd,
                 capture_output=True,
                 text=True,
                 check=False,
