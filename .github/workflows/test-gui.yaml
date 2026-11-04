@@ -7,6 +7,7 @@ on:
       - "src/**/*.py"
       - "freecad/**/*.py"
       - "tests/**/*.py"
+      - "tests/**/*.FCMacro"
       - "tests/ci-test/**"
       - "package.xml"
       - "LICENSE*"
@@ -21,6 +22,7 @@ on:
       - "src/**/*.py"
       - "freecad/**/*.py"
       - "tests/**/*.py"
+      - "tests/**/*.FCMacro"
       - "tests/ci-test/**"
       - "package.xml"
       - "LICENSE*"
@@ -258,6 +260,14 @@ jobs:
                   || TEST_EXIT=$?
               else
                 echo "Skipping standalone tests due to earlier failures"
+              fi
+
+              if [ "${TEST_EXIT:-0}" -eq 0 ]; then
+                echo "Running Addon Manager lifecycle in a disposable profile..."
+                FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1 \
+                  uv run pytest tests/addon_manager/test_lifecycle.py -v --tb=short \
+                  --junit-xml=/test-output/addon-manager-test-results.xml \
+                  || TEST_EXIT=$?
               fi
 
               exit ${TEST_EXIT:-0}

@@ -42,13 +42,20 @@ Repeat on macOS, Windows, and Linux. A custom repository exercises the Addon
 Manager without testing the public Index's review or cache; repeat a final
 smoke test through the public listing after acceptance.
 
-## Automation gap
+## Automated lifecycle test
 
-Current CI exercises the workbench and its archive builder, but does **not**
-execute Addon Manager's full install, update, disable, and uninstall lifecycle.
-Add an isolated-profile GUI integration job that exercises those operations
-through the real Addon Manager, checks metadata and version changes, restarts
-FreeCAD to verify loading and disabling, and checks listener and cleanup state.
-Run it on all three operating systems; require that each job proves isolation
-before it changes any profile or credentials. Avoid replacing this coverage
-with a test that only copies the package files or mocks the Addon Manager.
+The Linux GUI CI matrix runs `tests/addon_manager/test_lifecycle.py` on FreeCAD
+1.0.2 and the latest stable FreeCAD, with a non-blocking weekly canary. In an
+isolated container and profile, it uses FreeCAD's actual Addon Manager installer
+and addon operations to install an earlier release from a Git fixture, disable,
+enable, update to the current checkout, uninstall, and reinstall. It restarts
+FreeCAD, checks the manifest and workbench discovery, verifies default listener
+state, and pairs and connects to the bridge. It also checks that an unrelated
+addon and the pairing directory survive uninstall.
+
+The test opts in with `FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1` and refuses to
+operate when FreeCAD's user data directory is outside its disposable profile.
+Run it only in a disposable Linux container with a graphical display. It does
+not manipulate the Addon Manager's graphical controls, test the public Index,
+or cover native macOS and Windows profile and credential behavior. Those remain
+manual checks and automation work before Index submission.

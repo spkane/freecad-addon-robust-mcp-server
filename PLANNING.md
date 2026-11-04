@@ -846,10 +846,13 @@ Before requesting inclusion:
    environment is not an Addon Manager Python dependency; do not vendor it
    or bypass the [allow-list](https://freecad.github.io/Addon-Academy/Topics/Dependencies/Allow-List/).
    Confirm all icon authorship and preserve historical license grants.
-7. **Actual installation:** follow the [pre-listing test protocol](docs/development/addon-manager-testing.md) and automate the real Addon Manager lifecycle; test install, upgrade, disable,
-   uninstall, and reinstall in disposable FreeCAD profiles on macOS, Windows,
-   and Linux, including pairing, port cleanup, and no duplicate workbenches.
-   The current workbench archive tests are not a substitute for this flow.
+7. **Actual installation:** follow the [pre-listing test protocol](docs/development/addon-manager-testing.md).
+   Linux GUI CI exercises FreeCAD's Addon Manager installer and addon operations
+   across install, update, disable, enable, uninstall, reinstall, restarts, and
+   pairing in a disposable profile. Add native macOS and Windows coverage with
+   independently verified profile and credential isolation, and test the actual
+   Addon Manager graphical controls and public Index after acceptance. Archive
+   installation tests do not establish those remaining behaviors.
 8. **Submission:** use the `Addon - Addition` issue on FreeCAD/Addons only
    after the preceding work is reviewable, and provide compatibility, security,
    license, and independent testing evidence. Follow reviewer requests and
@@ -1115,7 +1118,8 @@ contract is explicit, and no P0/P1 release findings remain.
 2. Investigate the FreeCAD 27.1 accessibility crash and missing MCP console-log
    output independently. Reproduce where practical and collect evidence; avoid
    attributing the crash to the bridge without confirmation.
-3. Implement automated Addon Manager lifecycle tests before Index submission.
+3. Complete Addon Manager lifecycle coverage before Index submission: native
+   macOS and Windows, graphical controls, and public Index discovery remain.
    Use an unlisted custom repository and disposable FreeCAD profiles on macOS,
    Windows, and Linux; exercise install, startup and pairing, upgrade, disable,
    uninstall, and reinstall through the actual manager. Verify isolation,
