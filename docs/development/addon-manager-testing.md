@@ -55,7 +55,19 @@ addon and the pairing directory survive uninstall.
 
 The test opts in with `FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1` and refuses to
 operate when FreeCAD's user data directory is outside its disposable profile.
-Run it only in a disposable Linux container with a graphical display. It does
-not manipulate the Addon Manager's graphical controls, test the public Index,
-or cover native macOS and Windows profile and credential behavior. Those remain
-manual checks and automation work before Index submission.
+The cross-platform authentication workflow also attempts the lifecycle on
+native macOS and Windows using disposable hosted runners. The Windows runner
+passed with FreeCAD 1.1.4; the macOS runner has not yet been verified.
+
+To reproduce a native run, use a disposable operating-system account or VM,
+install the project dependencies and FreeCAD GUI, and set
+`FREECAD_ADDON_GUI_COMMAND` to the FreeCAD executable and
+`FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1` before running
+`uv run pytest tests/addon_manager/test_lifecycle.py -v`. On Windows, also set
+`FREECAD_ADDON_DISPOSABLE_WINDOWS=1`; the test refuses to replace an existing
+bridge credential and removes its own credential after the test. The test uses
+Qt's offscreen platform on Windows. On Linux, prefer the isolated GUI container.
+
+These tests do not manipulate the Addon Manager's graphical controls or test
+public Index discovery. Verify the controls before submission and repeat the
+public-listing smoke test after acceptance.

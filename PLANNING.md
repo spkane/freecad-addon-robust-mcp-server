@@ -849,10 +849,10 @@ Before requesting inclusion:
 7. **Actual installation:** follow the [pre-listing test protocol](docs/development/addon-manager-testing.md).
    Linux GUI CI exercises FreeCAD's Addon Manager installer and addon operations
    across install, update, disable, enable, uninstall, reinstall, restarts, and
-   pairing in a disposable profile. Add native macOS and Windows coverage with
-   independently verified profile and credential isolation, and test the actual
-   Addon Manager graphical controls and public Index after acceptance. Archive
-   installation tests do not establish those remaining behaviors.
+   pairing in a disposable profile. Native macOS and Windows jobs exercise the
+   same flow; verify their results and profile isolation. Test the actual Addon
+   Manager graphical controls before submission and the public Index after
+   acceptance. Archive tests do not establish those remaining behaviors.
 8. **Submission:** use the `Addon - Addition` issue on FreeCAD/Addons only
    after the preceding work is reviewable, and provide compatibility, security,
    license, and independent testing evidence. Follow reviewer requests and
