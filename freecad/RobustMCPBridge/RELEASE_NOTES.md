@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## Version 0.7.0-rc.5 (2026-11-03)
+
+### Changed
+
+- **Bridge version**: The status bar tooltip shows the installed workbench
+  version in each bridge state.
+- **Installation guidance**: Workbench documentation and headless startup
+  examples clarify the archive layout and version-specific FreeCAD profiles.
+
+This candidate is tested against the compatible server candidates listed in
+the CAM compatibility inventory; a new server candidate is not required.
+
 ## Version 0.7.0-rc.4 (2026-11-01)
 
 ### Changed
