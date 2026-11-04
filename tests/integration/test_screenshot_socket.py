@@ -4,6 +4,7 @@ import base64
 from uuid import uuid4
 
 import pytest
+from PySide6.QtGui import QImage
 
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 from freecad_mcp.bridge.socket import SocketBridge
@@ -87,17 +88,18 @@ except RuntimeError as error:
         hidden = await bridge.get_screenshot(doc_name=doc_name)
         assert hidden.success, hidden.error
         assert hidden.data is not None
-        pixels = await bridge.execute_python(
-            f"""
-import base64
-from PySide import QtGui
-visible = QtGui.QImage.fromData(base64.b64decode({visible.data!r}))
-hidden = QtGui.QImage.fromData(base64.b64decode({hidden.data!r}))
-_result_ = sum(visible.pixel(x, y) != hidden.pixel(x, y) for x in range(0, visible.width(), 8) for y in range(0, visible.height(), 8))
-"""
+        # Decode in the test process: sending both images back as Python code can
+        # exceed the bridge's request size limit on high-resolution displays.
+        visible_image = QImage.fromData(base64.b64decode(visible.data, validate=True))
+        hidden_image = QImage.fromData(base64.b64decode(hidden.data, validate=True))
+        assert not visible_image.isNull() and not hidden_image.isNull()
+        assert visible_image.size() == hidden_image.size()
+        pixels = sum(
+            visible_image.pixel(x, y) != hidden_image.pixel(x, y)
+            for x in range(0, visible_image.width(), 8)
+            for y in range(0, visible_image.height(), 8)
         )
-        assert pixels.success, pixels.error_traceback or pixels.stderr
-        assert pixels.result > 20, "Screenshot did not show the model"
+        assert pixels > 20, "Screenshot did not show the model"
     finally:
         try:
             await bridge.execute_python(

@@ -194,6 +194,10 @@ box = Part.makeBox(10, 20, 30)
 obj = doc.addObject("Part::Feature", "GUIBox")
 obj.Shape = box
 doc.recompute()
+import FreeCADGui
+FreeCADGui.activeDocument().activeView().viewIsometric()
+FreeCADGui.activeDocument().activeView().fitAll()
+FreeCADGui.updateGui()
 
 has_view_object = hasattr(obj, "ViewObject") and obj.ViewObject is not None
 
@@ -231,6 +235,10 @@ box = Part.makeBox(10, 10, 10)
 obj = doc.addObject("Part::Feature", "VisBox")
 obj.Shape = box
 doc.recompute()
+import FreeCADGui
+FreeCADGui.activeDocument().activeView().viewIsometric()
+FreeCADGui.activeDocument().activeView().fitAll()
+FreeCADGui.updateGui()
 _result_ = True
 """,
         )
@@ -297,6 +305,10 @@ box = Part.makeBox(10, 10, 10)
 obj = doc.addObject("Part::Feature", "DisplayBox")
 obj.Shape = box
 doc.recompute()
+import FreeCADGui
+FreeCADGui.activeDocument().activeView().viewIsometric()
+FreeCADGui.activeDocument().activeView().fitAll()
+FreeCADGui.updateGui()
 _result_ = True
 """,
         )
@@ -367,6 +379,10 @@ box = Part.makeBox(10, 10, 10)
 obj = doc.addObject("Part::Feature", "ColorBox")
 obj.Shape = box
 doc.recompute()
+import FreeCADGui
+FreeCADGui.activeDocument().activeView().viewIsometric()
+FreeCADGui.activeDocument().activeView().fitAll()
+FreeCADGui.updateGui()
 _result_ = True
 """,
         )
@@ -600,6 +616,10 @@ top_obj.ViewObject.ShapeColor = (0.5, 0.5, 0.5)
 top_obj.ViewObject.Transparency = 30
 
 doc.recompute()
+import FreeCADGui
+FreeCADGui.activeDocument().activeView().viewIsometric()
+FreeCADGui.activeDocument().activeView().fitAll()
+FreeCADGui.updateGui()
 
 _result_ = {
     "object_count": len(doc.Objects),

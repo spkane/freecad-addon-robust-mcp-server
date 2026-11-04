@@ -305,6 +305,11 @@ box = Part.makeBox(10, 20, 30)
 obj = doc.addObject("Part::Feature", "ValidBox")
 obj.Shape = box
 doc.recompute()
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.activeDocument().activeView().viewIsometric()
+    FreeCADGui.activeDocument().activeView().fitAll()
+    FreeCADGui.updateGui()
 
 # Validate the object
 state = list(obj.State) if hasattr(obj, 'State') else []
@@ -358,6 +363,11 @@ obj3 = doc.addObject("Part::Feature", "Sphere1")
 obj3.Shape = sphere
 
 doc.recompute()
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.activeDocument().activeView().viewIsometric()
+    FreeCADGui.activeDocument().activeView().fitAll()
+    FreeCADGui.updateGui()
 
 # Validate all objects
 total = len(doc.Objects)
@@ -790,6 +800,11 @@ box = Part.makeBox(20, 20, 20)
 obj = doc.addObject("Part::Feature", "ExportBox")
 obj.Shape = box
 doc.recompute()
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.activeDocument().activeView().viewIsometric()
+    FreeCADGui.activeDocument().activeView().fitAll()
+    FreeCADGui.updateGui()
 
 exports = {{}}
 

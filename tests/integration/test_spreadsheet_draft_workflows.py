@@ -288,6 +288,11 @@ box_volume = box.Shape.Volume
 # Now change spreadsheet value and verify it updates
 sheet.set("B1", "100")  # Change Length from 80 to 100
 doc.recompute()
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    FreeCADGui.activeDocument().activeView().viewIsometric()
+    FreeCADGui.activeDocument().activeView().fitAll()
+    FreeCADGui.updateGui()
 
 new_length = box.Length.Value
 new_volume = box.Shape.Volume

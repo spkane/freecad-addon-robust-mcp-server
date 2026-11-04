@@ -2,10 +2,30 @@
 
 import os
 import socket
+import subprocess
+from unittest.mock import patch
 
 import pytest
 
-from tests.integration.test_shutdown_crash import _is_port_occupied
+from tests.integration.test_shutdown_crash import (
+    _is_freecad_process_running,
+    _is_port_occupied,
+)
+
+
+@pytest.mark.parametrize(("returncode", "running"), [(0, True), (1, False)])
+def test_process_preflight_uses_exact_freecad_executable_names(
+    returncode: int, running: bool
+) -> None:
+    """Unrelated processes containing FreeCAD must not block shutdown tests."""
+    with patch("tests.integration.test_shutdown_crash.subprocess.run") as run:
+        run.return_value = subprocess.CompletedProcess([], returncode)
+        assert _is_freecad_process_running() is running
+        assert run.call_args.args[0] == [
+            "pgrep",
+            "-ix",
+            "freecad|freecadcmd|freecad[.]exe|freecadcmd[.]exe",
+        ]
 
 
 def test_preflight_detects_unrelated_listener_without_stopping_it() -> None:

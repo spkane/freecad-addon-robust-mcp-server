@@ -65,18 +65,15 @@ crashExitCodes = {
 def _is_freecad_process_running() -> bool:
     """Check if any FreeCAD process is currently running.
 
-    Uses pgrep to match process names (not full command lines) to avoid
-    false positives from unrelated processes whose arguments or working
-    directory contain "freecad".
+    Uses exact executable names, avoiding both command-line matches and
+    unrelated helpers such as the macOS FreeCAD thumbnail extension.
 
     Returns:
         True if a FreeCAD process is found, False otherwise.
     """
     try:
-        # pgrep -i (case-insensitive) WITHOUT -f (no full command line match).
-        # This matches executable basenames: freecad, FreeCAD, freecadcmd, etc.
         result = subprocess.run(
-            ["pgrep", "-i", "freecad"],  # noqa: S607
+            ["pgrep", "-ix", "freecad|freecadcmd|freecad[.]exe|freecadcmd[.]exe"],  # noqa: S607
             capture_output=True,
             timeout=5,
             check=False,

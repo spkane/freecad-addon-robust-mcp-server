@@ -45,6 +45,12 @@ for hole in holes:
 part = doc.addObject("Part::Feature", "Part")
 part.Shape = shape.removeSplitter()
 doc.recompute()
+if FreeCAD.GuiUp:
+    import FreeCADGui
+    view = FreeCADGui.getDocument(doc.Name).activeView()
+    view.viewIsometric()
+    view.fitAll()
+    FreeCADGui.updateGui()
 _result_ = {{"document": doc.Name, "valid": part.Shape.isValid()}}
 """
 
