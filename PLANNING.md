@@ -5,14 +5,35 @@
 
 **Post-merge triage update:** 2026-10-29
 
-**Release hold, 2026-10-30:** Local candidate testing exposed ShapeString
-identifier, sketch attachment, contour conversion, and recompute-reporting
-defects. Verify their fixes against real Qt5 and Qt6 FreeCAD before the stable
-release. A separate FreeCAD 27.1 development-build crash has a macOS Qt
-accessibility stack; its cause and relationship to the modeling operation are
-unconfirmed. The MCP console-log tools returned no entries while the FreeCAD
-report view contained messages, so investigate console-log capture separately;
-do not treat an empty tool response as proof of a clean report view.
+**Release status, 2026-11-03:** Server and workbench `0.7.0-rc.4` are
+published as GitHub prereleases; the server is also on TestPyPI, not production
+PyPI. The exact-artifact CAM gates passed and both reviewed compatibility
+inventory updates are merged. Stable publication and independent user testing
+remain outstanding. The current public PyPI server version is `0.6.1`; the
+GitHub stable component releases are `0.6.2` and predate pairing.
+
+PR #175 fixed the ShapeString identifier, attachment, contour conversion, and
+recompute-reporting defects, with real FreeCAD regression coverage. A separate
+FreeCAD 27.1 development-build crash has a macOS Qt accessibility stack; its
+cause and relationship to the modeling operation are unconfirmed. The MCP
+console-log tools returned no entries while the FreeCAD report view contained
+messages: investigate capture separately, and do not treat an empty response as
+proof of a clean report view.
+
+PR #174 delivered CAM tooling; #153 is closed. PR #182 added exact-artifact CAM
+release gates, and #185 fixed the prerelease inventory job. PR #186 implemented
+the neutral Qt wrapper, #192 and #194 clarified installation and archive layout,
+PR #193 added the bridge version tooltip, and #195 corrected `just` integration
+readiness checks. The user-visible CAM suite passed all 18 tests in a real macOS
+FreeCAD GUI. A subsequent full macOS FreeCAD 27.1 run reached the tests: 116
+passed, including CAM, but two screenshot pixel-comparison tests lost their
+bridge connections, and cleanup timed out while a FreeCAD thumbnail helper was
+present. The log shows FreeCAD remained running after the screenshot failures.
+Test-harness fixes avoid sending the images back through the bridge and exclude
+the thumbnail helper from process checks. With those fixes,
+the full macOS GUI recipe passed 118 tests and all seven standalone shutdown
+tests; three headless-only tests were skipped. Include these fixes in the next
+release and repeat the checks against its published artifacts.
 
 PRs #163, #164, #165, #166, and #167 are merged. PR #163 corrected release
 identity and trusted publisher configuration; #164 corrected installation
@@ -24,7 +45,8 @@ closed with the note that its fix is intended for the next release; publication
 and clean-install verification remain release gates. Issue #73 was closed in
 favor of #169, which tracks the remaining Addon Manager catalog work.
 
-**Repository snapshot:** `0a036ce`, PR #167 merge on remote `main`
+**Audit baseline:** `0a036ce`, PR #167 merge; release and issue status was
+refreshed on 2026-11-03.
 
 **Intended reader:** The maintainer returning to the project after time away  
 **Intended outcome:** Execute a secure, tested, repeatable public release of the
@@ -41,13 +63,13 @@ The practical problem is therefore not a first release. It is repairing a
 partially released product whose distribution channels, dependency constraints,
 security model, and repository metadata have diverged.
 
-Target a **`0.7.0` release candidate** rather than publishing another v1-based
-maintenance release. PR #122 migrated the server to the MCP Python SDK 2.x API,
+Target a **`0.7.0` stable release** after validating the published RC4
+candidates and completing the remaining release gates. PR #122 migrated the server to the MCP Python SDK 2.x API,
 and PR #147 refreshed the locked SDK to 2.3.0 plus the stable dependency and
 security-tool set. Stdio, Streamable HTTP, first-tool-call, unit, GUI FreeCAD,
 and headless FreeCAD integration checks pass on those merged changes. Complete
 the remaining security, packaging, clean-install, and FreeCAD compatibility
-gates before publishing the candidate. Follow with tool-catalog profiles,
+gates before stable publication. Follow with tool-catalog profiles,
 complete risk annotations, task-oriented evaluations, and MCP Registry
 publication.
 
@@ -109,11 +131,11 @@ macOS, and Windows authentication checks passed. PR #137 also corrected the
 contributor documentation links. PR #160 closed screenshot issues #82 and #92;
 all CI lanes passed, including real FreeCAD 1.0.2/Qt5, stable Qt6, and weekly
 Qt6 GUI tests. Contributor PR #102 was closed with thanks and credit. The
-screenshot fix is on `main` and has not yet been published in a new release.
+screenshot fix is included in the published RC4 candidates; it awaits a stable release.
 PR #161 repaired workbench release packaging and adopted Apache 2.0 while
 retaining prior MIT terms and notices. Both archive formats were installed and
 loaded in real FreeCAD Qt5 and Qt6 CI; all checks and CodeRabbit passed. The
-fix has not yet been published in a new release. Issues #73, #87, and #97 were
+fix is included in the published RC4 candidates and awaits a stable release. Issues #73, #87, and #97 were
 updated at the time for their outstanding acceptance criteria.
 PR #162 aligned the configuration and CLI default to XML-RPC, preserved
 explicit embedded mode, and tested default startup with real FreeCAD on Linux,
@@ -121,9 +143,8 @@ macOS, and Windows. It also corrected pairing and source-install guidance.
 Its CI workflows passed; the final CodeRabbit re-review was rate-limited, and
 all reported findings were addressed. Issues #73, #87, and #97 were later
 closed; #169 tracks the Addon Manager listing.
-CAM feature request #153 remains deferred while the fix-first queue is active.
-Canonical issues and their active implementation pull requests remain open
-until their acceptance criteria pass.
+CAM feature request #153 was implemented by PR #174 and is closed. The only
+open repository issue at this update is #169 for Addon Manager listing.
 
 This queue combines user impact, release risk, ease, and whether a usable pull
 request already exists. Effort is estimated for one maintainer who knows the
@@ -156,7 +177,7 @@ are deferred until this queue is complete.
 | 10    | Resolved | M      | Finish screenshot compatibility, rendering, and cleanup | **Completed:** [PR #160](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/160) closed [#82](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/82) and [#92](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/92); contributor [PR #102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102) was closed with credit. | Shared capture code uses capability checks, renders and fits geometry, restores the camera and animation state, and cleans temporary files on failure. Real Qt5 and Qt6 GUI tests cover XML-RPC and socket; embedded is covered by unit tests.                                                              |
 | 11    | Resolved | XS     | Correct installation documentation                      | PR #164; contributor PR #124 closed with thanks                                                                                                                                                                                                                                                                                                                                  | Corrected guidance and retained contributor credit.                                                                                                                                                                                                                                                         |
 | 12    | Resolved | XS     | Repair capabilities metadata                            | PR #166 fixed #135                                                                                                                                                                                                                                                                                                                                                               | Screenshot parameters and response metadata now match the tool.                                                                                                                                                                                                                                             |
-| 13    | P0       | S-M    | Verify release packaging and identity                   | PR #163 fixed metadata; #87 closed, publication verification pending                                                                                                                                                                                                                                                                                                             | Exercise candidate publication and clean-install the published artifact.                                                                                                                                                                                                                                    |
+| 13    | P0       | S-M    | Verify release packaging and identity                   | PR #163 fixed metadata; RC4 published; stable verification pending                                                                                                                                                                                                                                                                                                               | Finish independent clean-install testing and verify stable publication.                                                                                                                                                                                                                                     |
 | 14    | Resolved | S-M    | Make installation cross-platform                        | PR #165; #97 closed                                                                                                                                                                                                                                                                                                                                                              | Portable installer and Windows CI cover profile selection and status.                                                                                                                                                                                                                                       |
 
 ### Remaining release acceptance criteria
@@ -206,7 +227,7 @@ The maintenance-release queue is complete only when all of these are true:
 | [PR #141](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/141)              | Closed as duplicate of #100         | Symmetric-operation fixes are consolidated in canonical PR #100.                                                    |
 | [Issues #99 and #105](https://github.com/spkane/freecad-addon-robust-mcp-server/issues/99) | Closed as fixed                     | PR #123 fixed pocket no-change reporting and implicit `.env` loading.                                               |
 | [PR #129](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/129)              | Closed with credit                  | PR #159 incorporated and revised the contributor's startup and timer fixes.                                         |
-| [Issues #82 and #92](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/160)   | Closed as fixed                     | PR #160 fixed screenshot compatibility and rendering; the fix awaits the next release.                              |
+| [Issues #82 and #92](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/160)   | Closed as fixed                     | PR #160 fixed screenshot compatibility and rendering; the fix is in RC4 and awaits stable publication.              |
 | [PR #102](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/102)              | Closed with credit                  | Its rendering and framing investigation informed merged PR #160.                                                    |
 | [PR #160](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/160)              | Merged                              | Real FreeCAD Qt5 and Qt6 screenshot checks and CodeRabbit review passed.                                            |
 | [PR #137](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/137)              | Merged                              | Fixed installed workbench imports and standalone bridge registration.                                               |
@@ -215,7 +236,7 @@ The maintenance-release queue is complete only when all of these are true:
 
 The reported installation and capability issues #73, #87, #97, and #135 are
 closed. Verify the released package despite #87 closing; #169 tracks the Addon
-Manager catalog, and #153 remains the deferred CAM feature request.
+Manager catalog. CAM request #153 is closed after PR #174.
 
 ### Deferred feature/design backlog from closed PR #112
 
@@ -271,12 +292,22 @@ as the source of the contributor's proposal and implementation context.
 
 ### Research related FreeCAD MCP projects and forks
 
-After release, inventory this repository's forks and the FreeCAD MCP servers
-that inspired it. Compare features, tooling, workflows, tests, documentation,
-and implementation approaches, including [PR #112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112).
-Record links, user value, compatibility, security, licensing and attribution,
-maintenance cost, effort, and risk; rank promising ideas and open focused issues
-for those worth adopting or independently implementing.
+**Post-release feature research:** inventory this repository's forks and the
+FreeCAD MCP servers that inspired it, including their current branches,
+release activity, and relevant changes since they diverged. Compare their
+features, tooling, workflows, documentation, tests, and implementation
+approaches with the current server and bridge. Include the proposal in
+[PR #112](https://github.com/spkane/freecad-addon-robust-mcp-server/pull/112)
+and its focused evaluation above in that comparison.
+
+Record promising candidates with links to their source, the user problem they
+solve, compatibility with supported FreeCAD versions and MCP clients, security
+and maintenance tradeoffs, and evidence from representative workflows. Check
+licenses, attribution, and contribution history before copying code; where
+appropriate, consider an independently implemented equivalent. Rank candidates
+by user value, effort, and risk, and turn worthwhile ideas into separately
+scoped issues after research. Treat inactive forks and speculative features as
+leads to evaluate, not commitments to implement.
 
 ## Codebase map
 
@@ -888,11 +919,11 @@ tag candidate
 
 - PR #167 stages a container candidate, validates its native-platform digest
   against real FreeCAD, and promotes it before Python and GitHub publication.
-  Verify the tagged workflow and exercise the other image architecture.
+  RC4 passed the tagged workflow; exercise the other image architecture.
 - Use one build output per artifact type and download it in later jobs. Do not
   rebuild after approval.
 - PR #167 expanded wheel installation checks to Python 3.11–3.13 on Linux,
-  macOS, and Windows. Verify the matrix on the actual candidate tag.
+  macOS, and Windows. The RC4 candidate installation matrix passed; retain it for stable release.
 - Keep the required GUI compatibility lanes green against FreeCAD 1.0.2
   (Qt5/PySide2) and the dynamically resolved latest stable FreeCAD release
   (Qt6/PySide6). Keep the dynamically resolved latest weekly build as a
@@ -1076,25 +1107,31 @@ contract is explicit, and no P0/P1 release findings remain.
 
 ## Recommended next work session
 
-1. Implement automated Addon Manager lifecycle tests before Index submission.
+1. Complete hands-on RC4 testing with both published components, including
+   installation into each intended FreeCAD profile, pairing, representative CAD
+   and CAM operations, screenshots, and the status tooltip. Run the corrected
+   `just testing::integration-gui-release` end to end after PR #195 and record
+   results; the separate macOS GUI CAM suite passed 18 tests.
+2. Investigate the FreeCAD 27.1 accessibility crash and missing MCP console-log
+   output independently. Reproduce where practical and collect evidence; avoid
+   attributing the crash to the bridge without confirmation.
+3. Implement automated Addon Manager lifecycle tests before Index submission.
    Use an unlisted custom repository and disposable FreeCAD profiles on macOS,
    Windows, and Linux; exercise install, startup and pairing, upgrade, disable,
    uninstall, and reinstall through the actual manager. Verify isolation,
-   workbench loading, listener cleanup, metadata, and Report view. Keep unit
-   and archive tests, but do not treat them as lifecycle coverage.
-2. Confirm the listening indicator and opt-in auto-start with the FreeCAD team.
-   Exercise the wrapper-first loader in the next workbench release candidate.
-3. Exercise the merged release workflows with a release candidate, including
-   TestPyPI trusted publishing and the exact wheel and workbench archives.
-4. Verify clean installations and real tool calls with the published artifacts,
-   and rehearse partial-publication recovery. Verify the public package even
-   though #87 is closed. Prepare the `released` branch before listing in #169.
+   workbench loading, listener cleanup, metadata, and Report view. Archive
+   tests do not establish Addon Manager lifecycle coverage.
+4. Confirm the listening indicator and opt-in auto-start with the FreeCAD team;
+   review privacy, licensing, and the `released` branch plan in #169. Obtain
+   independent user testing and prepare a reviewed stable release before Index
+   submission. RC4's TestPyPI and exact-artifact gates passed; still verify
+   post-publication channels and rehearse partial-release recovery.
 5. **Lower priority:** research whether the explicitly invoked GUI and headless
    standalone startup scripts can avoid modifying `sys.path`, using namespaced
-   imports or an isolated bootstrap. These scripts are used for development,
-   CI, and supported headless automation, but not the normal interactive
-   workbench flow. Preserve those workflows and verify clean startup, pairing,
-   shutdown, and namespace isolation before adopting an alternative.
+   imports or an isolated bootstrap. These scripts support development, CI,
+   and headless automation, but not the normal interactive workbench flow.
+   Preserve those workflows and verify startup, pairing, shutdown, and namespace
+   isolation before adopting an alternative.
 
 ## Authoritative references
 

@@ -59,6 +59,48 @@ class TestTestingRuntime:
     """
 
     @pytest.mark.just_runtime
+    @pytest.mark.parametrize(
+        ("process_name", "expected"),
+        [
+            ("FreeCADThumbnai", 0),
+            ("freecad", 1),
+            ("FreeCADCmd", 1),
+            ("FreeCAD.exe", 1),
+            ("freecad-python3", 1),
+            ("freecadcmd-python3", 1),
+            ("freecadcmd-pyth", 1),
+        ],
+    )
+    def test_wait_for_freecad_exit_matches_application_names(
+        self, process_name: str, expected: int
+    ) -> None:
+        """Thumbnail helpers must not block cleanup; running FreeCAD must."""
+        helper = Path(__file__).resolve().parents[2] / "scripts/bridge-helpers.sh"
+        result = subprocess.run(  # noqa: S603
+            [
+                "/bin/bash",
+                "-c",
+                """
+                . "$1"
+                pgrep() {
+                    [ "$1" = "-ix" ] || return 2
+                    printf '%s\\n' "$2" >/dev/null
+                    printf '%s\\n' "$PROCESS_NAME" | grep -Eix "$2" >/dev/null
+                }
+                sleep() { :; }
+                wait_for_freecad_exit 1
+                """,
+                "bash",
+                str(helper),
+            ],
+            env={**os.environ, "PROCESS_NAME": process_name},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected, result.stdout + result.stderr
+
+    @pytest.mark.just_runtime
     @pytest.mark.parametrize("mode", ["gui", "headless"])
     def test_missing_freecad_executable_reports_error(
         self, tmp_path: Path, mode: str

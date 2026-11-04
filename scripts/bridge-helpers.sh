@@ -157,13 +157,11 @@ wait_for_freecad_exit() {
     local timeout=${1:-30}
     local elapsed=0
 
-    # Match by process name only (pgrep -i, without -f).
-    # -f would match the full command line, falsely catching unrelated
-    # processes whose arguments or cwd contain "freecad" (e.g. the calling
-    # just recipe, shell scripts, or pytest).  Without -f, pgrep checks only
-    # the executable basename: "freecad", "freecadcmd", "FreeCADCmd", etc.
+    # Match executable names exactly, excluding helpers such as the macOS
+    # FreeCAD thumbnail extension. Avoid -f, which matches command arguments.
+    # Linux may truncate freecadcmd-python3 to 15 characters in the process name.
     while [ $elapsed -lt $timeout ]; do
-        if ! pgrep -i "freecad" > /dev/null 2>&1; then
+        if ! pgrep -ix 'freecad|freecadcmd|freecad-python3|freecadcmd-pyth(on3)?|freecad[.]exe|freecadcmd[.]exe' > /dev/null 2>&1; then
             return 0
         fi
         sleep 1
