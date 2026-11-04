@@ -849,8 +849,8 @@ Before requesting inclusion:
 7. **Actual installation:** follow the [pre-listing test protocol](docs/development/addon-manager-testing.md).
    Linux GUI CI exercises FreeCAD's Addon Manager installer and addon operations
    across install, update, disable, enable, uninstall, reinstall, restarts, and
-   pairing in a disposable profile. Native macOS and Windows jobs exercise the
-   same flow; verify their results and profile isolation. Test the actual Addon
+   pairing in a disposable profile. Native macOS and Windows jobs passed the
+   same flow with FreeCAD 1.1.4 and isolated profiles. Test the actual Addon
    Manager graphical controls before submission and the public Index after
    acceptance. Archive tests do not establish those remaining behaviors.
 8. **Submission:** use the `Addon - Addition` issue on FreeCAD/Addons only
@@ -1118,9 +1118,9 @@ contract is explicit, and no P0/P1 release findings remain.
 2. Investigate the FreeCAD 27.1 accessibility crash and missing MCP console-log
    output independently. Reproduce where practical and collect evidence; avoid
    attributing the crash to the bridge without confirmation.
-3. Complete Addon Manager lifecycle coverage before Index submission: native
-   macOS and Windows and graphical controls remain. Verify public Index
-   discovery after the listing is accepted.
+3. Complete Addon Manager lifecycle coverage before Index submission: verify
+   graphical controls. Verify public Index discovery after the listing is
+   accepted.
    Use an unlisted custom repository and disposable FreeCAD profiles on macOS,
    Windows, and Linux; exercise install, startup and pairing, upgrade, disable,
    uninstall, and reinstall through the actual manager. Verify isolation,

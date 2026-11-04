@@ -56,8 +56,8 @@ addon and the pairing directory survive uninstall.
 The test opts in with `FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1` and refuses to
 operate when FreeCAD's user data directory is outside its disposable profile.
 The cross-platform authentication workflow also attempts the lifecycle on
-native macOS and Windows using disposable hosted runners. The Windows runner
-passed with FreeCAD 1.1.4; the macOS runner has not yet been verified.
+native macOS and Windows using disposable hosted runners. Both native runners
+passed with FreeCAD 1.1.4.
 
 To reproduce a native run, use a disposable operating-system account or VM,
 install the project dependencies and FreeCAD GUI, and set
