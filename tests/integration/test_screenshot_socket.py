@@ -4,7 +4,6 @@ import base64
 from uuid import uuid4
 
 import pytest
-from PySide6.QtGui import QImage
 
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 from freecad_mcp.bridge.socket import SocketBridge
@@ -19,6 +18,9 @@ pytestmark = [pytest.mark.integration, pytest.mark.gui, requires_gui]
 @pytest.mark.asyncio
 async def test_screenshot_renders_model_and_restores_camera(bridge_class: type) -> None:
     """A visible model changes image pixels and capture leaves the view unchanged."""
+    # Headless runners collect this module without GUI system libraries.
+    from PySide6.QtGui import QImage
+
     doc_name = f"McpScreenshot_{uuid4().hex}"
     bridge = bridge_class(**integration_credentials())
     await bridge.connect()
