@@ -1119,7 +1119,8 @@ contract is explicit, and no P0/P1 release findings remain.
    output independently. Reproduce where practical and collect evidence; avoid
    attributing the crash to the bridge without confirmation.
 3. Complete Addon Manager lifecycle coverage before Index submission: native
-   macOS and Windows, graphical controls, and public Index discovery remain.
+   macOS and Windows and graphical controls remain. Verify public Index
+   discovery after the listing is accepted.
    Use an unlisted custom repository and disposable FreeCAD profiles on macOS,
    Windows, and Linux; exercise install, startup and pairing, upgrade, disable,
    uninstall, and reinstall through the actual manager. Verify isolation,

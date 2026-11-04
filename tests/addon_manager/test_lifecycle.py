@@ -113,6 +113,9 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
         **os.environ,
         "HOME": str(home),
         "USERPROFILE": str(home),
+        "FREECAD_USER_HOME": str(home),
+        "FREECAD_USER_DATA": str(home),
+        "FREECAD_USER_TEMP": str(home / "temp"),
         "APPDATA": str(home / "AppData" / "Roaming"),
         "LOCALAPPDATA": str(home / "AppData" / "Local"),
         "XDG_DATA_HOME": str(home / ".local" / "share"),
@@ -123,17 +126,29 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
         "ADDON_TEST_METADATA": str(ROOT / "package.xml"),
         "ADDON_TEST_RESULT": str(result),
     }
+    (home / "temp").mkdir()
+    if os.name == "nt":
+        # Avoid relying on an interactive desktop on hosted Windows runners.
+        env["QT_QPA_PLATFORM"] = "offscreen"
 
     def phase(name: str) -> dict:
         result.unlink(missing_ok=True)
-        completed = subprocess.run(  # noqa: S603
-            [binary, "--user-cfg", str(home / "user.cfg"), str(MACRO)],
-            env={**env, "ADDON_TEST_PHASE": name},
-            capture_output=True,
-            text=True,
-            timeout=180,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(  # noqa: S603
+                [binary, "--user-cfg", str(home / "user.cfg"), str(MACRO)],
+                env={**env, "ADDON_TEST_PHASE": name},
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            details = (
+                result.read_text(encoding="utf-8") if result.exists() else "no result"
+            )
+            pytest.fail(
+                f"FreeCAD {name} timed out: {details}; stdout={error.stdout!r}; stderr={error.stderr!r}"
+            )
         output = completed.stdout + completed.stderr
         assert completed.returncode == 0, output
         assert result.is_file(), output
@@ -219,7 +234,12 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
     check_paired_bridge()
 
     # Update the same local branch with the actual checkout's workbench sources.
-    shutil.copytree(ROOT / "freecad", fixture / "freecad", dirs_exist_ok=True)
+    shutil.rmtree(fixture / "freecad")
+    shutil.copytree(
+        ROOT / "freecad",
+        fixture / "freecad",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+    )
     shutil.copy2(ROOT / "package.xml", fixture / "package.xml")
     _git(
         fixture,

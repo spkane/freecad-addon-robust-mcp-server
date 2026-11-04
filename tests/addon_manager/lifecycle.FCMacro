@@ -11,6 +11,14 @@ import FreeCADGui
 from PySide import QtCore
 
 
+def write_result(result):
+    """Publish a complete result before the test driver reads it."""
+    destination = Path(os.environ["ADDON_TEST_RESULT"])
+    temporary = destination.with_suffix(".tmp")
+    temporary.write_text(json.dumps(result), encoding="utf-8")
+    temporary.replace(destination)
+
+
 def run_phase():
     """Run one manager operation and report the result to the test driver."""
     result = {"phase": os.environ["ADDON_TEST_PHASE"]}
@@ -86,9 +94,7 @@ def run_phase():
             if commands._mcp_plugin is None or not commands._mcp_plugin.is_running:
                 raise RuntimeError("Paired bridge failed to start")
             result["ok"] = True
-            Path(os.environ["ADDON_TEST_RESULT"]).write_text(
-                json.dumps(result), encoding="utf-8"
-            )
+            write_result(result)
 
             def finish_when_requested():
                 if not Path(os.environ["ADDON_TEST_STOP"]).exists():
@@ -110,9 +116,7 @@ def run_phase():
     except Exception:
         result["error"] = traceback.format_exc()
         result["ok"] = False
-    Path(os.environ["ADDON_TEST_RESULT"]).write_text(
-        json.dumps(result), encoding="utf-8"
-    )
+    write_result(result)
     FreeCADGui.getMainWindow().close()
 
 
