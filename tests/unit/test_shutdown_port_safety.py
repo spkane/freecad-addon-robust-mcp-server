@@ -24,7 +24,7 @@ def test_process_preflight_uses_exact_freecad_executable_names(
         assert run.call_args.args[0] == [
             "pgrep",
             "-ix",
-            "freecad|freecadcmd|freecad[.]exe|freecadcmd[.]exe",
+            "freecad|freecadcmd|freecad-python3|freecadcmd-pyth(on3)?|freecad[.]exe|freecadcmd[.]exe",
         ]
 
 

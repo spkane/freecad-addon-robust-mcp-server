@@ -66,14 +66,19 @@ def _is_freecad_process_running() -> bool:
     """Check if any FreeCAD process is currently running.
 
     Uses exact executable names, avoiding both command-line matches and
-    unrelated helpers such as the macOS FreeCAD thumbnail extension.
+    unrelated helpers such as the macOS FreeCAD thumbnail extension. Linux
+    may truncate the Debian headless executable name to 15 characters.
 
     Returns:
         True if a FreeCAD process is found, False otherwise.
     """
     try:
         result = subprocess.run(
-            ["pgrep", "-ix", "freecad|freecadcmd|freecad[.]exe|freecadcmd[.]exe"],  # noqa: S607
+            [  # noqa: S607
+                "pgrep",
+                "-ix",
+                "freecad|freecadcmd|freecad-python3|freecadcmd-pyth(on3)?|freecad[.]exe|freecadcmd[.]exe",
+            ],
             capture_output=True,
             timeout=5,
             check=False,

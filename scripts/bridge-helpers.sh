@@ -159,8 +159,9 @@ wait_for_freecad_exit() {
 
     # Match executable names exactly, excluding helpers such as the macOS
     # FreeCAD thumbnail extension. Avoid -f, which matches command arguments.
+    # Linux may truncate freecadcmd-python3 to 15 characters in the process name.
     while [ $elapsed -lt $timeout ]; do
-        if ! pgrep -ix 'freecad|freecadcmd|freecad[.]exe|freecadcmd[.]exe' > /dev/null 2>&1; then
+        if ! pgrep -ix 'freecad|freecadcmd|freecad-python3|freecadcmd-pyth(on3)?|freecad[.]exe|freecadcmd[.]exe' > /dev/null 2>&1; then
             return 0
         fi
         sleep 1
