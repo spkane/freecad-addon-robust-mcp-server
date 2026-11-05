@@ -232,3 +232,18 @@ def test_start_stops_process_if_pid_cannot_be_saved(tmp_path: Path) -> None:
         helper.start(profile, "main")
     process.terminate.assert_called_once_with()
     process.wait.assert_called_once_with()
+
+
+@pytest.mark.skipif(helper.os.name != "nt", reason="Windows read-only behavior")
+def test_cleanup_removes_windows_readonly_file(tmp_path: Path) -> None:
+    """Cleanup handles read-only files installed by Git on Windows."""
+    profile = tmp_path / "profile"
+    profile.mkdir(mode=0o700)
+    (profile / "state.json").write_text(json.dumps({"marker": helper.MARKER}))
+    addon = profile / "addon"
+    addon.mkdir()
+    entry = addon / "readonly"
+    entry.write_text("content")
+    entry.chmod(0o444)
+    helper.clean(profile)
+    assert not profile.exists()

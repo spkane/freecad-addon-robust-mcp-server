@@ -253,6 +253,8 @@ def _clean(profile: Path) -> None:
             except PermissionError:
                 if os.name != "nt":
                     raise
+                if entry.is_symlink():
+                    raise
                 entry.chmod(stat.S_IWRITE)
                 entry.unlink()
     (profile / "state.json").unlink()
@@ -270,7 +272,10 @@ def _remove_readonly(function: Any, path: str, error: tuple[Any, Any, Any]) -> N
     """Retry removal of a Windows read-only file; propagate other errors."""
     if os.name != "nt" or not isinstance(error[1], PermissionError):
         raise error[1]
-    Path(path).chmod(stat.S_IWRITE)
+    target = Path(path)
+    if target.is_symlink():
+        raise error[1]
+    target.chmod(stat.S_IWRITE)
     function(path)
 
 
