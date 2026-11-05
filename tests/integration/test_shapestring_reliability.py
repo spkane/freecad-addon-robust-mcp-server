@@ -318,9 +318,11 @@ source.String = "OO"
 doc.recompute()
 _result_ = {{"before": first, "after": {{"volume": pocket.Shape.Volume,
          "null": pocket.Shape.isNull(), "state": list(pocket.State)}}}}
-"""
+""",
+        # Both text recomputes can exceed the default call timeout on shared CI.
+        timeout_ms=90_000,
     )
-    assert result.success, result.error_traceback
+    assert result.success, result.error_traceback or result.stderr
     before, after = result.result["before"], result.result["after"]
     assert not before["null"] and not after["null"]
     assert not {"Invalid", "Error"} & set(before["state"])

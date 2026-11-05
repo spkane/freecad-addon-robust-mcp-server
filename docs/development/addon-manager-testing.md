@@ -42,13 +42,32 @@ Repeat on macOS, Windows, and Linux. A custom repository exercises the Addon
 Manager without testing the public Index's review or cache; repeat a final
 smoke test through the public listing after acceptance.
 
-## Automation gap
+## Automated lifecycle test
 
-Current CI exercises the workbench and its archive builder, but does **not**
-execute Addon Manager's full install, update, disable, and uninstall lifecycle.
-Add an isolated-profile GUI integration job that exercises those operations
-through the real Addon Manager, checks metadata and version changes, restarts
-FreeCAD to verify loading and disabling, and checks listener and cleanup state.
-Run it on all three operating systems; require that each job proves isolation
-before it changes any profile or credentials. Avoid replacing this coverage
-with a test that only copies the package files or mocks the Addon Manager.
+The Linux GUI CI matrix runs `tests/addon_manager/test_lifecycle.py` on FreeCAD
+1.0.2 and the latest stable FreeCAD, with a non-blocking weekly canary. In an
+isolated container and profile, it uses FreeCAD's actual Addon Manager installer
+and addon operations to install an earlier release from a Git fixture, disable,
+enable, update to the current checkout, uninstall, and reinstall. It restarts
+FreeCAD, checks the manifest and workbench discovery, verifies default listener
+state, and pairs and connects to the bridge. It also checks that an unrelated
+addon and the pairing directory survive uninstall.
+
+The test opts in with `FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1` and refuses to
+operate when FreeCAD's user data directory is outside its disposable profile.
+The cross-platform authentication workflow also attempts the lifecycle on
+native macOS and Windows using disposable hosted runners. Both native runners
+passed with FreeCAD 1.1.4.
+
+To reproduce a native run, use a disposable operating-system account or VM,
+install the project dependencies and FreeCAD GUI, and set
+`FREECAD_ADDON_GUI_COMMAND` to the FreeCAD executable and
+`FREECAD_ADDON_LIFECYCLE_DISPOSABLE=1` before running
+`uv run pytest tests/addon_manager/test_lifecycle.py -v`. On Windows, also set
+`FREECAD_ADDON_DISPOSABLE_WINDOWS=1`; the test refuses to replace an existing
+bridge credential and removes its own credential after the test. The test uses
+Qt's offscreen platform on Windows. On Linux, prefer the isolated GUI container.
+
+These tests do not manipulate the Addon Manager's graphical controls or test
+public Index discovery. Verify the controls before submission and repeat the
+public-listing smoke test after acceptance.

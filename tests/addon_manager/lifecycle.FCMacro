@@ -1,0 +1,124 @@
+"""Exercise FreeCAD's real Addon Manager against a disposable profile."""
+
+import json
+import os
+import socket
+import traceback
+from pathlib import Path
+
+import FreeCAD
+import FreeCADGui
+from PySide import QtCore
+
+
+def write_result(result):
+    """Publish a complete result before the test driver reads it."""
+    destination = Path(os.environ["ADDON_TEST_RESULT"])
+    temporary = destination.with_suffix(".tmp")
+    temporary.write_text(json.dumps(result), encoding="utf-8")
+    temporary.replace(destination)
+
+
+def run_phase():
+    """Run one manager operation and report the result to the test driver."""
+    result = {"phase": os.environ["ADDON_TEST_PHASE"]}
+    try:
+        root = Path(os.environ["ADDON_TEST_ROOT"]).resolve(strict=True)
+        data = Path(FreeCAD.getUserAppDataDir()).resolve()
+        if root == Path(root.anchor) or not data.is_relative_to(root):
+            raise RuntimeError("FreeCAD user data is outside the disposable test root")
+        import addonmanager_freecad_interface as fci
+        from Addon import Addon
+        from addonmanager_installer import AddonInstaller, InstallationMethod
+        from addonmanager_uninstaller import AddonUninstaller
+
+        name = "freecad-addon-robust-mcp-server"
+        repo = os.environ["ADDON_TEST_REPO"]
+        addon = Addon(name, repo, branch="test-lifecycle")
+        addon.load_metadata_file(os.environ["ADDON_TEST_METADATA"])
+        addon.url = repo
+        addon.branch = "test-lifecycle"
+        addon.prefer_git = True
+        prefs = fci.Preferences()
+        if "force_git_in_repos" in prefs.preferences_defaults:
+            prefs.set("force_git_in_repos", name)
+        addon_path = data / "Mod" / name
+        workbenches = FreeCADGui.listWorkbenches()
+        present = "FreecadRobustMCPBridgeWorkbench" in workbenches
+        phase = result["phase"]
+        result["present"] = present
+        result["data"] = str(data)
+        if phase in ("install", "upgrade", "reinstall"):
+            installer = AddonInstaller(addon, allow_list=[])
+            if not Path(installer.installation_path).resolve().is_relative_to(root):
+                raise RuntimeError("Addon Manager installation path is not isolated")
+            if not installer.run(InstallationMethod.GIT):
+                raise RuntimeError("Addon Manager installation failed")
+            result["installed"] = (addon_path / "package.xml").is_file()
+        elif phase == "disable":
+            if not present:
+                raise RuntimeError("Installed workbench not discovered after restart")
+            addon.disable()
+            result["disabled"] = addon.is_disabled()
+        elif phase == "enable":
+            if present:
+                raise RuntimeError("Disabled workbench was loaded after restart")
+            addon.enable()
+            result["disabled"] = addon.is_disabled()
+        elif phase == "uninstall":
+            if not present:
+                raise RuntimeError("Enabled workbench not discovered after restart")
+            uninstaller = AddonUninstaller(addon)
+            if not Path(uninstaller.installation_path).resolve().is_relative_to(root):
+                raise RuntimeError("Addon Manager uninstall path is not isolated")
+            if not uninstaller.run():
+                raise RuntimeError("Addon Manager uninstall failed")
+            result["removed"] = not addon_path.exists()
+        elif phase == "absent":
+            if present or addon_path.exists():
+                raise RuntimeError("Uninstalled workbench is still present")
+        elif phase == "verify":
+            if not present:
+                raise RuntimeError("Workbench not discovered after restart")
+            FreeCADGui.activateWorkbench("FreecadRobustMCPBridgeWorkbench")
+            required = {"Start_MCP_Bridge", "Stop_MCP_Bridge", "MCP_Bridge_Status"}
+            if not required.issubset(FreeCADGui.listCommands()):
+                raise RuntimeError("Workbench bridge commands were not registered")
+        elif phase == "paired":
+            if not present:
+                raise RuntimeError("Workbench not discovered after restart")
+            FreeCADGui.activateWorkbench("FreecadRobustMCPBridgeWorkbench")
+            FreeCADGui.runCommand("Start_MCP_Bridge")
+            from freecad.RobustMCPBridge import commands
+
+            if commands._mcp_plugin is None or not commands._mcp_plugin.is_running:
+                raise RuntimeError("Paired bridge failed to start")
+            result["ok"] = True
+            write_result(result)
+
+            def finish_when_requested():
+                """Stop the bridge after the external client finishes its check."""
+                if not Path(os.environ["ADDON_TEST_STOP"]).exists():
+                    QtCore.QTimer.singleShot(100, finish_when_requested)
+                    return
+                FreeCADGui.runCommand("Stop_MCP_Bridge")
+                FreeCADGui.getMainWindow().close()
+
+            QtCore.QTimer.singleShot(100, finish_when_requested)
+            return
+        else:
+            raise ValueError("Unknown lifecycle phase")
+        for port in (9875, 9876):
+            with socket.socket() as probe:
+                probe.settimeout(0.5)
+                if probe.connect_ex(("127.0.0.1", port)) == 0:
+                    raise RuntimeError(f"Unexpected bridge listener on port {port}")
+        result["ok"] = True
+    except Exception:
+        result["error"] = traceback.format_exc()
+        result["ok"] = False
+    write_result(result)
+    FreeCADGui.getMainWindow().close()
+
+
+QtCore.QTimer.singleShot(2000, run_phase)

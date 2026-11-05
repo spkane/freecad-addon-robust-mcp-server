@@ -102,14 +102,20 @@ jobs:
             ditto "$APP" "$RUNNER_TEMP/FreeCAD.app"
             hdiutil detach "$MOUNT"
             CMD="$RUNNER_TEMP/FreeCAD.app/Contents/Resources/bin/freecadcmd"
+            GUI_CMD="$RUNNER_TEMP/FreeCAD.app/Contents/Resources/bin/freecad"
             [[ -f "$CMD" ]]
+            [[ -f "$GUI_CMD" ]]
           else
             7z x "$RUNNER_TEMP/$NAME" "-o$RUNNER_TEMP/freecad" -y > /dev/null
             CMD=$(find "$RUNNER_TEMP/freecad" -iname FreeCADCmd.exe -type f -print -quit)
+            GUI_CMD=$(find "$RUNNER_TEMP/freecad" -iname FreeCAD.exe -type f -print -quit)
             [[ -n "$CMD" ]]
+            [[ -n "$GUI_CMD" ]]
             CMD=$(cygpath -w "$CMD")
+            GUI_CMD=$(cygpath -w "$GUI_CMD")
           fi
           echo "FREECAD_AUTH_TEST_COMMAND=$CMD" >> "$GITHUB_ENV"
+          echo "FREECAD_ADDON_GUI_COMMAND=$GUI_CMD" >> "$GITHUB_ENV"
 
       - name: Exercise pairing and both MCP transports with real FreeCAD
         env:
@@ -117,3 +123,10 @@ jobs:
           FREECAD_AUTH_TEST_DISPOSABLE_WINDOWS: '1'
           FREECAD_CAM_PLATFORM_SUITE: '1'
         run: uv run pytest tests/integration/test_authenticated_standalone.py -v --tb=short
+
+      - name: Exercise Addon Manager lifecycle in a disposable profile
+        if: runner.os != 'Linux'
+        env:
+          FREECAD_ADDON_LIFECYCLE_DISPOSABLE: '1'
+          FREECAD_ADDON_DISPOSABLE_WINDOWS: '1'
+        run: uv run pytest tests/addon_manager/test_lifecycle.py -v --tb=short
