@@ -7,10 +7,16 @@ import argparse
 import json
 import os
 import shutil
+import stat
 import subprocess  # nosec B404 - launches the user-selected FreeCAD executable without a shell
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 REPOSITORY = "https://github.com/spkane/freecad-addon-robust-mcp-server"
 MARKER = "freecad-robust-mcp-manual-addon-test-v1"
@@ -54,9 +60,52 @@ def _running(pid: int) -> bool:
     return True
 
 
+def _check_private(path: Path) -> None:
+    """Reject profiles and lock files accessible to other Unix users."""
+    if os.name == "nt":
+        return  # Windows uses the user's private temporary directory and ACLs.
+    info = path.stat(follow_symlinks=False)
+    if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        raise ValueError(f"Test profile must be owned by you and private: {path}")
+
+
+@contextmanager
+def _profile_lock(profile: Path) -> Iterator[None]:
+    """Serialize startup and cleanup using a stable lock outside the profile."""
+    lock_path = profile.parent / f".{profile.name}.lock"
+    if lock_path.is_symlink():
+        raise ValueError("Test profile lock is a symlink")
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(lock_path, flags, 0o600)
+    try:
+        _check_private(lock_path)
+        if os.name == "nt":
+            import msvcrt
+
+            if os.fstat(fd).st_size == 0:
+                os.write(fd, b"0")
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+            else:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 def _read_state(profile: Path) -> dict:
     if profile.is_symlink() or not profile.is_dir():
         raise ValueError(f"Not a safe test profile directory: {profile}")
+    _check_private(profile)
     marker = profile / "state.json"
     if marker.is_symlink():
         raise ValueError("Test profile marker is a symlink")
@@ -86,6 +135,12 @@ def _binary() -> str:
 
 def start(profile: Path, ref: str) -> int:
     """Create or reopen the isolated profile, then launch FreeCAD in the background."""
+    with _profile_lock(profile):
+        return _start(profile, ref)
+
+
+def _start(profile: Path, ref: str) -> int:
+    """Launch while holding the profile lifecycle lock."""
     if not ref or any(char.isspace() for char in ref):
         raise ValueError(
             "The repository ref must be a non-empty branch or tag without spaces"
@@ -167,6 +222,12 @@ def start(profile: Path, ref: str) -> int:
 
 def clean(profile: Path) -> None:
     """Remove only a recognized test profile whose FreeCAD process has stopped."""
+    with _profile_lock(profile):
+        _clean(profile)
+
+
+def _clean(profile: Path) -> None:
+    """Remove the profile while holding its lifecycle lock."""
     if not profile.exists() and not profile.is_symlink():
         print("No manual Addon Manager test profile exists.")
         return

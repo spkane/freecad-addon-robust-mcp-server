@@ -43,7 +43,7 @@ def test_start_configures_isolated_profile_and_reuses_it(tmp_path: Path) -> None
 def test_cleanup_refuses_running_or_unrecognized_profile(tmp_path: Path) -> None:
     """Cleanup preserves unknown directories and a running FreeCAD profile."""
     profile = tmp_path / "profile"
-    profile.mkdir()
+    profile.mkdir(mode=0o700)
     marker = profile / "state.json"
     marker.write_text(json.dumps({"marker": "wrong"}))
     with pytest.raises(ValueError, match="recognized"):
@@ -98,7 +98,7 @@ def test_setup_macro_checks_profile_before_setting_repository(tmp_path: Path) ->
 def test_start_refuses_live_pid_and_replaces_stale_pid(tmp_path: Path) -> None:
     """A live test process is preserved; a stopped process gets a new PID."""
     profile = tmp_path / "profile"
-    profile.mkdir()
+    profile.mkdir(mode=0o700)
     marker = profile / "state.json"
     marker.write_text(json.dumps({"marker": helper.MARKER, "ref": "main", "pid": 123}))
     with (
@@ -117,3 +117,51 @@ def test_start_refuses_live_pid_and_replaces_stale_pid(tmp_path: Path) -> None:
         popen.return_value.wait.assert_not_called()
         assert popen.call_args.kwargs["stdin"] == helper.subprocess.DEVNULL
         assert popen.call_args.kwargs["stderr"] == helper.subprocess.STDOUT
+
+
+@pytest.mark.skipif(helper.os.name == "nt", reason="Unix permissions")
+def test_cleanup_rejects_shared_profile(tmp_path: Path) -> None:
+    """A readable or writable profile owned by another account is not trusted."""
+    profile = tmp_path / "profile"
+    profile.mkdir(mode=0o700)
+    (profile / "state.json").write_text(json.dumps({"marker": helper.MARKER}))
+    profile.chmod(0o755)
+    with pytest.raises(ValueError, match="owned by you and private"):
+        helper.clean(profile)
+    assert profile.exists()
+
+
+def test_cleanup_waits_for_start_to_record_process(tmp_path: Path) -> None:
+    """Cleanup cannot remove the profile while startup is launching FreeCAD."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    profile = tmp_path / "profile"
+    launching = Event()
+    release = Event()
+    process = MagicMock(pid=12345)
+
+    def launch(*_args: object, **_kwargs: object) -> MagicMock:
+        launching.set()
+        if not release.wait(5):
+            raise TimeoutError("Test did not release launch")
+        return process
+
+    with (
+        patch.object(helper, "_binary", return_value="freecad"),
+        patch.object(helper.subprocess, "Popen", side_effect=launch),
+        patch.object(helper, "_running", return_value=True),
+        ThreadPoolExecutor(max_workers=2) as executor,
+    ):
+        starting = executor.submit(helper.start, profile, "main")
+        assert launching.wait(5)
+        cleaning = executor.submit(helper.clean, profile)
+        try:
+            with pytest.raises(TimeoutError):
+                cleaning.result(timeout=0.2)
+        finally:
+            release.set()
+        assert starting.result(timeout=5) == 0
+        with pytest.raises(ValueError, match="Close"):
+            cleaning.result(timeout=5)
+    assert profile.exists()

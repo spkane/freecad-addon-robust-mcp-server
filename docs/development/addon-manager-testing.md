@@ -24,7 +24,8 @@ To test an upgrade, restart with a different branch or tag, then use the Addon
 Manager update flow. Tag support varies by FreeCAD version. When finished,
 close FreeCAD and run `just freecad::addon-test-clean`. The
 helper removes only its own profile; it never removes account-level pairing
-credentials. Profile isolation does not isolate those credentials. Use a
+credentials. A small coordination lock file remains in the temporary
+directory to prevent concurrent start and cleanup commands from racing. Profile isolation does not isolate those credentials. Use a
 disposable OS account for pairing tests. Set `FREECAD_ADDON_GUI_COMMAND` to a
 FreeCAD GUI executable to select a different installation. The command prints
 a short checklist; follow the detailed protocol below and record your results.
