@@ -11,6 +11,7 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -78,6 +79,37 @@ def _manifest_version(path: Path) -> str:
     version = root.find("{*}version")
     assert version is not None and version.text
     return version.text
+
+
+def _wait_for_owned_process(process: subprocess.Popen) -> None:
+    """Wait for our FreeCAD process, escalating if it does not exit."""
+    try:
+        process.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
+
+def test_owned_process_is_killed_and_reaped_after_timeouts() -> None:
+    """A process that ignores termination cannot leak into subsequent tests."""
+    process = MagicMock()
+    process.wait.side_effect = [
+        subprocess.TimeoutExpired("freecad", 30),
+        subprocess.TimeoutExpired("freecad", 10),
+        0,
+    ]
+    _wait_for_owned_process(process)
+    process.terminate.assert_called_once_with()
+    process.kill.assert_called_once_with()
+    assert process.wait.call_args_list == [
+        call(timeout=30),
+        call(timeout=10),
+        call(timeout=10),
+    ]
 
 
 @pytest.mark.skipif(
@@ -224,11 +256,7 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
                 assert ping.returncode == 0, ping.stdout + ping.stderr
             finally:
                 stop.touch()
-                try:
-                    process.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    process.terminate()
-                    process.wait(timeout=10)
+            _wait_for_owned_process(process)
             assert process.returncode == 0, log.read_text(encoding="utf-8")
 
     check_paired_bridge()
