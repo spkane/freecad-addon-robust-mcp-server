@@ -145,6 +145,10 @@ def _start(profile: Path, ref: str) -> int:
         raise ValueError(
             "The repository ref must be a non-empty branch or tag without spaces"
         )
+    if "#" in ref:
+        raise ValueError(
+            "The repository ref cannot contain # (FreeCAD treats it as a URL fragment)"
+        )
     binary = _binary()
     if profile.exists() or profile.is_symlink():
         state = _read_state(profile)

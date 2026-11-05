@@ -142,6 +142,7 @@ def test_cleanup_waits_for_start_to_record_process(tmp_path: Path) -> None:
     process = MagicMock(pid=12345)
 
     def launch(*_args: object, **_kwargs: object) -> MagicMock:
+        """Pause startup until the cleanup attempt has begun."""
         launching.set()
         if not release.wait(5):
             raise TimeoutError("Test did not release launch")
@@ -167,7 +168,7 @@ def test_cleanup_waits_for_start_to_record_process(tmp_path: Path) -> None:
     assert profile.exists()
 
 
-@pytest.mark.parametrize("ref", ["", "with space", "two\nlines"])
+@pytest.mark.parametrize("ref", ["", "with space", "two\nlines", "feature#example"])
 def test_start_rejects_invalid_refs(tmp_path: Path, ref: str) -> None:
     """Malformed repository refs never launch FreeCAD."""
     with pytest.raises(ValueError, match="repository ref"):
@@ -219,6 +220,7 @@ def test_start_stops_process_if_pid_cannot_be_saved(tmp_path: Path) -> None:
     original_write = type(marker).write_text
 
     def write_file(path: Path, *args: Any, **kwargs: Any) -> int:
+        """Fail the PID state write while allowing the macro write."""
         if path == marker:
             raise PermissionError("blocked")
         return original_write(path, *args, **kwargs)
