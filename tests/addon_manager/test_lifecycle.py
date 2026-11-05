@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, call
@@ -110,6 +111,26 @@ def test_owned_process_is_killed_and_reaped_after_timeouts() -> None:
         call(timeout=10),
         call(timeout=10),
     ]
+
+
+@contextmanager
+def _cleanup_owned_process(process: subprocess.Popen, stop: Path) -> Iterator[None]:
+    """Signal and reap the test-owned process even when an assertion fails."""
+    try:
+        yield
+    finally:
+        stop.touch()
+        _wait_for_owned_process(process)
+
+
+def test_owned_process_is_reaped_after_test_failure(tmp_path: Path) -> None:
+    """Readiness or ping failures still stop and reap the owned process."""
+    process = MagicMock()
+    stop = tmp_path / "stop"
+    with pytest.raises(AssertionError), _cleanup_owned_process(process, stop):
+        raise AssertionError("readiness failed")
+    assert stop.exists()
+    process.wait.assert_called_once_with(timeout=30)
 
 
 @pytest.mark.skipif(
@@ -228,7 +249,7 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
                 stdout=output,
                 stderr=subprocess.STDOUT,
             )
-            try:
+            with _cleanup_owned_process(process, stop):
                 deadline = time.monotonic() + 90
                 while (
                     not result.exists()
@@ -254,9 +275,6 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
                     check=False,
                 )
                 assert ping.returncode == 0, ping.stdout + ping.stderr
-            finally:
-                stop.touch()
-            _wait_for_owned_process(process)
             assert process.returncode == 0, log.read_text(encoding="utf-8")
 
     check_paired_bridge()
