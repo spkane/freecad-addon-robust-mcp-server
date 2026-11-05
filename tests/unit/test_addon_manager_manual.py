@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import runpy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -192,3 +192,43 @@ def test_main_reports_configuration_errors(
     monkeypatch.setattr(helper.sys, "argv", ["addon-test", "start", "bad ref"])
     assert helper.main() == 1
     assert "repository ref" in capsys.readouterr().err
+
+
+def test_cleanup_preserves_marker_when_removal_fails(tmp_path: Path) -> None:
+    """A failed partial cleanup remains recognizable and can be retried."""
+    profile = tmp_path / "profile"
+    profile.mkdir(mode=0o700)
+    marker = profile / "state.json"
+    marker.write_text(json.dumps({"marker": helper.MARKER}))
+    (profile / "addon").mkdir()
+    with patch.object(helper.shutil, "rmtree", side_effect=PermissionError("blocked")):
+        with pytest.raises(PermissionError):
+            helper.clean(profile)
+    assert marker.is_file()
+    helper.clean(profile)
+    assert not profile.exists()
+
+
+def test_start_stops_process_if_pid_cannot_be_saved(tmp_path: Path) -> None:
+    """A failed state write cannot leave an untracked FreeCAD process."""
+    profile = tmp_path / "profile"
+    profile.mkdir(mode=0o700)
+    marker = profile / "state.json"
+    marker.write_text(json.dumps({"marker": helper.MARKER, "ref": "main"}))
+    process = MagicMock(pid=12345)
+    original_write = type(marker).write_text
+
+    def write_file(path: Path, *args: Any, **kwargs: Any) -> int:
+        if path == marker:
+            raise PermissionError("blocked")
+        return original_write(path, *args, **kwargs)
+
+    with (
+        patch.object(helper, "_binary", return_value="freecad"),
+        patch.object(helper.subprocess, "Popen", return_value=process),
+        patch.object(type(marker), "write_text", autospec=True, side_effect=write_file),
+        pytest.raises(PermissionError, match="blocked"),
+    ):
+        helper.start(profile, "main")
+    process.terminate.assert_called_once_with()
+    process.wait.assert_called_once_with()

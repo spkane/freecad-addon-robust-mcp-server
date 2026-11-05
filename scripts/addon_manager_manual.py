@@ -13,7 +13,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -240,10 +240,38 @@ def _clean(profile: Path) -> None:
             "If the PID was reused, verify the process before removing the test "
             f"profile manually: {profile}"
         )
-    shutil.rmtree(profile)
+    # Keep the ownership marker until all other entries are removed, so a
+    # partial cleanup can be retried safely.
+    for entry in profile.iterdir():
+        if entry.name == "state.json":
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, onerror=_remove_readonly)
+        else:
+            try:
+                entry.unlink()
+            except PermissionError:
+                if os.name != "nt":
+                    raise
+                entry.chmod(stat.S_IWRITE)
+                entry.unlink()
+    (profile / "state.json").unlink()
+    try:
+        profile.rmdir()
+    except OSError:
+        (profile / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        raise
     print(
         f"Removed test profile: {profile}. OS-account pairing credentials were not changed."
     )
+
+
+def _remove_readonly(function: Any, path: str, error: tuple[Any, Any, Any]) -> None:
+    """Retry removal of a Windows read-only file; propagate other errors."""
+    if os.name != "nt" or not isinstance(error[1], PermissionError):
+        raise error[1]
+    Path(path).chmod(stat.S_IWRITE)
+    function(path)
 
 
 def main() -> int:
