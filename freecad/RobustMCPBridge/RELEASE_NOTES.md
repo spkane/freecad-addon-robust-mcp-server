@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## Version 0.7.0 (2026-11-06)
+
+Update the workbench and MCP server together. Pair the bridge before connecting;
+an existing pairing credential can be retained. FreeCAD 1.0.2 is the minimum
+supported version, and FreeCAD 1.1.4 or later is recommended for security.
+
+### Added
+
+- Paired, authenticated loopback bridge access and a versioned CAM runtime for
+  compatible MCP servers.
+- Packaged release archives with license and attribution information. The
+  workbench is not yet listed in the public FreeCAD Addon Manager.
+
+### Changed
+
+- Prefer FreeCAD's neutral Qt wrapper on supported Qt5 and Qt6 builds, with
+  compatible binding fallbacks. The status tooltip reports the bridge version.
+- Bridge execution uses the FreeCAD user's permissions. Pairing does not isolate
+  programs running as that same user.
+
+### Fixed
+
+- Clear pairing instructions and listener startup errors, including independent
+  recovery when one bridge port is occupied.
+- GUI startup and shutdown, Qt timer ownership, and execution timeout handling.
+
 ## Version 0.7.0-rc.5 (2026-11-03)
 
 ### Changed

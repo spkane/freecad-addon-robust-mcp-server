@@ -3,6 +3,15 @@
 This project uses **component-specific versioning**. Each component has its own
 release notes and version history.
 
+## 0.7.0
+
+Version 0.7.0 updates both the server and workbench. It adds authenticated
+bridge pairing and CAM tooling, migrates to MCP Python SDK 2, improves FreeCAD
+Qt5/Qt6 compatibility, and fixes screenshot, modeling, startup, and timeout
+reliability. The component release notes below contain details and limitations.
+Install or update both components together; FreeCAD 1.1.4 or newer is
+recommended for security.
+
 ## Component Release Notes
 
 | Component              | Release Notes                                                        | Description                                           |

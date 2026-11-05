@@ -119,9 +119,8 @@ This section covers installation and usage for end users who want to use the Rob
 ### Installation
 
 For the everyday setup, see the [Quick Start](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/quickstart/)
-for the server, workbench, pairing, and assistant configuration. The current
-stable 0.6.2 releases predate pairing; the pairing-capable stable workflow
-described there becomes available with the upcoming release.
+for the server, workbench, pairing, and assistant configuration. Install or
+update both components to compatible versions; pairing requires 0.7.0 or later.
 
 #### Using pip
 

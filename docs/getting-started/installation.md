@@ -27,10 +27,8 @@ The Qt5 test lane checks compatibility with older FreeCAD, not its security supp
 
 ### Method 1: Public releases with pip
 
-> **Current stable release:** PyPI and the stable workbench are at 0.6.2 and
-> predate pairing. For the pairing workflow below, use matching RC4 assets via
-> [Method 2](#method-2-github-release-assets) until a pairing-capable stable
-> release is published.
+> **Compatibility:** The pairing workflow requires both components at version
+> 0.7.0 or later. Older 0.6.x releases do not support bridge pairing.
 
 #### MCP server
 
@@ -87,22 +85,21 @@ selects stable releases, not these pre-release assets.
    only when you intend to test it.
 2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and
    open a new Terminal (macOS/Linux) or PowerShell (Windows). The following
-   commands install the downloaded **0.7.0-rc.4** wheel from Downloads. For a
+   commands install the downloaded **0.7.0** wheel from Downloads. For a
    different release or download location, substitute the actual filename and
-   path. The wheel uses `0.7.0rc4` without a hyphen; the workbench archive uses
-   `0.7.0-rc.4`.
+   path. Release candidates may use different version spelling in wheel names.
 
    On macOS or Linux:
 
    ```bash
-   uv tool install --force "$HOME/Downloads/freecad_robust_mcp-0.7.0rc4-py3-none-any.whl"
+   uv tool install --force "$HOME/Downloads/freecad_robust_mcp-0.7.0-py3-none-any.whl"
    uv tool update-shell
    ```
 
    On Windows PowerShell:
 
    ```powershell
-   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-0.7.0rc4-py3-none-any.whl"
+   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-0.7.0-py3-none-any.whl"
    uv tool update-shell
    ```
 
@@ -117,8 +114,8 @@ selects stable releases, not these pre-release assets.
 #### FreeCAD workbench bridge
 
 1. Quit FreeCAD. Open [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench)
-   and select the matching compatible release. For RC4, download
-   `freecad-mcp-workbench-0.7.0-rc.4.zip`. Its `.tar.gz` alternative contains
+   and select the matching compatible release. For 0.7.0, download
+   `freecad-mcp-workbench-0.7.0.zip`. Its `.tar.gz` alternative contains
    the same workbench.
 2. Extract the package folder into the active FreeCAD profile's `Mod` folder.
    It must directly contain `package.xml` and `freecad`. Move any older Robust
@@ -188,11 +185,10 @@ Restart or reconnect the assistant, then ask it to check the FreeCAD connection.
 
 #### MCP server
 
-The untagged `latest` image currently points to stable 0.6.2, which predates
-pairing. For the paired RC4 workflow, pull the matching candidate tag:
+For version 0.7.0, pull the versioned server image:
 
 ```bash
-docker pull spkane/freecad-robust-mcp:0.7.0-rc.4
+docker pull spkane/freecad-robust-mcp:0.7.0
 ```
 
 For another release, use its matching image tag and compatible workbench. To
@@ -201,8 +197,8 @@ checkout and use a workbench built from that same checkout.
 
 #### FreeCAD workbench bridge
 
-Install a compatible workbench in the FreeCAD profile you use. For the RC4
-image, use the RC4 workbench archive and follow the
+Install a compatible workbench in the FreeCAD profile you use. For the 0.7.0
+image, use the 0.7.0 workbench archive and follow the
 [release archive instructions](#manual-installation-from-a-release-archive).
 
 #### Pair and configure
@@ -291,11 +287,11 @@ print(os.path.join(App.getUserAppDataDir(), "Mod"))
 
 Use the printed directory, creating it if needed. Move the **entire top-level
 package folder** into `Mod`, not just the inner `freecad` or
-`RobustMCPBridge` folder. For RC4, the installed layout is:
+`RobustMCPBridge` folder. For 0.7.0, the installed layout is:
 
 ```text
 Mod/
-└── freecad-mcp-workbench-0.7.0-rc.4/
+└── freecad-mcp-workbench-0.7.0/
     ├── package.xml
     ├── LICENSE-CODE
     ├── LICENSE-MIT
@@ -317,9 +313,8 @@ use.
 
 ## Verifying Installation
 
-These instructions require pairing-capable server and workbench builds. The
-stable 0.6.2 releases predate pairing; use matching pairing-capable candidates
-or matching source builds until a newer stable release is available.
+These instructions require pairing-capable server and workbench builds.
+Install compatible 0.7.0 or later releases of both components.
 
 After installation, verify everything is working:
 
