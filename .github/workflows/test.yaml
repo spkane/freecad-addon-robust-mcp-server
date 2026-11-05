@@ -143,6 +143,9 @@ jobs:
       - name: Verify port conflict recovery on Windows
         run: uv run pytest tests/unit/addon/test_addon_timeouts.py -k "listener_port_conflicts or partial_start_can_stop" -v --tb=short
 
+      - name: Verify manual Addon Manager profile on Windows
+        run: uv run pytest tests/unit/test_addon_manager_manual.py -v --tb=short
+
       - name: Verify workbench installer on Windows
         run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
 
