@@ -150,7 +150,9 @@ def _start(profile: Path, ref: str) -> int:
         state = _read_state(profile)
         if state.get("pid") and _running(state["pid"]):
             raise ValueError(
-                "The test FreeCAD process is still running; close it first"
+                f"The test FreeCAD process (PID {state['pid']}) is still running; "
+                "close it first. If the PID was reused, verify the process before "
+                f"removing the test profile manually: {profile}"
             )
     else:
         profile.mkdir(mode=0o700)
@@ -233,7 +235,11 @@ def _clean(profile: Path) -> None:
         return
     state = _read_state(profile)
     if state.get("pid") and _running(state["pid"]):
-        raise ValueError("Close the test FreeCAD process before removing its profile")
+        raise ValueError(
+            f"Close the test FreeCAD process (PID {state['pid']}) before cleanup. "
+            "If the PID was reused, verify the process before removing the test "
+            f"profile manually: {profile}"
+        )
     shutil.rmtree(profile)
     print(
         f"Removed test profile: {profile}. OS-account pairing credentials were not changed."

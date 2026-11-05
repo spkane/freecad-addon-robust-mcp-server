@@ -165,3 +165,30 @@ def test_cleanup_waits_for_start_to_record_process(tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="Close"):
             cleaning.result(timeout=5)
     assert profile.exists()
+
+
+@pytest.mark.parametrize("ref", ["", "with space", "two\nlines"])
+def test_start_rejects_invalid_refs(tmp_path: Path, ref: str) -> None:
+    """Malformed repository refs never launch FreeCAD."""
+    with pytest.raises(ValueError, match="repository ref"):
+        helper.start(tmp_path / "profile", ref)
+
+
+def test_binary_honors_explicit_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The configured FreeCAD executable takes precedence over discovery."""
+    monkeypatch.setenv("FREECAD_ADDON_GUI_COMMAND", "/test/freecad")
+    assert helper._binary() == "/test/freecad"
+
+
+def test_clean_missing_profile_is_a_noop(tmp_path: Path) -> None:
+    """Cleanup may be run repeatedly after the profile has been removed."""
+    helper.clean(tmp_path / "missing")
+
+
+def test_main_reports_configuration_errors(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid startup configuration is presented as an actionable CLI error."""
+    monkeypatch.setattr(helper.sys, "argv", ["addon-test", "start", "bad ref"])
+    assert helper.main() == 1
+    assert "repository ref" in capsys.readouterr().err

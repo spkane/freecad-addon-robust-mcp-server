@@ -192,12 +192,8 @@ run-gui-custom freecad_path:
     echo "FreeCAD is starting with MCP bridge..."
 
 # =============================================================================
-# Deprecated Aliases (use install:: module instead)
+# Addon Manager Testing
 # =============================================================================
-# These are kept for backwards compatibility but will be removed in a future version.
-# Use the new install:: module commands instead:
-#   just install::mcp-bridge-workbench (was: just freecad::install-workbench)
-#   just install::status              (was: just freecad::mcp-status)
 
 # Start or reopen an isolated profile for manual Addon Manager testing
 addon-test-start ref="main":
@@ -206,3 +202,11 @@ addon-test-start ref="main":
 # Remove the manual Addon Manager test profile after closing FreeCAD
 addon-test-clean:
     uv run python "{{project_root}}/scripts/addon_manager_manual.py" clean
+
+# =============================================================================
+# Deprecated Aliases (use install:: module instead)
+# =============================================================================
+# These are kept for backwards compatibility but will be removed in a future version.
+# Use the new install:: module commands instead:
+#   just install::mcp-bridge-workbench (was: just freecad::install-workbench)
+#   just install::status              (was: just freecad::mcp-status)

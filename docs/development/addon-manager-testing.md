@@ -25,8 +25,10 @@ Manager update flow. Tag support varies by FreeCAD version. When finished,
 close FreeCAD and run `just freecad::addon-test-clean`. The
 helper removes only its own profile; it never removes account-level pairing
 credentials. A small coordination lock file remains in the temporary
-directory to prevent concurrent start and cleanup commands from racing. Profile isolation does not isolate those credentials. Use a
-disposable OS account for pairing tests. Set `FREECAD_ADDON_GUI_COMMAND` to a
+directory to prevent concurrent start and cleanup commands from racing.
+
+Profile isolation does not isolate credentials. Use a disposable OS account for
+pairing tests. Set `FREECAD_ADDON_GUI_COMMAND` to a
 FreeCAD GUI executable to select a different installation. The command prints
 a short checklist; follow the detailed protocol below and record your results.
 
@@ -35,7 +37,8 @@ a short checklist; follow the detailed protocol below and record your results.
    compatibility boundary and the latest stable FreeCAD for the primary
    supported path. FreeCAD 1.1.4 or newer is recommended for security; do not
    use untrusted documents with older releases.
-2. In FreeCAD, open **Edit → Preferences → Addon Manager** (on macOS, use the
+2. If you used the helper above, skip this step; the repository is configured.
+   Otherwise, in FreeCAD, open **Edit → Preferences → Addon Manager** (on macOS, use the
    application menu for Preferences). Under **Custom repositories**, add
    `https://github.com/spkane/freecad-addon-robust-mcp-server` and the branch
    or release ref you intend to test. Test an immutable release tag before
