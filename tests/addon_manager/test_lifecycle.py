@@ -65,6 +65,7 @@ def isolated_windows_credential() -> Iterator[dict]:
 
 
 def _git(cwd: Path, *args: str) -> None:
+    """Run Git in the disposable fixture repository."""
     subprocess.run(  # noqa: S603
         ["git", *args],  # noqa: S607
         cwd=cwd,
@@ -76,6 +77,7 @@ def _git(cwd: Path, *args: str) -> None:
 
 
 def _manifest_version(path: Path) -> str:
+    """Read the declared version from an addon manifest."""
     root = ET.parse(path).getroot()  # noqa: S314 - test fixture from this checkout
     version = root.find("{*}version")
     assert version is not None and version.text
@@ -185,6 +187,7 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
         env["QT_QPA_PLATFORM"] = "offscreen"
 
     def phase(name: str) -> dict:
+        """Run one lifecycle phase in a fresh FreeCAD process."""
         result.unlink(missing_ok=True)
         try:
             completed = subprocess.run(  # noqa: S603
@@ -238,6 +241,7 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
         isolated_windows_credential["credential"] = read_credential()
 
     def check_paired_bridge() -> None:
+        """Verify the installed bridge accepts an authenticated ping."""
         stop = tmp_path / "stop"
         stop.unlink(missing_ok=True)
         result.unlink(missing_ok=True)

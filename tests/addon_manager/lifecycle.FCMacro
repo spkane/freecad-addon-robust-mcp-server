@@ -97,6 +97,7 @@ def run_phase():
             write_result(result)
 
             def finish_when_requested():
+                """Stop the bridge after the external client finishes its check."""
                 if not Path(os.environ["ADDON_TEST_STOP"]).exists():
                     QtCore.QTimer.singleShot(100, finish_when_requested)
                     return
