@@ -8,6 +8,28 @@ profile containing your normal workbench or pairing credential.
 
 ## Manual test setup
 
+From a development checkout, use the helper to create and launch a disposable
+FreeCAD profile with the custom repository already configured:
+
+```bash
+just freecad::addon-test-start
+# Or test a specific branch or release tag:
+just freecad::addon-test-start robust-mcp-workbench-v0.7.0-rc.4
+```
+
+The command launches FreeCAD in the background and prints the location of its
+log. It refuses to start another test instance while the previous one is open.
+Close FreeCAD and run the same command to restart with the existing profile.
+To test an upgrade, restart with a different branch or tag, then use the Addon
+Manager update flow. Tag support varies by FreeCAD version. When finished,
+close FreeCAD and run `just freecad::addon-test-clean`. The
+helper removes only its own profile; it never removes account-level pairing
+credentials. Profile isolation does not isolate those credentials. Use a
+disposable OS account for pairing tests. Set `FREECAD_ADDON_GUI_COMMAND` to a
+FreeCAD GUI executable to select a different installation. The command prints
+a short checklist; follow the detailed protocol below and record your results.
+
+
 1. Install the FreeCAD version under test and Git. Use FreeCAD 1.0.2 for the
    compatibility boundary and the latest stable FreeCAD for the primary
    supported path. FreeCAD 1.1.4 or newer is recommended for security; do not

@@ -198,3 +198,11 @@ run-gui-custom freecad_path:
 # Use the new install:: module commands instead:
 #   just install::mcp-bridge-workbench (was: just freecad::install-workbench)
 #   just install::status              (was: just freecad::mcp-status)
+
+# Start or reopen an isolated profile for manual Addon Manager testing
+addon-test-start ref="main":
+    uv run python "{{project_root}}/scripts/addon_manager_manual.py" start {{quote(ref)}}
+
+# Remove the manual Addon Manager test profile after closing FreeCAD
+addon-test-clean:
+    uv run python "{{project_root}}/scripts/addon_manager_manual.py" clean

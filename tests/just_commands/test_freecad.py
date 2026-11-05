@@ -158,6 +158,8 @@ class TestFreecadSyntax:
         "freecad::run-headless-custom",
         "freecad::run-gui",
         "freecad::run-gui-custom",
+        "freecad::addon-test-start",
+        "freecad::addon-test-clean",
     ]
 
     @pytest.mark.just_syntax
