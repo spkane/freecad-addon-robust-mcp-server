@@ -91,6 +91,12 @@ jobs:
           echo ""
           echo "Version verification passed!"
 
+      - name: Verify stable release branch matches the tagged source
+        if: steps.version.outputs.is_prerelease == 'false'
+        run: |
+          git fetch --no-tags origin refs/heads/released:refs/remotes/origin/released
+          python3 -m scripts.verify_released_workbench source
+
       - name: Create workbench archive
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -100,6 +106,12 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: python3 scripts/verify_workbench_archives.py "$VERSION" .
+
+      - name: Verify stable archive matches the release source
+        if: steps.version.outputs.is_prerelease == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 -m scripts.verify_released_workbench archive "$VERSION" .
 
       - name: Build the MCP server candidate from this release commit
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -248,6 +260,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -m scripts.manage_cam_inventory check-current
+
+      - name: Recheck stable release branch before publication
+        if: needs.prepare.outputs.is_prerelease == 'false'
+        run: |
+          git fetch --no-tags origin refs/heads/released:refs/remotes/origin/released
+          python3 -m scripts.verify_released_workbench source
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
