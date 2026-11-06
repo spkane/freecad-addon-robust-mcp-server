@@ -303,19 +303,30 @@ _result_ = True
     )
     result = await bridge.execute_python(
         f"""
+import os
+import time
+def stage(label):
+    os.write(2, (f"ShapeString regression: {{label}} ({{time.monotonic():.3f}})\\n").encode())
 doc = FreeCAD.getDocument({name!r})
 body = doc.getObject("Body")
 source = doc.getObject({source["name"]!r})
+stage("create binder")
 binder = body.newObject("PartDesign::SubShapeBinder", "TextBinder")
 binder.Support = [(source, [""])]
+stage("recompute binder")
 doc.recompute()
+stage("create pocket")
 pocket = body.newObject("PartDesign::Pocket", "Pocket")
 pocket.Profile = binder
 pocket.Length = 2
+stage("recompute pocket")
 doc.recompute()
+stage("read initial shape")
 first = {{"volume": pocket.Shape.Volume, "null": pocket.Shape.isNull(), "state": list(pocket.State)}}
 source.String = "OO"
+stage("recompute edited source")
 doc.recompute()
+stage("read updated shape")
 _result_ = {{"before": first, "after": {{"volume": pocket.Shape.Volume,
          "null": pocket.Shape.isNull(), "state": list(pocket.State)}}}}
 """,
