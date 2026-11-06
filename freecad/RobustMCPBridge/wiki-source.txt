@@ -138,6 +138,15 @@ freecad-mcp --pair-bridge
 }}
 <translate>
 
+<!--T:47-->
+For a source checkout, run the following from the checkout directory instead:
+
+</translate>
+{{Code|code=
+uv run freecad-mcp --pair-bridge
+}}
+<translate>
+
 <!--T:32-->
 See the [https://github.com/spkane/freecad-addon-robust-mcp-server GitHub repository] for full documentation on configuring MCP clients.
 
