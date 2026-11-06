@@ -17,7 +17,9 @@ to MCP Python SDK 2 and may require updating older MCP clients.
   post-processing. CAM operations depend on a compatible bridge, FreeCAD
   version, and GUI availability. Simulation covers top-down three-axis cuts;
   it does not model tool holders or collisions. Independently verify machine
-  programs. The 0.7.0-rc.3 notes below list operation availability.
+  programs. LeadInOut, RampEntry, Dragknife, AxisMap, and ZCorrect require
+  the GUI; Boundary2, Mirror, and PlungeMilling require FreeCAD 26.3 or later
+  and the GUI.
 - Broader Part, Part Design, Sketcher, spreadsheet, and Draft ShapeString tools.
 
 ### Changed

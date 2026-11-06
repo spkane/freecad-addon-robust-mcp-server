@@ -67,7 +67,7 @@ On macOS and Linux, the credential is stored in
 `~/.freecad-robust-mcp/bridge-credential.json` inside a user-owned private
 directory. On Windows, the implementation uses a locally persisted generic
 credential named `FreeCADRobustMCPBridge:default` in Windows Credential Manager.
-The Windows implementation still requires verification on Windows before release.
+Cross-platform CI exercises Windows pairing and the Windows credential store.
 Both processes must run as the same user and see the same credential store; a
 container or different user account needs separate credential provisioning.
 

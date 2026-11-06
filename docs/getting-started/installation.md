@@ -258,9 +258,9 @@ status and uninstall recipes require Bash, including on Windows.
 
 ### Manual installation from a release archive
 
-Pairing-capable release candidates are available. Use a workbench archive
-compatible with the MCP server you installed, and choose the matching RC
-versions when testing a candidate.
+Use a workbench archive compatible with the MCP server you installed. Install
+0.7.0 or later of both components for pairing; choose matching RC versions when
+testing a candidate.
 
 1. If you need to find the active profile, follow the Python console step
    below while that version of FreeCAD is open. Then quit FreeCAD. Download the
