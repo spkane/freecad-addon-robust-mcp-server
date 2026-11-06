@@ -26,10 +26,13 @@ just release::bump-workbench 1.0.0
 git add -A
 git commit -m "chore: bump workbench to 1.0.0"  # or appropriate component/message
 
-# 5. Create & push tag (triggers CI/CD automatically)
+# 5. Stable workbench only: merge this reviewed main commit into released.
+#    Verify the complete trees match before tagging; prereleases skip this step.
+
+# 6. Create & push tag (triggers CI/CD automatically)
 just release::tag-workbench 1.0.0           # or tag-mcp-server
 
-# 6. Monitor release at GitHub Actions, then verify
+# 7. Monitor release at GitHub Actions, then verify
 just release::list-tags
 just release::latest-versions
 ```
@@ -288,7 +291,11 @@ git diff  # Review changes
 git add -A
 git commit -m "chore: bump workbench to 1.0.0"
 
-# 3. Create and push the release tag
+# 3. For stable releases, merge the reviewed main commit into released.
+#    Confirm both branches contain identical Git trees before tagging.
+#    Skip this step for prereleases.
+
+# 4. Create and push the release tag
 just release::tag-workbench 1.0.0
 ```
 
@@ -299,10 +306,12 @@ just release::tag-workbench 1.0.0
 
 **What happens automatically:**
 
-1. GitHub Actions validates the tag format
-2. Verifies version in source files matches tag
-3. Creates archive (tar.gz and zip)
-4. Creates GitHub Release with the archives
+1. GitHub Actions validates the tag and source versions.
+2. For a stable release, it verifies the tagged source tree matches `released`
+   and the manifest points to that branch.
+3. It builds the archives and verifies their contents match the packaged source,
+   then tests the exact candidate artifacts through the CAM release gate.
+4. It rechecks `released` before publication and publishes the verified archives.
 
 ## Verifying a Release
 

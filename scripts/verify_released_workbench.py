@@ -30,7 +30,10 @@ def verify_source(root: Path) -> None:
     readmes = [url for url in urls if url.get("type") == "readme"]
     if len(repositories) != 1 or repositories[0].get("branch") != "released":
         raise ValueError("Manifest repository must track the released branch")
-    if len(readmes) != 1 or not (readmes[0].text or "").endswith("/released/README.md"):
+    if len(readmes) != 1 or readmes[0].text != (
+        "https://raw.githubusercontent.com/spkane/"
+        "freecad-addon-robust-mcp-server/released/README.md"
+    ):
         raise ValueError("Manifest README must track the released branch")
 
 

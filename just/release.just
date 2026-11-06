@@ -85,7 +85,8 @@ bump-workbench version:
     echo "Next steps:"
     echo "  1. Review changes: git diff"
     echo "  2. Commit: git add -A && git commit -m 'chore: bump workbench to $VERSION'"
-    echo "  3. Tag and release: just release::tag-workbench $VERSION"
+    echo "  3. For a stable release, merge the reviewed main commit into released."
+    echo "  4. Tag and release: just release::tag-workbench $VERSION"
 
 # =============================================================================
 # Tag Creation Commands
