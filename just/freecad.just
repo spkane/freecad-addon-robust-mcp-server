@@ -192,6 +192,18 @@ run-gui-custom freecad_path:
     echo "FreeCAD is starting with MCP bridge..."
 
 # =============================================================================
+# Addon Manager Testing
+# =============================================================================
+
+# Start or reopen an isolated profile for manual Addon Manager testing
+addon-test-start ref="main":
+    uv run python "{{project_root}}/scripts/addon_manager_manual.py" start {{quote(ref)}}
+
+# Remove the manual Addon Manager test profile after closing FreeCAD
+addon-test-clean:
+    uv run python "{{project_root}}/scripts/addon_manager_manual.py" clean
+
+# =============================================================================
 # Deprecated Aliases (use install:: module instead)
 # =============================================================================
 # These are kept for backwards compatibility but will be removed in a future version.
