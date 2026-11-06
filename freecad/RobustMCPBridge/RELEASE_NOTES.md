@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## Version 0.7.1 (2026-11-06)
+
+### Fixed
+
+- The workbench manifest now points to the dedicated `released` branch for
+  Addon Manager installation and updates. Stable release archives are checked
+  against the same source as that branch before publication.
+
 ## Version 0.7.0 (2026-11-06)
 
 Update the workbench and MCP server together. Pair the bridge before connecting;

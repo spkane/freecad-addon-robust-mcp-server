@@ -3,6 +3,11 @@
 This project uses **component-specific versioning**. Each component has its own
 release notes and version history.
 
+## 0.7.1 (workbench)
+
+- Point the workbench manifest to the `released` branch and verify stable
+  release archives against the Addon Manager source.
+
 ## 0.7.0
 
 Version 0.7.0 updates both the server and workbench. It adds authenticated

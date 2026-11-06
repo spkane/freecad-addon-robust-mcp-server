@@ -3,6 +3,7 @@
 # ruff: noqa: S603, S607
 
 import subprocess
+import xml.etree.ElementTree as ET  # nosec B405 - local test metadata
 import zipfile
 from pathlib import Path
 
@@ -40,13 +41,16 @@ def test_release_branch_must_match_tagged_tree(tmp_path: Path) -> None:
 
 def test_release_archive_must_match_packaged_source(tmp_path: Path) -> None:
     """Reject added or changed archive files even when the version matches."""
-    create_archives("0.7.0", tmp_path, ROOT)
-    verify_archive("0.7.0", tmp_path, ROOT)
-    archive = tmp_path / "freecad-mcp-workbench-0.7.0.zip"
+    manifest = ET.parse(ROOT / "package.xml").getroot()  # nosec B314  # noqa: S314
+    version = manifest.findtext("{https://wiki.freecad.org/Package_Metadata}version")
+    assert version
+    create_archives(version, tmp_path, ROOT)
+    verify_archive(version, tmp_path, ROOT)
+    archive = tmp_path / f"freecad-mcp-workbench-{version}.zip"
     with zipfile.ZipFile(archive, "a") as output:
-        output.writestr("freecad-mcp-workbench-0.7.0/extra", "unexpected")
+        output.writestr(f"freecad-mcp-workbench-{version}/extra", "unexpected")
     with pytest.raises(ValueError, match="differs"):
-        verify_archive("0.7.0", tmp_path, ROOT)
+        verify_archive(version, tmp_path, ROOT)
 
 
 @pytest.mark.parametrize(
@@ -104,11 +108,14 @@ def test_archive_rejects_duplicate_paths(tmp_path: Path) -> None:
     """A ZIP with duplicate entries cannot be accepted as matching source."""
     import warnings
 
-    create_archives("0.7.0", tmp_path, ROOT)
-    archive = tmp_path / "freecad-mcp-workbench-0.7.0.zip"
+    manifest = ET.parse(ROOT / "package.xml").getroot()  # nosec B314  # noqa: S314
+    version = manifest.findtext("{https://wiki.freecad.org/Package_Metadata}version")
+    assert version
+    create_archives(version, tmp_path, ROOT)
+    archive = tmp_path / f"freecad-mcp-workbench-{version}.zip"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
         with zipfile.ZipFile(archive, "a") as output:
-            output.writestr("freecad-mcp-workbench-0.7.0/README.md", "replacement")
+            output.writestr(f"freecad-mcp-workbench-{version}/README.md", "replacement")
     with pytest.raises(ValueError, match="duplicate"):
-        verify_archive("0.7.0", tmp_path, ROOT)
+        verify_archive(version, tmp_path, ROOT)
