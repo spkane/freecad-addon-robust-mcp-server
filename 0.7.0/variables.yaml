@@ -1,0 +1,28 @@
+# Variables for mkdocs-macros-plugin
+# Use in docs with {{@ variable_name @}} (custom delimiters to avoid Python dict conflicts)
+
+# Project info
+project_name: FreeCAD Robust MCP Suite
+package_name: freecad-robust-mcp
+docker_image: spkane/freecad-robust-mcp
+
+# URLs
+repo_url: https://github.com/spkane/freecad-addon-robust-mcp-server
+pypi_url: https://pypi.org/project/freecad-robust-mcp/
+docker_url: https://hub.docker.com/r/spkane/freecad-robust-mcp
+
+# Ports
+xmlrpc_port: 9875
+socket_port: 9876
+
+# Example FreeCAD 1.1 paths; installations may use another profile.
+paths:
+  macos:
+    macro: ~/Library/Application Support/FreeCAD/v1-1/Macro/
+    mod: ~/Library/Application Support/FreeCAD/v1-1/Mod/
+  linux:
+    macro: ~/.local/share/FreeCAD/v1-1/Macro/
+    mod: ~/.local/share/FreeCAD/v1-1/Mod/
+  windows:
+    macro: "%APPDATA%/FreeCAD/v1-1/Macro/"
+    mod: "%APPDATA%/FreeCAD/v1-1/Mod/"
