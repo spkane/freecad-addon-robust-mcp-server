@@ -119,9 +119,8 @@ This section covers installation and usage for end users who want to use the Rob
 ### Installation
 
 For the everyday setup, see the [Quick Start](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/quickstart/)
-for the server, workbench, pairing, and assistant configuration. The current
-stable 0.6.2 releases predate pairing; the pairing-capable stable workflow
-described there becomes available with the upcoming release.
+for the server, workbench, pairing, and assistant configuration. Install or
+update both components to compatible versions; pairing requires 0.7.0 or later.
 
 #### Using pip
 
@@ -281,10 +280,9 @@ freecad-mcp --pair-bridge
 
 For a source checkout use `uv run freecad-mcp --pair-bridge`. For container or
 different-account setups, see the [pairing instructions](docs/getting-started/installation.md#step-1-pair-the-bridge).
-Use matching server and workbench builds that support pairing; the published
-0.6.x releases predate it. Until a pairing-capable release is published, use
-the server and workbench from the same current source checkout as described in
-the installation guide.
+Install compatible server and workbench releases at version 0.7.0 or later;
+0.6.x releases predate pairing. For development, use both components from the
+same source checkout, as described in the installation guide.
 
 Then start the MCP bridge inside FreeCAD:
 

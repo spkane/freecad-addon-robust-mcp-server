@@ -20,8 +20,9 @@ The workbench provides:
 
 The workbench is not yet in the public FreeCAD Addon Manager catalog. Follow
 the [installation guide](../getting-started/installation.md) to install the
-server and workbench from the same pairing-capable source checkout. The source
-installer creates `Mod/RobustMCPBridge/freecad/RobustMCPBridge/` inside the
+compatible 0.7.0 or later server and workbench releases, or use both
+components from the same source checkout for development. The source installer
+creates `Mod/RobustMCPBridge/freecad/RobustMCPBridge/` inside the
 selected FreeCAD user profile. Release archives instead include their own
 versioned package directory; follow the guide when using a compatible archive.
 

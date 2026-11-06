@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+## Version 0.7.0 (2026-11-06)
+
+This release updates both the MCP server and the Robust MCP Bridge. Install
+compatible 0.7.0 or later versions of both components and pair the bridge before
+connecting. Existing pairing credentials can be retained. This release migrates
+to MCP Python SDK 2 and may require updating older MCP clients.
+
+### Added
+
+- Authenticated bridge pairing for the XML-RPC and socket transports, and
+  required API-key authentication when using HTTP transport.
+- CAM tools for jobs, operations, toolpath generation, simulation, and G-code
+  post-processing. CAM operations depend on a compatible bridge, FreeCAD
+  version, and GUI availability. Simulation covers top-down three-axis cuts;
+  it does not model tool holders or collisions. Independently verify machine
+  programs. LeadInOut, RampEntry, Dragknife, AxisMap, and ZCorrect require
+  the GUI; Boundary2, Mirror, and PlungeMilling require FreeCAD 26.3 or later
+  and the GUI.
+- Broader Part, Part Design, Sketcher, spreadsheet, and Draft ShapeString tools.
+
+### Changed
+
+- The bridge executes Python with the FreeCAD user's permissions. Pairing
+  restricts unauthenticated local clients but does not isolate malicious
+  programs running under the same user account.
+- The recommended transport is XML-RPC. Update both server and workbench when
+  installing a new release. FreeCAD 1.0.2 is the compatibility floor; 1.1.4 or
+  newer is recommended for security.
+
+### Fixed
+
+- Screenshot rendering, framing, camera restoration, and temporary-file cleanup.
+- ShapeString identifiers, sketch attachment and contour conversion, and error
+  reporting for invalid recomputes.
+- Cross-version Part Design symmetry, external geometry, linked-property
+  serialization, and configurable execution deadlines.
+
 ## Version 0.7.0-rc.4 (2026-11-01)
 
 ### Changed

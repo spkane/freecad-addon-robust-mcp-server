@@ -13,57 +13,34 @@ The FreeCAD Robust MCP Suite consists of two components:
 
 ## Quick Start
 
-### 1. Install the MCP Bridge in FreeCAD
+### 1. Install the server and workbench
 
-The workbench is not yet in the public FreeCAD Addon Manager catalog. Install
-the pairing-capable server and workbench from the same source checkout. Install
-[`just`](https://just.systems/) and [`uv`](https://docs.astral.sh/uv/) first:
+The workbench is not yet in the public FreeCAD Addon Manager catalog. Follow
+our [stable Quick Start](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/quickstart/)
+to install both the MCP server and the compatible workbench archive. Use
+version 0.7.0 or later of both components for pairing. The guide covers
+versioned FreeCAD profiles, Windows, and source checkout installation.
+
+### 2. Pair and start the bridge
+
+Run `freecad-mcp --pair-bridge` as the user who runs FreeCAD; if already paired,
+retain the existing credential. Open FreeCAD, select **Robust MCP Bridge**, and
+click **Start MCP Bridge** unless it is already running.
+
+### 3. Configure your AI assistant
+
+Follow the [assistant configuration examples](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/quickstart/#4-connect-your-assistant)
+for Claude Desktop/CLI, Codex Desktop/CLI, and other MCP clients.
+
+### 4. Verify the installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/spkane/freecad-addon-robust-mcp-server.git
-cd freecad-addon-robust-mcp-server
-
-# Install the workbench
-just install::mcp-bridge-workbench
+freecad-mcp --version
+freecad-mcp --mode xmlrpc --check
 ```
 
-The installer creates the package and manifest under the selected FreeCAD
-profile's `Mod/RobustMCPBridge/` directory. Do not copy the repository itself
-into `Mod`. See the [installation guide](https://spkane.github.io/freecad-addon-robust-mcp-server/latest/getting-started/installation/)
-for versioned profiles, Windows requirements, and compatible release archives.
-
-### 2. Start the MCP Bridge
-
-1. Run `uv run freecad-mcp --pair-bridge` from the checkout as the same user
-   who runs FreeCAD.
-2. Open FreeCAD and select the **Robust MCP Bridge** workbench.
-3. Click **Start MCP Bridge** in the toolbar, unless auto-start is enabled.
-
-The bridge listens on:
-
-- **XML-RPC**: `http://localhost:9875`
-- **Socket**: `localhost:9876`
-
-### 3. Install the MCP Server
-
-Use `uv run freecad-mcp` from the same source checkout. Published 0.6.x server
-and workbench builds predate pairing and are not compatible with this setup.
-
-### 4. Configure Your AI Assistant
-
-Add to your MCP client configuration (e.g., Claude Desktop):
-
-```json
-{
-  "mcpServers": {
-    "freecad": {
-      "command": "uv",
-      "args": ["run", "--project", "/path/to/freecad-addon-robust-mcp-server", "freecad-mcp"]
-    }
-  }
-}
-```
+For development from a source checkout, prefix these commands and the pairing
+command with `uv run` from that checkout.
 
 ### 5. Start Using It
 
@@ -86,10 +63,10 @@ Your AI assistant can now:
 
 ```bash
 # Check MCP server installation
-uv run freecad-mcp --version
+freecad-mcp --version
 
 # Check connection status (with FreeCAD running)
-uv run freecad-mcp --mode xmlrpc --check
+freecad-mcp --mode xmlrpc --check
 ```
 
 ## Full Documentation

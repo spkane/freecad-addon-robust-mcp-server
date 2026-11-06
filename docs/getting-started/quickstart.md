@@ -3,12 +3,8 @@
 Install the server and FreeCAD workbench, pair them once, and connect your AI
 assistant. No source checkout or developer tools are required.
 
-> **Stable release availability:** The current stable releases (0.6.2) predate
-> bridge pairing. The steps below describe the upcoming pairing-capable stable
-> release and will work once it is published. Until then, use the
-> [release asset installation guide](installation.md#method-2-github-release-assets)
-> for matching release candidates or the source installation guide for development
-> builds; the stable 0.6.2 packages do not support the pairing steps below.
+> **Compatibility:** Install both the server and workbench at version 0.7.0
+> or later. Older 0.6.x releases do not support bridge pairing.
 
 ## What you need
 
@@ -27,7 +23,7 @@ Choose one server installation method:
 - **Stable package:** use the `uv` command below, or [install with pip](installation.md#method-1-public-releases-with-pip).
 - **GitHub release, including RC testing:** download the server wheel and follow
   the [release asset steps](installation.md#method-2-github-release-assets).
-  The instructions include an RC4 example for macOS, Linux, and Windows.
+  The instructions include a stable 0.7.0 example for macOS, Linux, and Windows.
 
 For the stable `uv` method, install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
 operating system, then open a new Terminal (macOS/Linux) or PowerShell (Windows)
@@ -57,16 +53,16 @@ For a downloaded server wheel, including a release candidate, see the
    select a Robust MCP Bridge workbench release compatible with your server,
    and download its `freecad-mcp-workbench` ZIP file. For stable installations,
    choose a stable release; for RC testing, choose the matching pre-release
-   version. For example, server RC4 pairs with workbench `0.7.0-rc.4`.
+   version. For example, server 0.7.0 pairs with workbench `0.7.0`.
 3. Extract the ZIP. Open the FreeCAD profile's `Mod` folder, and move the
    extracted workbench folder into it. The folder you move must directly contain
    `package.xml` and the `freecad` folder. If `Mod` does not exist, create it.
-   For RC4, move the entire `freecad-mcp-workbench-0.7.0-rc.4` folder, not the
+   For 0.7.0, move the entire `freecad-mcp-workbench-0.7.0` folder, not the
    inner `freecad` or `RobustMCPBridge` folder. The resulting structure is:
 
    ```text
    Mod/
-   └── freecad-mcp-workbench-0.7.0-rc.4/
+   └── freecad-mcp-workbench-0.7.0/
        ├── package.xml
        ├── LICENSE-CODE
        ├── LICENSE-MIT
