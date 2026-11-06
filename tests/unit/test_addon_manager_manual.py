@@ -186,9 +186,10 @@ def test_clean_missing_profile_is_a_noop(tmp_path: Path) -> None:
 
 
 def test_main_reports_configuration_errors(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     """Invalid startup configuration is presented as an actionable CLI error."""
+    monkeypatch.setattr(helper, "profile_path", lambda: tmp_path / "profile")
     monkeypatch.setattr(helper.sys, "argv", ["addon-test", "start", "bad ref"])
     assert helper.main() == 1
     assert "repository ref" in capsys.readouterr().err
