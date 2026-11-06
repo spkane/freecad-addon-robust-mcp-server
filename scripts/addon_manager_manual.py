@@ -272,7 +272,10 @@ def _clean(profile: Path) -> None:
         if entry.name == "state.json":
             continue
         if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry, onerror=_remove_readonly)
+            if sys.version_info >= (3, 12):
+                shutil.rmtree(entry, onexc=_remove_readonly)
+            else:
+                shutil.rmtree(entry, onerror=_remove_readonly)
         else:
             try:
                 entry.unlink()
@@ -294,13 +297,16 @@ def _clean(profile: Path) -> None:
     )
 
 
-def _remove_readonly(function: Any, path: str, error: tuple[Any, Any, Any]) -> None:
-    """Retry removal of a Windows read-only file; propagate other errors."""
-    if os.name != "nt" or not isinstance(error[1], PermissionError):
-        raise error[1]
+def _remove_readonly(
+    function: Any, path: str, error: BaseException | tuple[Any, Any, Any]
+) -> None:
+    """Retry a Windows read-only file for either shutil callback format."""
+    exception = error[1] if isinstance(error, tuple) else error
+    if os.name != "nt" or not isinstance(exception, PermissionError):
+        raise exception
     target = Path(path)
     if target.is_symlink():
-        raise error[1]
+        raise exception
     target.chmod(stat.S_IWRITE)
     function(path)
 

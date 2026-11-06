@@ -268,3 +268,28 @@ def test_failed_pid_write_preserves_previous_marker(tmp_path: Path) -> None:
     ):
         helper.start(profile, "main")
     assert json.loads((profile / "state.json").read_text()) == previous
+
+
+@pytest.mark.parametrize("legacy", [True, False])
+def test_readonly_callback_supports_both_shutil_formats(
+    tmp_path: Path, legacy: bool
+) -> None:
+    """Both onerror and onexc remove a Windows read-only file."""
+    target = tmp_path / "file"
+    target.touch()
+    failure = PermissionError("read only")
+    error = (PermissionError, failure, None) if legacy else failure
+    retry = MagicMock()
+    with patch.object(helper, "os", wraps=helper.os) as platform:
+        platform.name = "nt"
+        helper._remove_readonly(retry, str(target), error)
+    retry.assert_called_once_with(str(target))
+
+
+@pytest.mark.parametrize("legacy", [True, False])
+def test_readonly_callback_propagates_other_failures(legacy: bool) -> None:
+    """Unexpected errors are never hidden by the removal callback."""
+    failure = OSError("unexpected")
+    error = (OSError, failure, None) if legacy else failure
+    with pytest.raises(OSError, match="unexpected"):
+        helper._remove_readonly(MagicMock(), "unused", error)
