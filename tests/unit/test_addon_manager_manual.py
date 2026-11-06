@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import runpy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,9 +34,8 @@ def test_start_configures_isolated_profile_and_reuses_it(tmp_path: Path) -> None
         with patch.object(helper, "_running", return_value=False):
             assert helper.start(profile, "main") == 0
         assert sentinel.exists()
-        with patch.object(helper, "_running", return_value=False):
-            assert helper.start(profile, "other") == 0
-        assert f"{helper.REPOSITORY} other" in (profile / "setup.FCMacro").read_text()
+        with pytest.raises(ValueError, match="Only main"):
+            helper.start(profile, "other")
         assert sentinel.exists()
 
 
@@ -217,18 +216,10 @@ def test_start_stops_process_if_pid_cannot_be_saved(tmp_path: Path) -> None:
     marker = profile / "state.json"
     marker.write_text(json.dumps({"marker": helper.MARKER, "ref": "main"}))
     process = MagicMock(pid=12345)
-    original_write = type(marker).write_text
-
-    def write_file(path: Path, *args: Any, **kwargs: Any) -> int:
-        """Fail the PID state write while allowing the macro write."""
-        if path == marker:
-            raise PermissionError("blocked")
-        return original_write(path, *args, **kwargs)
-
     with (
         patch.object(helper, "_binary", return_value="freecad"),
         patch.object(helper.subprocess, "Popen", return_value=process),
-        patch.object(type(marker), "write_text", autospec=True, side_effect=write_file),
+        patch.object(helper.os, "replace", side_effect=PermissionError("blocked")),
         pytest.raises(PermissionError, match="blocked"),
     ):
         helper.start(profile, "main")
@@ -249,3 +240,31 @@ def test_cleanup_removes_windows_readonly_file(tmp_path: Path) -> None:
     entry.chmod(0o444)
     helper.clean(profile)
     assert not profile.exists()
+
+
+def test_initial_state_failure_removes_new_profile(tmp_path: Path) -> None:
+    """A failed first marker write does not leave an unrecognizable profile."""
+    profile = tmp_path / "profile"
+    with (
+        patch.object(helper, "_binary", return_value="freecad"),
+        patch.object(helper.os, "replace", side_effect=PermissionError("blocked")),
+        pytest.raises(PermissionError, match="blocked"),
+    ):
+        helper.start(profile, "main")
+    assert not profile.exists()
+
+
+def test_failed_pid_write_preserves_previous_marker(tmp_path: Path) -> None:
+    """An interrupted replacement leaves the prior marker intact."""
+    profile = tmp_path / "profile"
+    profile.mkdir(mode=0o700)
+    previous = {"marker": helper.MARKER, "ref": "main"}
+    (profile / "state.json").write_text(json.dumps(previous))
+    with (
+        patch.object(helper, "_binary", return_value="freecad"),
+        patch.object(helper.subprocess, "Popen", return_value=MagicMock(pid=12345)),
+        patch.object(helper.os, "replace", side_effect=PermissionError("blocked")),
+        pytest.raises(PermissionError),
+    ):
+        helper.start(profile, "main")
+    assert json.loads((profile / "state.json").read_text()) == previous

@@ -115,6 +115,18 @@ def _read_state(profile: Path) -> dict:
     return state
 
 
+def _write_state(profile: Path, state: dict) -> None:
+    """Atomically replace the profile marker without truncating an existing one."""
+    fd, name = tempfile.mkstemp(prefix=".state-", dir=profile)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            json.dump(state, output)
+        os.replace(temporary, profile / "state.json")  # noqa: PTH105 - atomic replace
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _binary() -> str:
     configured = os.environ.get("FREECAD_ADDON_GUI_COMMAND")
     if configured:
@@ -149,6 +161,12 @@ def _start(profile: Path, ref: str) -> int:
         raise ValueError(
             "The repository ref cannot contain # (FreeCAD treats it as a URL fragment)"
         )
+    if ref != "main":
+        raise ValueError(
+            "Only main is supported: FreeCAD can replace a custom ref with the "
+            "branch in package.xml. See docs/development/addon-manager-testing.md "
+            "for testing other refs."
+        )
     binary = _binary()
     if profile.exists() or profile.is_symlink():
         state = _read_state(profile)
@@ -161,7 +179,11 @@ def _start(profile: Path, ref: str) -> int:
     else:
         profile.mkdir(mode=0o700)
         state = {"marker": MARKER, "ref": ref}
-        (profile / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        try:
+            _write_state(profile, state)
+        except OSError:
+            profile.rmdir()
+            raise
     state["ref"] = ref
     data = profile / "data"
     temporary = profile / "temp"
@@ -196,7 +218,7 @@ def _start(profile: Path, ref: str) -> int:
         "1. Open Tools > Addon Manager, find FreeCAD Robust MCP Bridge, and install it.\n"
         "2. Close FreeCAD and rerun this command; confirm the workbench loads once.\n"
         "3. Test bridge start/stop and a paired MCP operation; check Report view.\n"
-        "4. Test disable, enable, uninstall, reinstall, and upgrade with restarts.\n"
+        "4. Test disable, enable, uninstall, reinstall, and updates with restarts.\n"
         "5. Close FreeCAD, then run just freecad::addon-test-clean.\n"
         "Pairing credentials belong to your OS account and are not isolated or removed.\n"
         "Use a disposable OS account if testing pairing or credential removal.\n",
@@ -217,7 +239,7 @@ def _start(profile: Path, ref: str) -> int:
         )
     try:
         state["pid"] = process.pid
-        (profile / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        _write_state(profile, state)
     except OSError:
         process.terminate()
         process.wait()
@@ -265,7 +287,7 @@ def _clean(profile: Path) -> None:
     try:
         profile.rmdir()
     except OSError:
-        (profile / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        _write_state(profile, state)
         raise
     print(
         f"Removed test profile: {profile}. OS-account pairing credentials were not changed."

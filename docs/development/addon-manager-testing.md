@@ -13,15 +13,20 @@ FreeCAD profile with the custom repository already configured:
 
 ```bash
 just freecad::addon-test-start
-# Or test a specific branch or release tag:
-just freecad::addon-test-start robust-mcp-workbench-v0.7.0-rc.4
 ```
 
 The command launches FreeCAD in the background and prints the location of its
 log. It refuses to start another test instance while the previous one is open.
 Close FreeCAD and run the same command to restart with the existing profile.
-To test an upgrade, restart with a different branch or tag, then use the Addon
-Manager update flow. Tag support varies by FreeCAD version. When finished,
+The helper tests `main` only. FreeCAD 1.0.2 can replace a selected custom ref
+with the repository branch declared in `package.xml`, so selecting another ref
+could silently install different code. To test another ref through the actual
+Addon Manager, use a separate test repository whose `package.xml` repository URL
+and branch match that repository and ref, and configure it manually in the
+isolated profile. Verify the installed checkout's commit against the intended
+source; modifying metadata means the test repository is not the exact release
+artifact. For exact release-archive validation use the release artifact tests.
+When finished,
 close FreeCAD and run `just freecad::addon-test-clean`. The
 helper removes only its own profile; it never removes account-level pairing
 credentials. A small coordination lock file remains in the temporary
@@ -40,9 +45,10 @@ a short checklist; follow the detailed protocol below and record your results.
 2. If you used the helper above, skip this step; the repository is configured.
    Otherwise, in FreeCAD, open **Edit → Preferences → Addon Manager** (on macOS, use the
    application menu for Preferences). Under **Custom repositories**, add
-   `https://github.com/spkane/freecad-addon-robust-mcp-server` and the branch
-   or release ref you intend to test. Test an immutable release tag before
-   submission; branch and tag support can differ by Addon Manager version.
+   `https://github.com/spkane/freecad-addon-robust-mcp-server` with branch
+   `main`. Before testing a release, verify `main` and the installed checkout
+   point to the intended release commit. For another ref, use the test
+   repository procedure above and separately verify the exact release archive.
 3. Open **Tools → Addon manager**, find **FreeCAD Robust MCP Bridge**, and
    install it. Restart FreeCAD when prompted. Confirm that the workbench loads,
    it appears exactly once in the workbench selector, its commands are present,
