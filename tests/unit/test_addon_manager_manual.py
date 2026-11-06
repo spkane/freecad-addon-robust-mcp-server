@@ -294,3 +294,14 @@ def test_readonly_callback_propagates_other_failures(legacy: bool) -> None:
     error = (OSError, failure, None) if legacy else failure
     with pytest.raises(OSError, match="unexpected"):
         helper._remove_readonly(MagicMock(), "unused", error)
+
+
+@pytest.mark.skipif(helper.os.name == "nt", reason="Unix process checks")
+def test_running_detects_live_and_reaped_processes() -> None:
+    """Unix PID checks detect live and reaped processes and reject PID zero."""
+    assert helper._running(helper.os.getpid())
+    with pytest.raises(ValueError, match="Invalid"):
+        helper._running(0)
+    process = helper.subprocess.Popen([helper.sys.executable, "-c", "pass"])
+    process.wait(timeout=10)
+    assert not helper._running(process.pid)
