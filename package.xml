@@ -17,9 +17,9 @@
 
     <freecadmin>1.0.2</freecadmin>
 
-    <url type="repository" branch="main">https://github.com/spkane/freecad-addon-robust-mcp-server</url>
+    <url type="repository" branch="released">https://github.com/spkane/freecad-addon-robust-mcp-server</url>
     <url type="bugtracker">https://github.com/spkane/freecad-addon-robust-mcp-server/issues</url>
-    <url type="readme">https://raw.githubusercontent.com/spkane/freecad-addon-robust-mcp-server/main/README.md</url>
+    <url type="readme">https://raw.githubusercontent.com/spkane/freecad-addon-robust-mcp-server/released/README.md</url>
     <url type="documentation">https://spkane.github.io/freecad-addon-robust-mcp-server/latest/</url>
 
     <tag>workbench</tag>

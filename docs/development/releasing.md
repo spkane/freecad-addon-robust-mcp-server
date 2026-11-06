@@ -449,3 +449,15 @@ just release::extract-changelog mcp-server 1.0.0
 # Delete a tag if needed
 just release::delete-tag <full-tag-name>
 ```
+
+### Stable workbench release branch
+
+Before tagging a stable workbench release, merge the reviewed release commit into
+`released` so that its complete Git tree matches the tagged `main` commit. The
+manifest must name `released` for its repository and README URLs, and its version
+and date must change for each published branch update. The release workflow
+checks tree identity before packaging and again immediately before publication,
+and compares the ZIP contents with the package rebuilt from the tagged source.
+Do not update `released` while a workbench publication is running; the final
+check cannot lock the branch against a concurrent update. Prereleases do not
+require the stable branch to match.

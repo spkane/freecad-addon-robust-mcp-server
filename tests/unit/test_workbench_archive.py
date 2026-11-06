@@ -35,10 +35,10 @@ def test_index_manifest_describes_source_package() -> None:
         "FreecadRobustMCPBridgeWorkbench"
     )
     urls = {url.get("type"): url for url in root.findall("pkg:url", NS)}
-    assert urls["repository"].get("branch") == "main"
+    assert urls["repository"].get("branch") == "released"
     assert urls["readme"].text == (
         "https://raw.githubusercontent.com/spkane/"
-        "freecad-addon-robust-mcp-server/main/README.md"
+        "freecad-addon-robust-mcp-server/released/README.md"
     )
     for entry in root.findall("pkg:license", NS):
         assert (ROOT / entry.attrib["file"]).is_file()
