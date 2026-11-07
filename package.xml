@@ -2,7 +2,7 @@
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
 
     <name>FreeCAD Robust MCP Bridge</name>
-    <version>0.7.1</version>
+    <version>0.7.2</version>
     <description>A robust MCP (Model Context Protocol) bridge workbench for AI assistant integration with FreeCAD.</description>
     <icon>freecad/RobustMCPBridge/Resources/Icons/FreecadRobustMCPBridge.svg</icon>
 
@@ -35,7 +35,7 @@
 
         <workbench>
             <name>Robust MCP Bridge</name>
-            <version>0.7.1</version>
+            <version>0.7.2</version>
             <date>2026-11-06</date>
             <description>Robust MCP Bridge workbench for AI assistant integration with FreeCAD. Uses the Model Context Protocol (MCP) to connect AI assistants like Claude Code and Cursor to FreeCAD. Works in both GUI mode (with full visual features including screenshots, colors, and camera control) and headless mode (for automation and CI/CD). Provides toolbar commands to start, stop, and monitor the MCP bridge server. Supports XML-RPC and JSON-RPC protocols with 150+ CAD tools.</description>
             <classname>FreecadRobustMCPBridgeWorkbench</classname>
