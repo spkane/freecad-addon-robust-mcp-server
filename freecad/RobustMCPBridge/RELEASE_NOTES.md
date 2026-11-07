@@ -2,12 +2,16 @@
 
 ## Unreleased
 
+## Version 0.7.2 (2026-11-06)
+
 ### Changed
 
 - Workbench command identifiers now use the `RobustMCPBridge_` prefix to avoid
   collisions with other addons. Custom shortcuts using the old command names
   must be configured again. Startup no longer logs routine messages when the
   bridge is disabled.
+- Direct-launch bridge scripts use a private package for their imports, avoiding
+  generic module names and modifications to the global Python import path.
 
 ## Version 0.7.1 (2026-11-06)
 
