@@ -965,3 +965,49 @@ def test_workbench_initialization_logs_only_enabled_auto_start(
     assert ("Auto-start enabled" in messages) is enabled
     if not enabled:
         assert not messages
+
+
+@pytest.mark.usefixtures("standalone_package_isolation")
+def test_clean_direct_launch_reports_missing_pairing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A clean direct launch loads the real package and reports an absent pairing."""
+    import importlib.util
+
+    package = "_robust_mcp_bridge_standalone"
+    freecad = MagicMock()
+    freecad.GuiUp = True
+    monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
+    monkeypatch.delenv("FREECAD_BRIDGE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FREECAD_BRIDGE_SECRET", raising=False)
+    monkeypatch.setattr("atexit.register", lambda *_args, **_kwargs: None)
+    credentials = types.ModuleType(f"{package}.credential_store")
+    missing = MagicMock(side_effect=FileNotFoundError("not paired"))
+    credentials.read_credential = missing  # type: ignore[attr-defined]
+    sys.modules[credentials.__name__] = credentials
+    bridge = types.ModuleType(f"{package}.bridge_utils")
+    bridge.get_running_plugin = lambda: None  # type: ignore[attr-defined]
+    sys.modules[bridge.__name__] = bridge
+    qt_spec = importlib.util.spec_from_file_location(
+        f"{package}.qt_compat", QT_COMPAT_PATH
+    )
+    assert qt_spec is not None and qt_spec.loader is not None
+    qt_compat = importlib.util.module_from_spec(qt_spec)
+    sys.modules[qt_spec.name] = qt_compat
+    qt_spec.loader.exec_module(qt_compat)
+    monkeypatch.setattr(
+        qt_compat, "load_qt_core_widgets", lambda: (MagicMock(), MagicMock())
+    )
+    assert package not in sys.modules
+    namespace = runpy.run_path(str(STARTUP_BRIDGE_PATH), run_name="__main__")
+    assert sys.modules[package].__file__ == str(
+        STARTUP_BRIDGE_PATH.parent / "__init__.py"
+    )
+    assert (
+        namespace["PairingRequiredError"]
+        is sys.modules[f"{package}.authentication"].PairingRequiredError
+    )
+    missing.assert_called_once_with()
+    errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
+    assert "freecad-mcp --pair-bridge" in errors
+    assert "Traceback" not in errors
