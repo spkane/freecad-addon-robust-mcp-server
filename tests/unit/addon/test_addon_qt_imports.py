@@ -802,8 +802,18 @@ def test_workbench_registers_namespaced_commands(
         "RobustMCPBridge_Status",
         "RobustMCPBridge_Preferences",
     }
-    assert set(workbench.appendToolbar.call_args.args[1]) <= registered
-    assert set(workbench.appendMenu.call_args.args[1]) - {"Separator"} <= registered
+    assert workbench.appendToolbar.call_args.args[1] == [
+        "RobustMCPBridge_Start",
+        "RobustMCPBridge_Stop",
+        "RobustMCPBridge_Status",
+    ]
+    assert workbench.appendMenu.call_args.args[1] == [
+        "RobustMCPBridge_Start",
+        "RobustMCPBridge_Stop",
+        "RobustMCPBridge_Status",
+        "Separator",
+        "RobustMCPBridge_Preferences",
+    ]
 
 
 @pytest.mark.parametrize("script", ["startup_bridge.py", "blocking_bridge.py"])
@@ -848,3 +858,87 @@ def test_direct_scripts_do_not_claim_generic_module_names(
     if script == "blocking_bridge.py":
         plugin.run_forever.assert_called_once()
     monkeypatch.delitem(sys.modules, package, raising=False)
+
+
+@pytest.mark.parametrize("script", ["startup_bridge.py", "blocking_bridge.py"])
+@pytest.mark.parametrize(
+    "failure", ["conflict", "missing_spec", "missing_loader", "execute"]
+)
+def test_direct_script_loader_failure_is_reported_and_cleans_up(
+    monkeypatch: pytest.MonkeyPatch, script: str, failure: str
+) -> None:
+    """Failed private-package initialization is explicit and leaves no partial package."""
+    import importlib.util
+
+    package_name = "_robust_mcp_bridge_standalone"
+    monkeypatch.delitem(sys.modules, package_name, raising=False)
+    freecad = MagicMock()
+    freecad.Version.return_value = ("1", "1")
+    monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
+    expected: type[Exception]
+    if failure == "conflict":
+        conflict = types.ModuleType(package_name)
+        conflict.__file__ = "/different/addon/__init__.py"
+        monkeypatch.setitem(sys.modules, package_name, conflict)
+        expected = RuntimeError
+    elif failure == "missing_spec":
+        monkeypatch.setattr(
+            importlib.util, "spec_from_file_location", lambda *_args, **_kwargs: None
+        )
+        expected = ImportError
+    elif failure == "missing_loader":
+        monkeypatch.setattr(
+            importlib.util,
+            "spec_from_file_location",
+            lambda *_args, **_kwargs: types.SimpleNamespace(loader=None),
+        )
+        expected = ImportError
+    else:
+        spec = importlib.util.spec_from_file_location(
+            package_name,
+            ADDON_DIR / "freecad_mcp_bridge" / "__init__.py",
+            submodule_search_locations=[str(ADDON_DIR / "freecad_mcp_bridge")],
+        )
+        assert spec is not None and spec.loader is not None
+        monkeypatch.setattr(
+            spec.loader,
+            "exec_module",
+            MagicMock(side_effect=RuntimeError("loader failed")),
+        )
+        monkeypatch.setattr(
+            importlib.util, "spec_from_file_location", lambda *_args, **_kwargs: spec
+        )
+        expected = RuntimeError
+    with pytest.raises(expected):
+        runpy.run_path(
+            str(ADDON_DIR / "freecad_mcp_bridge" / script), run_name="__main__"
+        )
+    if failure != "conflict":
+        assert package_name not in sys.modules
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_workbench_initialization_logs_only_enabled_auto_start(
+    monkeypatch: pytest.MonkeyPatch, enabled: bool
+) -> None:
+    """Report enabled auto-start while keeping a disabled bridge quiet."""
+    freecad = _install_init_gui_stubs(monkeypatch)
+    preferences = sys.modules["freecad.RobustMCPBridge.preferences"]
+    preferences.get_auto_start = lambda: enabled  # type: ignore[attr-defined]
+    preferences.get_auto_start_headless = lambda: False  # type: ignore[attr-defined]
+    preferences.get_auto_start_headless_batch = lambda: False  # type: ignore[attr-defined]
+    qt = types.ModuleType("freecad.RobustMCPBridge.freecad_mcp_bridge.qt_compat")
+    qtcore = MagicMock()
+    qtcore.QCoreApplication.instance.return_value = None
+    widgets = types.SimpleNamespace(QApplication=type("QApplication", (), {}))
+    qt.load_qt_core_widgets = lambda: (qtcore, widgets)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, qt.__name__, qt)
+    monkeypatch.delenv("FREECAD_MCP_TESTING", raising=False)
+    monkeypatch.setattr("atexit.register", lambda _callback: None)
+    runpy.run_path(str(ADDON_INIT_PATH), run_name="freecad.RobustMCPBridge.__init__")
+    messages = "".join(
+        call.args[0] for call in freecad.Console.PrintMessage.call_args_list
+    )
+    assert ("Auto-start enabled" in messages) is enabled
+    if not enabled:
+        assert not messages

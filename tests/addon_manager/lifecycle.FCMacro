@@ -81,19 +81,38 @@ def run_phase():
             if not present:
                 raise RuntimeError("Workbench not discovered after restart")
             FreeCADGui.activateWorkbench("FreecadRobustMCPBridgeWorkbench")
-            required = {
-                "RobustMCPBridge_Start",
-                "RobustMCPBridge_Stop",
-                "RobustMCPBridge_Status",
-                "RobustMCPBridge_Preferences",
-            }
+            required = (
+                {
+                    "Start_MCP_Bridge",
+                    "Stop_MCP_Bridge",
+                    "MCP_Bridge_Status",
+                    "MCP_Bridge_Preferences",
+                }
+                if os.environ["ADDON_TEST_LEGACY_COMMANDS"] == "1"
+                else {
+                    "RobustMCPBridge_Start",
+                    "RobustMCPBridge_Stop",
+                    "RobustMCPBridge_Status",
+                    "RobustMCPBridge_Preferences",
+                }
+            )
             if not required.issubset(FreeCADGui.listCommands()):
                 raise RuntimeError("Workbench bridge commands were not registered")
         elif phase == "paired":
             if not present:
                 raise RuntimeError("Workbench not discovered after restart")
             FreeCADGui.activateWorkbench("FreecadRobustMCPBridgeWorkbench")
-            FreeCADGui.runCommand("RobustMCPBridge_Start")
+            start_command = (
+                "Start_MCP_Bridge"
+                if os.environ["ADDON_TEST_LEGACY_COMMANDS"] == "1"
+                else "RobustMCPBridge_Start"
+            )
+            stop_command = (
+                "Stop_MCP_Bridge"
+                if os.environ["ADDON_TEST_LEGACY_COMMANDS"] == "1"
+                else "RobustMCPBridge_Stop"
+            )
+            FreeCADGui.runCommand(start_command)
             from freecad.RobustMCPBridge import commands
 
             if commands._mcp_plugin is None or not commands._mcp_plugin.is_running:
@@ -106,7 +125,7 @@ def run_phase():
                 if not Path(os.environ["ADDON_TEST_STOP"]).exists():
                     QtCore.QTimer.singleShot(100, finish_when_requested)
                     return
-                FreeCADGui.runCommand("RobustMCPBridge_Stop")
+                FreeCADGui.runCommand(stop_command)
                 FreeCADGui.getMainWindow().close()
 
             QtCore.QTimer.singleShot(100, finish_when_requested)

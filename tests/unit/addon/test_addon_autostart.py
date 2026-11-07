@@ -84,15 +84,6 @@ class TestAutoStartInitLogic:
         # Should call get_auto_start() and store/check the result
         assert "get_auto_start()" in init_code
 
-    def test_logs_auto_start_preference_value(self, init_code: str) -> None:
-        """__init__.py should log when auto-start is enabled.
-
-        This diagnostic logging helps debug auto-start issues by showing
-        what value was read from preferences.
-        """
-        # Should log the actual preference value
-        assert "Auto-start enabled" in init_code
-
     def test_logs_gui_state(self, init_code: str) -> None:
         """__init__.py should log GuiUp, QtCore, and QApp availability.
 

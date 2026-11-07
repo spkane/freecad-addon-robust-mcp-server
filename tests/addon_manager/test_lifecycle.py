@@ -180,6 +180,7 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
         "ADDON_TEST_REPO": fixture.as_uri(),
         "ADDON_TEST_METADATA": str(ROOT / "package.xml"),
         "ADDON_TEST_RESULT": str(result),
+        "ADDON_TEST_LEGACY_COMMANDS": "1",
     }
     (home / "temp").mkdir()
     if os.name == "nt":
@@ -312,6 +313,7 @@ def test_addon_manager_install_upgrade_disable_and_uninstall(
         "Update test candidate",
     )
     assert phase("upgrade")["installed"]
+    env["ADDON_TEST_LEGACY_COMMANDS"] = "0"
     assert _manifest_version(installed / "package.xml") == expected_version
     assert phase("verify")["present"]
     check_paired_bridge()
