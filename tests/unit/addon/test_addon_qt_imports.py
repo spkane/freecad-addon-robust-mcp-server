@@ -621,14 +621,16 @@ def test_standalone_startup_only_traces_unexpected_errors(
     package.__path__ = [str(STARTUP_BRIDGE_PATH.parent)]  # type: ignore[attr-defined]
     sys.modules[package_name] = package
     freecad = MagicMock()
-    freecad.GuiUp = False
+    freecad.GuiUp = True
     monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
     authentication = importlib.import_module(f"{package_name}.authentication")
     bridge = types.ModuleType("bridge_utils")
     bridge.get_running_plugin = lambda: None  # type: ignore[attr-defined]
     sys.modules[f"{package_name}.bridge_utils"] = bridge
     qt_compat = importlib.import_module(f"{package_name}.qt_compat")
-    monkeypatch.setattr(qt_compat, "load_qt_core_widgets", lambda: (None, None))
+    qtcore = MagicMock()
+    widgets = MagicMock()
+    monkeypatch.setattr(qt_compat, "load_qt_core_widgets", lambda: (qtcore, widgets))
     if missing_pairing:
         credential_store = importlib.import_module(f"{package_name}.credential_store")
         missing = MagicMock(side_effect=FileNotFoundError("not paired"))
@@ -645,8 +647,6 @@ def test_standalone_startup_only_traces_unexpected_errors(
         sys.modules[f"{package_name}.server"] = server
     namespace = runpy.run_path(str(STARTUP_BRIDGE_PATH), run_name="__main__")
     assert namespace["PairingRequiredError"] is authentication.PairingRequiredError
-    freecad.Console.PrintError.reset_mock()
-    namespace["_start_bridge"]()
     errors = "".join(call.args[0] for call in freecad.Console.PrintError.call_args_list)
     if missing_pairing:
         missing.assert_called_once_with()
