@@ -77,26 +77,28 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
         )
 
         # Register commands
-        FreeCADGui.addCommand("Start_MCP_Bridge", StartMCPBridgeCommand())
-        FreeCADGui.addCommand("Stop_MCP_Bridge", StopMCPBridgeCommand())
-        FreeCADGui.addCommand("MCP_Bridge_Status", MCPBridgeStatusCommand())
-        FreeCADGui.addCommand("MCP_Bridge_Preferences", MCPBridgePreferencesCommand())
+        FreeCADGui.addCommand("RobustMCPBridge_Start", StartMCPBridgeCommand())
+        FreeCADGui.addCommand("RobustMCPBridge_Stop", StopMCPBridgeCommand())
+        FreeCADGui.addCommand("RobustMCPBridge_Status", MCPBridgeStatusCommand())
+        FreeCADGui.addCommand(
+            "RobustMCPBridge_Preferences", MCPBridgePreferencesCommand()
+        )
 
         # Create toolbar with main commands
         toolbar_commands = [
-            "Start_MCP_Bridge",
-            "Stop_MCP_Bridge",
-            "MCP_Bridge_Status",
+            "RobustMCPBridge_Start",
+            "RobustMCPBridge_Stop",
+            "RobustMCPBridge_Status",
         ]
         self.appendToolbar("Robust MCP Bridge", toolbar_commands)
 
         # Create menu with all commands including preferences
         menu_commands = [
-            "Start_MCP_Bridge",
-            "Stop_MCP_Bridge",
-            "MCP_Bridge_Status",
+            "RobustMCPBridge_Start",
+            "RobustMCPBridge_Stop",
+            "RobustMCPBridge_Status",
             "Separator",
-            "MCP_Bridge_Preferences",
+            "RobustMCPBridge_Preferences",
         ]
         self.appendMenu("Robust MCP Bridge", menu_commands)
 
@@ -116,7 +118,7 @@ class FreecadRobustMCPBridgeWorkbench(FreeCADGui.Workbench):
                     FreeCAD.Console.PrintMessage(
                         "Auto-starting MCP Bridge (configured in preferences)...\n"
                     )
-                    FreeCADGui.runCommand("Start_MCP_Bridge")
+                    FreeCADGui.runCommand("RobustMCPBridge_Start")
         except Exception as e:
             FreeCAD.Console.PrintWarning(f"Could not auto-start MCP Bridge: {e}\n")
 
@@ -175,9 +177,6 @@ try:
 
     # Use QTimer.singleShot on the main thread - this should work
     QtCore.QTimer.singleShot(2000, _deferred_status_bar_sync)
-    FreeCAD.Console.PrintMessage(
-        "Robust MCP Bridge: Status bar sync scheduled from InitGui (2s)\n"
-    )
 
     # Auto-start the MCP bridge if configured in preferences
     # This runs at FreeCAD GUI startup (InitGui.py module-level code)
@@ -295,10 +294,6 @@ try:
         QtCore.QTimer.singleShot(3000, _auto_start_bridge)
         FreeCAD.Console.PrintMessage(
             "Robust MCP Bridge: Auto-start scheduled from InitGui (3s)\n"
-        )
-    else:
-        FreeCAD.Console.PrintMessage(
-            "Robust MCP Bridge: Auto-start disabled in preferences\n"
         )
 except Exception as e:
     FreeCAD.Console.PrintWarning(

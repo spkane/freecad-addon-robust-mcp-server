@@ -64,11 +64,40 @@ except ImportError:
     )
     sys.exit(1)
 
-# Import the plugin server directly from the module file in the same directory
-script_dir = str(Path(__file__).resolve().parent)
-sys.path.insert(0, script_dir)
-from bridge_utils import get_running_plugin, register_mcp_plugin  # noqa: E402
-from server import FreecadMCPPlugin  # noqa: E402
+# Direct execution has no package context. Load the bundled package under a
+# private name without adding its directory to FreeCAD's global import path.
+if not __package__:
+    import importlib.util
+
+    _package_name = "_robust_mcp_bridge_standalone"
+    _package_dir = Path(__file__).resolve().parent
+    _existing = sys.modules.get(_package_name)
+    if _existing is not None:
+        if not _existing.__file__ or Path(_existing.__file__).resolve() != (
+            _package_dir / "__init__.py"
+        ):
+            raise RuntimeError(
+                "A different Robust MCP Bridge standalone package is already loaded"
+            )
+    else:
+        _spec = importlib.util.spec_from_file_location(
+            _package_name,
+            _package_dir / "__init__.py",
+            submodule_search_locations=[str(_package_dir)],
+        )
+        if _spec is None or _spec.loader is None:
+            raise ImportError("Cannot load the Robust MCP Bridge package")
+        _package = importlib.util.module_from_spec(_spec)
+        sys.modules[_package_name] = _package
+        try:
+            _spec.loader.exec_module(_package)
+        except BaseException:
+            del sys.modules[_package_name]
+            raise
+    __package__ = _package_name
+
+from .bridge_utils import get_running_plugin, register_mcp_plugin
+from .server import FreecadMCPPlugin
 
 # Check if bridge is already running (from auto-start in Init.py)
 plugin = get_running_plugin()

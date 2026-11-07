@@ -29,17 +29,40 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-if __package__:
-    from .qt_compat import load_qt_core_widgets
-else:
-    from qt_compat import load_qt_core_widgets  # type: ignore[import-not-found, no-redef]
+# Direct execution has no package context. Load the bundled package under a
+# private name without adding its directory to FreeCAD's global import path.
+if not __package__:
+    import importlib.util
 
-# Add the script's directory to sys.path so we can import the server module
-script_dir = str(Path(__file__).resolve().parent)
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
+    _package_name = "_robust_mcp_bridge_standalone"
+    _package_dir = Path(__file__).resolve().parent
+    _existing = sys.modules.get(_package_name)
+    if _existing is not None:
+        if not _existing.__file__ or Path(_existing.__file__).resolve() != (
+            _package_dir / "__init__.py"
+        ):
+            raise RuntimeError(
+                "A different Robust MCP Bridge standalone package is already loaded"
+            )
+    else:
+        _spec = importlib.util.spec_from_file_location(
+            _package_name,
+            _package_dir / "__init__.py",
+            submodule_search_locations=[str(_package_dir)],
+        )
+        if _spec is None or _spec.loader is None:
+            raise ImportError("Cannot load the Robust MCP Bridge package")
+        _package = importlib.util.module_from_spec(_spec)
+        sys.modules[_package_name] = _package
+        try:
+            _spec.loader.exec_module(_package)
+        except BaseException:
+            del sys.modules[_package_name]
+            raise
+    __package__ = _package_name
 
-from authentication import PairingRequiredError  # noqa: E402
+from .authentication import PairingRequiredError
+from .qt_compat import load_qt_core_widgets
 
 # Check if we're running inside FreeCAD
 try:
@@ -94,7 +117,7 @@ def _start_bridge() -> None:
             _gui_waiter.start()
     """
     # Check if bridge is already running (from auto-start in Init.py)
-    from bridge_utils import get_running_plugin
+    from .bridge_utils import get_running_plugin
 
     if get_running_plugin() is not None:
         FreeCAD.Console.PrintMessage(
@@ -103,7 +126,7 @@ def _start_bridge() -> None:
         return
 
     try:
-        from server import FreecadMCPPlugin
+        from .server import FreecadMCPPlugin
 
         # Get configuration from environment variables (with defaults)
         try:
@@ -126,7 +149,7 @@ def _start_bridge() -> None:
 
         # Register plugin with commands module so Init.py auto-start can see it
         # This prevents both scripts from trying to start separate bridges
-        from bridge_utils import register_mcp_plugin
+        from .bridge_utils import register_mcp_plugin
 
         register_mcp_plugin(plugin, xmlrpc_port, socket_port)
 
@@ -231,7 +254,7 @@ try:
         FreeCAD.Console.PrintMessage(
             "Startup Bridge: GUI not ready, using GuiWaiter...\n"
         )
-        from bridge_utils import GuiWaiter
+        from .bridge_utils import GuiWaiter
 
         _gui_waiter = GuiWaiter(
             callback=_start_bridge,

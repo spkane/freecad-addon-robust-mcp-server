@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- Workbench command identifiers now use the `RobustMCPBridge_` prefix to avoid
+  collisions with other addons. Custom shortcuts using the old command names
+  must be configured again. Startup no longer logs routine messages when the
+  bridge is disabled.
+
 ## Version 0.7.1 (2026-11-06)
 
 ### Fixed
