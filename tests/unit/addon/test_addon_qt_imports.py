@@ -796,6 +796,12 @@ def test_workbench_registers_namespaced_commands(
     workbench.appendMenu = MagicMock()
     workbench.Initialize()
     registered = {call.args[0] for call in freecad_gui.addCommand.call_args_list}
+    assert dict(call.args for call in freecad_gui.addCommand.call_args_list) == {
+        "RobustMCPBridge_Start": commands.StartMCPBridgeCommand.return_value,
+        "RobustMCPBridge_Stop": commands.StopMCPBridgeCommand.return_value,
+        "RobustMCPBridge_Status": commands.MCPBridgeStatusCommand.return_value,
+        "RobustMCPBridge_Preferences": commands.MCPBridgePreferencesCommand.return_value,
+    }
     assert registered == {
         "RobustMCPBridge_Start",
         "RobustMCPBridge_Stop",
@@ -816,15 +822,33 @@ def test_workbench_registers_namespaced_commands(
     ]
 
 
+@pytest.fixture
+def standalone_package_isolation() -> Iterator[None]:
+    """Restore any preexisting private package and remove modules created by a test."""
+    package = "_robust_mcp_bridge_standalone"
+    saved = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == package or name.startswith(package + ".")
+    }
+    for name in saved:
+        sys.modules.pop(name, None)
+    try:
+        yield
+    finally:
+        for name in list(sys.modules):
+            if name == package or name.startswith(package + "."):
+                sys.modules.pop(name, None)
+        sys.modules.update(saved)
+
+
+@pytest.mark.usefixtures("standalone_package_isolation")
 @pytest.mark.parametrize("script", ["startup_bridge.py", "blocking_bridge.py"])
 def test_direct_scripts_do_not_claim_generic_module_names(
     monkeypatch: pytest.MonkeyPatch, script: str
 ) -> None:
     """Direct launch uses its private package without changing sys.path."""
     package = "_robust_mcp_bridge_standalone"
-    for name in list(sys.modules):
-        if name == package or name.startswith(package + "."):
-            monkeypatch.delitem(sys.modules, name)
     freecad = MagicMock()
     freecad.Version.return_value = ("1", "1")
     freecad.GuiUp = False
@@ -842,9 +866,9 @@ def test_direct_scripts_do_not_claim_generic_module_names(
     server.FreecadMCPPlugin = MagicMock()  # type: ignore[attr-defined]
     qt = types.ModuleType("qt_compat")
     qt.load_qt_core_widgets = lambda: (None, None)  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, f"{package}.bridge_utils", bridge)
-    monkeypatch.setitem(sys.modules, f"{package}.server", server)
-    monkeypatch.setitem(sys.modules, f"{package}.qt_compat", qt)
+    sys.modules[f"{package}.bridge_utils"] = bridge
+    sys.modules[f"{package}.server"] = server
+    sys.modules[f"{package}.qt_compat"] = qt
     sentinel = object()
     for name in ("server", "bridge_utils", "qt_compat", "authentication"):
         monkeypatch.setitem(sys.modules, name, sentinel)
@@ -857,12 +881,11 @@ def test_direct_scripts_do_not_claim_generic_module_names(
     )
     if script == "blocking_bridge.py":
         plugin.run_forever.assert_called_once()
-    monkeypatch.delitem(sys.modules, package, raising=False)
 
 
 @pytest.mark.parametrize("script", ["startup_bridge.py", "blocking_bridge.py"])
 @pytest.mark.parametrize(
-    "failure", ["conflict", "missing_spec", "missing_loader", "execute"]
+    "failure", ["conflict", "missing_file", "missing_spec", "missing_loader", "execute"]
 )
 def test_direct_script_loader_failure_is_reported_and_cleans_up(
     monkeypatch: pytest.MonkeyPatch, script: str, failure: str
@@ -876,9 +899,10 @@ def test_direct_script_loader_failure_is_reported_and_cleans_up(
     freecad.Version.return_value = ("1", "1")
     monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
     expected: type[Exception]
-    if failure == "conflict":
+    if failure in ("conflict", "missing_file"):
         conflict = types.ModuleType(package_name)
-        conflict.__file__ = "/different/addon/__init__.py"
+        if failure == "conflict":
+            conflict.__file__ = "/different/addon/__init__.py"
         monkeypatch.setitem(sys.modules, package_name, conflict)
         expected = RuntimeError
     elif failure == "missing_spec":
@@ -913,7 +937,7 @@ def test_direct_script_loader_failure_is_reported_and_cleans_up(
         runpy.run_path(
             str(ADDON_DIR / "freecad_mcp_bridge" / script), run_name="__main__"
         )
-    if failure != "conflict":
+    if failure not in ("conflict", "missing_file"):
         assert package_name not in sys.modules
 
 
@@ -934,7 +958,7 @@ def test_workbench_initialization_logs_only_enabled_auto_start(
     qt.load_qt_core_widgets = lambda: (qtcore, widgets)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, qt.__name__, qt)
     monkeypatch.delenv("FREECAD_MCP_TESTING", raising=False)
-    monkeypatch.setattr("atexit.register", lambda _callback: None)
+    monkeypatch.setattr("atexit.register", lambda *_args, **_kwargs: None)
     runpy.run_path(str(ADDON_INIT_PATH), run_name="freecad.RobustMCPBridge.__init__")
     messages = "".join(
         call.args[0] for call in freecad.Console.PrintMessage.call_args_list

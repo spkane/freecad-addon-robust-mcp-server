@@ -38,7 +38,8 @@ if not __package__:
     _package_dir = Path(__file__).resolve().parent
     _existing = sys.modules.get(_package_name)
     if _existing is not None:
-        if not _existing.__file__ or Path(_existing.__file__).resolve() != (
+        _existing_file = getattr(_existing, "__file__", None)
+        if not _existing_file or Path(_existing_file).resolve() != (
             _package_dir / "__init__.py"
         ):
             raise RuntimeError(
