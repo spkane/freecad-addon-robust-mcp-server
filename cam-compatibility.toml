@@ -10,6 +10,7 @@ compatible_workbenches = [
   { tag = "robust-mcp-workbench-v0.7.0-rc.4", asset = "freecad-mcp-workbench-0.7.0-rc.4.zip", sha256 = "752508bce1a433234ecba524e3e83aab5c5aa8064b5c209230bfb806e9f101c4" },  # pragma: allowlist secret
   { tag = "robust-mcp-workbench-v0.7.0-rc.5", asset = "freecad-mcp-workbench-0.7.0-rc.5.zip", sha256 = "e3c009fcb04182b903a04d6c4e760a713d146eb51f896cdca5d3929d7e31252a" },  # pragma: allowlist secret
   { tag = "robust-mcp-workbench-v0.7.1", asset = "freecad-mcp-workbench-0.7.1.zip", sha256 = "084bb3c427378affcc73d2098ba5fc5323e87a20f1a501f684aa5aa2fae1452d" },  # pragma: allowlist secret
+  { tag = "robust-mcp-workbench-v0.7.2", asset = "freecad-mcp-workbench-0.7.2.zip", sha256 = "0bb04fed2e1d72302d8a207beb4b2e33535595ae1f193b1d2348720ebb454b71" },  # pragma: allowlist secret
 ]
 retired_servers = []
 retired_workbenches = []
