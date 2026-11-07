@@ -13,20 +13,15 @@ must run on the main thread.
 
 from __future__ import annotations
 
-# Import FreeCAD first so we can log early
+from typing import TYPE_CHECKING, Any
+
 import FreeCAD
-
-FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init.py loaded\n")
-
-from typing import TYPE_CHECKING, Any  # noqa: E402
 
 if TYPE_CHECKING:
     from .freecad_mcp_bridge.bridge_utils import GuiWaiter
 
-from .freecad_mcp_bridge.authentication import PairingRequiredError  # noqa: E402
-from .freecad_mcp_bridge.qt_compat import load_qt_core_widgets  # noqa: E402
-
-FreeCAD.Console.PrintMessage("Robust MCP Bridge: Init loaded\n")
+from .freecad_mcp_bridge.authentication import PairingRequiredError
+from .freecad_mcp_bridge.qt_compat import load_qt_core_widgets
 
 # Global reference to GuiWaiter and auto-start timer to prevent garbage collection
 # Type annotations use Any for timer since it could be QTimer from PySide6 or PySide2
@@ -158,11 +153,8 @@ try:
         )
     else:
         _autoStartEnabled = get_auto_start() or get_auto_start_headless()
-    FreeCAD.Console.PrintMessage(
-        f"Robust MCP Bridge: Auto-start preference = {_autoStartEnabled}\n"
-    )
-
     if _autoStartEnabled:
+        FreeCAD.Console.PrintMessage("Robust MCP Bridge: Auto-start enabled\n")
         # Try to import Qt and check for running QApplication
         import contextlib
 
