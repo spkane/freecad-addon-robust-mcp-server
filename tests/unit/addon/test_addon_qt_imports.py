@@ -933,11 +933,17 @@ def test_direct_script_loader_failure_is_reported_and_cleans_up(
             importlib.util, "spec_from_file_location", lambda *_args, **_kwargs: spec
         )
         expected = RuntimeError
-    with pytest.raises(expected):
+    with pytest.raises(expected) as error:
         runpy.run_path(
             str(ADDON_DIR / "freecad_mcp_bridge" / script), run_name="__main__"
         )
-    if failure not in ("conflict", "missing_file"):
+    if failure in ("conflict", "missing_file"):
+        assert (
+            "A different Robust MCP Bridge standalone package is already loaded"
+            in str(error.value)
+        )
+        assert sys.modules[package_name] is conflict
+    else:
         assert package_name not in sys.modules
 
 
