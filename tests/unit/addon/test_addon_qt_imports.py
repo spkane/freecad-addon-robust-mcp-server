@@ -609,29 +609,24 @@ class TestInitGuiQtFallback:
         assert any("Neither PySide6 nor PySide2" in msg for msg in warnings)
 
 
+@pytest.mark.usefixtures("standalone_package_isolation")
 @pytest.mark.parametrize("missing_pairing", [True, False])
 def test_standalone_startup_only_traces_unexpected_errors(
     monkeypatch: pytest.MonkeyPatch, missing_pairing: bool
 ) -> None:
     """Standalone startup keeps expected pairing errors readable."""
-    monkeypatch.syspath_prepend(str(ADDON_DIR))
-    package_name = "freecad_mcp_bridge"
-    for module_name in (
-        "freecad_mcp_bridge.authentication",
-        "freecad_mcp_bridge.challenges",
-        "freecad_mcp_bridge.credential_store",
-        "freecad_mcp_bridge.server",
-        "freecad_mcp_bridge.qt_compat",
-    ):
-        monkeypatch.setitem(sys.modules, module_name, None)
-        monkeypatch.delitem(sys.modules, module_name)
-    authentication = importlib.import_module(f"{package_name}.authentication")
-    bridge = types.ModuleType("bridge_utils")
-    bridge.get_running_plugin = lambda: None  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, f"{package_name}.bridge_utils", bridge)
+    package_name = "_robust_mcp_bridge_standalone"
+    package = types.ModuleType(package_name)
+    package.__file__ = str(STARTUP_BRIDGE_PATH.parent / "__init__.py")
+    package.__path__ = [str(STARTUP_BRIDGE_PATH.parent)]  # type: ignore[attr-defined]
+    sys.modules[package_name] = package
     freecad = MagicMock()
     freecad.GuiUp = False
     monkeypatch.setitem(sys.modules, "FreeCAD", freecad)
+    authentication = importlib.import_module(f"{package_name}.authentication")
+    bridge = types.ModuleType("bridge_utils")
+    bridge.get_running_plugin = lambda: None  # type: ignore[attr-defined]
+    sys.modules[f"{package_name}.bridge_utils"] = bridge
     qt_compat = importlib.import_module(f"{package_name}.qt_compat")
     monkeypatch.setattr(qt_compat, "load_qt_core_widgets", lambda: (None, None))
     if missing_pairing:
@@ -647,10 +642,8 @@ def test_standalone_startup_only_traces_unexpected_errors(
         plugin = MagicMock()
         plugin.start.side_effect = RuntimeError("unexpected")
         server.FreecadMCPPlugin = MagicMock(return_value=plugin)  # type: ignore[attr-defined]
-        monkeypatch.setitem(sys.modules, f"{package_name}.server", server)
-    namespace = runpy.run_path(
-        str(STARTUP_BRIDGE_PATH), run_name="freecad_mcp_bridge.startup_bridge"
-    )
+        sys.modules[f"{package_name}.server"] = server
+    namespace = runpy.run_path(str(STARTUP_BRIDGE_PATH), run_name="__main__")
     assert namespace["PairingRequiredError"] is authentication.PairingRequiredError
     freecad.Console.PrintError.reset_mock()
     namespace["_start_bridge"]()
