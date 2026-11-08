@@ -392,8 +392,11 @@ The Robust MCP Server provides **150+ tools** organized into categories. Tools m
 | `execute_python`             | Execute arbitrary Python code in FreeCAD's context            | All  |
 | `get_freecad_version`        | Get FreeCAD version, build date, and Python version           | All  |
 | `get_connection_status`      | Check MCP bridge connection status and latency                | All  |
-| `get_console_output`         | Get recent FreeCAD console output (up to N lines)             | All  |
+| `get_console_output`         | Get recent Report view or available console history           | All* |
 | `get_mcp_server_environment` | Get Robust MCP Server environment (OS, hostname, instance_id) | All  |
+
+*Console history depends on FreeCAD session capabilities and is unavailable in
+embedded mode; an unavailable source returns an error.*
 
 #### Document Management (7 tools)
 

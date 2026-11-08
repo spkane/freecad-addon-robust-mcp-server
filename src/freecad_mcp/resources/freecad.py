@@ -276,9 +276,13 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
             JSON string containing:
                 - lines: List of console output lines
                 - count: Number of lines
+                - error: Description when console history is unavailable
         """
         bridge = await get_bridge()
-        lines = await bridge.get_console_output(lines=100)
+        try:
+            lines = await bridge.get_console_output(lines=100)
+        except RuntimeError as exc:
+            return json.dumps({"error": str(exc)}, indent=2)
         return json.dumps(
             {
                 "lines": lines,
@@ -458,7 +462,7 @@ Check for this pattern and handle gracefully.""",
                     "problem": "Sketches with free degrees of freedom",
                     "symptom": "Geometry moves unexpectedly on recompute",
                     "solution": """Add constraints or use the construction mode.
-Check with: sketch.solve() returns DoF count (0 = fully constrained)""",
+Check with: sketch.DoF gives the DoF count (0 = fully constrained).""",
                 },
                 "invalid_booleans": {
                     "problem": "Boolean operations on non-overlapping shapes",

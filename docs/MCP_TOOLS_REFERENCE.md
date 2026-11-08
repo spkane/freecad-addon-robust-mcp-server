@@ -85,6 +85,11 @@ Get recent FreeCAD console output.
 get_console_output(lines: int = 100) -> list[str]
 ```
 
+`lines` must be between 1 and 1000. In GUI mode, the result contains recent
+Report view text. In headless mode, FreeCAD must expose console history; if
+history is unavailable, the tool reports an error instead of returning an
+ambiguous empty list. Embedded mode does not provide console history.
+
 ### get_mcp_server_environment
 
 Get environment information about the Robust MCP Server process. Useful for identifying the Robust MCP Server instance via the unique `instance_id`.
@@ -1058,6 +1063,9 @@ Get FreeCAD console output.
 ```python
 get_console_log(lines: int = 50) -> dict
 ```
+
+Uses the same history source and line limits as `get_console_output`, and
+classifies returned lines by message text.
 
 #### recompute
 

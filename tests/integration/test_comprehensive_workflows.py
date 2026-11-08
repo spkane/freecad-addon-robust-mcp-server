@@ -1345,7 +1345,7 @@ doc.recompute()
 
 results["constraints_added"] = constraints_added
 results["constraint_count"] = sketch.ConstraintCount
-results["dof"] = sketch.solve()  # Returns degrees of freedom, 0 = fully constrained
+results["dof"] = sketch.DoF  # Degrees of freedom, 0 = fully constrained
 
 # Center viewport
 if FreeCAD.GuiUp:
