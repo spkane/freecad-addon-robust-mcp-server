@@ -41,6 +41,10 @@ from freecad_mcp.bridge.base import (
     WorkbenchInfo,
     resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.console import (
+    build_console_output_code,
+    console_output_from_result,
+)
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 
@@ -1137,23 +1141,6 @@ _result_ = {
     # =========================================================================
 
     async def get_console_output(self, lines: int = 100) -> list[str]:
-        """Get recent console output."""
-        code = f"""
-# Try to get console output from FreeCAD
-output_lines = []
-
-# Try FreeCAD.Console if available
-if hasattr(FreeCAD, 'Console'):
-    console = FreeCAD.Console
-    if hasattr(console, 'GetLog'):
-        log = console.GetLog()
-        if log:
-            output_lines = log.split('\\n')[-{lines}:]
-
-_result_ = output_lines
-"""
-        result = await self.execute_python(code)
-
-        if result.success and result.result:
-            return result.result
-        return []
+        """Get recent Report view output or report that capture is unavailable."""
+        result = await self.execute_python(build_console_output_code(lines))
+        return console_output_from_result(result)

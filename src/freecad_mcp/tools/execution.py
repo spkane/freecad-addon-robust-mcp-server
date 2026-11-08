@@ -130,10 +130,14 @@ def register_execution_tools(
         """Get recent FreeCAD console output.
 
         Args:
-            lines: Maximum number of lines to return. Defaults to 100.
+            lines: Maximum number of lines to return (1-1000). Defaults to 100.
 
         Returns:
             List of console output lines, most recent last.
+
+        Raises:
+            ValueError: The line limit is outside the supported range.
+            RuntimeError: Console history is unavailable in this FreeCAD session.
         """
         bridge = await get_bridge()
         return await bridge.get_console_output(lines)

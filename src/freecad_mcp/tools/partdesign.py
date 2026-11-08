@@ -3016,7 +3016,9 @@ except Exception:
                 - constraint_count: Number of constraints
                 - external_geometry_count: Number of external geometry references
                 - fully_constrained: Whether sketch is fully constrained
-                - dof: Degrees of freedom remaining
+                - dof: Degrees of freedom remaining, or None if unavailable; may be
+                  stale if the sketch has not been recomputed
+                - state: FreeCAD object state flags, including any error state
         """
         bridge = await get_bridge()
 
@@ -3036,7 +3038,8 @@ _result_ = {{
     "constraint_count": sketch.ConstraintCount,
     "external_geometry_count": external_geometry_count,
     "fully_constrained": sketch.FullyConstrained if hasattr(sketch, "FullyConstrained") else None,
-    "dof": sketch.solve() if hasattr(sketch, "solve") else None,
+    "dof": getattr(sketch, "DoF", None),
+    "state": list(sketch.State) if hasattr(sketch, "State") else None,
 }}
 """
         result = await bridge.execute_python(code)

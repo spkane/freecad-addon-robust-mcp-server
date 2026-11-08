@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- Report actual sketch degrees of freedom without calling the solver. Thanks to
+  [thopman](https://github.com/thopman/freecad-addon-robust-mcp-server/commit/23c03808d22b6c8357f988bdb45ac2a930870a6f)
+  for identifying the issue.
+- Read FreeCAD's Report view for console diagnostics in GUI sessions. Return an
+  error when console history is unavailable instead of an ambiguous empty list;
+  console queries accept between 1 and 1000 lines.
+
 ## Version 0.7.0 (2026-11-06)
 
 This release updates both the MCP server and the Robust MCP Bridge. Install

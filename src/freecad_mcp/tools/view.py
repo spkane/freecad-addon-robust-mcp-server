@@ -737,13 +737,17 @@ except Exception:
         """Get recent console output from FreeCAD.
 
         Args:
-            lines: Maximum number of lines to return. Defaults to 50.
+            lines: Maximum number of lines to return (1-1000). Defaults to 50.
 
         Returns:
             Dictionary with:
                 - messages: List of console messages
                 - warnings: List of warning messages
                 - errors: List of error messages
+
+        Raises:
+            ValueError: The line limit is outside the supported range.
+            RuntimeError: Console history is unavailable in this FreeCAD session.
         """
         bridge = await get_bridge()
         console_lines = await bridge.get_console_output(lines)

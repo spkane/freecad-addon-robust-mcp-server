@@ -945,7 +945,7 @@ _result_ = {
 execute_python('''
 sketch = FreeCAD.ActiveDocument.getObject("SketchName")
 _result_ = {
-    "dof": sketch.solve(),  # Degrees of freedom
+    "dof": getattr(sketch, "DoF", None),  # Degrees of freedom
     "constraint_count": sketch.ConstraintCount,
     "geometry_count": sketch.GeometryCount
 }
