@@ -34,7 +34,10 @@ from freecad_mcp.bridge.base import (
     WorkbenchInfo,
     resolve_execution_timeout_ms,
 )
-from freecad_mcp.bridge.console import validate_console_lines
+from freecad_mcp.bridge.console import (
+    ConsoleHistoryUnavailableError,
+    validate_console_lines,
+)
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 
@@ -360,7 +363,9 @@ else:
             RuntimeError: Embedded mode does not provide console history.
         """
         validate_console_lines(lines)
-        raise RuntimeError("FreeCAD console history is unavailable in embedded mode")
+        raise ConsoleHistoryUnavailableError(
+            "FreeCAD console history is unavailable in embedded mode"
+        )
 
     async def get_freecad_version(self) -> dict[str, Any]:
         """Get FreeCAD version information."""

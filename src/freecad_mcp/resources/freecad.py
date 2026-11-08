@@ -22,6 +22,8 @@ Resource URIs:
 import json
 from typing import Any
 
+from freecad_mcp.bridge.console import ConsoleHistoryUnavailableError
+
 
 def register_resources(mcp: Any, get_bridge: Any) -> None:
     """Register FreeCAD resources with the Robust MCP Server.
@@ -281,7 +283,7 @@ def register_resources(mcp: Any, get_bridge: Any) -> None:
         bridge = await get_bridge()
         try:
             lines = await bridge.get_console_output(lines=100)
-        except RuntimeError as exc:
+        except ConsoleHistoryUnavailableError as exc:
             return json.dumps({"error": str(exc)}, indent=2)
         return json.dumps(
             {

@@ -76,6 +76,35 @@ def test_missing_gui_window_falls_back_to_getlog(monkeypatch):
     assert namespace["_result_"] == ["available history"]
 
 
+@pytest.mark.parametrize("where", ["window", "widget"])
+def test_gui_lookup_failure_falls_back_to_getlog(monkeypatch, where):
+    """Qt object lifetime failures do not prevent native history lookup."""
+
+    def fail(*_args):
+        raise RuntimeError("Qt object was deleted")
+
+    gui = ModuleType("FreeCADGui")
+    monkeypatch.setattr(
+        gui,
+        "getMainWindow",
+        fail if where == "window" else lambda: SimpleNamespace(findChild=fail),
+        raising=False,
+    )
+    pyside = ModuleType("PySide")
+    monkeypatch.setattr(
+        pyside, "QtWidgets", SimpleNamespace(QTextEdit=object), raising=False
+    )
+    monkeypatch.setitem(sys.modules, "FreeCADGui", gui)
+    monkeypatch.setitem(sys.modules, "PySide", pyside)
+    namespace = {
+        "FreeCAD": SimpleNamespace(
+            GuiUp=True, Console=SimpleNamespace(GetLog=lambda: "history")
+        )
+    }
+    exec(build_console_output_code(10), namespace)  # noqa: S102
+    assert namespace["_result_"] == ["history"]
+
+
 def test_unavailable_qt_wrapper_falls_back_to_getlog(monkeypatch):
     """An unavailable Qt wrapper does not hide available console history."""
     gui = ModuleType("FreeCADGui")
@@ -103,8 +132,8 @@ def test_headless_console_history_falls_back_to_getlog():
 def test_unavailable_history_is_not_reported_as_empty():
     """No accessible console history is distinguishable from an empty report."""
     namespace = {"FreeCAD": SimpleNamespace(GuiUp=False, Console=SimpleNamespace())}
-    with pytest.raises(RuntimeError, match="unavailable"):
-        exec(build_console_output_code(10), namespace)  # noqa: S102
+    exec(build_console_output_code(10), namespace)  # noqa: S102
+    assert namespace["_result_"] is None
 
 
 @pytest.mark.parametrize("lines", [0, -1, 1001, True])
@@ -132,9 +161,7 @@ async def test_console_bridge_distinguishes_empty_and_failed_capture(bridge_type
     bridge.execute_python = AsyncMock(return_value=ExecutionResult(True, [], "", "", 0))
     assert await bridge.get_console_output() == []
 
-    bridge.execute_python.return_value = ExecutionResult(
-        False, None, "", "unavailable", 0
-    )
+    bridge.execute_python.return_value = ExecutionResult(True, None, "", "", 0)
     with pytest.raises(RuntimeError, match="unavailable"):
         await bridge.get_console_output()
 

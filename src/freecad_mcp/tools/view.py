@@ -746,6 +746,7 @@ except Exception:
                 - errors: List of error messages
 
         Raises:
+            ValueError: The line limit is outside the supported range.
             RuntimeError: Console history is unavailable in this FreeCAD session.
         """
         bridge = await get_bridge()

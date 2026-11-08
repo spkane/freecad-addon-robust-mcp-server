@@ -15,6 +15,7 @@ from freecad_mcp.bridge.base import (
     ObjectInfo,
     WorkbenchInfo,
 )
+from freecad_mcp.bridge.console import ConsoleHistoryUnavailableError
 
 
 class TestFreecadResources:
@@ -424,7 +425,7 @@ class TestFreecadResources:
     ) -> None:
         """Unavailable history is reported distinctly from an empty console."""
         mock_bridge.get_console_output = AsyncMock(
-            side_effect=RuntimeError("Console history is unavailable")
+            side_effect=ConsoleHistoryUnavailableError("Console history is unavailable")
         )
         result = await register_resources["freecad://console"]()
         assert json.loads(result) == {"error": "Console history is unavailable"}

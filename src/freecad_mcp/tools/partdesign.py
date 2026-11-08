@@ -3039,7 +3039,7 @@ _result_ = {{
     "external_geometry_count": external_geometry_count,
     "fully_constrained": sketch.FullyConstrained if hasattr(sketch, "FullyConstrained") else None,
     "dof": getattr(sketch, "DoF", None),
-    "state": list(getattr(sketch, "State", [])),
+    "state": list(sketch.State) if hasattr(sketch, "State") else None,
 }}
 """
         result = await bridge.execute_python(code)
