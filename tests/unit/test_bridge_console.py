@@ -147,6 +147,11 @@ async def test_console_bridge_distinguishes_empty_and_failed_capture(bridge_type
         ("TimeoutError", TimeoutError),
         ("RequestNotSentError", TimeoutError),
         ("ConnectionError", ConnectionError),
+        ("ConnectionRefusedError", ConnectionError),
+        ("ConnectionResetError", ConnectionError),
+        ("ConnectionAbortedError", ConnectionError),
+        ("BrokenPipeError", ConnectionError),
+        ("RemoteDisconnected", ConnectionError),
     ],
 )
 async def test_console_bridge_preserves_transport_failures(

@@ -18,7 +18,14 @@ def console_output_from_result(result: ExecutionResult) -> list[str]:
     )
     if result.error_type in {"TimeoutError", "RequestNotSentError"}:
         raise TimeoutError(message)
-    if result.error_type == "ConnectionError":
+    if result.error_type in {
+        "ConnectionError",
+        "ConnectionRefusedError",
+        "ConnectionResetError",
+        "ConnectionAbortedError",
+        "BrokenPipeError",
+        "RemoteDisconnected",
+    }:
         raise ConnectionError(message)
     raise RuntimeError(message)
 
