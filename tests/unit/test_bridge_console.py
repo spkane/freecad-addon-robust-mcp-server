@@ -7,7 +7,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from freecad_mcp.bridge.base import ExecutionResult
-from freecad_mcp.bridge.console import build_console_output_code
+from freecad_mcp.bridge.console import (
+    ConsoleHistoryUnavailableError,
+    build_console_output_code,
+)
 from freecad_mcp.bridge.embedded import EmbeddedBridge
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
@@ -149,7 +152,7 @@ async def test_embedded_console_checks_limits_before_unavailable_error():
     bridge = EmbeddedBridge()
     with pytest.raises(ValueError, match="lines"):
         await bridge.get_console_output(0)
-    with pytest.raises(RuntimeError, match="unavailable"):
+    with pytest.raises(ConsoleHistoryUnavailableError, match="unavailable"):
         await bridge.get_console_output(1)
 
 
@@ -162,7 +165,7 @@ async def test_console_bridge_distinguishes_empty_and_failed_capture(bridge_type
     assert await bridge.get_console_output() == []
 
     bridge.execute_python.return_value = ExecutionResult(True, None, "", "", 0)
-    with pytest.raises(RuntimeError, match="unavailable"):
+    with pytest.raises(ConsoleHistoryUnavailableError, match="unavailable"):
         await bridge.get_console_output()
 
 
