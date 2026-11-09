@@ -13,6 +13,12 @@ from typing import Any
 from freecad_mcp.tools._registration import file_tool, unsafe_tool
 
 
+def _validate_macro_name(name: str) -> None:
+    """Reject path-like names before any bridge operation is dispatched."""
+    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0"):
+        raise ValueError("Macro name must be a single file name, not a path")
+
+
 def register_macro_tools(
     mcp: Any,
     get_bridge: Callable[[], Awaitable[Any]],
@@ -74,6 +80,7 @@ def register_macro_tools(
                 - error_type: Error type if failed
                 - error_traceback: Full traceback if failed
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
         result = await bridge.run_macro(macro_name, args)
         return {
@@ -107,6 +114,7 @@ def register_macro_tools(
                 - path: Full path to created macro file
                 - description: Macro description
         """
+        _validate_macro_name(name)
         bridge = await get_bridge()
         macro = await bridge.create_macro(name, code, description)
         return {
@@ -128,6 +136,7 @@ def register_macro_tools(
                 - code: Full macro code
                 - path: Path to macro file
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
 
         code = f"""
@@ -179,6 +188,7 @@ _result_ = {{
                 - success: Whether deletion was successful
                 - path: Path of deleted macro
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
 
         code = f"""
@@ -229,6 +239,7 @@ _result_ = {{
                 - path: Full path to created macro file
                 - template: Template used
         """
+        _validate_macro_name(name)
         templates = {
             "basic": """
 # Your macro code goes here
