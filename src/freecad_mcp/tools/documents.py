@@ -7,6 +7,8 @@ creating, opening, saving, closing, and listing documents.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools._registration import file_tool
+
 
 def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register document-related tools with the Robust MCP Server.
@@ -94,7 +96,7 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             "path": doc.path,
         }
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def open_document(path: str) -> dict[str, Any]:
         """Open an existing FreeCAD document from file.
 
@@ -121,7 +123,7 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             "objects": doc.objects,
         }
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def save_document(
         doc_name: str | None = None,
         path: str | None = None,

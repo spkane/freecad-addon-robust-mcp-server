@@ -368,7 +368,9 @@ def test_gui_status_warns_that_bridge_accepts_python(
     plugin._listener_states = {"xmlrpc": "running", "socket": "running"}
     plugin._set_status_bar = MagicMock()
     plugin._update_status_bar()
-    assert "Python execution enabled" in plugin._set_status_bar.call_args.args[0]
+    assert (
+        "client code has your permissions" in plugin._set_status_bar.call_args.args[0]
+    )
     status_module.update_status_running.assert_called_once_with(
         9875, 9876, 0, xmlrpc_running=True, socket_running=True, errors=""
     )
@@ -431,8 +433,10 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     widget = module.MCPStatusWidget()
     widget._widget = MagicMock()
     widget.set_running(9875, 9876, 1)
-    assert "Python execution enabled" in widget._widget.setText.call_args.args[0]
+    assert "Python: full user permissions" in widget._widget.setText.call_args.args[0]
     assert "authorized clients" in widget._widget.setToolTip.call_args.args[0]
+    assert "full permissions" in widget._widget.setToolTip.call_args.args[0]
+    assert "files and network" in widget._widget.setToolTip.call_args.args[0]
     widget.set_running(
         9875,
         9876,

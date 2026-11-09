@@ -183,6 +183,37 @@ async def test_stdio_first_tool_call_completes(unsafe: bool) -> None:
         assert initialize_result.server_info.version
         assert any(tool.name == "get_freecad_version" for tool in tools_result.tools)
         names = {tool.name for tool in tools_result.tools}
+        file_tools = {
+            "open_document",
+            "save_document",
+            "export_step",
+            "export_stl",
+            "export_3mf",
+            "export_obj",
+            "export_iges",
+            "import_step",
+            "import_stl",
+            "spreadsheet_import_csv",
+            "spreadsheet_export_csv",
+            "insert_part_from_library",
+            "draft_shapestring",
+            "draft_text_on_surface",
+            "cam_post_process",
+            "cam_export_job_template",
+            "cam_check_job",
+            "cam_simulate",
+            "cam_import_tool_library",
+            "cam_export_tool_library",
+            "read_macro",
+            "delete_macro",
+        }
+        assert file_tools <= names
+        for name in file_tools:
+            tool = next(t for t in tools_result.tools if t.name == name)
+            assert tool.annotations is not None
+            assert tool.annotations.open_world_hint is True
+            assert tool.annotations.read_only_hint is (name == "read_macro")
+            assert tool.annotations.destructive_hint is (name != "read_macro")
         assert {
             "execute_python",
             "safe_execute",
@@ -200,6 +231,25 @@ async def test_stdio_first_tool_call_completes(unsafe: bool) -> None:
                     "create_macro_from_template",
                 }
             )
+        else:
+            unsafe_tools = {
+                "execute_python",
+                "safe_execute",
+                "run_macro",
+                "create_macro",
+                "create_macro_from_template",
+            }
+            for tool in tools_result.tools:
+                if tool.name in unsafe_tools:
+                    assert tool.annotations is not None
+                    assert tool.annotations.read_only_hint is False
+                    assert tool.annotations.destructive_hint is True
+                    assert tool.annotations.idempotent_hint is False
+                    assert tool.annotations.open_world_hint is True
+            execute = next(t for t in tools_result.tools if t.name == "execute_python")
+            assert "code" in execute.input_schema["properties"]
+            assert execute.description is not None
+            assert "full permissions" in execute.description
         assert call_result.is_error is False
 
 

@@ -7,6 +7,8 @@ parametric design through cell values that can drive model dimensions.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools._registration import file_tool
+
 
 def register_spreadsheet_tools(
     mcp: Any, get_bridge: Callable[[], Awaitable[Any]]
@@ -689,7 +691,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "Failed to get cell range")
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def spreadsheet_import_csv(
         spreadsheet_name: str,
         file_path: str,
@@ -804,7 +806,7 @@ except Exception:
             return result.result
         raise ValueError(result.error_traceback or "Failed to import CSV")
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def spreadsheet_export_csv(
         spreadsheet_name: str,
         file_path: str,

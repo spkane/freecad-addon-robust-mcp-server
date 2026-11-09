@@ -10,7 +10,7 @@ macro-centric workflow with templates and validation.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from freecad_mcp.tools._registration import unsafe_tool
+from freecad_mcp.tools._registration import file_tool, unsafe_tool
 
 
 def register_macro_tools(
@@ -56,6 +56,9 @@ def register_macro_tools(
         args: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Run a FreeCAD macro by name.
+
+        The file's contents do not appear in this tool call. Macro code runs
+        with the FreeCAD user's full permissions; review the file first.
 
         Args:
             macro_name: Name of the macro to run (without .FCMacro extension).
@@ -112,7 +115,7 @@ def register_macro_tools(
             "description": macro.description,
         }
 
-    @mcp.tool()
+    @file_tool(mcp, read_only=True)
     async def read_macro(macro_name: str) -> dict[str, Any]:
         """Read the contents of a FreeCAD macro.
 
@@ -162,7 +165,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "Read macro failed")
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def delete_macro(macro_name: str) -> dict[str, Any]:
         """Delete a user macro.
 

@@ -144,9 +144,9 @@ class TestCamTools:
         registered: RegisteredTools = {}
         mcp = MagicMock()
 
-        def tool_decorator() -> Callable[
-            [Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]
-        ]:
+        def tool_decorator(
+            **_kwargs: Any,
+        ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
             def wrapper(
                 func: Callable[..., Awaitable[Any]],
             ) -> Callable[..., Awaitable[Any]]:

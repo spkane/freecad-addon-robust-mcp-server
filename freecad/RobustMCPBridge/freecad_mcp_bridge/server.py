@@ -1038,11 +1038,11 @@ class FreecadMCPPlugin:
                     time_ago = f"{int(elapsed)}s ago"
                 else:
                     time_ago = f"{int(elapsed / 60)}m ago"
-                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests | last: {time_ago}"
+                status = f"🔌 MCP Bridge: client code has your permissions{ports} | {self._request_count} requests | last: {time_ago}"
             else:
-                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests"
+                status = f"🔌 MCP Bridge: client code has your permissions{ports} | {self._request_count} requests"
         else:
-            status = f"🔌 MCP Bridge: Python execution enabled{ports} | waiting for connections..."
+            status = f"🔌 MCP Bridge: client code has your permissions{ports} | waiting for connections..."
 
         if errors:
             status += " | Listener error: " + " ".join(errors.values())

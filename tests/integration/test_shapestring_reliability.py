@@ -23,7 +23,7 @@ def _tools(bridge: XmlRpcBridge) -> dict[str, Callable[..., Awaitable[Any]]]:
         def __init__(self) -> None:
             self.tools: dict[str, Callable[..., Awaitable[Any]]] = {}
 
-        def tool(self) -> Callable[..., Any]:
+        def tool(self, **_kwargs: Any) -> Callable[..., Any]:
             def register(
                 func: Callable[..., Awaitable[Any]],
             ) -> Callable[..., Awaitable[Any]]:

@@ -193,9 +193,9 @@ class MCPStatusWidget:
         state = (
             "listener error"
             if errors and not (xmlrpc_running or socket_running)
-            else "Python execution enabled, partial"
+            else "Client Python: full user permissions (partial)"
             if errors
-            else "Python execution enabled"
+            else "Client Python: full user permissions"
         )
         self._widget.setText(f"MCP: {state} ({xmlrpc_port}/{socket_port})")
         self._widget.setStyleSheet(
@@ -208,7 +208,9 @@ class MCPStatusWidget:
             "}"
         )
         self._widget.setToolTip(
-            f"MCP Bridge {__version__} is running and accepts Python from authorized clients\n"
+            f"MCP Bridge {__version__} accepts Python from authorized clients.\n"
+            "Their code runs with your full permissions, including access to "
+            "your files and network.\n"
             f"XML-RPC: {'listening' if xmlrpc_running else 'unavailable'} on localhost:{xmlrpc_port}\n"
             f"JSON-RPC: {'listening' if socket_running else 'unavailable'} on localhost:{socket_port}\n"
             f"Requests processed: {request_count}" + (f"\n{errors}" if errors else "")
