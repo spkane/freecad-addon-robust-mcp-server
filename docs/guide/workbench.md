@@ -34,7 +34,10 @@ versioned package directory; follow the guide when using a compatible archive.
 
 1. Switch to the **MCP Bridge** workbench in FreeCAD
 1. Click **Start Bridge** in the toolbar
-1. The status indicator turns green when running
+1. Check the status indicator or startup output to confirm the bridge is running
+
+In the current development version, the running status includes a Python
+permissions warning. Installed releases may show a different status message.
 
 You'll see a confirmation message:
 
@@ -46,18 +49,27 @@ MCP Bridge started!
 
 ### Stopping the Bridge
 
-Click **Stop Bridge** in the toolbar. The status indicator turns red.
+Click **Stop Bridge** in the toolbar. The status indicator turns gray.
 
 ### Status Indicator
 
-Hover over the status indicator to see the installed bridge version and its
-current status.
+The following states describe the current development version. Status text and
+colors in older installed releases may differ.
 
-| Color  | Status                                |
-| ------ | ------------------------------------- |
-| Green  | Bridge running, accepting connections |
-| Red    | Bridge stopped                        |
-| Yellow | Bridge starting/stopping              |
+Hover over the status indicator to see the installed bridge version, listener
+status, and the permissions available to authorized clients. The running
+warning remains visible without interrupting automation. It also appears when
+the bridge is started without selecting the workbench.
+
+| Color  | Status                                                       |
+| ------ | ------------------------------------------------------------ |
+| Amber  | Bridge running, accepting Python with the user's permissions |
+| Gray   | Bridge stopped                                               |
+| Yellow | Bridge starting                                              |
+| Red    | Bridge error                                                 |
+
+See the [security guide](security.md) for what pairing and the warning do and
+do not protect against.
 
 ---
 
@@ -250,7 +262,7 @@ If the console reports that FreeCAD's matching PySide binding could not be loade
 
 **Solution:**
 
-1. Verify the bridge is running (green status indicator)
+1. Verify the bridge is running using its status indicator or startup output
 1. Check that ports match between workbench and Robust MCP Server config
 1. On Docker Desktop, verify that `FREECAD_SOCKET_HOST` is set to
    `host.docker.internal`
@@ -258,7 +270,7 @@ If the console reports that FreeCAD's matching PySide binding could not be loade
    container gateway cannot reach the bridge's loopback-only listener
 
 Do not rebind the bridge to `0.0.0.0` to resolve this error. The bridge accepts
-unauthenticated Python execution, so non-loopback access is unsafe until
+Python execution from paired clients, so non-loopback access is unsafe until
 protected remote transport is implemented.
 
 ### Headless Mode Hangs
