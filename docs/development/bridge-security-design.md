@@ -275,8 +275,10 @@ in the interactive approval prompt and the call was cancelled. These fixtures di
 not execute code or access files. A 400-character code argument was abbreviated
 with an ellipsis in the approval prompt; the call was cancelled. We did not
 establish whether an alternate UI can reveal the full value. These probes do not
-establish the negotiated protocol version, elicitation or other Codex
-configurations. Claude
+establish the negotiated protocol version or other Codex configurations. A
+separate SDK `Context.elicit` fixture in the interactive session returned
+`cancel` without a confirmation being presented in this test; it never executed
+code. Do not assume elicitation works in other versions or configurations. Claude
 Code 2.1.319 could not be tested because its OAuth session was expired. Record
 fresh results after testing the actual UI and each supported configuration;
 never infer that a client honors hints from its version alone.
