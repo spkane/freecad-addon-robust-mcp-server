@@ -500,6 +500,7 @@ class FreecadMCPPlugin:
 
         # Status bar tracking
         self._status_timer = None
+        self._standalone_warning: Any | None = None
         self._request_count = 0
         self._last_request_time: float | None = None
 
@@ -996,6 +997,7 @@ class FreecadMCPPlugin:
 
         # Clear status bar message
         if _freecad_gui_up():
+            self._remove_standalone_warning()
             self._set_status_bar("")
             try:
                 status_module: Any = None
@@ -1038,11 +1040,11 @@ class FreecadMCPPlugin:
                     time_ago = f"{int(elapsed)}s ago"
                 else:
                     time_ago = f"{int(elapsed / 60)}m ago"
-                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests | last: {time_ago}"
+                status = f"🔌 MCP Bridge: client code has your permissions{ports} | {self._request_count} requests | last: {time_ago}"
             else:
-                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests"
+                status = f"🔌 MCP Bridge: client code has your permissions{ports} | {self._request_count} requests"
         else:
-            status = f"🔌 MCP Bridge: Python execution enabled{ports} | waiting for connections..."
+            status = f"🔌 MCP Bridge: client code has your permissions{ports} | waiting for connections..."
 
         if errors:
             status += " | Listener error: " + " ".join(errors.values())
@@ -1063,6 +1065,7 @@ class FreecadMCPPlugin:
                     "freecad.RobustMCPBridge.Qt.status_widget"
                 )
             if status_module is not None:
+                self._remove_standalone_warning()
                 listener_status = self.get_status()
                 errors = listener_status["listener_errors"]
                 status_module.update_status_running(
@@ -1073,8 +1076,41 @@ class FreecadMCPPlugin:
                     socket_running=listener_status["listeners"]["socket"] == "running",
                     errors="\n".join(errors.values()),
                 )
+            else:
+                self._show_standalone_warning()
         except Exception:
             pass
+
+    def _show_standalone_warning(self) -> None:
+        """Show a non-modal permanent warning when no workbench widget is loaded."""
+        if self._standalone_warning is not None:
+            return
+        main_window = FreeCADGui.getMainWindow()
+        status_bar = main_window.statusBar() if main_window else None
+        if status_bar is None:
+            return
+        _, QtWidgets = load_qt_core_widgets()
+        label = QtWidgets.QLabel("MCP: Client Python has full user permissions")
+        label.setObjectName("mcp_bridge_standalone_warning")
+        label.setToolTip(
+            "Authorized clients can run Python with your full permissions, "
+            "including access to your files and network."
+        )
+        label.setStyleSheet(
+            "QLabel { background-color: #9a5700; color: white; "
+            "padding: 2px 6px; border-radius: 3px; font-size: 11px; }"
+        )
+        status_bar.addPermanentWidget(label)
+        self._standalone_warning = label
+
+    def _remove_standalone_warning(self) -> None:
+        """Remove the standalone label when stopping or switching to the workbench."""
+        label = self._standalone_warning
+        self._standalone_warning = None
+        if label is not None:
+            with contextlib.suppress(RuntimeError):
+                label.setParent(None)
+                label.deleteLater()
 
     def _set_status_bar(self, message: str) -> None:
         """Set the FreeCAD main window status bar message.

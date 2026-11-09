@@ -113,6 +113,28 @@ _result_ = {
         elif expected_release:
             assert freecad_version == expected_release
 
+    def test_running_bridge_warning_is_persistent(
+        self, xmlrpc_proxy: xmlrpc.client.ServerProxy
+    ) -> None:
+        """An unrelated status message cannot hide the active bridge warning."""
+        result = execute_code(
+            xmlrpc_proxy,
+            """
+import FreeCADGui
+from PySide import QtWidgets
+bar = FreeCADGui.getMainWindow().statusBar()
+widget = bar.findChild(QtWidgets.QLabel, "mcp_bridge_status_widget")
+if widget is None:
+    widget = bar.findChild(QtWidgets.QLabel, "mcp_bridge_standalone_warning")
+if widget is None:
+    raise RuntimeError("No persistent bridge warning widget")
+bar.showMessage("Unrelated FreeCAD status", 1000)
+_result_ = {"text": widget.text(), "visible": widget.isVisible()}
+""",
+        )
+        assert "full user permissions" in result["result"]["text"]
+        assert result["result"]["visible"] is True
+
     def test_workbench_qt_widgets(
         self, xmlrpc_proxy: xmlrpc.client.ServerProxy
     ) -> None:
@@ -141,12 +163,15 @@ status_module = importlib.import_module("_mcp_widget_probe.Qt.status_widget")
 preferences_page = preferences_module.MCPBridgePreferencesPage()
 status_widget = status_module.MCPStatusWidget()
 status_installed = status_widget.install()
+if status_installed:
+    status_widget.set_running(9875, 9876)
 
 _result_ = {
     "preferences_title": preferences_page.windowTitle(),
     "status_installed": status_installed,
     "status_widget_created": status_widget._widget is not None,
     "status_tooltip": status_widget._widget.toolTip() if status_installed else "",
+    "status_text": status_widget._widget.text() if status_installed else "",
     "bridge_version": status_module.__version__,
 }
 
@@ -159,6 +184,8 @@ preferences_page.deleteLater()
         assert result["result"]["status_installed"] is True
         assert result["result"]["status_widget_created"] is True
         assert result["result"]["bridge_version"] in result["result"]["status_tooltip"]
+        assert "Python: full user permissions" in result["result"]["status_text"]
+        assert "files and network" in result["result"]["status_tooltip"]
 
 
 class TestGUIObjectCreation:

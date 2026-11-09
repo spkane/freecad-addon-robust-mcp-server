@@ -505,7 +505,9 @@ class TestFreecadResources:
         functions: dict[str, Callable[..., Any]] = {}
         server = MagicMock()
 
-        def tool_decorator() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def tool_decorator(
+            **_kwargs: Any,
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
             def register(func: Callable[..., Any]) -> Callable[..., Any]:
                 functions[func.__name__] = func
                 return func

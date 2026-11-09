@@ -81,7 +81,7 @@ def _register(bridge: XmlRpcBridge) -> Tools:
     mcp = MagicMock()
     tools: Tools = {}
 
-    def tool_decorator() -> Callable[[Any], Any]:
+    def tool_decorator(**_kwargs: Any) -> Callable[[Any], Any]:
         def wrapper(func: Any) -> Any:
             tools[func.__name__] = func
             return func

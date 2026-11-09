@@ -16,7 +16,7 @@ class TestMacroTools:
         mcp = MagicMock()
         mcp._registered_tools = {}
 
-        def tool_decorator():
+        def tool_decorator(**_kwargs):
             def wrapper(func):
                 mcp._registered_tools[func.__name__] = func
                 return func
@@ -389,3 +389,55 @@ class TestMacroTools:
 
         assert "Unknown template" in str(exc_info.value)
         assert "invalid_template" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        ".",
+        "..",
+        "../outside",
+        "sub/file",
+        r"sub\\file",
+        r"C:\\outside",
+        "C:outside",
+        "bad\x00name",
+    ],
+)
+@pytest.mark.parametrize(
+    ("tool_name", "argument"),
+    [
+        ("read_macro", "macro_name"),
+        ("delete_macro", "macro_name"),
+        ("run_macro", "macro_name"),
+        ("create_macro", "name"),
+        ("create_macro_from_template", "name"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_macro_tools_reject_paths_before_bridge_dispatch(
+    name, tool_name, argument
+):
+    """Macro names cannot escape the macro directory through path components."""
+    from freecad_mcp.tools.macros import register_macro_tools
+
+    registered = {}
+    mcp = MagicMock()
+
+    def tool(**_kwargs):
+        def register(func):
+            registered[func.__name__] = func
+            return func
+
+        return register
+
+    mcp.tool = tool
+    get_bridge = AsyncMock()
+    register_macro_tools(mcp, get_bridge, allow_unsafe_code=True)
+    args = {argument: name}
+    if tool_name == "create_macro":
+        args["code"] = "pass"
+    with pytest.raises(ValueError, match="single file name"):
+        await registered[tool_name](**args)
+    get_bridge.assert_not_awaited()

@@ -10,7 +10,13 @@ macro-centric workflow with templates and validation.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from freecad_mcp.tools._registration import unsafe_tool
+from freecad_mcp.tools._registration import file_tool, unsafe_tool
+
+
+def _validate_macro_name(name: str) -> None:
+    """Reject path-like names before any bridge operation is dispatched."""
+    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0"):
+        raise ValueError("Macro name must be a single file name, not a path")
 
 
 def register_macro_tools(
@@ -57,6 +63,9 @@ def register_macro_tools(
     ) -> dict[str, Any]:
         """Run a FreeCAD macro by name.
 
+        The file's contents do not appear in this tool call. Macro code runs
+        with the FreeCAD user's full permissions; review the file first.
+
         Args:
             macro_name: Name of the macro to run (without .FCMacro extension).
             args: Optional dictionary of arguments to pass to the macro.
@@ -71,6 +80,7 @@ def register_macro_tools(
                 - error_type: Error type if failed
                 - error_traceback: Full traceback if failed
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
         result = await bridge.run_macro(macro_name, args)
         return {
@@ -104,6 +114,7 @@ def register_macro_tools(
                 - path: Full path to created macro file
                 - description: Macro description
         """
+        _validate_macro_name(name)
         bridge = await get_bridge()
         macro = await bridge.create_macro(name, code, description)
         return {
@@ -112,7 +123,7 @@ def register_macro_tools(
             "description": macro.description,
         }
 
-    @mcp.tool()
+    @file_tool(mcp, read_only=True)
     async def read_macro(macro_name: str) -> dict[str, Any]:
         """Read the contents of a FreeCAD macro.
 
@@ -125,6 +136,7 @@ def register_macro_tools(
                 - code: Full macro code
                 - path: Path to macro file
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
 
         code = f"""
@@ -162,7 +174,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "Read macro failed")
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def delete_macro(macro_name: str) -> dict[str, Any]:
         """Delete a user macro.
 
@@ -176,6 +188,7 @@ _result_ = {{
                 - success: Whether deletion was successful
                 - path: Path of deleted macro
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
 
         code = f"""
@@ -226,6 +239,7 @@ _result_ = {{
                 - path: Full path to created macro file
                 - template: Template used
         """
+        _validate_macro_name(name)
         templates = {
             "basic": """
 # Your macro code goes here

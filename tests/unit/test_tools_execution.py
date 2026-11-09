@@ -16,7 +16,7 @@ class TestExecutionTools:
         mcp = MagicMock()
         mcp._registered_tools = {}
 
-        def tool_decorator():
+        def tool_decorator(**_kwargs):
             def wrapper(func):
                 mcp._registered_tools[func.__name__] = func
                 return func

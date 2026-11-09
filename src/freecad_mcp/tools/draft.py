@@ -7,6 +7,8 @@ ShapeString for creating 3D text geometry that can be used with PartDesign.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools._registration import file_tool
+
 
 def _validate_vector(
     value: list[float] | None,
@@ -91,7 +93,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
             "get_bridge must be a callable that returns an awaitable bridge"
         )
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def draft_shapestring(
         text: str,
         font_path: str | None = None,
@@ -572,7 +574,7 @@ except Exception:
             result.error_traceback or "Failed to convert ShapeString to face"
         )
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def draft_text_on_surface(
         text: str,
         target_face: str,

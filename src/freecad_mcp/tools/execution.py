@@ -37,6 +37,8 @@ def register_execution_tools(
 
         This tool allows you to run arbitrary Python code within FreeCAD's
         environment, with access to all FreeCAD modules and the active document.
+        The code runs with the FreeCAD user's full permissions, including access
+        to files and the network. Review the complete code before execution.
 
         Args:
             code: Python code to execute. Use `_result_ = value` to return data

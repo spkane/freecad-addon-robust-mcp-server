@@ -8,6 +8,8 @@ has excellent screenshot handling with view type detection.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.tools._registration import file_tool
+
 
 def register_view_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register view-related tools with the Robust MCP Server.
@@ -643,7 +645,7 @@ _result_ = parts
             return result.result
         return []
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def insert_part_from_library(
         part_path: str,
         name: str | None = None,

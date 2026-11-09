@@ -222,3 +222,63 @@ slow input, queue saturation, and legacy peers. Verify real FreeCAD GUI and
 headless operation across supported Qt5 and Qt6 builds. Platform-specific key
 storage, enrollment, revocation, and recovery require tests on each supported
 operating system; mocks alone cannot establish OS isolation.
+
+## MCP tool risk inventory and approval boundaries
+
+This inventory describes the tool surface as of the current source revision. It
+is a development aid, not proof that an MCP client asks for or displays approval.
+A paired client can directly access the FreeCAD bridge with the FreeCAD user's
+permissions; server-side tool registration does not sandbox that client.
+
+| Tool group | Inputs and effects | Exposure and metadata |
+| --- | --- | --- |
+| `execute_python`, `safe_execute` | Model-provided Python runs with the FreeCAD user's filesystem and network permissions. `safe_execute` is not a security sandbox. | Available only with `FREECAD_ALLOW_UNSAFE_CODE=true`; marked non-read-only, destructive, non-idempotent and open-world. |
+| `run_macro`, `create_macro`, `create_macro_from_template` | Execute or create macro code; `run_macro` exposes a name, not the file contents. | Available only with unsafe code enabled; same conservative metadata. No approval or exact-content binding is provided by the server. |
+| `read_macro`, `delete_macro` | Read or delete a user-selected macro name. System macros may also be read. | Registered by default. `read_macro` is marked read-only; deletion is marked destructive. Both are open-world. Tool-level names reject path separators and drive prefixes; symlink behavior and approval require further review. |
+| `open_document`, `save_document` | Read or write a model-selected path; save can use the current document path. | Registered by default and marked open-world and potentially destructive. |
+| `import_step`, `import_stl`, `export_step`, `export_stl`, `export_3mf`, `export_obj`, `export_iges` | Read imported files or write exported files at supplied paths. | Registered by default and marked open-world and potentially destructive. |
+| `spreadsheet_import_csv`, `spreadsheet_export_csv` | Read or write the specified CSV file. | Registered by default and marked open-world and potentially destructive. |
+| `insert_part_from_library`, `draft_shapestring`, `draft_text_on_surface` | Read a selected part or font file and modify a document. | Registered by default and marked open-world and potentially destructive. |
+| `cam_create_job`, `cam_add_tool_controller` | Create or modify a job and optionally read a selected job template or `tool.bit_file`. | Registered by default and marked open-world and potentially destructive, including when no explicit file is selected. |
+| `cam_post_process`, `cam_export_job_template`, `cam_check_job`, `cam_simulate`, `cam_import_tool_library`, `cam_export_tool_library` | Read or write tool libraries, templates, reports, simulation files or post-processed output. Some outputs are optional or use paths from a job. | Registered by default and marked open-world and potentially destructive. |
+
+Other tools manipulate FreeCAD documents, objects or the GUI. Many implement
+fixed operations by generating Python internally; the existence of that internal
+Python does not mean the model supplied arbitrary executable code. Review the
+full catalog when new tools or path arguments are added. Annotations are
+conservative hints for client UX, not authorization, file access enforcement,
+proof of human approval, or protection from prompt injection.
+
+### Client approval verification
+
+The project's MCP stdio protocol test verifies the advertised code parameter,
+unsafe-tool defaults and annotations. It does **not** verify that a particular
+client displays complete arguments, asks a human, or supports elicitation.
+
+Before relying on any client for approval, exercise its real UI with a harmless
+fixture on each supported protocol version. Record the client and SDK versions,
+approval defaults, full-content display including long code, path visibility,
+denial, cancellation, timeout and user-configured automatic approval. Test
+unsupported elicitation explicitly and do not silently execute on failure.
+Client-side approval is under the client's control; it cannot prove that a human
+reviewed an action against a malicious or compromised client. Macro execution by
+file name still requires an exact-content review design.
+
+Observed on 2026-11-08 with a harmless local MCP fixture: Codex CLI 0.167.0 in
+non-interactive `exec` mode logged an annotated tool call and its code argument,
+then refused the call because its approval policy was `never`. In an interactive
+Codex CLI 0.167.0 session with `on-request` policy, the approval prompt showed a
+short code argument and offered one-time, session, persistent and cancel choices.
+Cancel returned a cancelled tool call; a subsequent separately approved call
+returned the fixture result. A separate fixture's file-path argument also appeared
+in the interactive approval prompt and the call was cancelled. These fixtures did
+not execute code or access files. A 400-character code argument was abbreviated
+with an ellipsis in the approval prompt; the call was cancelled. We did not
+establish whether an alternate UI can reveal the full value. These probes do not
+establish the negotiated protocol version or other Codex configurations. A
+separate SDK `Context.elicit` fixture in the interactive session returned
+`cancel` without a confirmation being presented in this test; it never executed
+code. Do not assume elicitation works in other versions or configurations. Claude
+Code 2.1.319 could not be tested because its OAuth session was expired. Record
+fresh results after testing the actual UI and each supported configuration;
+never infer that a client honors hints from its version alone.

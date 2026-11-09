@@ -18,6 +18,7 @@ import types
 import xmlrpc.client
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, call
 
@@ -368,7 +369,9 @@ def test_gui_status_warns_that_bridge_accepts_python(
     plugin._listener_states = {"xmlrpc": "running", "socket": "running"}
     plugin._set_status_bar = MagicMock()
     plugin._update_status_bar()
-    assert "Python execution enabled" in plugin._set_status_bar.call_args.args[0]
+    assert (
+        "client code has your permissions" in plugin._set_status_bar.call_args.args[0]
+    )
     status_module.update_status_running.assert_called_once_with(
         9875, 9876, 0, xmlrpc_running=True, socket_running=True, errors=""
     )
@@ -377,6 +380,38 @@ def test_gui_status_warns_that_bridge_accepts_python(
     status_module.update_status_running.assert_called_with(
         9875, 9876, 0, xmlrpc_running=False, socket_running=True, errors=""
     )
+
+
+def test_standalone_warning_is_permanent_and_removed_on_stop(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Standalone GUI startup needs a non-modal warning without the workbench."""
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(server_mod, "FreeCAD", MagicMock(GuiUp=True), raising=False)
+    monkeypatch.setattr(server_mod, "__package__", "standalone_bridge")
+    monkeypatch.delitem(
+        sys.modules, "freecad.RobustMCPBridge.Qt.status_widget", raising=False
+    )
+    status_bar, label = MagicMock(), MagicMock()
+    gui = SimpleNamespace(
+        getMainWindow=lambda: SimpleNamespace(statusBar=lambda: status_bar)
+    )
+    monkeypatch.setattr(server_mod, "FreeCADGui", gui, raising=False)
+    qt = SimpleNamespace(QLabel=MagicMock(return_value=label))
+    monkeypatch.setattr(server_mod, "load_qt_core_widgets", lambda: (None, qt))
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._listener_states = {"xmlrpc": "running", "socket": "running"}
+
+    plugin._update_status_widget()
+    plugin._update_status_widget()
+    status_bar.addPermanentWidget.assert_called_once_with(label)
+    assert "full user permissions" in qt.QLabel.call_args.args[0]
+    assert "files and network" in label.setToolTip.call_args.args[0]
+
+    plugin._stop_status_updates()
+    label.setParent.assert_called_once_with(None)
+    label.deleteLater.assert_called_once_with()
+    assert plugin._standalone_warning is None
 
 
 @pytest.mark.parametrize("freecad_available", [False, True])
@@ -431,8 +466,10 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     widget = module.MCPStatusWidget()
     widget._widget = MagicMock()
     widget.set_running(9875, 9876, 1)
-    assert "Python execution enabled" in widget._widget.setText.call_args.args[0]
+    assert "Python: full user permissions" in widget._widget.setText.call_args.args[0]
     assert "authorized clients" in widget._widget.setToolTip.call_args.args[0]
+    assert "full permissions" in widget._widget.setToolTip.call_args.args[0]
+    assert "files and network" in widget._widget.setToolTip.call_args.args[0]
     widget.set_running(
         9875,
         9876,
