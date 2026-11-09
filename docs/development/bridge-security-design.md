@@ -239,6 +239,7 @@ permissions; server-side tool registration does not sandbox that client.
 | `import_step`, `import_stl`, `export_step`, `export_stl`, `export_3mf`, `export_obj`, `export_iges` | Read imported files or write exported files at supplied paths. | Registered by default and marked open-world and potentially destructive. |
 | `spreadsheet_import_csv`, `spreadsheet_export_csv` | Read or write the specified CSV file. | Registered by default and marked open-world and potentially destructive. |
 | `insert_part_from_library`, `draft_shapestring`, `draft_text_on_surface` | Read a selected part or font file and modify a document. | Registered by default and marked open-world and potentially destructive. |
+| `cam_create_job`, `cam_add_tool_controller` | Create or modify a job and optionally read a selected job template or `tool.bit_file`. | Registered by default and marked open-world and potentially destructive, including when no explicit file is selected. |
 | `cam_post_process`, `cam_export_job_template`, `cam_check_job`, `cam_simulate`, `cam_import_tool_library`, `cam_export_tool_library` | Read or write tool libraries, templates, reports, simulation files or post-processed output. Some outputs are optional or use paths from a job. | Registered by default and marked open-world and potentially destructive. |
 
 Other tools manipulate FreeCAD documents, objects or the GUI. Many implement

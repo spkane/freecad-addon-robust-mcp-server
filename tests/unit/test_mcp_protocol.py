@@ -199,6 +199,8 @@ async def test_stdio_first_tool_call_completes(unsafe: bool) -> None:
             "draft_shapestring",
             "draft_text_on_surface",
             "cam_post_process",
+            "cam_create_job",
+            "cam_add_tool_controller",
             "cam_export_job_template",
             "cam_check_job",
             "cam_simulate",

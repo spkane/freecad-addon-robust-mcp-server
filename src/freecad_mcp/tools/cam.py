@@ -170,7 +170,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def cam_create_job(
         model_objects: list[str],
         doc_name: str | None = None,
@@ -271,7 +271,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             "Set CAM Stock",
         )
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def cam_add_tool_controller(
         tool: dict[str, Any],
         job_name: str | None = None,
