@@ -37,6 +37,10 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "deps(actions)"
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
 
   # Docker dependencies
   - package-ecosystem: "docker"
