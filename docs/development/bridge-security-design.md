@@ -266,9 +266,13 @@ file name still requires an exact-content review design.
 
 Observed on 2026-11-08 with a harmless local MCP fixture: Codex CLI 0.167.0 in
 non-interactive `exec` mode logged an annotated tool call and its code argument,
-then refused the call because its approval policy was `never`. The
-fixture did not execute code. This is not a test of the interactive approval UI,
-truncation, elicitation, user overrides, or other Codex configurations. Claude
+then refused the call because its approval policy was `never`. In an interactive
+Codex CLI 0.167.0 session with `on-request` policy, the approval prompt showed a
+short code argument and offered one-time, session, persistent and cancel choices.
+Cancel returned a cancelled tool call; a subsequent separately approved call
+returned the fixture result. The fixture did not execute code. Neither probe
+establishes long-code display, negotiated protocol version, elicitation or other
+Codex configurations. Claude
 Code 2.1.319 could not be tested because its OAuth session was expired. Record
 fresh results after testing the actual UI and each supported configuration;
 never infer that a client honors hints from its version alone.
