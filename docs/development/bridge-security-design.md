@@ -270,9 +270,13 @@ then refused the call because its approval policy was `never`. In an interactive
 Codex CLI 0.167.0 session with `on-request` policy, the approval prompt showed a
 short code argument and offered one-time, session, persistent and cancel choices.
 Cancel returned a cancelled tool call; a subsequent separately approved call
-returned the fixture result. The fixture did not execute code. Neither probe
-establishes long-code display, negotiated protocol version, elicitation or other
-Codex configurations. Claude
+returned the fixture result. A separate fixture's file-path argument also appeared
+in the interactive approval prompt and the call was cancelled. These fixtures did
+not execute code or access files. A 400-character code argument was abbreviated
+with an ellipsis in the approval prompt; the call was cancelled. We did not
+establish whether an alternate UI can reveal the full value. These probes do not
+establish the negotiated protocol version, elicitation or other Codex
+configurations. Claude
 Code 2.1.319 could not be tested because its OAuth session was expired. Record
 fresh results after testing the actual UI and each supported configuration;
 never infer that a client honors hints from its version alone.
