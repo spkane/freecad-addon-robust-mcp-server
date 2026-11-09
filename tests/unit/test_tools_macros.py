@@ -401,6 +401,7 @@ class TestMacroTools:
         "sub/file",
         r"sub\\file",
         r"C:\\outside",
+        "C:outside",
         "bad\x00name",
     ],
 )
