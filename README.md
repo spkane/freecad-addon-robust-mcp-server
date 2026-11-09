@@ -98,7 +98,9 @@ bridge is running, the current development version shows a persistent, non-modal
 status warning. The workbench indicator's tooltip includes listener details.
 Stop the bridge when it is not needed.
 
-Bridge listeners are restricted to loopback and require pairing. Pairing does
+In workbench 0.7.0 and later, bridge listeners are restricted to loopback and
+require pairing. Older 0.6.x bridges do not provide pairing authentication.
+Pairing does
 not prevent a trusted client from following malicious instructions in a model
 or protect against malicious software running as the same user. The MCP server
 does not expose arbitrary Python and macro execution tools by default, but

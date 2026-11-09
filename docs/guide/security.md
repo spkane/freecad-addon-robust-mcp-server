@@ -34,8 +34,10 @@ stop the process when it is no longer needed.
 
 ## Pairing and local connections
 
-The bridge's XML-RPC and JSON-RPC listeners bind to loopback and require a
-per-user pairing credential. Auto-start is disabled by default. Pairing keeps
+In workbench 0.7.0 and later, the bridge's XML-RPC and JSON-RPC listeners bind
+to loopback and require a per-user pairing credential. Older 0.6.x bridges do
+not provide pairing authentication; update both components to compatible
+versions. Auto-start is disabled by default. Pairing keeps
 clients without the credential from making authenticated requests; it does not
 protect against malicious software running as the same operating-system user,
 or against a paired agent following malicious instructions in a document.
