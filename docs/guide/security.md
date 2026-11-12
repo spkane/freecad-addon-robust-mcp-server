@@ -56,12 +56,82 @@ is a tool-registration setting, not a Python sandbox or a bridge access control.
 Other tools can read or write files and modify FreeCAD documents; enable unsafe
 tools only when you need them and trust the client.
 
+In the current development version, `execute_python` and `safe_execute`
+require a local FreeCAD review dialog by default when using the socket
+connection. A user can explicitly change this in the preferences below. The
+dialog displays the code to be executed and defaults to denial. These tools
+fail closed with older bridges, headless FreeCAD, embedded mode, and XML-RPC;
+they do not fall back to unreviewed execution. `run_macro` is unavailable
+until the exact file contents can be reviewed and executed without reopening a
+changed file. Macro creation still writes files, and ordinary modeling and
+file tools can have side effects without this dialog.
+
+Depending on its configuration, an MCP client may ask permission before it
+calls the tool. In this example Codex shows a permission prompt for the
+isolated test server:
+
+![Codex permission prompt for an example Python tool call](../assets/images/codex-python-permission.png)
+
+This is the client's permission decision. It is separate from FreeCAD's
+review, may be disabled or remembered in client settings, and must not be
+assumed to display all code in every client or configuration.
+
+When an agent calls `execute_python`, the local review can look like this:
+
+![FreeCAD review dialog displaying harmless example Python with Allow once and Deny options](../assets/images/bridge-python-review.png)
+
+The image was captured with an MCP test client and a temporary FreeCAD profile.
+The dialog shows the code to review, warns about its permissions, and defaults
+to **Deny**. **Allow once** approves only that request; closing the dialog or
+letting the review expire denies it. Review the complete code, including text
+outside the initial view, before deciding.
+
+An explicit denial returns `ReviewDenied`; an unavailable review returns
+`ReviewUnavailable`. Neither authorizes execution. Do not automatically retry
+or bypass a user's denial.
+
+For `safe_execute`, the dialog displays the complete transaction and validation
+wrapper. The submitted code appears inside its `user_code` string, where quotes
+and backslashes may be escaped. Review the wrapper and the submitted code;
+deny the request if you cannot determine what it will execute.
+
+In FreeCAD's Robust MCP Bridge preferences, **Review supported MCP Python
+requests in FreeCAD** is enabled by default. It covers `execute_python` and
+`safe_execute` together; the bridge cannot independently verify which MCP tool
+supplied the Python. Disabling it allows these requests to proceed without the
+local review dialog. Authorized clients' Python has your full permissions.
+
+You may separately enable **Offer a time-limited review bypass in the review
+dialog**. When enabled, the dialog offers an optional duration from one minute
+to eight hours; selecting it and allowing the current request bypasses review
+for subsequent supported Python requests until it expires. The bypass is
+local to the running bridge and is cleared when it stops. The status indicator
+shows when supported Python review is bypassed. Preference changes require a
+bridge restart. The socket and GUI requirements still apply; this does not
+enable reviewed execution in headless, XML-RPC, or embedded modes.
+On macOS and Linux the bypass deadline includes time spent asleep. Platforms
+without a sleep-inclusive clock use their monotonic clock, which may pause
+during sleep; stop the bridge to end a bypass immediately.
+
+The review rejects code that cannot be displayed faithfully, including CRLF
+line endings, certain control or formatting characters, and code over the
+review size limit. The socket's encoded request limit can be reached with
+smaller input, depending on its content and authentication proof. Convert line
+endings to LF before submitting the request;
+the bridge displays and executes the submitted content without silently
+rewriting it.
+
+This is a guard on those MCP tools, not a bridge-wide policy: another paired
+client can still submit Python directly to the bridge, and ordinary tools use
+that same unrestricted bridge capability. A review cannot stop code that has
+already started. A lost connection after committing an approved operation can
+leave its outcome unknown; the server does not replay that operation.
+
 Some code and file tools advertise MCP annotations describing their potential
 effects. These annotations are advisory: clients decide whether and how to
-present an approval. The bridge does not enforce a human approval, and a
-client may truncate code, automatically approve a call, or show only a macro
-name rather than its contents. Check your client's actual approval behavior
-and review sensitive operations and code before allowing them. See the
+present an approval, and a client may truncate code or automatically approve
+a call. Check your client's actual approval behavior and review sensitive
+operations and code before allowing them. See the
 [tool risk inventory](../development/bridge-security-design.md#mcp-tool-risk-inventory-and-approval-boundaries)
 for details and tested client behavior.
 

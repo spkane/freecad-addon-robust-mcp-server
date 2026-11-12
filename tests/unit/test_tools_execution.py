@@ -5,6 +5,23 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from freecad_mcp.bridge.base import ConnectionStatus, ExecutionResult
+from freecad_mcp.bridge.embedded import EmbeddedBridge
+from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bridge_type", [EmbeddedBridge, XmlRpcBridge])
+async def test_unsupported_review_transport_fails_closed(bridge_type):
+    """Unsupported modes must never dispatch the unreviewed fallback."""
+    bridge = bridge_type()
+    bridge.execute_python = AsyncMock()
+    try:
+        result = await bridge.execute_reviewed_python("print('unsafe')")
+        assert result.success is False
+        assert result.error_type == "ReviewUnavailable"
+        bridge.execute_python.assert_not_awaited()
+    finally:
+        await bridge.disconnect()
 
 
 class TestExecutionTools:
@@ -45,7 +62,7 @@ class TestExecutionTools:
     @pytest.mark.asyncio
     async def test_execute_python_success(self, register_tools, mock_bridge):
         """execute_python should return success result."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={"value": 42, "type": "int"},
@@ -61,15 +78,16 @@ class TestExecutionTools:
         assert result["success"] is True
         assert result["result"] == {"value": 42, "type": "int"}
         assert result["execution_time_ms"] == 10.5
-        mock_bridge.execute_python.assert_awaited_once_with(
+        mock_bridge.execute_reviewed_python.assert_awaited_once_with(
             "_result_ = {'value': 42, 'type': 'int'}",
             None,
         )
+        mock_bridge.execute_python.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_execute_python_with_timeout(self, register_tools, mock_bridge):
         """execute_python should pass timeout to bridge."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result=True,
@@ -82,14 +100,15 @@ class TestExecutionTools:
         execute_python = register_tools["execute_python"]
         await execute_python(code="_result_ = True", timeout_ms=60000)
 
-        mock_bridge.execute_python.assert_called_once()
-        call_args = mock_bridge.execute_python.call_args
-        assert call_args.kwargs.get("timeout_ms") == 60000 or call_args.args[1] == 60000
+        mock_bridge.execute_reviewed_python.assert_awaited_once_with(
+            "_result_ = True", 60000
+        )
+        mock_bridge.execute_python.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_execute_python_failure(self, register_tools, mock_bridge):
         """execute_python should return error on failure."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=False,
                 result=None,
@@ -111,7 +130,7 @@ class TestExecutionTools:
     @pytest.mark.asyncio
     async def test_execute_python_with_stdout(self, register_tools, mock_bridge):
         """execute_python should capture stdout."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result=None,

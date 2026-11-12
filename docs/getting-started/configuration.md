@@ -103,6 +103,14 @@ expose `execute_python`, `safe_execute`, `run_macro`,
 `FREECAD_ALLOW_UNSAFE_CODE=true` in the MCP server environment before startup
 to expose them. Restart the server after changing this setting.
 
+In the development version, `execute_python` and `safe_execute` also require
+local approval in a GUI bridge over the socket connection. Set
+`FREECAD_MODE=socket` in the MCP server environment and start FreeCAD with its
+GUI bridge to use those tools. They fail closed when that review is
+unavailable. `run_macro` is unavailable until it can
+review and execute the same file contents. See the [security guide](../guide/security.md#tools-files-and-approvals)
+for the scope and limits of the review.
+
 This setting controls the MCP tool list; it is not a sandbox or a bridge
 authorization mechanism. Other CAD tools still generate Python for FreeCAD,
 and an authenticated bridge client can submit code directly. Use it together

@@ -318,6 +318,24 @@ class FreecadBridge(ABC):
     # Code Execution
     # =========================================================================
 
+    async def execute_reviewed_python(
+        self, code: str, timeout_ms: int | None = None
+    ) -> ExecutionResult:
+        """Execute code only after a trusted local review, if supported.
+
+        The default denies execution for transports without a verified review
+        protocol. It must never fall back to the unrestricted execution path.
+        """
+        return ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Local code review is unavailable for this connection mode. "
+            "Use FREECAD_MODE=socket with a GUI FreeCAD bridge.",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
+
     @abstractmethod
     async def execute_python(
         self,

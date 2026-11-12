@@ -43,6 +43,12 @@ DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_TIMEOUT = 30.0
 EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
+# The bridge's lease is 300 seconds. Leave time for a commit to reach its queue.
+REVIEW_DECISION_TIMEOUT_SECONDS = 295.0
+REVIEW_POLL_INTERVAL_SECONDS = 0.25
+# The workbench applies this limit to the complete newline-delimited envelope,
+# including base64 expansion and the request proof.
+MAX_SOCKET_REQUEST_BYTES = 64 * 1024
 # Captured streams, result values, and error diagnostics can expand substantially
 # when JSON escapes control characters. Bound the wire frame while allowing them.
 MAX_SOCKET_RESPONSE_BYTES = 32 * 1024 * 1024
@@ -283,7 +289,14 @@ class SocketBridge(FreecadBridge):
                     "body": base64.b64encode(body).decode("ascii"),
                     "proof": base64.b64encode(proof).decode("ascii"),
                 }
-                writer.write(json.dumps(envelope).encode("utf-8") + b"\n")
+                frame = json.dumps(envelope).encode("utf-8") + b"\n"
+                if len(frame) > MAX_SOCKET_REQUEST_BYTES:
+                    raise JsonRpcError(
+                        -32600,
+                        "Request exceeds the socket frame limit after encoding; "
+                        "no execution request was sent",
+                    )
+                writer.write(frame)
                 await writer.drain()
                 response_data = await self._read_response_line(reader, writer)
         except TimeoutError:
@@ -291,7 +304,8 @@ class SocketBridge(FreecadBridge):
             raise
 
         if not response_data:
-            self._connected = False
+            if self._writer is writer:
+                self._connected = False
             msg = "Connection closed by server"
             raise ConnectionError(msg)
 
@@ -524,6 +538,139 @@ class SocketBridge(FreecadBridge):
     # =========================================================================
     # Code Execution
     # =========================================================================
+
+    async def execute_reviewed_python(  # noqa: PLR0912
+        self, code: str, timeout_ms: int | None = None
+    ) -> ExecutionResult:
+        """Review and execute code over one non-reconnecting socket session.
+
+        A dedicated connection keeps concurrent bridge requests independent.
+        Once commit is sent, loss of a response is reported as ambiguous and
+        the request is never replayed.
+        """
+        started = time.perf_counter()
+        writer: asyncio.StreamWriter | None = None
+        committed = False
+        denied = False
+        try:
+            execution_timeout = (
+                resolve_execution_timeout_ms(timeout_ms, self._execution_timeout_ms)
+                / 1000
+            )
+            reader, stream_writer = await asyncio.wait_for(
+                asyncio.open_connection(
+                    self._host, self._port, limit=MAX_SOCKET_RESPONSE_BYTES
+                ),
+                timeout=self._timeout,
+            )
+            writer = stream_writer
+
+            async def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
+                response = await self._send_request_once(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": str(uuid.uuid4()),
+                        "method": method,
+                        "params": params,
+                    },
+                    reader,
+                    stream_writer,
+                    self._timeout,
+                )
+                if not isinstance(response, dict):
+                    raise ValueError("Bridge returned an invalid review response")
+                return response
+
+            async with asyncio.timeout(REVIEW_DECISION_TIMEOUT_SECONDS):
+                response = await request("review_begin", {"code": code})
+                review_id = response["review_id"]
+                if type(review_id) is not str or not 1 <= len(review_id) <= 64:
+                    raise ValueError("Bridge returned an invalid review identifier")
+                while True:
+                    response = await request("review_status", {"review_id": review_id})
+                    state = response.get("state")
+                    if state == "approved":
+                        break
+                    if state != "pending":
+                        denied = state == "denied"
+                        raise ValueError(f"Local review ended: {state}")
+                    await asyncio.sleep(REVIEW_POLL_INTERVAL_SECONDS)
+
+                # A lost commit response can mean the operation was scheduled.
+                committed = True
+                response = await request("review_commit", {"review_id": review_id})
+                if response.get("scheduled") is not True:
+                    committed = False
+                    raise ValueError("Local review could not be committed")
+
+            async with asyncio.timeout(execution_timeout):
+                while True:
+                    response = await request("review_result", {"review_id": review_id})
+                    result = response.get("result")
+                    if result is not None:
+                        if (
+                            not isinstance(result, dict)
+                            or type(result.get("success")) is not bool
+                        ):
+                            raise ValueError(
+                                "Bridge returned an invalid execution result"
+                            )
+                        reported_time = result.get("execution_time_ms")
+                        execution_time = (
+                            float(reported_time)
+                            if isinstance(reported_time, (int, float))
+                            and not isinstance(reported_time, bool)
+                            and 0 <= reported_time < float("inf")
+                            else (time.perf_counter() - started) * 1000
+                        )
+                        return ExecutionResult(
+                            success=result["success"],
+                            result=result.get("result"),
+                            stdout=result.get("stdout", ""),
+                            stderr=result.get("stderr")
+                            or result.get("error_message", ""),
+                            execution_time_ms=execution_time,
+                            error_type=result.get("error_type"),
+                            error_traceback=result.get("error_traceback"),
+                        )
+                    status = await request("review_status", {"review_id": review_id})
+                    state = status.get("state")
+                    if state in ("expired", "denied"):
+                        committed = False
+                        denied = state == "denied"
+                        raise ValueError("Local review ended before execution")
+                    if state == "unavailable":
+                        raise ValueError("Local review result is no longer available")
+                    await asyncio.sleep(REVIEW_POLL_INTERVAL_SECONDS)
+        except (
+            TimeoutError,
+            ConnectionError,
+            OSError,
+            JsonRpcError,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as error:
+            message = str(error) or type(error).__name__
+            if committed:
+                message += "; execution may already be running and was not retried"
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=message,
+                execution_time_ms=(time.perf_counter() - started) * 1000,
+                error_type="ReviewDenied"
+                if denied
+                else "ReviewExecutionUnknown"
+                if committed
+                else "ReviewUnavailable",
+            )
+        finally:
+            if writer is not None:
+                writer.close()
+                with contextlib.suppress(Exception):
+                    await writer.wait_closed()
 
     async def execute_python(
         self,
@@ -1117,10 +1264,9 @@ macro_file = os.path.join(macro_path, {name!r} + ".FCMacro")
 
 header = ""
 if {description!r}:
-    header = f"# {description!r}\\n\\n"
+    header = "# " + {description!r} + "\\n\\n"
 
-full_code = header + '''# -*- coding: utf-8 -*-
-# FreeCAD Macro: {name}
+full_code = header + "# -*- coding: utf-8 -*-\\n# FreeCAD Macro: " + {name!r} + '''
 # Created via MCP Bridge
 
 import FreeCAD

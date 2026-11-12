@@ -1,0 +1,282 @@
+"""Exercise review decisions in an isolated installed FreeCAD process."""
+
+import base64
+import hmac
+import importlib
+import importlib.util
+import json
+import os
+import socket
+import sys
+import threading
+import time
+import traceback
+from pathlib import Path
+
+import FreeCAD
+import FreeCADGui
+
+sys.path.insert(0, os.environ["MCP_REVIEW_PROBE_ADDON"])
+from freecad_mcp_bridge.authentication import (
+    BridgeAuthenticator,
+    create_hmac_verifier,
+    request_proof_message,
+)
+from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+from freecad_mcp_bridge.server import FreecadMCPPlugin
+
+QtCore, QtWidgets = load_qt_core_widgets()
+secret = bytes.fromhex(os.environ.get("MCP_REVIEW_PROBE_SECRET", "78" * 32))
+plugin = None
+errors = []
+finished = threading.Event()
+seen = set()
+results = []
+result_path = Path(os.environ["MCP_REVIEW_PROBE_RESULT"])
+example_code = 'print("Hello from FreeCAD")\n_result_ = 42'
+port_file = os.environ.get("MCP_REVIEW_PROBE_PORT")
+done_file = os.environ.get("MCP_REVIEW_PROBE_DONE")
+manual = os.environ.get("MCP_REVIEW_PROBE_MANUAL") == "1"
+preferences_tested = False
+
+
+def test_preferences():
+    """Exercise the actual preferences panel and isolated FreeCAD settings."""
+    root = Path(os.environ["MCP_REVIEW_PROBE_ADDON"])
+    spec = importlib.util.spec_from_file_location(
+        "approval_probe_addon",
+        root / "__init__.py",
+        submodule_search_locations=[str(root)],
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Could not load isolated workbench")
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = package
+    spec.loader.exec_module(package)
+    page_module = importlib.import_module("approval_probe_addon.Qt.preferences_page")
+    MCPBridgePreferencesPage = page_module.MCPBridgePreferencesPage
+
+    page = MCPBridgePreferencesPage()
+    page.loadSettings()
+    if not page.review_python_cb.isChecked() or page.review_bypass_cb.isChecked():
+        raise RuntimeError("Unexpected review preference defaults")
+    page.review_python_cb.setChecked(False)
+    page.review_bypass_cb.setChecked(True)
+    page.saveSettings()
+    other = MCPBridgePreferencesPage()
+    other.loadSettings()
+    if other.review_python_cb.isChecked() or not other.review_bypass_cb.isChecked():
+        raise RuntimeError("Review preferences did not persist")
+    page.deleteLater()
+    other.deleteLater()
+
+
+def worker(port):
+    """Run authenticated requests from a non-GUI thread."""
+    try:
+        cases = [(example_code, True), ("_result_ = 99", False)]
+        if preferences_tested:
+            cases.insert(1, (example_code, True))
+        for index, (code, decision) in enumerate(cases):
+            if preferences_tested and index == 2:
+                plugin._review_controller._policy.clear_session()
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+                stream = sock.makefile("rwb")
+
+                def request(method, params, stream=stream):
+                    stream.write(b'{"type":"challenge"}\n')
+                    stream.flush()
+                    challenge = json.loads(stream.readline())["challenge"]
+                    body = json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": "one",
+                            "method": method,
+                            "params": params,
+                        }
+                    ).encode()
+                    proof = hmac.digest(
+                        secret,
+                        request_proof_message("probe", challenge, "socket", body),
+                        "sha256",
+                    )
+                    envelope = {
+                        "client": "probe",
+                        "challenge": challenge,
+                        "body": base64.b64encode(body).decode(),
+                        "proof": base64.b64encode(proof).decode(),
+                    }
+                    stream.write(json.dumps(envelope).encode() + b"\n")
+                    stream.flush()
+                    response = json.loads(stream.readline())
+                    if "error" in response:
+                        raise RuntimeError(str(response["error"]))
+                    return response["result"]
+
+                request_id = request("review_begin", {"code": code})["review_id"]
+                deadline = time.monotonic() + 15
+                state = "pending"
+                while time.monotonic() < deadline:
+                    state = request("review_status", {"review_id": request_id})["state"]
+                    if state != "pending":
+                        break
+                    time.sleep(0.1)
+                if state != ("approved" if decision else "denied"):
+                    raise RuntimeError(f"Unexpected review state: {state}")
+                if decision:
+                    if (
+                        request("review_commit", {"review_id": request_id})["scheduled"]
+                        is not True
+                    ):
+                        raise RuntimeError("Approved request was not scheduled")
+                    result = None
+                    while time.monotonic() < deadline:
+                        result = request("review_result", {"review_id": request_id})[
+                            "result"
+                        ]
+                        if result is not None:
+                            break
+                        time.sleep(0.1)
+                    if (
+                        result is None
+                        or not result["success"]
+                        or result["result"] != 42
+                    ):
+                        raise RuntimeError(f"Unexpected execution result: {result}")
+                results.append(state)
+    except BaseException:
+        errors.append(traceback.format_exc())
+    finally:
+        finished.set()
+
+
+def tick():
+    """Decide each test dialog and close the owned application after testing."""
+    try:
+        controller = plugin._review_controller
+        if not manual and controller and controller._request and controller._dialog:
+            request = controller._request
+            if request.request_id not in seen:
+                seen.add(request.request_id)
+                if request.payload.content == example_code.encode() and not (
+                    port_file and results
+                ):
+                    screenshot_path = os.environ.get("MCP_REVIEW_PROBE_SCREENSHOT")
+                    if screenshot_path and not controller._dialog.grab().save(
+                        screenshot_path
+                    ):
+                        raise RuntimeError("Could not capture the review dialog")
+                    if preferences_tested:
+                        checkbox = controller._dialog.findChild(QtWidgets.QCheckBox)
+                        if checkbox is None:
+                            raise RuntimeError("Timed bypass control unavailable")
+                        checkbox.setChecked(True)
+                    controller._dialog.accept()
+                    if port_file:
+                        results.append("approved")
+                else:
+                    controller._dialog.reject()
+                    if port_file:
+                        results.append("denied")
+        if finished.is_set() or (done_file and Path(done_file).exists()):
+            timer.stop()
+            plugin.stop()
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "results": results,
+                        "errors": errors,
+                        "seen": len(seen),
+                        "freecad": FreeCAD.Version(),
+                        "qt": QtCore.qVersion(),
+                        "preferences_tested": preferences_tested,
+                    }
+                )
+            )
+            FreeCADGui.getMainWindow().close()
+    except BaseException:
+        errors.append(traceback.format_exc())
+        finished.set()
+
+
+def start():
+    """Start an isolated bridge after the real GUI event loop is running."""
+    global plugin, timer, preferences_tested
+    try:
+        expected_data = os.path.realpath(os.environ["FREECAD_USER_DATA"])
+        if os.path.realpath(FreeCAD.getUserAppDataDir()) != expected_data:
+            raise RuntimeError("FreeCAD did not select the temporary user profile")
+        if os.environ.get("MCP_REVIEW_PROBE_PREFERENCES") == "1":
+            test_preferences()
+            preferences_tested = True
+        auth = BridgeAuthenticator(
+            create_hmac_verifier(lambda client: secret if client == "probe" else None)
+        )
+        plugin = FreecadMCPPlugin(
+            host="127.0.0.1", port=0, xmlrpc_port=0, authenticator=auth
+        )
+        plugin.start()
+        if plugin._review_broker is None:
+            raise RuntimeError("GUI startup did not enable review")
+        if preferences_tested:
+            policy = plugin._review_controller._policy
+            if (
+                policy.requires_review("execute_python")
+                or not policy.timed_bypass_enabled()
+            ):
+                raise RuntimeError("Bridge did not load saved review preferences")
+            # Exercise the actual host dialog with the opt-in control enabled.
+            from freecad_mcp_bridge.approval import ApprovalPayload, ApprovalRequest
+            from freecad_mcp_bridge.review_dialog import create_review_dialog
+
+            policy.configure("execute_python", require_review=True)
+            request = ApprovalRequest(ApprovalPayload("execute_python", b"pass"), 30)
+            dialog = create_review_dialog(request, FreeCADGui.getMainWindow(), policy)
+            dialog.open()
+            QtWidgets.QApplication.processEvents()
+            checkbox = dialog.findChild(QtWidgets.QCheckBox)
+            duration = dialog.findChild(QtWidgets.QSpinBox)
+            if checkbox is None or duration is None or checkbox.isChecked():
+                raise RuntimeError(
+                    "Timed bypass control unavailable or enabled by default"
+                )
+            checkbox.setChecked(True)
+            duration.setValue(1)
+            dialog.accept()
+            QtWidgets.QApplication.processEvents()
+            if request.consume() is None or policy.requires_review("execute_python"):
+                raise RuntimeError("Timed bypass did not follow local acceptance")
+            policy.clear_session()
+            if not policy.requires_review("execute_python"):
+                raise RuntimeError("Timed bypass was not cleared")
+            dialog.deleteLater()
+            plugin.stop()
+            params = FreeCAD.ParamGet(
+                "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
+            )
+            params.SetBool("ReviewPython", True)
+            params.SetBool("AllowReviewBypass", False)
+            plugin.start()
+            policy = plugin._review_controller._policy
+            if (
+                not policy.requires_review("execute_python")
+                or policy.timed_bypass_enabled()
+            ):
+                raise RuntimeError("Bridge did not restore default review preferences")
+            policy.set_timed_bypass_enabled(True)
+        port = plugin._socket_server.sockets[0].getsockname()[1]
+        if port_file:
+            Path(port_file).write_text(str(port))
+        else:
+            threading.Thread(target=worker, args=(port,), daemon=True).start()
+        timer = QtCore.QTimer()
+        timer.timeout.connect(tick)
+        timer.start(50)
+    except BaseException:
+        result_path.write_text(json.dumps({"errors": [traceback.format_exc()]}))
+        if plugin:
+            plugin.stop()
+        FreeCADGui.getMainWindow().close()
+
+
+QtCore.QTimer.singleShot(1000, start)

@@ -82,66 +82,17 @@ class TestMacroTools:
         assert result[1]["is_system"] is True
 
     @pytest.mark.asyncio
-    async def test_run_macro_success(self, register_tools, mock_bridge):
-        """run_macro should execute a macro and return results."""
-        # run_macro calls bridge.run_macro which returns ExecutionResult
-        mock_bridge.run_macro = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result={"exported_count": 3},
-                stdout="Exported 3 objects\n",
-                stderr="",
-                execution_time_ms=150.0,
-            )
-        )
-
-        run_macro = register_tools["run_macro"]
-        result = await run_macro(macro_name="ExportSTL")
-
-        assert result["success"] is True
-        assert result["stdout"] == "Exported 3 objects\n"
-        mock_bridge.run_macro.assert_called_once_with("ExportSTL", None)
-
-    @pytest.mark.asyncio
-    async def test_run_macro_with_args(self, register_tools, mock_bridge):
-        """run_macro should pass arguments to macro."""
-        mock_bridge.run_macro = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result=None,
-                stdout="",
-                stderr="",
-                execution_time_ms=50.0,
-            )
-        )
-
-        run_macro = register_tools["run_macro"]
-        args = {"output_dir": "/tmp", "format": "step"}
-        result = await run_macro(macro_name="CustomMacro", args=args)
-
-        assert result["success"] is True
-        mock_bridge.run_macro.assert_called_once_with("CustomMacro", args)
-
-    @pytest.mark.asyncio
-    async def test_run_macro_failure(self, register_tools, mock_bridge):
-        """run_macro should return error info on failure."""
-        mock_bridge.run_macro = AsyncMock(
-            return_value=ExecutionResult(
-                success=False,
-                result=None,
-                stdout="",
-                stderr="NameError: name 'undefined_var' is not defined",
-                execution_time_ms=10.0,
-                error_type="NameError",
-                error_traceback="Traceback...",
-            )
-        )
-
-        run_macro = register_tools["run_macro"]
-        result = await run_macro(macro_name="BrokenMacro")
-
+    @pytest.mark.parametrize("args", [None, {"output_dir": "/tmp"}])
+    async def test_run_macro_fails_closed_without_content_review(
+        self, register_tools, mock_bridge, args
+    ):
+        """Never execute an unreviewed file, even when arguments are supplied."""
+        result = await register_tools["run_macro"]("ExportSTL", args)
         assert result["success"] is False
-        assert result["error_type"] == "NameError"
+        assert result["error_type"] == "ReviewUnavailable"
+        mock_bridge.run_macro.assert_not_awaited()
+        mock_bridge.execute_python.assert_not_awaited()
+        mock_bridge.execute_reviewed_python.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_create_macro(self, register_tools, mock_bridge):

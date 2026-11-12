@@ -172,6 +172,7 @@ class MCPStatusWidget:
         xmlrpc_running: bool = True,
         socket_running: bool = True,
         errors: str = "",
+        review_bypassed: bool = False,
     ) -> None:
         """Update the widget to show running status.
 
@@ -182,6 +183,7 @@ class MCPStatusWidget:
             xmlrpc_running: Whether XML-RPC is listening.
             socket_running: Whether JSON-RPC is listening.
             errors: Listener errors and troubleshooting guidance.
+            review_bypassed: Whether supported Python review is bypassed.
         """
         if self._widget is None:
             return
@@ -197,7 +199,8 @@ class MCPStatusWidget:
             if errors
             else "Client Python: full user permissions"
         )
-        self._widget.setText(f"MCP: {state} ({xmlrpc_port}/{socket_port})")
+        suffix = " | Python review bypassed" if review_bypassed else ""
+        self._widget.setText(f"MCP: {state}{suffix} ({xmlrpc_port}/{socket_port})")
         self._widget.setStyleSheet(
             "QLabel { "
             "background-color: #9a5700; "
@@ -321,6 +324,7 @@ def update_status_running(
     xmlrpc_running: bool = True,
     socket_running: bool = True,
     errors: str = "",
+    review_bypassed: bool = False,
 ) -> None:
     """Update status widget to show running state."""
     widget = get_status_widget()
@@ -332,6 +336,7 @@ def update_status_running(
         xmlrpc_running=xmlrpc_running,
         socket_running=socket_running,
         errors=errors,
+        review_bypassed=review_bypassed,
     )
 
 

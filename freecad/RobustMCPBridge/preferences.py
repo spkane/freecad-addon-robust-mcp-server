@@ -27,6 +27,8 @@ class PreferencesDict(TypedDict):
     status_bar_enabled: bool
     xmlrpc_port: int
     socket_port: int
+    review_python: bool
+    allow_review_bypass: bool
 
 
 # Parameter path for our workbench preferences
@@ -39,6 +41,26 @@ DEFAULT_AUTO_START_HEADLESS_BATCH = False
 DEFAULT_STATUS_BAR_ENABLED = True
 DEFAULT_XMLRPC_PORT = 9875
 DEFAULT_SOCKET_PORT = 9876
+
+
+def get_review_python() -> bool:
+    """Require local review for supported Python requests by default."""
+    return get_param().GetBool("ReviewPython", True)
+
+
+def set_review_python(enabled: bool) -> None:
+    """Set the local review requirement for supported Python requests."""
+    get_param().SetBool("ReviewPython", enabled)
+
+
+def get_allow_review_bypass() -> bool:
+    """Return whether the review dialog may offer a timed bypass."""
+    return get_param().GetBool("AllowReviewBypass", False)
+
+
+def set_allow_review_bypass(enabled: bool) -> None:
+    """Enable or disable the timed bypass option in the review dialog."""
+    get_param().SetBool("AllowReviewBypass", enabled)
 
 
 def get_param() -> FreeCAD.ParameterGrp:
@@ -193,6 +215,8 @@ def get_all_preferences() -> PreferencesDict:
         "status_bar_enabled": get_status_bar_enabled(),
         "xmlrpc_port": get_xmlrpc_port(),
         "socket_port": get_socket_port(),
+        "review_python": get_review_python(),
+        "allow_review_bypass": get_allow_review_bypass(),
     }
 
 
@@ -204,3 +228,5 @@ def reset_to_defaults() -> None:
     set_status_bar_enabled(DEFAULT_STATUS_BAR_ENABLED)
     set_xmlrpc_port(DEFAULT_XMLRPC_PORT)
     set_socket_port(DEFAULT_SOCKET_PORT)
+    set_review_python(True)
+    set_allow_review_bypass(False)
