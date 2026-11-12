@@ -15,7 +15,7 @@ from freecad_mcp.tools._registration import file_tool, unsafe_tool
 
 def _validate_macro_name(name: str) -> None:
     """Reject path-like names before any bridge operation is dispatched."""
-    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0"):
+    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0\r\n"):
         raise ValueError("Macro name must be a single file name, not a path")
 
 

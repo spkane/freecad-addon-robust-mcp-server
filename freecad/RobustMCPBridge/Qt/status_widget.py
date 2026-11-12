@@ -384,6 +384,11 @@ def sync_status_with_bridge() -> None:
 
         if _mcp_plugin is not None and _mcp_plugin.is_running:
             status = _mcp_plugin.get_status()
+            controller = _mcp_plugin._review_controller
+            policy = controller._policy if controller is not None else None
+            bypassed = policy is not None and not policy.requires_review(
+                "execute_python"
+            )
             widget.set_running(
                 _mcp_plugin.xmlrpc_port,
                 _mcp_plugin.socket_port,
@@ -391,6 +396,7 @@ def sync_status_with_bridge() -> None:
                 xmlrpc_running=status["listeners"]["xmlrpc"] == "running",
                 socket_running=status["listeners"]["socket"] == "running",
                 errors="\n".join(status["listener_errors"].values()),
+                review_bypassed=bypassed,
             )
         else:
             widget.set_stopped()

@@ -504,6 +504,31 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     assert "XML-RPC: listening" in tooltip and "JSON-RPC: unavailable" in tooltip
     assert "check preferences" in tooltip and "authorized clients" in tooltip
     assert module.__version__ in tooltip
+    policy = MagicMock()
+    policy.requires_review.return_value = False
+    plugin = MagicMock(
+        is_running=True, xmlrpc_port=9875, socket_port=9876, request_count=1
+    )
+    plugin._review_controller = types.SimpleNamespace(_policy=policy)
+    plugin.get_status.return_value = {
+        "listeners": {"xmlrpc": "running", "socket": "running"},
+        "listener_errors": {},
+    }
+    monkeypatch.setitem(
+        sys.modules,
+        "freecad.RobustMCPBridge.commands",
+        types.SimpleNamespace(_mcp_plugin=plugin),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "freecad.RobustMCPBridge.preferences",
+        types.SimpleNamespace(get_status_bar_enabled=lambda: True),
+    )
+    synced = MagicMock()
+    synced.install.return_value = True
+    monkeypatch.setattr(module, "get_status_widget", lambda: synced)
+    module.sync_status_with_bridge()
+    assert synced.set_running.call_args.kwargs["review_bypassed"] is True
     for method, args in (
         (widget.set_stopped, ()),
         (widget.set_starting, ()),

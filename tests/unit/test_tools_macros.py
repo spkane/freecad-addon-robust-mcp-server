@@ -354,6 +354,8 @@ class TestMacroTools:
         r"C:\\outside",
         "C:outside",
         "bad\x00name",
+        "bad\nname",
+        "bad\rname",
     ],
 )
 @pytest.mark.parametrize(

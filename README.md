@@ -106,8 +106,9 @@ or protect against malicious software running as the same user. The MCP server
 does not expose arbitrary Python and macro execution tools by default, but
 ordinary modeling tools still execute Python through the bridge. Client tool
 approval behavior varies. In the current development version, the optional
-`execute_python` and `safe_execute` tools also require a local FreeCAD approval
-dialog on a supported GUI/socket connection. This does not prevent other
+`execute_python` and `safe_execute` tools require a local FreeCAD approval
+dialog by default on a supported GUI/socket connection. Users can disable review
+or enable a timed bypass in the workbench preferences. This does not prevent other
 paired clients from sending Python directly to the bridge.
 
 See the [security guide](docs/guide/security.md) for the warning, pairing,
@@ -434,7 +435,7 @@ The Robust MCP Server provides **150+ tools** organized into categories. Tools m
 
 | Tool                         | Description                                                   | Mode |
 | ---------------------------- | ------------------------------------------------------------- | ---- |
-| `execute_python`             | Execute arbitrary Python code in FreeCAD's context            | All  |
+| `execute_python`             | Execute Python; enable unsafe tools and use socket mode       | GUI  |
 | `get_freecad_version`        | Get FreeCAD version, build date, and Python version           | All  |
 | `get_connection_status`      | Check MCP bridge connection status and latency                | All  |
 | `get_console_output`         | Get recent Report view or available console history           | All* |
