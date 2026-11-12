@@ -1,6 +1,7 @@
 """Verify macro names cannot escape generated bridge code."""
 
 import asyncio
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -15,7 +16,16 @@ from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
 @pytest.mark.asyncio
 @pytest.mark.parametrize("bridge_class", [SocketBridge, XmlRpcBridge])
 @pytest.mark.parametrize(
-    "name", ["'''; marker.append('executed'); #", "name\nmarker.append('executed')"]
+    "name",
+    [
+        "'''; marker.append('executed'); #",
+        pytest.param(
+            "name\nmarker.append('executed')",
+            marks=pytest.mark.skipif(
+                sys.platform == "win32", reason="Windows rejects newlines in filenames"
+            ),
+        ),
+    ],
 )
 async def test_macro_name_is_data_in_generated_code(
     tmp_path: Path, bridge_class: type, name: str
