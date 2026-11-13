@@ -61,10 +61,10 @@ require a local FreeCAD review dialog by default when using the socket
 connection. A user can explicitly change this in the preferences below. The
 dialog displays the code to be executed and defaults to denial. These tools
 fail closed with older bridges, headless FreeCAD, embedded mode, and XML-RPC;
-they do not fall back to unreviewed execution. `run_macro` is unavailable
-until the exact file contents can be reviewed and executed without reopening a
-changed file. Macro creation still writes files, and ordinary modeling and
-file tools can have side effects without this dialog.
+they do not fall back to unreviewed execution. `run_macro` also requires a
+supported GUI/socket bridge and local review unless the user explicitly grants
+a saved approval or timed bypass. Macro creation still writes files, and
+ordinary modeling and file tools can have side effects without this dialog.
 
 Depending on its configuration, an MCP client may ask permission before it
 calls the tool. In this example Codex shows a permission prompt for the
@@ -86,6 +86,39 @@ to **Deny**. **Allow once** approves only that request; closing the dialog or
 letting the review expire denies it. Review the complete code, including text
 outside the initial view, before deciding.
 
+### Macro review and saved versions
+
+When an agent requests `run_macro`, FreeCAD captures the macro file, displays
+its resolved path, SHA-256, arguments and code, and asks for a decision:
+
+![FreeCAD macro review dialog showing a macro's path, checksum, arguments, code, and approval controls](../assets/images/bridge-macro-review.png)
+
+This screenshot shows a harmless example in an isolated FreeCAD profile, with
+the optional timed bypass enabled. **Deny** stops the request; **Allow once**
+runs the captured contents. Even if the file changes while the dialog is open,
+FreeCAD executes the captured text that was displayed, rather than reopening
+the file. CRLF line endings are shown and executed as LF. A changed file requires a new review unless an active
+macro bypass or another saved approval applies.
+
+**Always allow this exact macro version** saves an approval for the displayed
+path and SHA-256. Later requests for that same path and contents can run without
+another local review. This approval does **not** bind arguments, imported
+modules, other files, or network resources; they may change the macro's behavior.
+Use it only for macros and dependencies you trust. An enabled timed bypass is
+separate: it skips review for *all* supported macro requests during that period,
+including previously unseen macros.
+
+Manage saved versions under **Preferences → Robust MCP Bridge → Saved macro
+approvals**. Select an entry to remove it or open its containing folder; you
+can also remove all entries. The screenshot shows an example entry:
+
+![FreeCAD bridge preferences showing saved macro approvals and removal controls](../assets/images/bridge-macro-approvals.png)
+
+Removal takes effect immediately, including for an automatic approval that has
+not yet been claimed for execution. Saved approvals persist across bridge
+restarts. The timed bypass lasts only for the selected interval and is cleared
+when the bridge stops; the status indicator reports a macro bypass while active.
+
 An explicit denial returns `ReviewDenied`; an unavailable review returns
 `ReviewUnavailable`. Neither authorizes execution. Do not automatically retry
 or bypass a user's denial.
@@ -104,18 +137,20 @@ local review dialog. Authorized clients' Python has your full permissions.
 You may separately enable **Offer a time-limited review bypass in the review
 dialog**. When enabled, the dialog offers an optional duration from one minute
 to eight hours; selecting it and allowing the current request bypasses review
-for subsequent supported Python requests until it expires. The bypass is
-local to the running bridge and is cleared when it stops. The status indicator
-shows when supported Python review is bypassed. Preference changes require a
+for subsequent supported requests of the same kind until it expires. Python
+and macro bypasses are separate. The bypass is local to the running bridge and
+is cleared when it stops. The status indicator shows which review is bypassed. Preference changes require a
 bridge restart. The socket and GUI requirements still apply; this does not
 enable reviewed execution in headless, XML-RPC, or embedded modes.
 On macOS and Linux the bypass deadline includes time spent asleep. Platforms
 without a sleep-inclusive clock use their monotonic clock, which may pause
 during sleep; stop the bridge to end a bypass immediately.
 
-The review rejects code that cannot be displayed faithfully, including CRLF
-line endings, certain control or formatting characters, and code over the
-review size limit. The socket's encoded request limit can be reached with
+The review rejects code or macro contents that cannot be displayed faithfully,
+including certain control or formatting characters and code over the review
+size limit. Macro CRLF line endings are displayed and executed as LF; the
+saved checksum still identifies the original file bytes. Python review rejects
+CRLF line endings. The socket's encoded request limit can be reached with
 smaller input, depending on its content and authentication proof. Convert line
 endings to LF before submitting the request;
 the bridge displays and executes the submitted content without silently

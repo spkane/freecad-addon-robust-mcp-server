@@ -39,6 +39,7 @@ import uuid
 import weakref
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -509,6 +510,7 @@ class FreecadMCPPlugin:
         )
         # Review routing stays disabled until a trusted GUI coordinator is installed.
         self._review_broker: Any | None = None
+        self._macro_review_roots: tuple[str, ...] = ()
         self._review_controller: Any | None = None
         self._review_close_relay: Any | None = None
         self._socket_client_count = 0
@@ -1129,6 +1131,8 @@ class FreecadMCPPlugin:
                     socket_running=listener_status["listeners"]["socket"] == "running",
                     errors="\n".join(errors.values()),
                     review_bypassed=bypassed,
+                    macro_review_bypassed=policy is not None
+                    and not policy.requires_review("run_macro"),
                 )
             else:
                 self._show_standalone_warning()
@@ -1140,9 +1144,15 @@ class FreecadMCPPlugin:
         controller = self._review_controller
         policy = controller._policy if controller is not None else None
         bypassed = policy is not None and not policy.requires_review("execute_python")
+        macro_bypassed = policy is not None and not policy.requires_review("run_macro")
+        bypasses = []
+        if bypassed:
+            bypasses.append("Python")
+        if macro_bypassed:
+            bypasses.append("macro")
         message = (
-            "MCP: Python review bypassed; client has full permissions"
-            if bypassed
+            f"MCP: {' and '.join(bypasses)} review bypassed; client has full permissions"
+            if bypasses
             else "MCP: Client Python has full user permissions"
         )
         if self._standalone_warning is not None:
@@ -1300,10 +1310,12 @@ class FreecadMCPPlugin:
             self._review_close_relay = None
         if __package__:
             from .approval import LeasedReviewBroker, ReviewCoordinator
+            from .macro_approvals import freecad_approval_store
             from .review_dialog import ReviewDialogController, create_close_relay
             from .review_policy import ReviewPolicy
         else:
             from approval import LeasedReviewBroker, ReviewCoordinator  # type: ignore[import-not-found,no-redef]
+            from macro_approvals import freecad_approval_store  # type: ignore[import-not-found,no-redef]
             from review_dialog import (  # type: ignore[import-not-found,no-redef]
                 ReviewDialogController,
                 create_close_relay,
@@ -1325,7 +1337,18 @@ class FreecadMCPPlugin:
         parent = None
         with contextlib.suppress(Exception):
             parent = FreeCADGui.getMainWindow()
-        controller = ReviewDialogController(coordinator, parent, policy)
+        self._macro_review_roots = ()
+        approval_store = None
+        try:
+            self._macro_review_roots = (
+                FreeCAD.getUserMacroDir(True),
+                str(Path(FreeCAD.getResourceDir()) / "Macro"),
+            )
+            approval_store = freecad_approval_store()
+        except Exception:
+            # Macro review is unavailable if the trusted GUI cannot configure it.
+            pass
+        controller = ReviewDialogController(coordinator, parent, policy, approval_store)
         self._review_close_relay = create_close_relay(controller)
         self._review_controller = controller
         self._review_broker = LeasedReviewBroker(coordinator, MAX_PENDING_REQUESTS)
@@ -1376,10 +1399,30 @@ class FreecadMCPPlugin:
             return
         request_id, payload = item
         try:
-            if payload.action != "execute_python":
+            if payload.action == "execute_python":
+                code = payload.content.decode("utf-8", errors="strict")
+                result = self._execute_code_sync(code)
+            elif payload.action == "run_macro":
+                if (
+                    payload.macro_path is None
+                    or payload.macro_args_json is None
+                    or hashlib.sha256(payload.content).hexdigest()
+                    != payload.macro_sha256
+                ):
+                    raise ValueError("Invalid reviewed macro")
+                args = json.loads(payload.macro_args_json)
+                if type(args) is not dict:
+                    raise ValueError("Invalid reviewed macro arguments")
+                if __package__:
+                    from .review_dialog import review_text
+                else:
+                    from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+                reviewed_code = review_text(payload.content, allow_crlf=True)
+                result = self._execute_code_sync(
+                    reviewed_code, filename=payload.macro_path, initial_globals=args
+                )
+            else:
                 raise ValueError("Unsupported reviewed action")
-            code = payload.content.decode("utf-8", errors="strict")
-            result = self._execute_code_sync(code)
             self._record_request()
         except Exception:
             result = {
@@ -1460,11 +1503,19 @@ class FreecadMCPPlugin:
 
             return standalone_dispatch(version, operation, args)
 
-    def _execute_code_sync(self, code: str) -> dict[str, Any]:
+    def _execute_code_sync(
+        self,
+        code: str | bytes,
+        *,
+        filename: str = "<mcp>",
+        initial_globals: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Execute Python code synchronously (call on main thread only).
 
         Args:
             code: Python code to execute.
+            filename: Source name for the compiled code.
+            initial_globals: Named values supplied to the execution environment.
 
         Returns:
             Execution result dictionary.
@@ -1478,6 +1529,11 @@ class FreecadMCPPlugin:
             "_robust_mcp_cam_dispatch": self._cam_dispatch,
         }
 
+        if initial_globals is not None:
+            exec_globals.update(initial_globals)
+            exec_globals["__file__"] = filename
+            exec_globals["__name__"] = "__main__"
+
         if FREECAD_AVAILABLE:
             exec_globals["FreeCAD"] = FreeCAD
             exec_globals["App"] = FreeCAD
@@ -1486,7 +1542,7 @@ class FreecadMCPPlugin:
 
         try:
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                compiled = compile(code, "<mcp>", "exec")
+                compiled = compile(code, filename, "exec")
                 exec(compiled, exec_globals)  # noqa: S102
 
             elapsed = (time.perf_counter() - start) * 1000
@@ -1726,6 +1782,7 @@ class FreecadMCPPlugin:
                 and request.get("method")
                 in (
                     "review_begin",
+                    "review_begin_macro",
                     "review_status",
                     "review_commit",
                     "review_cancel",
@@ -1776,6 +1833,11 @@ class FreecadMCPPlugin:
                 "id": request_id,
                 "error": {"code": -32602, "message": "Invalid params"},
             }
+
+        if method == "review_begin_macro":
+            return await self._review_begin_macro(
+                request_id, params, authenticated_client
+            )
 
         if method in (
             "review_begin",
@@ -1836,6 +1898,76 @@ class FreecadMCPPlugin:
                 "data": f"Unknown method: {method}",
             },
         }
+
+    async def _review_begin_macro(
+        self,
+        request_id: str | int | None,
+        params: dict[str, Any],
+        owner: str | None,
+    ) -> dict[str, Any]:
+        """Capture local macro bytes off the event loop before creating a review."""
+        broker = self._review_broker
+        try:
+            if broker is None or type(owner) is not str or not self._macro_review_roots:
+                raise ValueError("Macro review unavailable")
+            if (
+                set(params) != {"macro_name", "args"}
+                or type(params["args"]) is not dict
+            ):
+                raise ValueError("Invalid macro arguments")
+            args = params["args"]
+            reserved = {"FreeCAD", "FreeCADGui", "App", "Gui", "_result_"}
+            if any(
+                type(key) is not str
+                or not key.isidentifier()
+                or key.startswith("_")
+                or key in reserved
+                for key in args
+            ):
+                raise ValueError("Invalid macro argument name")
+            args_json = json.dumps(
+                args, ensure_ascii=True, allow_nan=False, sort_keys=True
+            )
+            if len(args_json.encode("utf-8")) > 4096:
+                raise ValueError("Macro arguments are too large")
+            if __package__:
+                from .approval import ApprovalPayload
+                from .macro_snapshot import resolve_macro
+                from .review_dialog import review_text
+            else:
+                from approval import ApprovalPayload  # type: ignore[import-not-found,no-redef]
+                from macro_snapshot import resolve_macro  # type: ignore[import-not-found,no-redef]
+                from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+            snapshot = await asyncio.to_thread(
+                resolve_macro, params["macro_name"], self._macro_review_roots
+            )
+            review_text(snapshot.content, allow_crlf=True)
+            review_text(snapshot.path.encode("utf-8"))
+            if broker is None or self._review_broker is not broker:
+                raise ValueError("Macro review stopped")
+            if broker is None:
+                raise ValueError("Macro review stopped")
+            payload = ApprovalPayload(
+                "run_macro", snapshot.content, snapshot.path, snapshot.sha256, args_json
+            )
+            result = {"review_id": broker.begin(owner, payload, REVIEW_LEASE_SECONDS)}
+            return {"jsonrpc": "2.0", "id": request_id, "result": result}
+        except (
+            ValueError,
+            TypeError,
+            UnicodeError,
+            OSError,
+            RuntimeError,
+            RecursionError,
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32000,
+                    "message": "Macro review unavailable or invalid",
+                },
+            }
 
     def _review_request(  # noqa: PLR0912
         self,

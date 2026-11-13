@@ -30,7 +30,13 @@ def test_default_and_timed_bypass_are_scoped_and_expire(policy_module):
     policy.set_timed_bypass_enabled(True)
     policy.grant_bypass("execute_python", 60)
     assert not policy.requires_review("execute_python")
-    clock[0] += 60
+    assert policy.requires_review("run_macro")
+    policy.grant_bypass("run_macro", 30)
+    assert not policy.requires_review("run_macro")
+    clock[0] += 30
+    assert policy.requires_review("run_macro")
+    assert not policy.requires_review("execute_python")
+    clock[0] += 30
     assert policy.requires_review("execute_python")
 
 

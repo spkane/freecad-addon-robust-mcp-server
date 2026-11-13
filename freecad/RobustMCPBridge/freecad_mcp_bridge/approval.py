@@ -38,6 +38,9 @@ class ApprovalPayload:
 
     action: str
     content: bytes
+    macro_path: str | None = None
+    macro_sha256: str | None = None
+    macro_args_json: str | None = None
 
 
 class ApprovalRequest:
@@ -59,6 +62,15 @@ class ApprovalRequest:
             type(payload) is not ApprovalPayload
             or type(payload.action) is not str
             or type(payload.content) is not bytes
+            or (payload.macro_path is not None and type(payload.macro_path) is not str)
+            or (
+                payload.macro_sha256 is not None
+                and type(payload.macro_sha256) is not str
+            )
+            or (
+                payload.macro_args_json is not None
+                and type(payload.macro_args_json) is not str
+            )
         ):
             raise TypeError("Approval payload must contain immutable bytes")
         if (
@@ -72,6 +84,7 @@ class ApprovalRequest:
         self._deadline = time.monotonic() + timeout_seconds
         self._bypass_deadline: float | None = None
         self._bypass_clock: Callable[[], float] | None = None
+        self._claim_validator: Callable[[], bool] | None = None
         self._state = ApprovalState.PENDING
         self._lock = threading.Lock()
         self._decision_event = threading.Event()
@@ -132,6 +145,19 @@ class ApprovalRequest:
             self._decision_event.set()
             return True
 
+    def approve_if_still_valid(self, validator: Callable[[], bool]) -> bool:
+        """Approve provisionally, checking a local policy again at claim time."""
+        if not callable(validator):
+            raise TypeError("Claim validator must be callable")
+        with self._lock:
+            self._expire_locked()
+            if self._state is not ApprovalState.PENDING:
+                return False
+            self._claim_validator = validator
+            self._state = ApprovalState.APPROVED
+            self._decision_event.set()
+            return True
+
     def cancel(self) -> bool:
         """Deny a pending or approved request before it is consumed."""
         with self._lock:
@@ -161,6 +187,17 @@ class ApprovalRequest:
             self._expire_locked()
             if self._state is not ApprovalState.APPROVED:
                 return None
+            if self._claim_validator is not None:
+                try:
+                    valid = self._claim_validator() is True
+                except Exception:
+                    valid = False
+                if not valid:
+                    self._state = ApprovalState.DENIED
+                    return None
+                self._expire_locked()
+                if self._state is not ApprovalState.APPROVED:
+                    return None
             self._state = ApprovalState.CONSUMED
             return self._payload
 

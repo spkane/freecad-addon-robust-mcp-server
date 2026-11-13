@@ -119,6 +119,14 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         review_layout.addWidget(review_warning)
         layout.addWidget(review_group)
 
+        from .macro_approvals_widget import MacroApprovalsWidget
+
+        approvals_group = QtWidgets.QGroupBox("Saved macro approvals")
+        approvals_layout = QtWidgets.QVBoxLayout(approvals_group)
+        self.macro_approvals = MacroApprovalsWidget(approvals_group)
+        approvals_layout.addWidget(self.macro_approvals)
+        layout.addWidget(approvals_group)
+
         # Network Ports group
         ports_group = QtWidgets.QGroupBox("Network Ports")
         ports_layout = QtWidgets.QFormLayout(ports_group)
@@ -200,6 +208,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
 
         This method is called by FreeCAD when the Preferences dialog opens.
         """
+        self.macro_approvals.refresh()
         # Import here to avoid circular imports and ensure module is available
         from ..preferences import (
             get_allow_review_bypass,

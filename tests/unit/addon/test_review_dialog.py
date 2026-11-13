@@ -241,3 +241,115 @@ def test_controller_applies_local_bypass_deadline(
     assert coordinator.next_execution() is None
     controller.close()
     policy.clear_session.assert_called_once()
+
+
+def test_macro_review_can_save_exact_version(modules: tuple, tmp_path: Path) -> None:
+    """An explicit accepted choice stores the path and digest that were shown."""
+    import hashlib
+    import json
+
+    approval, review, widgets = modules
+    content = b"print('example')"
+    path = str(tmp_path / "example.FCMacro")
+    digest = hashlib.sha256(content).hexdigest()
+    request = approval.ApprovalRequest(
+        approval.ApprovalPayload("run_macro", content, path, digest, json.dumps({})), 30
+    )
+    store = MagicMock()
+    widgets.QCheckBox.return_value.isChecked.return_value = True
+    dialog = review.create_review_dialog(request, approval_store=store)
+    dialog.finished.connect.call_args.args[0](1)
+    entry = store.add.call_args.args[0]
+    assert (entry.path, entry.sha256) == (path, digest)
+    assert request.consume() == request.payload
+
+
+def test_failed_saved_macro_approval_denies_request(
+    modules: tuple, tmp_path: Path
+) -> None:
+    """A failure to save an approval cannot leave the operation authorized."""
+    import hashlib
+
+    approval, review, widgets = modules
+    content = b"pass"
+    request = approval.ApprovalRequest(
+        approval.ApprovalPayload(
+            "run_macro",
+            content,
+            str(tmp_path / "test.FCMacro"),
+            hashlib.sha256(content).hexdigest(),
+            "{}",
+        ),
+        30,
+    )
+    store = MagicMock()
+    store.add.side_effect = OSError("storage failed")
+    widgets.QCheckBox.return_value.isChecked.return_value = True
+    dialog = review.create_review_dialog(request, approval_store=store)
+    dialog.finished.connect.call_args.args[0](1)
+    assert request.consume() is None
+    assert request.state == approval.ApprovalState.DENIED
+
+
+def test_saved_macro_approval_rechecked_before_claim(
+    modules: tuple, tmp_path: Path
+) -> None:
+    """Removing a saved approval prevents a queued automatic execution."""
+    import hashlib
+
+    approval, review, _ = modules
+    coordinator = approval.ReviewCoordinator(1)
+    content = b"pass"
+    request = coordinator.submit(
+        approval.ApprovalPayload(
+            "run_macro",
+            content,
+            str(tmp_path / "test.FCMacro"),
+            hashlib.sha256(content).hexdigest(),
+            "{}",
+        ),
+        30,
+    )
+    store = MagicMock()
+    store.contains.side_effect = [True, False]
+    controller = review.ReviewDialogController(coordinator, approval_store=store)
+    controller.poll()
+    assert request.state == approval.ApprovalState.APPROVED
+    assert coordinator.wait_and_schedule(request)
+    assert coordinator.next_execution() is None
+    assert request.state == approval.ApprovalState.DENIED
+
+
+@pytest.mark.parametrize("remove_all", [False, True])
+def test_persisted_revocation_blocks_queued_macro(
+    modules: tuple, tmp_path: Path, remove_all: bool
+) -> None:
+    """Removing or clearing a stored version revokes an unclaimed ticket."""
+    import hashlib
+    import importlib
+
+    approval, review, _ = modules
+    store_module = importlib.import_module("review_dialog_test.macro_approvals")
+    storage = [""]
+    store = store_module.MacroApprovalStore(
+        lambda: storage[0], lambda value: storage.__setitem__(0, value)
+    )
+    content = b"_result_ = 42"
+    entry = store_module.MacroApproval(
+        str(tmp_path / "example.FCMacro"), hashlib.sha256(content).hexdigest()
+    )
+    store.add(entry)
+    coordinator = approval.ReviewCoordinator(1)
+    request = coordinator.submit(
+        approval.ApprovalPayload("run_macro", content, entry.path, entry.sha256, "{}"),
+        30,
+    )
+    controller = review.ReviewDialogController(coordinator, approval_store=store)
+    controller.poll()
+    assert coordinator.wait_and_schedule(request)
+    if remove_all:
+        store.clear()
+    else:
+        assert store.remove(entry)
+    assert coordinator.next_execution() is None
+    assert request.state == approval.ApprovalState.DENIED

@@ -28,6 +28,31 @@ def approval_module(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     return module
 
 
+def test_saved_approval_is_rechecked_when_claimed(approval_module: ModuleType) -> None:
+    """Revocation after scheduling prevents a saved approval from executing."""
+    payload = approval_module.ApprovalPayload("run_macro", b"pass")
+    request = approval_module.ApprovalRequest(payload, 30)
+    allowed = [True]
+    assert request.approve_if_still_valid(lambda: allowed[0])
+    allowed[0] = False
+    assert request.consume() is None
+    assert request.state == approval_module.ApprovalState.DENIED
+
+
+def test_saved_approval_check_failure_denies(approval_module: ModuleType) -> None:
+    """A failed persisted-policy lookup cannot authorize execution."""
+    request = approval_module.ApprovalRequest(
+        approval_module.ApprovalPayload("run_macro", b"pass"), 30
+    )
+
+    def fail() -> bool:
+        raise OSError("unavailable")
+
+    assert request.approve_if_still_valid(fail)
+    assert request.consume() is None
+    assert request.state == approval_module.ApprovalState.DENIED
+
+
 def test_approval_is_bound_to_immutable_content_and_is_single_use(
     approval_module: ModuleType,
 ) -> None:
@@ -465,3 +490,24 @@ def test_broker_reports_denial_to_owner_without_dispatch(
     assert broker.status("bob", review_id) is None
     assert not broker.commit("alice", review_id)
     assert coordinator.next_execution() is None
+
+
+def test_claim_expires_during_saved_approval_validation(
+    approval_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A slow validation cannot authorize a request after its deadline."""
+    clock = [10.0]
+    monkeypatch.setattr(
+        approval_module, "time", SimpleNamespace(monotonic=lambda: clock[0])
+    )
+    request = approval_module.ApprovalRequest(
+        approval_module.ApprovalPayload("run_macro", b"pass"), 1
+    )
+
+    def validate() -> bool:
+        clock[0] = 11.0
+        return True
+
+    assert request.approve_if_still_valid(validate)
+    assert request.consume() is None
+    assert request.state == approval_module.ApprovalState.EXPIRED

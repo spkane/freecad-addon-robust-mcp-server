@@ -108,8 +108,9 @@ local approval by default in a GUI bridge over the socket connection. Review
 can be disabled or temporarily bypassed through the workbench preferences. Set
 `FREECAD_MODE=socket` in the MCP server environment and start FreeCAD with its
 GUI bridge to use those tools. They fail closed when that review is
-unavailable. `run_macro` is unavailable until it can
-review and execute the same file contents. See the [security guide](../guide/security.md#tools-files-and-approvals)
+unavailable. `run_macro` uses the same GUI/socket requirement and reviews a
+captured copy of the file unless the user has explicitly saved an approval or
+chosen a timed macro-review bypass. See the [security guide](../guide/security.md#tools-files-and-approvals)
 for the scope and limits of the review.
 
 This setting controls the MCP tool list; it is not a sandbox or a bridge

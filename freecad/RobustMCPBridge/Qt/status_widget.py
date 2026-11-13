@@ -173,6 +173,7 @@ class MCPStatusWidget:
         socket_running: bool = True,
         errors: str = "",
         review_bypassed: bool = False,
+        macro_review_bypassed: bool = False,
     ) -> None:
         """Update the widget to show running status.
 
@@ -184,6 +185,7 @@ class MCPStatusWidget:
             socket_running: Whether JSON-RPC is listening.
             errors: Listener errors and troubleshooting guidance.
             review_bypassed: Whether supported Python review is bypassed.
+            macro_review_bypassed: Whether local macro review is bypassed.
         """
         if self._widget is None:
             return
@@ -200,6 +202,8 @@ class MCPStatusWidget:
             else "Client Python: full user permissions"
         )
         suffix = " | Python review bypassed" if review_bypassed else ""
+        if macro_review_bypassed:
+            suffix += " | Macro review bypassed"
         self._widget.setText(f"MCP: {state}{suffix} ({xmlrpc_port}/{socket_port})")
         self._widget.setStyleSheet(
             "QLabel { "
@@ -325,6 +329,7 @@ def update_status_running(
     socket_running: bool = True,
     errors: str = "",
     review_bypassed: bool = False,
+    macro_review_bypassed: bool = False,
 ) -> None:
     """Update status widget to show running state."""
     widget = get_status_widget()
@@ -337,6 +342,7 @@ def update_status_running(
         socket_running=socket_running,
         errors=errors,
         review_bypassed=review_bypassed,
+        macro_review_bypassed=macro_review_bypassed,
     )
 
 
@@ -397,6 +403,8 @@ def sync_status_with_bridge() -> None:
                 socket_running=status["listeners"]["socket"] == "running",
                 errors="\n".join(status["listener_errors"].values()),
                 review_bypassed=bypassed,
+                macro_review_bypassed=policy is not None
+                and not policy.requires_review("run_macro"),
             )
         else:
             widget.set_stopped()

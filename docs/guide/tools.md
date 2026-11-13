@@ -509,7 +509,7 @@ operations such as Drilling from a script (`hole-op-create`).
 | Tool                         | Description                              |
 | ---------------------------- | ---------------------------------------- |
 | `list_macros`                | List available macros                    |
-| `run_macro`                  | Unavailable pending exact-content review |
+| `run_macro`                  | Run a macro after local review           |
 | `create_macro`               | Create a new macro                       |
 | `read_macro`                 | Read macro source code                   |
 | `delete_macro`               | Delete a user macro                      |

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 # Both MCP Python tools produce the same bridge-level action. The bridge
 # cannot trust a remote client's claim that its Python came from a given tool.
-REVIEWED_ACTIONS = frozenset({"execute_python"})
+REVIEWED_ACTIONS = frozenset({"execute_python", "run_macro"})
 MAX_BYPASS_SECONDS = 8 * 60 * 60
 
 
