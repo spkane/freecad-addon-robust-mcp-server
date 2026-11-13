@@ -1015,10 +1015,9 @@ macro_file = os.path.join(macro_path, {name!r} + ".FCMacro")
 
 header = ""
 if {description!r}:
-    header = f"# {description!r}\\n\\n"
+    header = "".join("# " + line + "\\n" for line in {description!r}.splitlines()) + "\\n"
 
-full_code = header + '''# -*- coding: utf-8 -*-
-# FreeCAD Macro: {name}
+full_code = header + "# -*- coding: utf-8 -*-\\n# FreeCAD Macro: " + " ".join({name!r}.splitlines()) + '''
 # Created via MCP Bridge
 
 import FreeCAD

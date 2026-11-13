@@ -88,7 +88,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 - **150+ MCP Tools**: Comprehensive CAD operations including primitives, PartDesign, booleans, export
 - **Multiple Connection Modes**: XML-RPC (recommended), JSON-RPC socket, or embedded
 - **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
-- **Macro Development**: Create, edit, run, and template FreeCAD macros via MCP
+- **Macro Development**: Create, inspect, and template FreeCAD macros via MCP
 
 ## Security
 
@@ -105,12 +105,35 @@ not prevent a trusted client from following malicious instructions in a model
 or protect against malicious software running as the same user. The MCP server
 does not expose arbitrary Python and macro execution tools by default, but
 ordinary modeling tools still execute Python through the bridge. Client tool
-approval behavior varies and is not enforced by the bridge.
+approval behavior varies. In the current development version, the optional
+`execute_python` and `safe_execute` tools require a local FreeCAD approval
+dialog by default on a supported GUI/socket connection. Users can disable review
+or enable a timed bypass in the workbench preferences. This does not prevent other
+paired clients from sending Python directly to the bridge.
 
 See the [security guide](docs/guide/security.md) for the warning, pairing,
 client approvals, file access, and remote-access considerations.
 
 ![FreeCAD with the standalone bridge permissions warning in the status bar](docs/assets/images/bridge-permissions-full.png)
+
+Some MCP clients also request permission before calling an unsafe tool. This
+example shows Codex asking to run a harmless Python request against the
+isolated test server:
+
+![Codex permission prompt for an example Python tool call](docs/assets/images/codex-python-permission.png)
+
+The client prompt depends on its settings and is separate from FreeCAD's local
+review.
+
+For example, when an agent requests `execute_python`, FreeCAD can show the
+complete code and ask the user to allow it once or deny it:
+
+![FreeCAD review dialog showing harmless example Python and Allow once and Deny buttons](docs/assets/images/bridge-python-review.png)
+
+This example was captured in an isolated test profile with an MCP test client.
+Macro execution remains unavailable until its exact file contents can be
+reviewed and executed safely. See the security guide for connection-mode
+limitations and the behavior after timeouts.
 
 ## Installation Requirements / Dependencies
 
@@ -412,7 +435,7 @@ The Robust MCP Server provides **150+ tools** organized into categories. Tools m
 
 | Tool                         | Description                                                   | Mode |
 | ---------------------------- | ------------------------------------------------------------- | ---- |
-| `execute_python`             | Execute arbitrary Python code in FreeCAD's context            | All  |
+| `execute_python`             | Execute Python; enable unsafe tools and use socket mode       | GUI  |
 | `get_freecad_version`        | Get FreeCAD version, build date, and Python version           | All  |
 | `get_connection_status`      | Check MCP bridge connection status and latency                | All  |
 | `get_console_output`         | Get recent Report view or available console history           | All* |
@@ -534,7 +557,7 @@ embedded mode; an unavailable source returns an error.*
 | Tool                         | Description                                    | Mode |
 | ---------------------------- | ---------------------------------------------- | ---- |
 | `list_macros`                | List all available FreeCAD macros              | All  |
-| `run_macro`                  | Execute a macro by name                        | All  |
+| `run_macro`                  | Unavailable pending exact-content review       | —    |
 | `create_macro`               | Create a new macro file                        | All  |
 | `read_macro`                 | Read macro source code                         | All  |
 | `delete_macro`               | Delete a user macro                            | All  |

@@ -1,14 +1,14 @@
 # FreeCAD bridge authentication design
 
-Status: implementation in progress. Released XML-RPC and socket listeners accept
-unauthenticated code execution; the controls described here are not yet a
-release guarantee. On the development branch, startup refuses to open listeners
-without an authentication provider. The development branch can load explicit
-credentials from its process environment, a private POSIX credential file, or
-Windows Credential Manager. Windows and cross-platform verification are still outstanding. The
-selected release boundary uses per-user pairing and
-does not promise isolation from malicious programs running under the same OS
-account. The bridge must fail closed if pairing or authentication is unavailable.
+Status: authentication and approval work continues on the development branch.
+The current bridge refuses to open its XML-RPC and socket listeners without an
+authentication provider. It can load explicit credentials from its process
+environment, a private POSIX credential file, or Windows Credential Manager.
+The selected boundary uses per-user pairing and does not promise isolation
+from malicious programs running under the same OS account. The bridge must fail
+closed if pairing or authentication is unavailable. The local code-review path
+described below covers specific MCP tools; it does not guard the legacy raw
+bridge endpoint.
 
 ## Trust boundary
 
@@ -232,8 +232,8 @@ permissions; server-side tool registration does not sandbox that client.
 
 | Tool group | Inputs and effects | Exposure and metadata |
 | --- | --- | --- |
-| `execute_python`, `safe_execute` | Model-provided Python runs with the FreeCAD user's filesystem and network permissions. `safe_execute` is not a security sandbox. | Available only with `FREECAD_ALLOW_UNSAFE_CODE=true`; marked non-read-only, destructive, non-idempotent and open-world. |
-| `run_macro`, `create_macro`, `create_macro_from_template` | Execute or create macro code; `run_macro` exposes a name, not the file contents. | Available only with unsafe code enabled; same conservative metadata. No approval or exact-content binding is provided by the server. |
+| `execute_python`, `safe_execute` | Model-provided Python runs with the FreeCAD user's filesystem and network permissions. `safe_execute` is not a security sandbox. | Available only with `FREECAD_ALLOW_UNSAFE_CODE=true`; require local review over a GUI/socket bridge. Marked non-read-only, destructive, non-idempotent and open-world. |
+| `run_macro`, `create_macro`, `create_macro_from_template` | Execute or create macro code; `run_macro` exposes a name, not the file contents. | Available only with unsafe code enabled; `run_macro` fails closed until exact file contents can be reviewed and executed. Creation still writes files. |
 | `read_macro`, `delete_macro` | Read or delete a user-selected macro name. System macros may also be read. | Registered by default. `read_macro` is marked read-only; deletion is marked destructive. Both are open-world. Tool-level names reject path separators and drive prefixes; symlink behavior and approval require further review. |
 | `open_document`, `save_document` | Read or write a model-selected path; save can use the current document path. | Registered by default and marked open-world and potentially destructive. |
 | `import_step`, `import_stl`, `export_step`, `export_stl`, `export_3mf`, `export_obj`, `export_iges` | Read imported files or write exported files at supplied paths. | Registered by default and marked open-world and potentially destructive. |
@@ -248,6 +248,34 @@ Python does not mean the model supplied arbitrary executable code. Review the
 full catalog when new tools or path arguments are added. Annotations are
 conservative hints for client UX, not authorization, file access enforcement,
 proof of human approval, or protection from prompt injection.
+
+### Local code-review protocol
+
+The socket client opens a dedicated authenticated connection for each reviewed
+operation. `review_begin` submits bounded UTF-8 code for a FreeCAD-owned
+dialog; approval alone does not enqueue executable work. The authenticated
+socket session then polls for the decision and explicitly commits its opaque
+ticket. The GUI queue claims the approved immutable bytes once and executes
+them on the FreeCAD thread. The client polls for the result on the same
+connection. Other connections, even those sharing a credential, cannot commit
+or read that ticket.
+
+The review lease is five minutes, with a shorter client decision deadline.
+Denial, expiration, cancellation, shutdown and an observed socket disconnect
+invalidate an unclaimed ticket. There is a race between disconnect and the GUI
+claim: once work has started, it cannot be cancelled. A lost commit or result
+response is therefore reported as an unknown outcome and is never retried.
+Expired or denied tickets that were not claimed are reported as not executed.
+The controller serializes dialogs and bounds the queue and retained results.
+
+The normal GUI startup enables this local review when it can create the Qt
+controller. If it cannot, reviewed execution fails closed while ordinary bridge
+operations remain available. XML-RPC, embedded and headless modes do not
+implement this reviewed operation; the server does not fall back to raw
+execution for these tools. The bridge's separate legacy `execute` endpoint
+still accepts arbitrary Python from paired clients, including code generated by
+ordinary MCP tools. This protocol is a guard on the selected tool paths, not a
+bridge-wide authorization policy or protection against another paired client.
 
 ### Client approval verification
 
@@ -282,3 +310,39 @@ code. Do not assume elicitation works in other versions or configurations. Claud
 Code 2.1.319 could not be tested because its OAuth session was expired. Record
 fresh results after testing the actual UI and each supported configuration;
 never infer that a client honors hints from its version alone.
+
+On 2026-11-09, after login was refreshed, a non-interactive Claude Code test
+denied the annotated tool by default. A one-command allow rule for the harmless
+fixture let the resolver run, but elicitation returned cancellation. That does
+not establish interactive display, explicit approval, or behavior with other
+settings. The isolated manual fixture can exercise both the client prompt and
+the separate FreeCAD dialog without changing the normal FreeCAD profile.
+
+On 2026-11-11, interactive tests of the isolated fixture on macOS showed
+the separate FreeCAD review dialog in both Codex and Claude Code. Allowing the
+fixed Python example returned `42`; denying it in FreeCAD returned a failure
+without stdout. This test predates the distinct `ReviewDenied` error type, so
+it does not verify that new type in the interactive clients. Client permission
+prompts are separate from the FreeCAD review dialog.
+
+An automated isolated FreeCAD 27.1/Qt 6.11.2 host test subsequently verified
+`ReviewDenied` with empty stdout through both MCP stdio and streamable HTTP.
+The test programmatically decides the dialog; it does not replace an
+interactive client test of the corrected error type.
+
+The isolated host preferences test also passed on FreeCAD 1.0.2/Qt 5.15.15
+in Docker and on FreeCAD 27.1/Qt 6.11.2 on macOS. It verifies persisted
+settings and an authenticated sequence in which a locally approved timed
+bypass skips the next dialog and clearing it restores review. These tests
+programmatically operate the dialogs.
+
+Codex CLI 0.167.2 negotiated MCP protocol `2025-06-18`. Its direct form
+elicitation test returned cancellation without a visible form when the
+Pydantic-generated schema contained top-level `title` or `description`;
+Codex logs identified these fields as unrecognized. After the fixture removed
+both fields, Codex displayed the form and an explicit approval returned
+`PROBE_APPROVED`. The fixture never executes its elicitation input. Claude Code
+also displayed a separate form and returned approval in an interactive test.
+These are observations for short test text, not guarantees for long code,
+other versions or transports, or proof that a human reviewed a request.
+See [Codex issue #60158](https://github.com/openai/codex/issues/60158).

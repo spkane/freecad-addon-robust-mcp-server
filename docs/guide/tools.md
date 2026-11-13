@@ -506,14 +506,14 @@ operations such as Drilling from a script (`hole-op-create`).
 
 ## Macro Tools
 
-| Tool                         | Description                     |
-| ---------------------------- | ------------------------------- |
-| `list_macros`                | List available macros           |
-| `run_macro`                  | Execute a macro                 |
-| `create_macro`               | Create a new macro              |
-| `read_macro`                 | Read macro source code          |
-| `delete_macro`               | Delete a user macro             |
-| `create_macro_from_template` | Create from predefined template |
+| Tool                         | Description                              |
+| ---------------------------- | ---------------------------------------- |
+| `list_macros`                | List available macros                    |
+| `run_macro`                  | Unavailable pending exact-content review |
+| `create_macro`               | Create a new macro                       |
+| `read_macro`                 | Read macro source code                   |
+| `delete_macro`               | Delete a user macro                      |
+| `create_macro_from_template` | Create from predefined template          |
 
 ---
 

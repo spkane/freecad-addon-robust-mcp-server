@@ -18,7 +18,9 @@ list_macros() -> list[dict]
 
 ### run_macro
 
-Execute a macro by name with optional arguments.
+This tool currently returns `ReviewUnavailable`. A filename alone is not
+enough to approve the code: macro execution will remain unavailable until the
+exact file contents can be reviewed and executed without reopening the file.
 
 ```python
 run_macro(
@@ -27,11 +29,7 @@ run_macro(
 ) -> dict
 ```
 
-**Example prompt:**
-
-```text
-"Run the ExportSTL macro"
-```
+Use `read_macro` to inspect a macro instead.
 
 ### create_macro
 
@@ -111,10 +109,6 @@ The MCP server excels at helping develop FreeCAD macros. Example workflows:
 
 ```text
 "Read the macro 'MyMacro' and explain what it does"
-```
-
-```text
-"Run the macro and show me any errors from the FreeCAD console"
 ```
 
 ### Creating a New Macro

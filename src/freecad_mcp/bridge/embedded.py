@@ -987,11 +987,13 @@ _result_ = True
         macro_file = macro_path / f"{name}.FCMacro"
 
         # Add description as header comment
-        header = f"# {description}\n\n" if description else ""
+        header = "".join(f"# {line}\n" for line in description.splitlines())
+        if description:
+            header += "\n"
 
         # Add standard imports
         full_code = f"""{header}# -*- coding: utf-8 -*-
-# FreeCAD Macro: {name}
+# FreeCAD Macro: {" ".join(name.splitlines())}
 # Created via MCP Bridge
 
 import FreeCAD

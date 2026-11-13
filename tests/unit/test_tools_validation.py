@@ -468,9 +468,58 @@ class TestValidationTools:
     # ========== safe_execute tests ==========
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("error_type", ["ReviewDenied", "ReviewUnavailable"])
+    async def test_safe_execute_reports_review_denial_as_not_executed(
+        self, register_tools, mock_bridge, error_type
+    ):
+        """A review that does not authorize execution has no rollback to report."""
+        mock_bridge.execute_reviewed_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr="Local review ended",
+                execution_time_ms=1,
+                error_type=error_type,
+            )
+        )
+        result = await register_tools["safe_execute"]("pass")
+        assert result["success"] is False
+        assert result["error_type"] == error_type
+        assert result["rolled_back"] is False
+        assert result["execution_success"] is False
+        mock_bridge.execute_python.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error_type",
+        ["ReviewExecutionUnknown", "ResultValidationError", "RuntimeError"],
+    )
+    async def test_safe_execute_preserves_unknown_execution_outcome(
+        self, register_tools, mock_bridge, error_type
+    ):
+        """A lost commit response cannot be reported as a definite rollback."""
+        mock_bridge.execute_reviewed_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr="Execution may already be running",
+                execution_time_ms=1,
+                error_type=error_type,
+            )
+        )
+        result = await register_tools["safe_execute"]("pass")
+        assert result["success"] is False
+        assert result["error_type"] == error_type
+        assert result["rolled_back"] is None
+        assert result["execution_success"] is None
+        mock_bridge.execute_python.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_safe_execute_success(self, register_tools, mock_bridge):
         """safe_execute should succeed with valid code."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
@@ -501,11 +550,12 @@ class TestValidationTools:
         assert result["rolled_back"] is False
         assert result["execution_success"] is True
         assert result["validation"]["valid"] is True
+        mock_bridge.execute_python.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_safe_execute_execution_failure(self, register_tools, mock_bridge):
         """safe_execute should rollback on execution failure."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
@@ -535,7 +585,7 @@ class TestValidationTools:
     @pytest.mark.asyncio
     async def test_safe_execute_validation_failure(self, register_tools, mock_bridge):
         """safe_execute should rollback on validation failure."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
@@ -569,7 +619,7 @@ class TestValidationTools:
     @pytest.mark.asyncio
     async def test_safe_execute_no_auto_undo(self, register_tools, mock_bridge):
         """safe_execute should not rollback when auto_undo_on_failure is False."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
@@ -601,7 +651,7 @@ class TestValidationTools:
     @pytest.mark.asyncio
     async def test_safe_execute_no_validation(self, register_tools, mock_bridge):
         """safe_execute should skip validation when validate_after is False."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
@@ -629,7 +679,7 @@ class TestValidationTools:
     @pytest.mark.asyncio
     async def test_safe_execute_with_doc_name(self, register_tools, mock_bridge):
         """safe_execute should accept doc_name parameter."""
-        mock_bridge.execute_python = AsyncMock(
+        mock_bridge.execute_reviewed_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,
                 result={
@@ -657,7 +707,7 @@ class TestValidationTools:
 
         assert result["success"] is True
         # Verify doc_name was passed
-        call_args = mock_bridge.execute_python.call_args[0][0]
+        call_args = mock_bridge.execute_reviewed_python.call_args[0][0]
         assert "MyDocument" in call_args
 
 

@@ -15,7 +15,7 @@ from freecad_mcp.tools._registration import file_tool, unsafe_tool
 
 def _validate_macro_name(name: str) -> None:
     """Reject path-like names before any bridge operation is dispatched."""
-    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0"):
+    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0\r\n"):
         raise ValueError("Macro name must be a single file name, not a path")
 
 
@@ -59,37 +59,34 @@ def register_macro_tools(
     @unsafe_tool(mcp, allow_unsafe_code)
     async def run_macro(
         macro_name: str,
-        args: dict[str, Any] | None = None,
+        args: dict[str, Any] | None = None,  # noqa: ARG001
     ) -> dict[str, Any]:
-        """Run a FreeCAD macro by name.
+        """Return ReviewUnavailable for a valid macro name without running it.
 
         The file's contents do not appear in this tool call. Macro code runs
-        with the FreeCAD user's full permissions; review the file first.
+        with the FreeCAD user's full permissions. Execution is unavailable
+        until the exact file contents can be reviewed and bound to execution.
+        Use ``read_macro`` to inspect a macro instead.
 
         Args:
             macro_name: Name of the macro to run (without .FCMacro extension).
-            args: Optional dictionary of arguments to pass to the macro.
-                  These will be set as variables before execution.
+            args: Ignored while macro execution is unavailable.
 
         Returns:
-            Dictionary with execution result:
-                - success: Whether macro executed successfully
-                - stdout: Captured standard output
-                - stderr: Captured standard error
-                - execution_time_ms: Execution time in milliseconds
-                - error_type: Error type if failed
-                - error_traceback: Full traceback if failed
+            A failure result with ``error_type`` set to ``ReviewUnavailable``.
+
+        Raises:
+            ValueError: If the macro name is not a single file name.
         """
         _validate_macro_name(macro_name)
-        bridge = await get_bridge()
-        result = await bridge.run_macro(macro_name, args)
         return {
-            "success": result.success,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "execution_time_ms": result.execution_time_ms,
-            "error_type": result.error_type,
-            "error_traceback": result.error_traceback,
+            "success": False,
+            "stdout": "",
+            "stderr": "Macro execution requires review of the exact file contents; "
+            "this review is not yet available.",
+            "execution_time_ms": 0,
+            "error_type": "ReviewUnavailable",
+            "error_traceback": None,
         }
 
     @unsafe_tool(mcp, allow_unsafe_code)
