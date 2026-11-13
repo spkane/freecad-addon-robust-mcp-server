@@ -83,16 +83,24 @@ class TestMacroTools:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("args", [None, {"output_dir": "/tmp"}])
-    async def test_run_macro_fails_closed_without_content_review(
+    async def test_run_macro_uses_only_reviewed_execution(
         self, register_tools, mock_bridge, args
     ):
-        """Never execute an unreviewed file, even when arguments are supplied."""
+        """Unavailable review never falls back to the unrestricted method."""
+        mock_bridge.execute_reviewed_macro.return_value = ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Review unavailable",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
         result = await register_tools["run_macro"]("ExportSTL", args)
         assert result["success"] is False
         assert result["error_type"] == "ReviewUnavailable"
+        mock_bridge.execute_reviewed_macro.assert_awaited_once_with("ExportSTL", args)
         mock_bridge.run_macro.assert_not_awaited()
         mock_bridge.execute_python.assert_not_awaited()
-        mock_bridge.execute_reviewed_python.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_create_macro(self, register_tools, mock_bridge):

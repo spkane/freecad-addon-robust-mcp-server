@@ -59,34 +59,33 @@ def register_macro_tools(
     @unsafe_tool(mcp, allow_unsafe_code)
     async def run_macro(
         macro_name: str,
-        args: dict[str, Any] | None = None,  # noqa: ARG001
+        args: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Return ReviewUnavailable for a valid macro name without running it.
+        """Run a macro after reviewing its exact locally captured contents.
 
-        The file's contents do not appear in this tool call. Macro code runs
-        with the FreeCAD user's full permissions. Execution is unavailable
-        until the exact file contents can be reviewed and bound to execution.
-        Use ``read_macro`` to inspect a macro instead.
+        Local GUI review is required unless the user explicitly enabled a
+        saved version or a temporary bypass. Code runs with the FreeCAD user's
+        permissions; arguments and dependencies may change independently of
+        a saved approval. Unsupported transports fail closed.
 
         Args:
-            macro_name: Name of the macro to run (without .FCMacro extension).
-            args: Ignored while macro execution is unavailable.
+            macro_name: Name without the .FCMacro extension.
+            args: JSON-compatible named variables supplied to the macro.
 
         Returns:
-            A failure result with ``error_type`` set to ``ReviewUnavailable``.
-
-        Raises:
-            ValueError: If the macro name is not a single file name.
+            Execution result, or a failure if review is unavailable or denied.
         """
         _validate_macro_name(macro_name)
+        bridge = await get_bridge()
+        result = await bridge.execute_reviewed_macro(macro_name, args)
         return {
-            "success": False,
-            "stdout": "",
-            "stderr": "Macro execution requires review of the exact file contents; "
-            "this review is not yet available.",
-            "execution_time_ms": 0,
-            "error_type": "ReviewUnavailable",
-            "error_traceback": None,
+            "success": result.success,
+            "result": result.result,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "execution_time_ms": result.execution_time_ms,
+            "error_type": result.error_type,
+            "error_traceback": result.error_traceback,
         }
 
     @unsafe_tool(mcp, allow_unsafe_code)

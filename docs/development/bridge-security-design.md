@@ -289,8 +289,9 @@ approval defaults, full-content display including long code, path visibility,
 denial, cancellation, timeout and user-configured automatic approval. Test
 unsupported elicitation explicitly and do not silently execute on failure.
 Client-side approval is under the client's control; it cannot prove that a human
-reviewed an action against a malicious or compromised client. Macro execution by
-file name still requires an exact-content review design.
+reviewed an action against a malicious or compromised client. Macro execution
+uses a FreeCAD-side snapshot, allowing review and execution of the same bytes;
+saved approvals bind the path and digest, not arguments or imported files.
 
 Observed on 2026-11-08 with a harmless local MCP fixture: Codex CLI 0.167.0 in
 non-interactive `exec` mode logged an annotated tool call and its code argument,

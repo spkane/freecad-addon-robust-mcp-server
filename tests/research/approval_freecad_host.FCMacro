@@ -67,6 +67,81 @@ def test_preferences():
     other.loadSettings()
     if other.review_python_cb.isChecked() or not other.review_bypass_cb.isChecked():
         raise RuntimeError("Review preferences did not persist")
+    approval_module = importlib.import_module(
+        "approval_probe_addon.freecad_mcp_bridge.macro_approvals"
+    )
+    widget_module = importlib.import_module(
+        "approval_probe_addon.Qt.macro_approvals_widget"
+    )
+    table = page.macro_approvals
+    store = table._store
+    macro_dir = Path(os.environ["FREECAD_USER_DATA"])
+    preferences_screenshot = os.environ.get("MCP_MACRO_PREFERENCES_SCREENSHOT")
+    if preferences_screenshot:
+        import hashlib
+
+        example = approval_module.MacroApproval(
+            "/Users/example/FreeCAD/Macro/Example.FCMacro",
+            hashlib.sha256(
+                b'print("Hello from a FreeCAD macro")\n_result_ = 42\n'
+            ).hexdigest(),
+        )
+        store.add(example)
+        table.refresh()
+        page.resize(900, 760)
+        page.review_python_cb.setChecked(True)
+        page.show()
+        QtWidgets.QApplication.processEvents()
+        if not page.grab().save(preferences_screenshot):
+            raise RuntimeError("Could not capture macro preferences")
+        store.clear()
+        page.review_python_cb.setChecked(False)
+    items = [
+        approval_module.MacroApproval(
+            str(macro_dir / f"macro-{i}.FCMacro"), f"{i:064x}"
+        )
+        for i in range(25)
+    ]
+    for item in items:
+        store.add(item)
+    table.refresh()
+    table.table.setMaximumHeight(150)
+    page.show()
+    QtWidgets.QApplication.processEvents()
+    if table.table.rowCount() != 25 or table.table.verticalScrollBar().maximum() <= 0:
+        raise RuntimeError("Saved macro approval table did not scroll")
+    selected_row = next(
+        row
+        for row in range(table.table.rowCount())
+        if table.table.item(row, 0).text() == items[2].path
+        and table.table.item(row, 1).text() == items[2].sha256
+    )
+    table.table.selectRow(selected_row)
+    opened = []
+    from types import SimpleNamespace
+
+    original_loader = widget_module.load_qt_modules
+    widget_module.load_qt_modules = lambda *_names: (
+        SimpleNamespace(
+            QDesktopServices=SimpleNamespace(
+                openUrl=lambda url: opened.append(url.toLocalFile()) or True
+            )
+        ),
+    )
+    try:
+        table.open_folder()
+    finally:
+        widget_module.load_qt_modules = original_loader
+    if opened != [str(macro_dir)]:
+        raise RuntimeError(f"Wrong macro folder opened: {opened}")
+    table.remove_selected()
+    if store.contains(items[2]) or not store.contains(items[1]):
+        raise RuntimeError("Removing a saved macro approval did not persist")
+    store.clear()
+    table.refresh()
+    if table.table.rowCount() != 0:
+        raise RuntimeError("Saved macro approval table did not clear")
+    page.close()
     page.deleteLater()
     other.deleteLater()
 
@@ -77,6 +152,7 @@ def worker(port):
         cases = [(example_code, True), ("_result_ = 99", False)]
         if preferences_tested:
             cases.insert(1, (example_code, True))
+            cases.append((None, True))
         for index, (code, decision) in enumerate(cases):
             if preferences_tested and index == 2:
                 plugin._review_controller._policy.clear_session()
@@ -113,7 +189,16 @@ def worker(port):
                         raise RuntimeError(str(response["error"]))
                     return response["result"]
 
-                request_id = request("review_begin", {"code": code})["review_id"]
+                if code is None:
+                    request_id = request(
+                        "review_begin_macro",
+                        {"macro_name": "HostMacro", "args": {"value": 42}},
+                    )["review_id"]
+                    Path(plugin._macro_review_roots[0], "HostMacro.FCMacro").write_text(
+                        "_result_ = 999\n"
+                    )
+                else:
+                    request_id = request("review_begin", {"code": code})["review_id"]
                 deadline = time.monotonic() + 15
                 state = "pending"
                 while time.monotonic() < deadline:
@@ -158,7 +243,9 @@ def tick():
             request = controller._request
             if request.request_id not in seen:
                 seen.add(request.request_id)
-                if request.payload.content == example_code.encode() and not (
+                if request.payload.action == "run_macro":
+                    controller._dialog.accept()
+                elif request.payload.content == example_code.encode() and not (
                     port_file and results
                 ):
                     screenshot_path = os.environ.get("MCP_REVIEW_PROBE_SCREENSHOT")
@@ -230,6 +317,81 @@ def start():
             from freecad_mcp_bridge.review_dialog import create_review_dialog
 
             policy.configure("execute_python", require_review=True)
+            macro_screenshot = os.environ.get("MCP_MACRO_REVIEW_SCREENSHOT")
+            if macro_screenshot:
+                from freecad_mcp_bridge.macro_snapshot import snapshot_macro
+
+                macro_dir = Path(FreeCAD.getUserMacroDir(True))
+                macro_dir.mkdir(parents=True, exist_ok=True)
+                macro_file = macro_dir / "Example.FCMacro"
+                macro_file.write_text(
+                    'print("Hello from a FreeCAD macro")\n_result_ = 42\n'
+                )
+                snapshot = snapshot_macro(str(macro_file))
+                macro_request = ApprovalRequest(
+                    ApprovalPayload(
+                        "run_macro",
+                        snapshot.content,
+                        snapshot.path,
+                        snapshot.sha256,
+                        "{}",
+                    ),
+                    30,
+                )
+                macro_dialog = create_review_dialog(
+                    macro_request,
+                    FreeCADGui.getMainWindow(),
+                    policy,
+                    plugin._review_controller._approval_store,
+                )
+                macro_dialog.open()
+                QtWidgets.QApplication.processEvents()
+                if not macro_dialog.grab().save(macro_screenshot):
+                    raise RuntimeError("Could not capture macro review dialog")
+                from freecad_mcp_bridge.macro_approvals import MacroApproval
+
+                save_control = next(
+                    item
+                    for item in macro_dialog.findChildren(QtWidgets.QCheckBox)
+                    if item.text() == "Always allow this exact macro version"
+                )
+                save_control.setChecked(True)
+                macro_dialog.accept()
+                QtWidgets.QApplication.processEvents()
+                approval = MacroApproval(snapshot.path, snapshot.sha256)
+                store = plugin._review_controller._approval_store
+                if macro_request.consume() is None or not store.contains(approval):
+                    raise RuntimeError("Exact macro approval did not persist")
+                queued_id = plugin._review_broker.begin(
+                    "local-test", macro_request.payload, 30
+                )
+                plugin._review_controller.poll()
+                if not plugin._review_broker.commit("local-test", queued_id):
+                    raise RuntimeError("Saved approval did not auto-approve")
+                page_module = importlib.import_module(
+                    "approval_probe_addon.Qt.preferences_page"
+                )
+                revoke_page = page_module.MCPBridgePreferencesPage()
+                revoke_page.macro_approvals.refresh()
+                table = revoke_page.macro_approvals
+                row = next(
+                    row
+                    for row in range(table.table.rowCount())
+                    if table.table.item(row, 0).text() == approval.path
+                    and table.table.item(row, 1).text() == approval.sha256
+                )
+                table.table.selectRow(row)
+                table.remove_selected()
+                plugin._process_reviewed_queue()
+                if (
+                    store.contains(approval)
+                    or plugin._review_broker.result("local-test", queued_id) is not None
+                ):
+                    raise RuntimeError(
+                        "Removing approval failed to revoke queued request"
+                    )
+                revoke_page.deleteLater()
+                macro_dialog.deleteLater()
             request = ApprovalRequest(ApprovalPayload("execute_python", b"pass"), 30)
             dialog = create_review_dialog(request, FreeCADGui.getMainWindow(), policy)
             dialog.open()
@@ -264,6 +426,27 @@ def start():
             ):
                 raise RuntimeError("Bridge did not restore default review preferences")
             policy.set_timed_bypass_enabled(True)
+        if preferences_tested:
+            macro_dir = Path(FreeCAD.getUserMacroDir(True))
+            macro_dir.mkdir(parents=True, exist_ok=True)
+            (macro_dir / "HostMacro.FCMacro").write_text("_result_ = value\n")
+            # Compare the legacy exec wrapper and reviewed macro namespace for
+            # a sibling import without changing the process-global sys.path.
+            helper = "mcp_review_sibling_probe_475917"
+            (macro_dir / (helper + ".py")).write_text("VALUE = 42\n")
+            code = "import " + helper + "\n_result_ = " + helper + ".VALUE\n"
+            legacy = plugin._execute_code_sync("exec(" + repr(code) + ")")
+            sys.modules.pop(helper, None)
+            reviewed = plugin._execute_code_sync(
+                code, filename=str(macro_dir / "HostMacro.FCMacro"), initial_globals={}
+            )
+            sys.modules.pop(helper, None)
+            if (legacy["success"], legacy.get("result"), legacy.get("error_type")) != (
+                reviewed["success"],
+                reviewed.get("result"),
+                reviewed.get("error_type"),
+            ):
+                raise RuntimeError("Reviewed macro sibling imports differ from legacy")
         port = plugin._socket_server.sockets[0].getsockname()[1]
         if port_file:
             Path(port_file).write_text(str(port))

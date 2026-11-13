@@ -539,7 +539,7 @@ class SocketBridge(FreecadBridge):
     # Code Execution
     # =========================================================================
 
-    async def execute_reviewed_python(  # noqa: PLR0912
+    async def execute_reviewed_python(
         self, code: str, timeout_ms: int | None = None
     ) -> ExecutionResult:
         """Review and execute code over one non-reconnecting socket session.
@@ -548,6 +548,22 @@ class SocketBridge(FreecadBridge):
         Once commit is sent, loss of a response is reported as ambiguous and
         the request is never replayed.
         """
+        return await self._execute_reviewed_request(
+            "review_begin", {"code": code}, timeout_ms
+        )
+
+    async def execute_reviewed_macro(
+        self, macro_name: str, args: dict[str, Any] | None = None
+    ) -> ExecutionResult:
+        """Request review of a snapshot captured by the FreeCAD bridge."""
+        return await self._execute_reviewed_request(
+            "review_begin_macro", {"macro_name": macro_name, "args": args or {}}, None
+        )
+
+    async def _execute_reviewed_request(  # noqa: PLR0912
+        self, begin_method: str, params: dict[str, Any], timeout_ms: int | None
+    ) -> ExecutionResult:
+        """Run the shared single-use review protocol without replay on failure."""
         started = time.perf_counter()
         writer: asyncio.StreamWriter | None = None
         committed = False
@@ -582,7 +598,7 @@ class SocketBridge(FreecadBridge):
                 return response
 
             async with asyncio.timeout(REVIEW_DECISION_TIMEOUT_SECONDS):
-                response = await request("review_begin", {"code": code})
+                response = await request(begin_method, params)
                 review_id = response["review_id"]
                 if type(review_id) is not str or not 1 <= len(review_id) <= 64:
                     raise ValueError("Bridge returned an invalid review identifier")

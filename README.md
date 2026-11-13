@@ -130,10 +130,20 @@ complete code and ask the user to allow it once or deny it:
 
 ![FreeCAD review dialog showing harmless example Python and Allow once and Deny buttons](docs/assets/images/bridge-python-review.png)
 
-This example was captured in an isolated test profile with an MCP test client.
-Macro execution remains unavailable until its exact file contents can be
-reviewed and executed safely. See the security guide for connection-mode
-limitations and the behavior after timeouts.
+The Python example was captured in an isolated test profile with an MCP test
+client. In the current development version, `run_macro` also requests local
+review when unsafe tools are enabled and FreeCAD is connected using a supported
+GUI/socket bridge. The dialog displays the macro's path, SHA-256, arguments,
+and captured code:
+
+![FreeCAD macro review dialog showing the path, checksum, code, and approval choices](docs/assets/images/bridge-macro-review.png)
+
+You can allow the request once, deny it, or explicitly save approval for that
+path and exact file contents. If enabled in preferences, a time-limited bypass
+is also available. Saved approvals do not cover changes to arguments, imported
+files, or other dependencies. Manage saved versions in the bridge preferences.
+See the [security guide](docs/guide/security.md) for screenshots, limitations,
+and the behavior after timeouts.
 
 ## Installation Requirements / Dependencies
 
@@ -557,7 +567,7 @@ embedded mode; an unavailable source returns an error.*
 | Tool                         | Description                                    | Mode |
 | ---------------------------- | ---------------------------------------------- | ---- |
 | `list_macros`                | List all available FreeCAD macros              | All  |
-| `run_macro`                  | Unavailable pending exact-content review       | —    |
+| `run_macro`                  | Run a macro with local review (socket only)    | GUI  |
 | `create_macro`               | Create a new macro file                        | All  |
 | `read_macro`                 | Read macro source code                         | All  |
 | `delete_macro`               | Delete a user macro                            | All  |

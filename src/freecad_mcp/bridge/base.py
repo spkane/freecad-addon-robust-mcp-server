@@ -336,6 +336,19 @@ class FreecadBridge(ABC):
             error_type="ReviewUnavailable",
         )
 
+    async def execute_reviewed_macro(
+        self, macro_name: str, args: dict[str, Any] | None = None
+    ) -> ExecutionResult:
+        """Run a macro only when local review is available; never fall back."""
+        return ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Local macro review is unavailable for this connection mode.",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
+
     @abstractmethod
     async def execute_python(
         self,

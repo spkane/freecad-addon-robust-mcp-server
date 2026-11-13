@@ -143,6 +143,11 @@ def main() -> None:  # noqa: PLR0912
     parser = argparse.ArgumentParser()
     parser.add_argument("binary", help="Path to the installed FreeCAD GUI executable")
     parser.add_argument("--screenshot", type=Path, help="Save the test dialog image")
+    parser.add_argument(
+        "--macro-screenshots",
+        type=Path,
+        help="Save actual macro review and preferences screenshots in this directory",
+    )
     parser.add_argument("--mcp", action="store_true", help="Exercise an MCP SDK client")
     parser.add_argument("--mcp-http", action="store_true", help="Exercise MCP HTTP")
     parser.add_argument(
@@ -181,6 +186,13 @@ def main() -> None:  # noqa: PLR0912
             env["MCP_REVIEW_PROBE_SCREENSHOT"] = str(profile / "review.png")
         if args.preferences:
             env["MCP_REVIEW_PROBE_PREFERENCES"] = "1"
+        if args.macro_screenshots:
+            if not args.preferences:
+                parser.error("--macro-screenshots requires --preferences")
+            env["MCP_MACRO_REVIEW_SCREENSHOT"] = str(profile / "macro-review.png")
+            env["MCP_MACRO_PREFERENCES_SCREENSHOT"] = str(
+                profile / "macro-preferences.png"
+            )
         if args.mcp or args.mcp_http or args.manual:
             env["MCP_REVIEW_PROBE_PORT"] = str(profile / "port")
             env["MCP_REVIEW_PROBE_DONE"] = str(profile / "done")
@@ -310,7 +322,7 @@ def main() -> None:  # noqa: PLR0912
                 )
             result = json.loads(result_path.read_text())
             expected = (
-                ["approved", "approved", "denied"]
+                ["approved", "approved", "denied", "approved"]
                 if args.preferences
                 else ["approved", "denied"]
             )
@@ -318,10 +330,15 @@ def main() -> None:  # noqa: PLR0912
                 raise RuntimeError(f"FreeCAD review probe failed: {result}")
             if args.preferences and result.get("preferences_tested") is not True:
                 raise RuntimeError(f"FreeCAD preferences probe failed: {result}")
-            if args.preferences and result.get("seen") != 2:
-                raise RuntimeError(
-                    f"Timed bypass did not skip exactly one dialog: {result}"
-                )
+            if args.preferences and result.get("seen") != 3:
+                raise RuntimeError(f"Unexpected Python or macro dialog count: {result}")
+            if args.macro_screenshots:
+                args.macro_screenshots.mkdir(parents=True, exist_ok=True)
+                for name in ("macro-review.png", "macro-preferences.png"):
+                    source = profile / name
+                    if not source.is_file():
+                        raise RuntimeError(f"Screenshot not captured: {name}")
+                    shutil.copyfile(source, args.macro_screenshots / name)
             if args.screenshot:
                 screenshot = profile / "review.png"
                 if not screenshot.is_file():
