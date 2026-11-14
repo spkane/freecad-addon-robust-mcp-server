@@ -1,5 +1,6 @@
 """Verify default-deny review behavior without requiring a Qt GUI."""
 
+import importlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -59,6 +60,31 @@ def test_dialog_displays_exact_code_and_approval_is_single_use(modules: tuple) -
     handler(1)
     assert request.consume() is request.payload
     handler(1)
+    assert request.consume() is None
+
+
+def test_file_dialog_shows_resolved_target_and_overwrite(
+    modules: tuple, tmp_path: Path
+) -> None:
+    """A file review shows the operation, destination, and generated code."""
+    approval, review, widgets = modules
+    file_review = importlib.import_module("review_dialog_test.file_review")
+    path = tmp_path / "existing.step"
+    path.write_text("existing")
+    snapshot = file_review.snapshot_file(str(path), "write")
+    request = approval.ApprovalRequest(
+        approval.ApprovalPayload(
+            "file_operation", b"print('generated')", file_snapshot=snapshot
+        ),
+        30,
+    )
+    dialog = review.create_review_dialog(request)
+    calls = widgets.QPlainTextEdit.return_value.setPlainText.call_args_list
+    assert "Operation: write" in calls[0].args[0]
+    assert str(path.resolve()) in calls[0].args[0]
+    assert "may be overwritten" in calls[0].args[0]
+    assert calls[1].args[0] == "print('generated')"
+    dialog.finished.connect.call_args.args[0](0)
     assert request.consume() is None
 
 

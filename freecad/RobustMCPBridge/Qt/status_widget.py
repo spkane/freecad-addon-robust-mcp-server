@@ -174,6 +174,7 @@ class MCPStatusWidget:
         errors: str = "",
         review_bypassed: bool = False,
         macro_review_bypassed: bool = False,
+        file_review_bypassed: bool = False,
     ) -> None:
         """Update the widget to show running status.
 
@@ -186,6 +187,7 @@ class MCPStatusWidget:
             errors: Listener errors and troubleshooting guidance.
             review_bypassed: Whether supported Python review is bypassed.
             macro_review_bypassed: Whether local macro review is bypassed.
+            file_review_bypassed: Whether local file review is bypassed.
         """
         if self._widget is None:
             return
@@ -204,6 +206,8 @@ class MCPStatusWidget:
         suffix = " | Python review bypassed" if review_bypassed else ""
         if macro_review_bypassed:
             suffix += " | Macro review bypassed"
+        if file_review_bypassed:
+            suffix += " | File review bypassed"
         self._widget.setText(f"MCP: {state}{suffix} ({xmlrpc_port}/{socket_port})")
         self._widget.setStyleSheet(
             "QLabel { "
@@ -330,6 +334,7 @@ def update_status_running(
     errors: str = "",
     review_bypassed: bool = False,
     macro_review_bypassed: bool = False,
+    file_review_bypassed: bool = False,
 ) -> None:
     """Update status widget to show running state."""
     widget = get_status_widget()
@@ -343,6 +348,7 @@ def update_status_running(
         errors=errors,
         review_bypassed=review_bypassed,
         macro_review_bypassed=macro_review_bypassed,
+        file_review_bypassed=file_review_bypassed,
     )
 
 
@@ -405,6 +411,8 @@ def sync_status_with_bridge() -> None:
                 review_bypassed=bypassed,
                 macro_review_bypassed=policy is not None
                 and not policy.requires_review("run_macro"),
+                file_review_bypassed=policy is not None
+                and not policy.requires_review("file_operation"),
             )
         else:
             widget.set_stopped()

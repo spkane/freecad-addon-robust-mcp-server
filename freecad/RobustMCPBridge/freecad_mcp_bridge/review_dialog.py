@@ -71,13 +71,13 @@ def create_review_dialog(  # noqa: PLR0912
         ValueError: If the action or displayed content cannot be reviewed safely.
     """
     try:
-        action = request.payload.action
-        code = review_text(request.payload.content, allow_crlf=action == "run_macro")
-        if action not in {"execute_python", "run_macro"}:
+        payload = request.payload
+        action = payload.action
+        code = review_text(payload.content, allow_crlf=action == "run_macro")
+        if action not in {"execute_python", "run_macro", "file_operation"}:
             raise ValueError("Unsupported action for code review")
         macro_approval = None
         if action == "run_macro":
-            payload = request.payload
             if (
                 payload.macro_path is None
                 or payload.macro_sha256 is None
@@ -92,6 +92,12 @@ def create_review_dialog(  # noqa: PLR0912
             macro_approval = MacroApproval(payload.macro_path, payload.macro_sha256)
             review_text(payload.macro_path.encode("utf-8"))
             review_text(payload.macro_args_json.encode("utf-8"))
+        file_snapshot = payload.file_snapshot
+        if action == "file_operation":
+            if file_snapshot is None:
+                raise ValueError("Missing file review snapshot")
+            review_text(file_snapshot.requested_path.encode("utf-8"))
+            review_text(file_snapshot.resolved_path.encode("utf-8"))
         qtcore, qtwidgets = load_qt_core_widgets()
         app = qtwidgets.QApplication.instance()
         if app is None or qtcore.QThread.currentThread() != app.thread():
@@ -100,6 +106,8 @@ def create_review_dialog(  # noqa: PLR0912
         dialog.setWindowTitle(
             "Review macro execution"
             if action == "run_macro"
+            else "Review file operation"
+            if action == "file_operation"
             else "Review Python execution"
         )
         dialog.resize(800, 600)
@@ -128,6 +136,27 @@ def create_review_dialog(  # noqa: PLR0912
                 )
             details.setMaximumHeight(140)
             layout.addWidget(details)
+        if action == "file_operation" and file_snapshot is not None:
+            details = qtwidgets.QPlainTextEdit(dialog)
+            details.setReadOnly(True)
+            detail_text = (
+                f"Operation: {file_snapshot.action}\n"
+                f"Requested path: {file_snapshot.requested_path}\n"
+                f"Resolved path: {file_snapshot.resolved_path}\n"
+                f"Target exists: {'yes' if file_snapshot.exists else 'no'}\n"
+                f"Final component is a symlink: {'yes' if file_snapshot.is_symlink else 'no'}"
+            )
+            if file_snapshot.target is not None and file_snapshot.target.link_count > 1:
+                detail_text += (
+                    f"\nTarget has {file_snapshot.target.link_count} hard links."
+                )
+            if file_snapshot.action == "write" and file_snapshot.exists:
+                detail_text += "\nThe existing file may be overwritten."
+            details.setPlainText(detail_text)
+            if details.toPlainText() != detail_text:
+                raise ValueError("The review widget could not display the file details")
+            details.setMaximumHeight(160)
+            layout.addWidget(details)
         editor = qtwidgets.QPlainTextEdit(dialog)
         editor.setReadOnly(True)
         editor.setPlainText(code)
@@ -153,10 +182,13 @@ def create_review_dialog(  # noqa: PLR0912
         bypass_check = None
         bypass_minutes = None
         if policy is not None and policy.timed_bypass_enabled():
+            action_label = {
+                "run_macro": "macro",
+                "file_operation": "file",
+                "execute_python": "Python",
+            }[action]
             bypass_check = qtwidgets.QCheckBox(
-                "Also bypass local macro review for a limited time"
-                if action == "run_macro"
-                else "Also bypass local Python review for a limited time"
+                f"Also bypass local {action_label} review for a limited time"
             )
             bypass_minutes = qtwidgets.QSpinBox()
             bypass_minutes.setRange(1, 480)
@@ -166,7 +198,11 @@ def create_review_dialog(  # noqa: PLR0912
             layout.addWidget(bypass_minutes)
             bypass_warning = qtwidgets.QLabel(
                 "While bypassed, authorized clients can run "
-                + ("macros" if action == "run_macro" else "Python")
+                + {
+                    "run_macro": "macros",
+                    "file_operation": "file operations",
+                    "execute_python": "Python",
+                }[action]
                 + " without this review, including access to files and the network."
             )
             bypass_warning.setWordWrap(True)

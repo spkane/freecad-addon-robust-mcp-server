@@ -124,6 +124,7 @@ class ServerConfig(BaseSettings):
     allow_file_access: bool = True
     allow_network_access: bool = False
     allow_unsafe_code: bool = False
+    allow_unreviewed_file_operations: bool = False
 
 
 def get_config() -> ServerConfig:

@@ -28,6 +28,7 @@ class PreferencesDict(TypedDict):
     xmlrpc_port: int
     socket_port: int
     review_python: bool
+    review_files: bool
     allow_review_bypass: bool
 
 
@@ -51,6 +52,16 @@ def get_review_python() -> bool:
 def set_review_python(enabled: bool) -> None:
     """Set the local review requirement for supported Python requests."""
     get_param().SetBool("ReviewPython", enabled)
+
+
+def get_review_files() -> bool:
+    """Require local review for supported file operations by default."""
+    return get_param().GetBool("ReviewFiles", True)
+
+
+def set_review_files(enabled: bool) -> None:
+    """Set the local review requirement for supported file operations."""
+    get_param().SetBool("ReviewFiles", enabled)
 
 
 def get_allow_review_bypass() -> bool:
@@ -216,6 +227,7 @@ def get_all_preferences() -> PreferencesDict:
         "xmlrpc_port": get_xmlrpc_port(),
         "socket_port": get_socket_port(),
         "review_python": get_review_python(),
+        "review_files": get_review_files(),
         "allow_review_bypass": get_allow_review_bypass(),
     }
 
@@ -229,4 +241,5 @@ def reset_to_defaults() -> None:
     set_xmlrpc_port(DEFAULT_XMLRPC_PORT)
     set_socket_port(DEFAULT_SOCKET_PORT)
     set_review_python(True)
+    set_review_files(True)
     set_allow_review_bypass(False)

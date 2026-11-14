@@ -80,8 +80,25 @@ dialog displays the code to be executed and defaults to denial. These tools
 fail closed with older bridges, headless FreeCAD, embedded mode, and XML-RPC;
 they do not fall back to unreviewed execution. `run_macro` also requires a
 supported GUI/socket bridge and local review unless the user explicitly grants
-a saved approval or timed bypass. Macro creation still writes files, and
-ordinary modeling and file tools can have side effects without this dialog.
+a saved approval or timed bypass.
+
+Supported tools that access an explicit file path also request local review by
+default. The dialog identifies the requested and resolved path, the operation,
+and whether a file already exists. It also shows the generated code. FreeCAD
+checks the target again before dispatch, but this is not an atomic filesystem
+operation: another local process can still change it before it is opened.
+Other modeling tools and direct access to the paired bridge can have file or
+network side effects without this dialog; this feature is not a sandbox.
+
+File review requires a current GUI workbench and the socket connection. The
+workbench preferences can disable it or enable a timed bypass; the status
+indicator reports those local overrides. For automation and other connection
+modes, setting `FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true` on the MCP
+server explicitly bypasses this review. This server-side override applies to
+all supported file operations and is not visible in the FreeCAD status widget.
+CAM output using job-defined paths or split files cannot yet be reviewed as
+individual targets; use an explicit output path with `split_files=false`, or
+explicitly choose the server-side override.
 
 Depending on its configuration, an MCP client may ask permission before it
 calls the tool. In this example Codex shows a permission prompt for the

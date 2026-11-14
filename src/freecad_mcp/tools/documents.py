@@ -7,6 +7,9 @@ creating, opening, saving, closing, and listing documents.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from mcp.server.mcpserver.exceptions import ToolError
+
+from freecad_mcp.bridge.file_review import file_review_target
 from freecad_mcp.tools._registration import file_tool
 
 
@@ -144,7 +147,28 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             ValueError: If document not found or no path specified for new doc.
         """
         bridge = await get_bridge()
-        saved_path = await bridge.save_document(doc_name, path)
+        if path:
+            saved_path = await bridge.save_document(doc_name, path)
+        else:
+            doc = (
+                await bridge.get_active_document()
+                if doc_name is None
+                else next(
+                    (
+                        item
+                        for item in await bridge.get_documents()
+                        if item.name == doc_name
+                    ),
+                    None,
+                )
+            )
+            if doc is None or not doc.path:
+                raise ValueError("No saved path for the requested document")
+            token = file_review_target.set((doc.path, "write", "path"))
+            try:
+                saved_path = await bridge.save_document(doc.name, doc.path)
+            finally:
+                file_review_target.reset(token)
         return {
             "success": True,
             "path": saved_path,
@@ -170,9 +194,16 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
 
         saved = False
         if save_changes:
+            if doc_name is None:
+                active = await bridge.get_active_document()
+                if active is None:
+                    raise ValueError("No active document")
+                doc_name = active.name
             try:
-                await bridge.save_document(doc_name)
+                await save_document(doc_name)
                 saved = True
+            except ToolError:
+                raise
             except Exception:
                 pass
 

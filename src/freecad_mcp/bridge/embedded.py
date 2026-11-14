@@ -125,6 +125,17 @@ class EmbeddedBridge(FreecadBridge):
         Returns:
             ExecutionResult with execution outcome.
         """
+        from freecad_mcp.bridge.file_review import (
+            ensure_review_result,
+            file_review_target,
+        )
+        from freecad_mcp.config import get_config
+
+        target = file_review_target.get()
+        if target is not None and not get_config().allow_unreviewed_file_operations:
+            return ensure_review_result(
+                await self.execute_reviewed_file(code, *target, timeout_ms=timeout_ms)
+            )
         if not self._connected:
             return ExecutionResult(
                 success=False,
@@ -986,6 +997,14 @@ _result_ = True
         Returns:
             MacroInfo for the created macro.
         """
+        from freecad_mcp.bridge.file_review import file_review_target
+        from freecad_mcp.config import get_config
+
+        if (
+            file_review_target.get() is not None
+            and not get_config().allow_unreviewed_file_operations
+        ):
+            raise ValueError("Local file review is unavailable in embedded mode")
         macro_path = self._get_macro_path()
         macro_path.mkdir(parents=True, exist_ok=True)
 

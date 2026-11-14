@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from freecad_mcp.bridge.base import ExecutionResult
 from freecad_mcp.tools import cam
@@ -61,7 +62,7 @@ TOOL_ARGS: dict[str, dict[str, Any]] = {
     "cam_export_tool_library": {"library": "Default", "file_path": "/tmp/x.tbl"},
     "cam_list_tool_library": {},
     "cam_analyze_model": {"object_name": "Part"},
-    "cam_create_job": {"model_objects": ["Part"]},
+    "cam_create_job": {"model_objects": ["Part"], "template": ""},
     "cam_set_stock": {},
     "cam_add_tool_controller": {"tool": {"shape": "endmill"}},
     "cam_feeds_speeds": {},
@@ -203,6 +204,28 @@ class TestCamTools:
         timeout = bridge.execute_python.call_args.kwargs["timeout_ms"]
         assert timeout == cam.CAM_TIMEOUT_MS
 
+    async def test_default_template_is_resolved_before_review(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+    ) -> None:
+        from freecad_mcp.bridge.file_review import file_review_target
+
+        tools, bridge = tools_and_bridge
+        seen = []
+
+        async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
+            seen.append((code, file_review_target.get()))
+            value = "/tmp/job.json" if len(seen) == 1 else {"ok": True}
+            return ExecutionResult(
+                success=True, result=value, stdout="", stderr="", execution_time_ms=1
+            )
+
+        bridge.execute_python.side_effect = execute
+        assert await tools["cam_create_job"](model_objects=["Part"]) == {"ok": True}
+        assert seen[0][1] is None
+        assert seen[1][1] == ("/tmp/job.json", "read", "path")
+        assert _payload(seen[1][0])["template"] == "/tmp/job.json"
+        assert file_review_target.get() is None
+
     async def test_none_arguments_are_dropped(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
@@ -287,14 +310,43 @@ class TestCamTools:
         assert payload["kind"] == "dressup"
 
     async def test_post_process_passes_use_job_output(
-        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+        self,
+        tools_and_bridge: tuple[RegisteredTools, AsyncMock],
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        from types import SimpleNamespace
+
+        monkeypatch.setattr(
+            "freecad_mcp.config.get_config",
+            lambda: SimpleNamespace(allow_unreviewed_file_operations=True),
+        )
         tools, bridge = tools_and_bridge
         await tools["cam_post_process"](use_job_output=True)
         code = bridge.execute_python.call_args.args[0]
         assert _payload(code)["use_job_output"] is True
         assert _called_function(code) == "post_process"
         assert "def _write_job_output(" in _runtime_source()
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [{"use_job_output": True}, {"output_file": "/tmp/out.nc", "split_files": True}],
+    )
+    async def test_unreviewable_cam_outputs_fail_closed(
+        self,
+        tools_and_bridge: tuple[RegisteredTools, AsyncMock],
+        monkeypatch: pytest.MonkeyPatch,
+        arguments: dict,
+    ) -> None:
+        from types import SimpleNamespace
+
+        monkeypatch.setattr(
+            "freecad_mcp.config.get_config",
+            lambda: SimpleNamespace(allow_unreviewed_file_operations=False),
+        )
+        tools, bridge = tools_and_bridge
+        with pytest.raises(ToolError, match="ReviewUnavailable"):
+            await tools["cam_post_process"](**arguments)
+        bridge.execute_python.assert_not_awaited()
 
     async def test_add_operation_passes_source_operations(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]

@@ -58,14 +58,23 @@ def test_preferences():
 
     page = MCPBridgePreferencesPage()
     page.loadSettings()
-    if not page.review_python_cb.isChecked() or page.review_bypass_cb.isChecked():
+    if (
+        not page.review_python_cb.isChecked()
+        or not page.review_files_cb.isChecked()
+        or page.review_bypass_cb.isChecked()
+    ):
         raise RuntimeError("Unexpected review preference defaults")
     page.review_python_cb.setChecked(False)
+    page.review_files_cb.setChecked(False)
     page.review_bypass_cb.setChecked(True)
     page.saveSettings()
     other = MCPBridgePreferencesPage()
     other.loadSettings()
-    if other.review_python_cb.isChecked() or not other.review_bypass_cb.isChecked():
+    if (
+        other.review_python_cb.isChecked()
+        or other.review_files_cb.isChecked()
+        or not other.review_bypass_cb.isChecked()
+    ):
         raise RuntimeError("Review preferences did not persist")
     approval_module = importlib.import_module(
         "approval_probe_addon.freecad_mcp_bridge.macro_approvals"
@@ -309,6 +318,7 @@ def start():
             policy = plugin._review_controller._policy
             if (
                 policy.requires_review("execute_python")
+                or policy.requires_review("file_operation")
                 or not policy.timed_bypass_enabled()
             ):
                 raise RuntimeError("Bridge did not load saved review preferences")

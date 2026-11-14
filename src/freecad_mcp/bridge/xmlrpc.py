@@ -392,7 +392,7 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
     # Code Execution
     # =========================================================================
 
-    async def execute_python(
+    async def execute_python(  # noqa: PLR0911
         self,
         code: str,
         timeout_ms: int | None = None,
@@ -407,6 +407,17 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
         Returns:
             ExecutionResult with execution outcome.
         """
+        from freecad_mcp.bridge.file_review import (
+            ensure_review_result,
+            file_review_target,
+        )
+        from freecad_mcp.config import get_config
+
+        target = file_review_target.get()
+        if target is not None and not get_config().allow_unreviewed_file_operations:
+            return ensure_review_result(
+                await self.execute_reviewed_file(code, *target, timeout_ms=timeout_ms)
+            )
         if self._proxy is None:
             return ExecutionResult(
                 success=False,

@@ -382,6 +382,7 @@ def test_gui_status_warns_that_bridge_accepts_python(
         errors="",
         review_bypassed=False,
         macro_review_bypassed=False,
+        file_review_bypassed=False,
     )
     status_module.update_status_running.reset_mock()
     plugin._review_controller = SimpleNamespace(
@@ -390,6 +391,10 @@ def test_gui_status_warns_that_bridge_accepts_python(
     plugin._update_status_bar()
     assert (
         status_module.update_status_running.call_args.kwargs["review_bypassed"] is True
+    )
+    assert (
+        status_module.update_status_running.call_args.kwargs["file_review_bypassed"]
+        is True
     )
     plugin._listener_states["xmlrpc"] = "disabled"
     plugin._update_status_bar()
@@ -402,6 +407,7 @@ def test_gui_status_warns_that_bridge_accepts_python(
         errors="",
         review_bypassed=True,
         macro_review_bypassed=True,
+        file_review_bypassed=True,
     )
 
 
@@ -1665,6 +1671,88 @@ def test_reviewed_queue_fails_closed_without_gui(
     console.PrintWarning.assert_called_once_with(
         "MCP Bridge: reviewed execution disabled; GUI thread unavailable.\n"
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change_target", [False, True])
+async def test_file_review_binds_target_and_code_before_execution(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    change_target: bool,
+) -> None:
+    """Only the reviewed code may run, and changed file targets are rejected."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True, "result": 42})
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    path = tmp_path / "model.FCStd"
+    path.write_text("original")
+    response = await plugin._process_jsonrpc_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "review_begin_file",
+            "params": {
+                "code": "_result_ = 42",
+                "path": str(path),
+                "action": "read",
+                "kind": "path",
+            },
+        },
+        "alice",
+    )
+    review_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert request is not None
+    assert request.payload.file_snapshot.resolved_path == str(path.resolve())
+    assert request.decide(approved=True)
+    assert not broker.commit("other-client", review_id)
+    assert broker.commit("alice", review_id)
+    if change_target:
+        path.write_text("modified after approval")
+    plugin._process_queue()
+    result = broker.result("alice", review_id)
+    assert result is not None
+    if change_target:
+        plugin._execute_code_sync.assert_not_called()
+        assert result["error_type"] == "FileTargetChanged"
+    else:
+        plugin._execute_code_sync.assert_called_once_with("_result_ = 42")
+        assert result["result"] == 42
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_macro_file_review_resolves_local_search_order_and_rejects_paths(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """A macro name is resolved by FreeCAD's user/system search order."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    user, system = tmp_path / "user", tmp_path / "system"
+    user.mkdir()
+    system.mkdir()
+    (system / "Demo.FCMacro").write_text("system")
+    plugin._macro_review_roots = (str(user), str(system))
+    coordinator = approval.ReviewCoordinator(2)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 2)
+    params = {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}
+    response = await plugin._review_begin_file(1, params, "alice")
+    assert response.get("result")
+    request = coordinator.next_review()
+    assert request.payload.file_snapshot.resolved_path == str(
+        (system / "Demo.FCMacro").resolve()
+    )
+    request.cancel()
+    params["path"] = "../other"
+    response = await plugin._review_begin_file(2, params, "alice")
+    assert response["error"]["message"] == "File review unavailable or invalid"
+    plugin._review_broker.close()
 
 
 @pytest.mark.asyncio

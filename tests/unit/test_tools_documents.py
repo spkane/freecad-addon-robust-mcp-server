@@ -181,6 +181,11 @@ class TestDocumentTools:
     @pytest.mark.asyncio
     async def test_save_document_default(self, register_tools, mock_bridge):
         """save_document should save active document."""
+        mock_bridge.get_active_document = AsyncMock(
+            return_value=DocumentInfo(
+                name="Doc", label="Doc", path="/tmp/saved.FCStd", objects=[]
+            )
+        )
         mock_bridge.save_document = AsyncMock(return_value="/tmp/saved.FCStd")
 
         save_document = register_tools["save_document"]
@@ -188,7 +193,7 @@ class TestDocumentTools:
 
         assert result["success"] is True
         assert result["path"] == "/tmp/saved.FCStd"
-        mock_bridge.save_document.assert_called_once_with(None, None)
+        mock_bridge.save_document.assert_called_once_with("Doc", "/tmp/saved.FCStd")
 
     @pytest.mark.asyncio
     async def test_save_document_with_path(self, register_tools, mock_bridge):
@@ -217,6 +222,13 @@ class TestDocumentTools:
     @pytest.mark.asyncio
     async def test_close_document_with_save(self, register_tools, mock_bridge):
         """close_document should save before closing when requested."""
+        mock_bridge.get_documents = AsyncMock(
+            return_value=[
+                DocumentInfo(
+                    name="TestDoc", label="Test", path="/tmp/doc.FCStd", objects=[]
+                )
+            ]
+        )
         mock_bridge.save_document = AsyncMock(return_value="/tmp/doc.FCStd")
         mock_bridge.close_document = AsyncMock()
 
@@ -225,7 +237,7 @@ class TestDocumentTools:
 
         assert result["success"] is True
         assert result["saved"] is True
-        mock_bridge.save_document.assert_called_once_with("TestDoc")
+        mock_bridge.save_document.assert_called_once_with("TestDoc", "/tmp/doc.FCStd")
         mock_bridge.close_document.assert_called_once_with("TestDoc")
 
     @pytest.mark.asyncio
