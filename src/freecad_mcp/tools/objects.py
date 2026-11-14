@@ -527,9 +527,9 @@ obj1 = doc.getObject({object1_name!r})
 obj2 = doc.getObject({object2_name!r})
 
 if obj1 is None:
-    raise ValueError(f"Object not found: {object1_name!r}")
+    raise ValueError("Object not found: " + repr({object1_name!r}))
 if obj2 is None:
-    raise ValueError(f"Object not found: {object2_name!r}")
+    raise ValueError("Object not found: " + repr({object2_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Boolean {operation.capitalize()}")
@@ -599,7 +599,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Set Placement")
@@ -663,7 +663,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape to scale")
@@ -743,7 +743,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Rotate Object")
@@ -813,7 +813,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Copy Object")
@@ -897,7 +897,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape to mirror")
@@ -1302,7 +1302,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -1383,7 +1383,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -1448,7 +1448,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -1628,7 +1628,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -1915,7 +1915,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -1984,7 +1984,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -2052,7 +2052,7 @@ if doc is None:
 
 obj = doc.getObject({object_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {object_name!r}")
+    raise ValueError("Object not found: " + repr({object_name!r}))
 
 if not hasattr(obj, "Shape"):
     raise ValueError("Object has no shape")
@@ -2212,11 +2212,11 @@ if doc is None:
 
 profile_obj = doc.getObject({profile_name!r})
 if profile_obj is None:
-    raise ValueError(f"Profile object not found: {profile_name!r}")
+    raise ValueError("Profile object not found: " + repr({profile_name!r}))
 
 spine_obj = doc.getObject({spine_name!r})
 if spine_obj is None:
-    raise ValueError(f"Spine object not found: {spine_name!r}")
+    raise ValueError("Spine object not found: " + repr({spine_name!r}))
 
 if not hasattr(profile_obj, "Shape") or not hasattr(spine_obj, "Shape"):
     raise ValueError("Objects must have shapes")

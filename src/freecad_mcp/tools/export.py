@@ -362,7 +362,7 @@ import Part
 import os
 
 if not os.path.exists({file_path!r}):
-    raise FileNotFoundError(f"File not found: {file_path!r}")
+    raise FileNotFoundError("File not found: " + repr({file_path!r}))
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
@@ -412,7 +412,7 @@ import Mesh
 import os
 
 if not os.path.exists({file_path!r}):
-    raise FileNotFoundError(f"File not found: {file_path!r}")
+    raise FileNotFoundError("File not found: " + repr({file_path!r}))
 
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:

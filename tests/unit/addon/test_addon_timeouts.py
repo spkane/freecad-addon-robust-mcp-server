@@ -873,6 +873,23 @@ def test_xmlrpc_listener_authenticates_before_dispatch(server_mod: Any) -> None:
                 connection.close()
 
         body = xmlrpc.client.dumps((), methodname="ping").encode()
+        for method, path in (("GET", "/challenge"), ("POST", "/RPC2")):
+            for host in ("example.com", "localhost.example.com", "localhost@evil.test"):
+                assert request(method, path, body, Host=host)[0] == 403
+            assert request(method, path, body, Origin="http://localhost:3000")[0] == 403
+            assert request(method, path, body, Origin="null")[0] == 403
+        assert request("GET", "/challenge", Host="localhost:54321")[0] == 200
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+        try:
+            connection.putrequest("GET", "/challenge", skip_host=True)
+            connection.putheader("Host", "localhost")
+            connection.putheader("Host", "127.0.0.1")
+            connection.endheaders()
+            response = connection.getresponse()
+            assert response.status == 403
+            response.read()
+        finally:
+            connection.close()
         assert request("POST", "/RPC2", body)[0] == 401
         status, challenge_bytes = request("GET", "/challenge")
         assert status == 200

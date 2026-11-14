@@ -228,7 +228,7 @@ else:
     else:
         obj = doc.getObject({object_name!r})
         if obj is None:
-            _result_ = {{"success": False, "error": f"Object not found: {object_name!r}"}}
+            _result_ = {{"success": False, "error": "Object not found: " + repr({object_name!r})}}
         elif hasattr(obj, "ViewObject") and obj.ViewObject:
             obj.ViewObject.Visibility = {visible}
             _result_ = {{"success": True, "visible": {visible}}}
@@ -277,7 +277,7 @@ else:
     else:
         obj = doc.getObject({object_name!r})
         if obj is None:
-            _result_ = {{"success": False, "error": f"Object not found: {object_name!r}"}}
+            _result_ = {{"success": False, "error": "Object not found: " + repr({object_name!r})}}
         elif hasattr(obj, "ViewObject") and obj.ViewObject:
             obj.ViewObject.DisplayMode = {mode!r}
             _result_ = {{"success": True, "mode": {mode!r}}}
@@ -329,7 +329,7 @@ else:
     else:
         obj = doc.getObject({object_name!r})
         if obj is None:
-            _result_ = {{"success": False, "error": f"Object not found: {object_name!r}"}}
+            _result_ = {{"success": False, "error": "Object not found: " + repr({object_name!r})}}
         elif hasattr(obj, "ViewObject") and obj.ViewObject:
             obj.ViewObject.ShapeColor = ({color[0]}, {color[1]}, {color[2]})
             _result_ = {{"success": True, "color": {color}}}

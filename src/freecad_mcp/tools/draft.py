@@ -510,10 +510,10 @@ if doc is None:
 
 shape_string = doc.getObject({shapestring_name!r})
 if shape_string is None:
-    raise ValueError(f"ShapeString not found: {shapestring_name!r}")
+    raise ValueError("ShapeString not found: " + repr({shapestring_name!r}))
 
 if not hasattr(shape_string, 'Shape') or shape_string.Shape is None:
-    raise ValueError(f"Object has no shape: {shapestring_name!r}")
+    raise ValueError("Object has no shape: " + repr({shapestring_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Convert ShapeString to Face")
@@ -651,17 +651,17 @@ if doc is None:
 
 target = doc.getObject({target_object!r})
 if target is None:
-    raise ValueError(f"Target object not found: {target_object!r}")
+    raise ValueError("Target object not found: " + repr({target_object!r}))
 
 if not hasattr(target, 'Shape') or target.Shape is None:
-    raise ValueError(f"Target object has no shape: {target_object!r}")
+    raise ValueError("Target object has no shape: " + repr({target_object!r}))
 
 # Get the target face
 face_name = {target_face!r}
 try:
     face = getattr(target.Shape, face_name)
 except Exception:
-    raise ValueError(f"Face not found: {{face_name}} on {target_object!r}")
+    raise ValueError(f"Face not found: {{face_name}} on " + repr({target_object!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Text on Surface")
@@ -863,10 +863,10 @@ if doc is None:
 
 shape_string = doc.getObject({shapestring_name!r})
 if shape_string is None:
-    raise ValueError(f"ShapeString not found: {shapestring_name!r}")
+    raise ValueError("ShapeString not found: " + repr({shapestring_name!r}))
 
 if not hasattr(shape_string, 'Shape') or shape_string.Shape is None:
-    raise ValueError(f"Object has no shape: {shapestring_name!r}")
+    raise ValueError("Object has no shape: " + repr({shapestring_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Extrude ShapeString")

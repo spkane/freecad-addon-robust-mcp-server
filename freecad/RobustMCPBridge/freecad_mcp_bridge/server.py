@@ -41,6 +41,7 @@ import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
     from .authentication import BridgeAuthenticator
@@ -2063,6 +2064,35 @@ class FreecadMCPPlugin:
         class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
             """XML-RPC handler that responds gracefully to GET requests."""
 
+            def _validate_browser_boundary(self) -> bool:
+                """Reject browser origins and non-loopback or ambiguous Host headers."""
+                hosts = self.headers.get_all("Host") or []
+                if len(hosts) != 1 or self.headers.get_all("Origin"):
+                    self.send_error(403, "Invalid request origin or host")
+                    return False
+                host = hosts[0]
+                try:
+                    parsed = urlsplit("http://" + host)
+                    valid = (
+                        bool(host)
+                        and parsed.netloc == host
+                        and not parsed.path
+                        and not parsed.query
+                        and not parsed.fragment
+                        and parsed.username is None
+                        and parsed.password is None
+                        and parsed.hostname is not None
+                        and (parsed.port is None or 1 <= parsed.port <= 65535)
+                    )
+                    hostname = parsed.hostname
+                    if valid and hostname is not None and hostname != "localhost":
+                        valid = ipaddress.ip_address(hostname).is_loopback
+                except ValueError:
+                    valid = False
+                if not valid:
+                    self.send_error(403, "Invalid request origin or host")
+                return valid
+
             def handle(self) -> None:
                 """Treat a closed client as an expected end of its request."""
                 with contextlib.suppress(
@@ -2092,6 +2122,8 @@ class FreecadMCPPlugin:
 
             def do_POST(self) -> None:
                 """Reject oversized, compressed, or ambiguously framed requests."""
+                if not self._validate_browser_boundary():
+                    return
                 lengths = self.headers.get_all("Content-Length", [])
                 if (
                     len(lengths) != 1
@@ -2150,6 +2182,8 @@ class FreecadMCPPlugin:
                         curl http://localhost:9875/
                         # Returns: FreeCAD MCP Bridge - XML-RPC endpoint (POST only)
                 """
+                if not self._validate_browser_boundary():
+                    return
                 self._read_timer.cancel()
                 if self.path == "/challenge":
                     if authenticator is None:

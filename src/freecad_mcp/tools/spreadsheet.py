@@ -148,10 +148,10 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 if not hasattr(sheet, "set"):
-    raise ValueError(f"Object is not a spreadsheet: {spreadsheet_name!r}")
+    raise ValueError("Object is not a spreadsheet: " + repr({spreadsheet_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Set Spreadsheet Cell")
@@ -226,7 +226,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 cell = {cell!r}
 
@@ -320,7 +320,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Set Cell Alias")
@@ -330,7 +330,7 @@ try:
 
     # Validate alias is a valid identifier
     if not alias.isidentifier():
-        raise ValueError(f"Invalid alias: {alias!r}. Must be a valid Python identifier.")
+        raise ValueError("Invalid alias: " + repr({alias!r}) + ". Must be a valid Python identifier.")
 
     sheet.setAlias(cell, alias)
     doc.recompute()
@@ -388,7 +388,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 aliases = {{}}
 
@@ -456,7 +456,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Clear Spreadsheet Cell")
@@ -540,11 +540,11 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 target = doc.getObject({target_object!r})
 if target is None:
-    raise ValueError(f"Target object not found: {target_object!r}")
+    raise ValueError("Target object not found: " + repr({target_object!r}))
 
 alias = {alias!r}
 prop = {target_property!r}
@@ -630,7 +630,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 import re
 
@@ -739,7 +739,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 file_path = {file_path!r}
 delimiter = {delimiter!r}
@@ -854,7 +854,7 @@ if doc is None:
 
 sheet = doc.getObject({spreadsheet_name!r})
 if sheet is None:
-    raise ValueError(f"Spreadsheet not found: {spreadsheet_name!r}")
+    raise ValueError("Spreadsheet not found: " + repr({spreadsheet_name!r}))
 
 file_path = {file_path!r}
 delimiter = {delimiter!r}
