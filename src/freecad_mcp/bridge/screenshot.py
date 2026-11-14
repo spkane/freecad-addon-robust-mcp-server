@@ -1,5 +1,9 @@
 """Generate the shared FreeCAD GUI screenshot operation for all bridges."""
 
+import inspect
+
+from freecad_mcp.bridge import private_scratch
+
 
 def build_screenshot_code(
     doc_name: str | None, view_angle: str, width: int, height: int
@@ -15,10 +19,11 @@ def build_screenshot_code(
     Returns:
         Python source to execute in FreeCAD's GUI thread.
     """
+    scratch_code = inspect.getsource(private_scratch)
     return f"""
+{scratch_code}
 import base64
 import os
-import tempfile
 
 requested_doc = {doc_name!r}
 doc = FreeCAD.ActiveDocument if requested_doc is None else FreeCAD.getDocument(requested_doc)
@@ -44,7 +49,6 @@ if method is not None and not callable(getattr(view, method, None)):
 animation_getter = getattr(view, "isAnimationEnabled", None)
 animation_setter = getattr(view, "setAnimationEnabled", None)
 animation = animation_getter() if callable(animation_getter) and callable(animation_setter) else None
-temp_path = None
 camera = None
 try:
     if animation is not None:
@@ -55,23 +59,19 @@ try:
     FreeCADGui.updateGui()
     view.fitAll()
     FreeCADGui.updateGui()
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as image_file:
-        temp_path = image_file.name
-    view.saveImage(temp_path, {width}, {height}, "Current")
-    with open(temp_path, "rb") as image_file:
-        image_data = base64.b64encode(image_file.read()).decode("ascii")
+    with private_scratch_directory(".freecad-mcp-screenshot-") as private_dir:
+        temp_path = os.path.join(private_dir, "screenshot.png")
+        view.saveImage(temp_path, {width}, {height}, "Current")
+        with open(temp_path, "rb") as image_file:
+            image_data = base64.b64encode(image_file.read()).decode("ascii")
 finally:
     try:
         if camera is not None:
             view.setCamera(camera)
             FreeCADGui.updateGui()
     finally:
-        try:
-            if temp_path is not None:
-                os.unlink(temp_path)
-        finally:
-            if animation is not None:
-                animation_setter(animation)
+        if animation is not None:
+            animation_setter(animation)
 
 _result_ = {{"success": True, "data": image_data, "format": "png", "width": {width}, "height": {height}}}
 """

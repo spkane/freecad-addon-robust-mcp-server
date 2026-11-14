@@ -572,6 +572,53 @@ def test_xmlrpc_execute_accepts_timeout_and_preserves_one_argument_clients(
     ]
 
 
+@pytest.mark.parametrize("fail", [False, True])
+def test_xmlrpc_screenshot_uses_and_cleans_user_directory(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fail: bool
+) -> None:
+    """Legacy XML-RPC screenshots remove their private directory on all exits."""
+    import os
+
+    original_expanduser = os.path.expanduser
+    monkeypatch.setattr(
+        os.path,
+        "expanduser",
+        lambda path: str(tmp_path) if path == "~" else original_expanduser(path),
+    )
+    created = []
+
+    class View3DInventor:
+        def viewIsometric(self) -> None:
+            pass
+
+        def saveImage(self, path: str, *_args: object) -> None:
+            image = Path(path)
+            assert image.parent.parent == tmp_path
+            created.append(image.parent)
+            image.write_bytes(b"png")
+            if fail:
+                raise RuntimeError("capture failed")
+
+    view = View3DInventor()
+    environment = {
+        "FreeCAD": SimpleNamespace(GuiUp=True, ActiveDocument=object()),
+        "FreeCADGui": SimpleNamespace(ActiveDocument=SimpleNamespace(ActiveView=view)),
+    }
+    plugin = server_mod.FreecadMCPPlugin()
+
+    def execute(code: str, _timeout: int) -> dict[str, Any]:
+        exec(code, environment)  # noqa: S102
+        return {"success": True, "result": environment["_result_"]}
+
+    plugin._execute_via_queue = execute
+    if fail:
+        with pytest.raises(RuntimeError, match="capture failed"):
+            plugin._xmlrpc_get_view()
+    else:
+        assert base64.b64decode(plugin._xmlrpc_get_view()["data"]) == b"png"
+    assert created and not created[0].exists()
+
+
 @pytest.mark.asyncio
 async def test_socket_execute_forwards_timeout(server_mod: Any) -> None:
     """JSON-RPC execute requests should forward their timeout to the queue."""

@@ -572,6 +572,11 @@ def test_embedded_cam_loads_without_importing_workbench(
             "operation": "capabilities",
             "value": 2,
         }
+        from freecad_mcp.bridge.private_scratch import private_scratch_directory
+
+        assert bridge._cam_runtime._embedded_private_scratch_directory is (
+            private_scratch_directory
+        )
     finally:
         bridge._executor.shutdown(wait=True)
 
