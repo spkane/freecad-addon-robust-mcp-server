@@ -422,16 +422,46 @@ def start():
             if not policy.requires_review("execute_python"):
                 raise RuntimeError("Timed bypass was not cleared")
             dialog.deleteLater()
+            from freecad_mcp_bridge.file_review import snapshot_file
+
+            reviewed_file = Path(os.environ["FREECAD_USER_DATA"]) / "review.FCStd"
+            reviewed_file.write_text("example")
+            file_request = ApprovalRequest(
+                ApprovalPayload(
+                    "file_operation",
+                    b"pass",
+                    file_snapshot=snapshot_file(str(reviewed_file), "read"),
+                ),
+                30,
+            )
+            file_dialog = create_review_dialog(
+                file_request, FreeCADGui.getMainWindow(), policy
+            )
+            file_dialog.open()
+            QtWidgets.QApplication.processEvents()
+            details = " ".join(
+                item.toPlainText()
+                for item in file_dialog.findChildren(QtWidgets.QPlainTextEdit)
+            )
+            if str(reviewed_file) not in details:
+                raise RuntimeError("File review dialog omitted the target")
+            file_dialog.reject()
+            QtWidgets.QApplication.processEvents()
+            if file_request.consume() is not None:
+                raise RuntimeError("Denied file request was accepted")
+            file_dialog.deleteLater()
             plugin.stop()
             params = FreeCAD.ParamGet(
                 "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
             )
             params.SetBool("ReviewPython", True)
+            params.SetBool("ReviewFiles", True)
             params.SetBool("AllowReviewBypass", False)
             plugin.start()
             policy = plugin._review_controller._policy
             if (
                 not policy.requires_review("execute_python")
+                or not policy.requires_review("file_operation")
                 or policy.timed_bypass_enabled()
             ):
                 raise RuntimeError("Bridge did not restore default review preferences")
