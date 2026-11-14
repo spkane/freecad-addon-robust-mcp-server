@@ -322,7 +322,7 @@ def main() -> None:  # noqa: PLR0912
                 )
             result = json.loads(result_path.read_text())
             expected = (
-                ["approved", "approved", "denied", "approved"]
+                ["approved", "approved", "denied", "approved", "approved"]
                 if args.preferences
                 else ["approved", "denied"]
             )
@@ -330,7 +330,7 @@ def main() -> None:  # noqa: PLR0912
                 raise RuntimeError(f"FreeCAD review probe failed: {result}")
             if args.preferences and result.get("preferences_tested") is not True:
                 raise RuntimeError(f"FreeCAD preferences probe failed: {result}")
-            if args.preferences and result.get("seen") != 3:
+            if args.preferences and result.get("seen") != 4:
                 raise RuntimeError(f"Unexpected Python or macro dialog count: {result}")
             if args.macro_screenshots:
                 args.macro_screenshots.mkdir(parents=True, exist_ok=True)

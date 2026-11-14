@@ -162,6 +162,7 @@ def worker(port):
         if preferences_tested:
             cases.insert(1, (example_code, True))
             cases.append((None, True))
+            cases.append(("__file_review_probe__", True))
         for index, (code, decision) in enumerate(cases):
             if preferences_tested and index == 2:
                 plugin._review_controller._policy.clear_session()
@@ -206,6 +207,20 @@ def worker(port):
                     Path(plugin._macro_review_roots[0], "HostMacro.FCMacro").write_text(
                         "_result_ = 999\n"
                     )
+                elif code == "__file_review_probe__":
+                    target = Path(os.environ["FREECAD_USER_DATA"]) / "socket-review.txt"
+                    target.write_text("42")
+                    request_id = request(
+                        "review_begin_file",
+                        {
+                            "code": "_result_ = int(open("
+                            + repr(str(target))
+                            + ").read())",
+                            "path": str(target),
+                            "action": "read",
+                            "kind": "path",
+                        },
+                    )["review_id"]
                 else:
                     request_id = request("review_begin", {"code": code})["review_id"]
                 deadline = time.monotonic() + 15
@@ -252,7 +267,7 @@ def tick():
             request = controller._request
             if request.request_id not in seen:
                 seen.add(request.request_id)
-                if request.payload.action == "run_macro":
+                if request.payload.action in {"run_macro", "file_operation"}:
                     controller._dialog.accept()
                 elif request.payload.content == example_code.encode() and not (
                     port_file and results
