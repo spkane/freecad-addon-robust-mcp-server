@@ -355,7 +355,7 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Environment Variables:
   FREECAD_MODE           Connection mode: xmlrpc, socket, or embedded
-                         (default: xmlrpc)
+                         (default: socket)
   FREECAD_SOCKET_HOST    Host for socket/XML-RPC connection (default: localhost)
   FREECAD_SOCKET_PORT    Port for socket connection (default: 9876)
   FREECAD_XMLRPC_PORT    Port for XML-RPC connection (default: 9875)

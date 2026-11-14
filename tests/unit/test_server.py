@@ -112,7 +112,7 @@ class TestLifespan:
     """Tests for the lifespan context manager."""
 
     @pytest.mark.asyncio
-    async def test_unconfigured_startup_uses_xmlrpc(self) -> None:
+    async def test_unconfigured_startup_uses_socket(self) -> None:
         """Default startup uses the real configuration and never selects embedded."""
         import freecad_mcp.server as server_module
 
@@ -127,14 +127,14 @@ class TestLifespan:
                 return_value=("paired", signer),
             ),
             patch(
-                "freecad_mcp.bridge.xmlrpc.XmlRpcBridge", return_value=bridge
-            ) as xmlrpc,
+                "freecad_mcp.bridge.socket.SocketBridge", return_value=bridge
+            ) as socket,
             patch("freecad_mcp.bridge.embedded.EmbeddedBridge") as embedded,
         ):
             async with server_module.lifespan(MagicMock()):
-                xmlrpc.assert_called_once_with(
+                socket.assert_called_once_with(
                     host="localhost",
-                    port=9875,
+                    port=9876,
                     execution_timeout_ms=30000,
                     client_id="paired",
                     signer=signer,

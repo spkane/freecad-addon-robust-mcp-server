@@ -198,8 +198,8 @@ Example MCP client configuration with custom ports:
 ```
 
 !!! info "Choosing a Connection Mode"
-    - **`xmlrpc`** (recommended): Most reliable, works on all platforms. Connects to FreeCAD via XML-RPC protocol.
-    - **`socket`**: Alternative protocol using JSON-RPC over TCP sockets. Also works on all platforms.
+    - **`xmlrpc`**: Connects via XML-RPC. Local file and code review are unavailable.
+    - **`socket`** (recommended): Connects via JSON-RPC and supports local review in GUI mode.
     - **`embedded`**: Direct Python import of FreeCAD (Linux only). Does not require the workbench but crashes on macOS due to library linking issues. Not recommended for production use.
 
 !!! warning "Port Matching Required"
