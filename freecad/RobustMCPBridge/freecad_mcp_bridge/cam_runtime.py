@@ -31,6 +31,7 @@ import stat
 import sys
 import traceback
 import warnings
+from contextlib import nullcontext
 from pathlib import Path as FsPath
 from typing import Any
 
@@ -2279,8 +2280,18 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
     job = _job(doc, args.get("job_name"))
     doc.recompute()
     report_file = args.get("report_file")
-    with private_scratch_directory(".freecad-mcp-cam-") as tmp:
-        target = FsPath(report_file) if report_file else FsPath(tmp) / "report.html"
+    scratch = (
+        nullcontext(None)
+        if report_file
+        else private_scratch_directory(".freecad-mcp-cam-")
+    )
+    with scratch as tmp:
+        if report_file:
+            target = FsPath(report_file)
+        else:
+            if tmp is None:
+                raise RuntimeError("Temporary report directory unavailable")
+            target = FsPath(tmp) / "report.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         # built like CAMSanity.validate_job(); images (3D views of the GUI) only
         # on request, the report then embeds them

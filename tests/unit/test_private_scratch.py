@@ -66,8 +66,10 @@ def test_windows_scratch_directory_has_protected_acl(
         env = os.environ.copy()
         env["FREECAD_TEST_SCRATCH_DIRECTORY"] = path
         script = (
+            "$ErrorActionPreference = 'Stop'; "
             "$acl = Get-Acl -LiteralPath $env:FREECAD_TEST_SCRATCH_DIRECTORY; "
-            "if (-not $acl.AreAccessRulesProtected) { exit 3 }; "
+            "Write-Output ('Protected=' + $acl.AreAccessRulesProtected); "
+            "Write-Output ('SDDL=' + $acl.Sddl); "
             "$acl.GetAccessRules($true,$true,"
             "[System.Security.Principal.SecurityIdentifier]) | "
             "ForEach-Object { $_.IdentityReference.Value }"
@@ -85,9 +87,13 @@ def test_windows_scratch_directory_has_protected_acl(
             ],
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
             env=env,
         )
-        assert set(result.stdout.split()) <= {"S-1-5-18", "S-1-5-32-544", "S-1-3-4"}
-        assert "S-1-3-4" in result.stdout
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        lines = result.stdout.splitlines()
+        assert "Protected=True" in lines, (result.stdout, result.stderr)
+        sids = {line for line in lines if line.startswith("S-")}
+        assert sids <= {"S-1-5-18", "S-1-5-32-544", "S-1-3-4"}, result.stdout
+        assert "S-1-3-4" in sids, result.stdout
     assert not Path(path).exists()
