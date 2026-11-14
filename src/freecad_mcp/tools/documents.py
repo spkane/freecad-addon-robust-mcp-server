@@ -7,8 +7,6 @@ creating, opening, saving, closing, and listing documents.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.server.mcpserver.exceptions import ToolError
-
 from freecad_mcp.bridge.file_review import file_review_target
 from freecad_mcp.tools._registration import file_tool
 
@@ -147,6 +145,15 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             ValueError: If document not found or no path specified for new doc.
         """
         bridge = await get_bridge()
+        if path and doc_name is None:
+            lookup_token = file_review_target.set(None)
+            try:
+                active = await bridge.get_active_document()
+            finally:
+                file_review_target.reset(lookup_token)
+            if active is None:
+                raise ValueError("No active document")
+            doc_name = active.name
         if path:
             saved_path = await bridge.save_document(doc_name, path)
         else:
@@ -199,13 +206,8 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
                 if active is None:
                     raise ValueError("No active document")
                 doc_name = active.name
-            try:
-                await save_document(doc_name)
-                saved = True
-            except ToolError:
-                raise
-            except Exception:
-                pass
+            await save_document(doc_name)
+            saved = True
 
         await bridge.close_document(doc_name)
         return {

@@ -114,8 +114,13 @@ async def bridge() -> AsyncIterator[XmlRpcBridge]:
 
 
 @pytest.fixture
-async def tools(bridge: XmlRpcBridge) -> Tools:
-    """The CAM tools, registered against the live bridge."""
+async def tools(bridge: XmlRpcBridge, monkeypatch: pytest.MonkeyPatch) -> Tools:
+    """Run unattended CAM coverage with the explicit XML-RPC automation override.
+
+    Default-deny and reviewed socket behavior have separate tests; this suite
+    exercises CAM itself and cannot interact with a GUI review dialog.
+    """
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
     return _register(bridge)
 
 

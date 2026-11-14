@@ -221,6 +221,11 @@ class TestCamTools:
 
         bridge.execute_python.side_effect = execute
         assert await tools["cam_create_job"](model_objects=["Part"]) == {"ok": True}
+        assert len(seen) == 2
+        assert seen[0][0] == (
+            "import Path.Preferences as _cam_prefs\n"
+            "_result_ = _cam_prefs.defaultJobTemplate() or ''"
+        )
         assert seen[0][1] is None
         assert seen[1][1] == ("/tmp/job.json", "read", "path")
         assert _payload(seen[1][0])["template"] == "/tmp/job.json"

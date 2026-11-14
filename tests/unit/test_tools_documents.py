@@ -242,16 +242,35 @@ class TestDocumentTools:
 
     @pytest.mark.asyncio
     async def test_close_document_save_failure(self, register_tools, mock_bridge):
-        """close_document should still close even if save fails."""
+        """A failed save leaves the document open."""
+        mock_bridge.get_documents = AsyncMock(
+            return_value=[
+                DocumentInfo(
+                    name="TestDoc", label="Test", path="/tmp/doc.FCStd", objects=[]
+                )
+            ]
+        )
         mock_bridge.save_document = AsyncMock(side_effect=Exception("Save failed"))
         mock_bridge.close_document = AsyncMock()
 
         close_document = register_tools["close_document"]
-        result = await close_document(doc_name="TestDoc", save_changes=True)
+        with pytest.raises(Exception, match="Save failed"):
+            await close_document(doc_name="TestDoc", save_changes=True)
+        mock_bridge.save_document.assert_awaited_once_with("TestDoc", "/tmp/doc.FCStd")
+        mock_bridge.close_document.assert_not_awaited()
 
-        assert result["success"] is True
-        assert result["saved"] is False
-        mock_bridge.close_document.assert_called_once()
+    @pytest.mark.asyncio
+    async def test_close_document_missing_save_path_keeps_it_open(
+        self, register_tools, mock_bridge
+    ):
+        """A missing saved path must not discard unsaved work."""
+        mock_bridge.get_documents = AsyncMock(return_value=[])
+        with pytest.raises(ValueError, match="No saved path"):
+            await register_tools["close_document"](
+                doc_name="TestDoc", save_changes=True
+            )
+        mock_bridge.save_document.assert_not_awaited()
+        mock_bridge.close_document.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_recompute_document_success(self, register_tools, mock_bridge):

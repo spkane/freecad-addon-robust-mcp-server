@@ -96,6 +96,32 @@ async def test_existing_document_save_uses_reviewed_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explicit_save_binds_active_document_before_review() -> None:
+    """Changing the active document during review does not redirect the save."""
+    observed = []
+
+    async def active():
+        assert file_review_target.get() is None
+        return SimpleNamespace(name="Model")
+
+    async def save(name, path):
+        observed.append((name, path, file_review_target.get()))
+        return path
+
+    bridge = SimpleNamespace(get_active_document=active, save_document=save)
+    mcp = Tools()
+
+    async def get_bridge():
+        return bridge
+
+    register_document_tools(mcp, get_bridge)
+    await mcp.functions["save_document"](path="/tmp/output.FCStd")
+    assert observed == [
+        ("Model", "/tmp/output.FCStd", ("/tmp/output.FCStd", "write", "path"))
+    ]
+
+
+@pytest.mark.asyncio
 async def test_close_with_save_propagates_review_denial() -> None:
     """Denying a save does not silently close the document."""
     bridge = SimpleNamespace(
