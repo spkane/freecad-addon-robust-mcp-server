@@ -39,6 +39,7 @@ from freecad_mcp.bridge.console import (
     validate_console_lines,
 )
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
+from freecad_mcp.bridge.private_scratch import private_scratch_directory
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 
 
@@ -201,6 +202,10 @@ class EmbeddedBridge(FreecadBridge):
                 )
                 if spec and spec.loader and path.is_file():
                     runtime = importlib.util.module_from_spec(spec)
+                    # The standalone runtime has no package for relative imports.
+                    runtime.__dict__["_embedded_private_scratch_directory"] = (
+                        private_scratch_directory
+                    )
                     spec.loader.exec_module(runtime)
                     self._cam_runtime = runtime
         if self._cam_runtime is None:

@@ -31,6 +31,7 @@ import stat
 import sys
 import traceback
 import warnings
+from contextlib import nullcontext
 from pathlib import Path as FsPath
 from typing import Any
 
@@ -2265,17 +2266,32 @@ def simulate(args: dict[str, Any]) -> dict[str, Any]:
 
 def check_job(args: dict[str, Any]) -> dict[str, Any]:
     """FreeCAD's job check ("Sanity"): findings, summary, optional HTML report."""
-    import tempfile
-
     from Path.Main.Sanity import ImageBuilder
     from Path.Main.Sanity.Sanity import CAMSanity
+
+    if __package__:
+        from .private_scratch import private_scratch_directory
+    elif "_embedded_private_scratch_directory" in globals():
+        private_scratch_directory = globals()["_embedded_private_scratch_directory"]
+    else:
+        from private_scratch import private_scratch_directory  # type: ignore[import-not-found,no-redef]
 
     doc = _doc(args.get("doc_name"))
     job = _job(doc, args.get("job_name"))
     doc.recompute()
     report_file = args.get("report_file")
-    with tempfile.TemporaryDirectory() as tmp:
-        target = FsPath(report_file) if report_file else FsPath(tmp) / "report.html"
+    scratch = (
+        nullcontext(None)
+        if report_file
+        else private_scratch_directory(".freecad-mcp-cam-")
+    )
+    with scratch as tmp:
+        if report_file:
+            target = FsPath(report_file)
+        else:
+            if tmp is None:
+                raise RuntimeError("Temporary report directory unavailable")
+            target = FsPath(tmp) / "report.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         # built like CAMSanity.validate_job(); images (3D views of the GUI) only
         # on request, the report then embeds them

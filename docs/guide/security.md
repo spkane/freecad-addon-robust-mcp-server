@@ -53,6 +53,17 @@ exposure to browser requests and DNS rebinding; it does not replace pairing.
 SSH forwarding remains possible when the client connects to a loopback host,
 including on a different local port.
 
+Screenshots and temporary CAM report files are created in short-lived
+directories under the FreeCAD user's home directory and removed after use,
+including when capture fails. On POSIX systems the temporary directory is
+created with owner-only permissions. On Windows it uses a protected access
+control list for the owner, administrators, and the system account, including
+with older bundled Python versions. Other programs running as the same user,
+administrators, and backups can still access or retain these files, and an
+unexpected process termination may leave a temporary directory behind.
+On Windows, these operations fail if the home filesystem does not support
+persistent access control lists; they do not fall back to a shared location.
+
 ## Tools, files, and approvals
 
 The MCP server hides `execute_python`, `safe_execute`, `run_macro`,

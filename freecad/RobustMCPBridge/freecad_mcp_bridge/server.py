@@ -24,6 +24,7 @@ import binascii
 import contextlib
 import errno
 import hashlib
+import inspect
 import io
 import ipaddress
 import json
@@ -2364,9 +2365,14 @@ class FreecadMCPPlugin:
                 f"Must be one of: {', '.join(sorted(self._VALID_VIEW_TYPES))}",
             }
 
+        if __package__:
+            from . import private_scratch
+        else:
+            import private_scratch  # type: ignore[import-not-found,no-redef]
+        scratch_code = inspect.getsource(private_scratch)
         code = f"""
+{scratch_code}
 import base64
-import tempfile
 import os
 
 if not FreeCAD.GuiUp:
@@ -2407,15 +2413,11 @@ else:
                     view.viewRight()
 
                 # Capture screenshot
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-                    temp_path = f.name
-
-                view.saveImage(temp_path, {width}, {height}, "Current")
-
-                with open(temp_path, "rb") as f:
-                    image_data = base64.b64encode(f.read()).decode("utf-8")
-
-                os.unlink(temp_path)
+                with private_scratch_directory(".freecad-mcp-screenshot-") as private_dir:
+                    temp_path = os.path.join(private_dir, "screenshot.png")
+                    view.saveImage(temp_path, {width}, {height}, "Current")
+                    with open(temp_path, "rb") as f:
+                        image_data = base64.b64encode(f.read()).decode("utf-8")
 
                 _result_ = {{
                     "success": True,
