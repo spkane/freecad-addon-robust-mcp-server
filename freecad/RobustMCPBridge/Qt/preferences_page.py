@@ -98,20 +98,24 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
 
         layout.addWidget(display_group)
 
-        review_group = QtWidgets.QGroupBox("Python review")
+        review_group = QtWidgets.QGroupBox("Local review")
         review_layout = QtWidgets.QVBoxLayout(review_group)
         self.review_python_cb = QtWidgets.QCheckBox(
             "Review supported MCP Python requests in FreeCAD"
         )
         review_layout.addWidget(self.review_python_cb)
+        self.review_files_cb = QtWidgets.QCheckBox(
+            "Review supported MCP file operations in FreeCAD"
+        )
+        review_layout.addWidget(self.review_files_cb)
         self.review_bypass_cb = QtWidgets.QCheckBox(
             "Offer a time-limited review bypass in the review dialog"
         )
         review_layout.addWidget(self.review_bypass_cb)
         review_warning = QtWidgets.QLabel(
             "Disabling or bypassing review lets authorized clients run Python "
-            "without a local prompt, with access to your files and network. "
-            "This setting covers supported reviewed Python requests only; "
+            "or access files without a local prompt. "
+            "These settings cover supported reviewed requests only; "
             "other paired bridge clients can already run Python without review. "
             "Restart the bridge to apply changes."
         )
@@ -215,6 +219,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
             get_auto_start,
             get_auto_start_headless,
             get_auto_start_headless_batch,
+            get_review_files,
             get_review_python,
             get_socket_port,
             get_status_bar_enabled,
@@ -228,6 +233,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         self.xmlrpc_spin.setValue(get_xmlrpc_port())
         self.socket_spin.setValue(get_socket_port())
         self.review_python_cb.setChecked(get_review_python())
+        self.review_files_cb.setChecked(get_review_files())
         self.review_bypass_cb.setChecked(get_allow_review_bypass())
 
     def saveSettings(self) -> None:
@@ -242,6 +248,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
             set_auto_start,
             set_auto_start_headless,
             set_auto_start_headless_batch,
+            set_review_files,
             set_review_python,
             set_socket_port,
             set_status_bar_enabled,
@@ -260,6 +267,7 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         set_xmlrpc_port(self.xmlrpc_spin.value())
         set_socket_port(self.socket_spin.value())
         set_review_python(self.review_python_cb.isChecked())
+        set_review_files(self.review_files_cb.isChecked())
         set_allow_review_bypass(self.review_bypass_cb.isChecked())
 
         # Check if ports changed and notify about restart if needed

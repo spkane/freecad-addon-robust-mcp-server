@@ -111,6 +111,11 @@ dialog by default on a supported GUI/socket connection. Users can disable review
 or enable a timed bypass in the workbench preferences. This does not prevent other
 paired clients from sending Python directly to the bridge.
 
+Supported file tools also request local review by default. The dialog shows the
+operation and path, and the preferences offer an explicit override for automation.
+This is not a filesystem sandbox; see the security guide for connection-mode and
+CAM output limitations.
+
 See the [security guide](docs/guide/security.md) for the warning, pairing,
 client approvals, file access, and remote-access considerations.
 

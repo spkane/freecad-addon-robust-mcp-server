@@ -502,6 +502,11 @@ def main() -> None:
         print(f"FREECAD_MCP_INSTANCE_ID={INSTANCE_ID}", file=sys.stderr, flush=True)
 
     logger.info("Starting FreeCAD Robust MCP Server")
+    if config.allow_unreviewed_file_operations:
+        logger.warning(
+            "File operation review is disabled by local server configuration; "
+            "authorized clients can access files without a FreeCAD review."
+        )
     logger.info("Instance ID: %s", INSTANCE_ID)
     logger.info("Mode: %s", config.mode.value)
     logger.info("Transport: %s", config.transport.value)

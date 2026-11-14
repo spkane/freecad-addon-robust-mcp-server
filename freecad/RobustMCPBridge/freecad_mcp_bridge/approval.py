@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from .file_review import FileReviewSnapshot
+
 
 class ApprovalState(str, Enum):
     """Lifecycle of one locally reviewed action."""
@@ -41,6 +43,7 @@ class ApprovalPayload:
     macro_path: str | None = None
     macro_sha256: str | None = None
     macro_args_json: str | None = None
+    file_snapshot: FileReviewSnapshot | None = None
 
 
 class ApprovalRequest:
@@ -73,6 +76,13 @@ class ApprovalRequest:
             )
         ):
             raise TypeError("Approval payload must contain immutable bytes")
+        if payload.file_snapshot is not None:
+            if __package__:
+                from .file_review import FileReviewSnapshot
+            else:
+                from file_review import FileReviewSnapshot  # type: ignore[import-not-found,no-redef]
+            if type(payload.file_snapshot) is not FileReviewSnapshot:
+                raise TypeError("File review snapshot must be immutable")
         if (
             isinstance(timeout_seconds, bool)
             or not math.isfinite(timeout_seconds)

@@ -349,6 +349,24 @@ class FreecadBridge(ABC):
             error_type="ReviewUnavailable",
         )
 
+    async def execute_reviewed_file(
+        self,
+        code: str,
+        path: str,
+        action: str,
+        kind: str,
+        timeout_ms: int | None = None,
+    ) -> ExecutionResult:
+        """Fail closed when this connection cannot request local file review."""
+        return ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Local file review is unavailable for this connection mode.",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
+
     @abstractmethod
     async def execute_python(
         self,

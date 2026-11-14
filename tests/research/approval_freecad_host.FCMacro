@@ -58,14 +58,23 @@ def test_preferences():
 
     page = MCPBridgePreferencesPage()
     page.loadSettings()
-    if not page.review_python_cb.isChecked() or page.review_bypass_cb.isChecked():
+    if (
+        not page.review_python_cb.isChecked()
+        or not page.review_files_cb.isChecked()
+        or page.review_bypass_cb.isChecked()
+    ):
         raise RuntimeError("Unexpected review preference defaults")
     page.review_python_cb.setChecked(False)
+    page.review_files_cb.setChecked(False)
     page.review_bypass_cb.setChecked(True)
     page.saveSettings()
     other = MCPBridgePreferencesPage()
     other.loadSettings()
-    if other.review_python_cb.isChecked() or not other.review_bypass_cb.isChecked():
+    if (
+        other.review_python_cb.isChecked()
+        or other.review_files_cb.isChecked()
+        or not other.review_bypass_cb.isChecked()
+    ):
         raise RuntimeError("Review preferences did not persist")
     approval_module = importlib.import_module(
         "approval_probe_addon.freecad_mcp_bridge.macro_approvals"
@@ -153,6 +162,7 @@ def worker(port):
         if preferences_tested:
             cases.insert(1, (example_code, True))
             cases.append((None, True))
+            cases.append(("__file_review_probe__", True))
         for index, (code, decision) in enumerate(cases):
             if preferences_tested and index == 2:
                 plugin._review_controller._policy.clear_session()
@@ -197,6 +207,20 @@ def worker(port):
                     Path(plugin._macro_review_roots[0], "HostMacro.FCMacro").write_text(
                         "_result_ = 999\n"
                     )
+                elif code == "__file_review_probe__":
+                    target = Path(os.environ["FREECAD_USER_DATA"]) / "socket-review.txt"
+                    target.write_text("42")
+                    request_id = request(
+                        "review_begin_file",
+                        {
+                            "code": "_result_ = int(open("
+                            + repr(str(target))
+                            + ").read())",
+                            "path": str(target),
+                            "action": "read",
+                            "kind": "path",
+                        },
+                    )["review_id"]
                 else:
                     request_id = request("review_begin", {"code": code})["review_id"]
                 deadline = time.monotonic() + 15
@@ -243,7 +267,7 @@ def tick():
             request = controller._request
             if request.request_id not in seen:
                 seen.add(request.request_id)
-                if request.payload.action == "run_macro":
+                if request.payload.action in {"run_macro", "file_operation"}:
                     controller._dialog.accept()
                 elif request.payload.content == example_code.encode() and not (
                     port_file and results
@@ -309,6 +333,7 @@ def start():
             policy = plugin._review_controller._policy
             if (
                 policy.requires_review("execute_python")
+                or policy.requires_review("file_operation")
                 or not policy.timed_bypass_enabled()
             ):
                 raise RuntimeError("Bridge did not load saved review preferences")
@@ -412,16 +437,46 @@ def start():
             if not policy.requires_review("execute_python"):
                 raise RuntimeError("Timed bypass was not cleared")
             dialog.deleteLater()
+            from freecad_mcp_bridge.file_review import snapshot_file
+
+            reviewed_file = Path(os.environ["FREECAD_USER_DATA"]) / "review.FCStd"
+            reviewed_file.write_text("example")
+            file_request = ApprovalRequest(
+                ApprovalPayload(
+                    "file_operation",
+                    b"pass",
+                    file_snapshot=snapshot_file(str(reviewed_file), "read"),
+                ),
+                30,
+            )
+            file_dialog = create_review_dialog(
+                file_request, FreeCADGui.getMainWindow(), policy
+            )
+            file_dialog.open()
+            QtWidgets.QApplication.processEvents()
+            details = " ".join(
+                item.toPlainText()
+                for item in file_dialog.findChildren(QtWidgets.QPlainTextEdit)
+            )
+            if str(reviewed_file) not in details:
+                raise RuntimeError("File review dialog omitted the target")
+            file_dialog.reject()
+            QtWidgets.QApplication.processEvents()
+            if file_request.consume() is not None:
+                raise RuntimeError("Denied file request was accepted")
+            file_dialog.deleteLater()
             plugin.stop()
             params = FreeCAD.ParamGet(
                 "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
             )
             params.SetBool("ReviewPython", True)
+            params.SetBool("ReviewFiles", True)
             params.SetBool("AllowReviewBypass", False)
             plugin.start()
             policy = plugin._review_controller._policy
             if (
                 not policy.requires_review("execute_python")
+                or not policy.requires_review("file_operation")
                 or policy.timed_bypass_enabled()
             ):
                 raise RuntimeError("Bridge did not restore default review preferences")

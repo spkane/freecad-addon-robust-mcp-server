@@ -41,11 +41,15 @@ def preferences(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
 def test_review_preferences_default_and_reset(preferences: ModuleType) -> None:
     """Explicit settings persist and reset restores safe defaults."""
     assert preferences.get_review_python() is True
+    assert preferences.get_review_files() is True
     assert preferences.get_allow_review_bypass() is False
     preferences.set_review_python(False)
+    preferences.set_review_files(False)
     preferences.set_allow_review_bypass(True)
     assert preferences.get_review_python() is False
+    assert preferences.get_review_files() is False
     assert preferences.get_allow_review_bypass() is True
     preferences.reset_to_defaults()
     assert preferences.get_review_python() is True
+    assert preferences.get_review_files() is True
     assert preferences.get_allow_review_bypass() is False

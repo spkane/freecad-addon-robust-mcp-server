@@ -560,6 +560,21 @@ class SocketBridge(FreecadBridge):
             "review_begin_macro", {"macro_name": macro_name, "args": args or {}}, None
         )
 
+    async def execute_reviewed_file(
+        self,
+        code: str,
+        path: str,
+        action: str,
+        kind: str,
+        timeout_ms: int | None = None,
+    ) -> ExecutionResult:
+        """Review one generated operation and its file target in FreeCAD."""
+        return await self._execute_reviewed_request(
+            "review_begin_file",
+            {"code": code, "path": path, "action": action, "kind": kind},
+            timeout_ms,
+        )
+
     async def _execute_reviewed_request(  # noqa: PLR0912
         self, begin_method: str, params: dict[str, Any], timeout_ms: int | None
     ) -> ExecutionResult:
@@ -688,7 +703,7 @@ class SocketBridge(FreecadBridge):
                 with contextlib.suppress(Exception):
                     await writer.wait_closed()
 
-    async def execute_python(
+    async def execute_python(  # noqa: PLR0911
         self,
         code: str,
         timeout_ms: int | None = None,
@@ -703,6 +718,17 @@ class SocketBridge(FreecadBridge):
         Returns:
             ExecutionResult with execution outcome.
         """
+        from freecad_mcp.bridge.file_review import (
+            ensure_review_result,
+            file_review_target,
+        )
+        from freecad_mcp.config import get_config
+
+        target = file_review_target.get()
+        if target is not None and not get_config().allow_unreviewed_file_operations:
+            return ensure_review_result(
+                await self.execute_reviewed_file(code, *target, timeout_ms=timeout_ms)
+            )
         try:
             effective_timeout_ms = resolve_execution_timeout_ms(
                 timeout_ms,

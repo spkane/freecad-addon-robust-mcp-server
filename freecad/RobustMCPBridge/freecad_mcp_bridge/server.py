@@ -41,7 +41,7 @@ import weakref
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
@@ -1135,6 +1135,8 @@ class FreecadMCPPlugin:
                     review_bypassed=bypassed,
                     macro_review_bypassed=policy is not None
                     and not policy.requires_review("run_macro"),
+                    file_review_bypassed=policy is not None
+                    and not policy.requires_review("file_operation"),
                 )
             else:
                 self._show_standalone_warning()
@@ -1152,6 +1154,8 @@ class FreecadMCPPlugin:
             bypasses.append("Python")
         if macro_bypassed:
             bypasses.append("macro")
+        if policy is not None and not policy.requires_review("file_operation"):
+            bypasses.append("file")
         message = (
             f"MCP: {' and '.join(bypasses)} review bypassed; client has full permissions"
             if bypasses
@@ -1331,6 +1335,8 @@ class FreecadMCPPlugin:
             )
             if params.GetBool("ReviewPython", True) is False:
                 policy.configure("execute_python", require_review=False)
+            if params.GetBool("ReviewFiles", True) is False:
+                policy.configure("file_operation", require_review=False)
             if params.GetBool("AllowReviewBypass", False) is True:
                 policy.set_timed_bypass_enabled(True)
         except Exception:
@@ -1379,7 +1385,7 @@ class FreecadMCPPlugin:
                 if FREECAD_AVAILABLE:
                     FreeCAD.Console.PrintError(f"Queue processing error: {e}\n")
 
-    def _process_reviewed_queue(self) -> None:
+    def _process_reviewed_queue(self) -> None:  # noqa: PLR0912
         """Execute at most one claimed review on the FreeCAD thread.
 
         Only the exact content returned by a
@@ -1404,6 +1410,19 @@ class FreecadMCPPlugin:
             if payload.action == "execute_python":
                 code = payload.content.decode("utf-8", errors="strict")
                 result = self._execute_code_sync(code)
+            elif payload.action == "file_operation":
+                if (
+                    payload.file_snapshot is None
+                    or not payload.file_snapshot.unchanged()
+                ):
+                    result = {
+                        "success": False,
+                        "error_type": "FileTargetChanged",
+                        "error_message": "The reviewed file target changed before execution.",
+                    }
+                else:
+                    code = payload.content.decode("utf-8", errors="strict")
+                    result = self._execute_code_sync(code)
             elif payload.action == "run_macro":
                 if (
                     payload.macro_path is None
@@ -1785,6 +1804,7 @@ class FreecadMCPPlugin:
                 in (
                     "review_begin",
                     "review_begin_macro",
+                    "review_begin_file",
                     "review_status",
                     "review_commit",
                     "review_cancel",
@@ -1835,6 +1855,11 @@ class FreecadMCPPlugin:
                 "id": request_id,
                 "error": {"code": -32602, "message": "Invalid params"},
             }
+
+        if method == "review_begin_file":
+            return await self._review_begin_file(
+                request_id, params, authenticated_client
+            )
 
         if method == "review_begin_macro":
             return await self._review_begin_macro(
@@ -1900,6 +1925,87 @@ class FreecadMCPPlugin:
                 "data": f"Unknown method: {method}",
             },
         }
+
+    async def _review_begin_file(
+        self,
+        request_id: str | int | None,
+        params: dict[str, Any],
+        owner: str | None,
+    ) -> dict[str, Any]:
+        """Snapshot a file target before presenting the generated operation."""
+        broker = self._review_broker
+        try:
+            if broker is None or type(owner) is not str:
+                raise ValueError("File review unavailable")
+            if set(params) != {"code", "path", "action", "kind"}:
+                raise ValueError("Invalid file review parameters")
+            code, path, action, kind = (
+                params[k] for k in ("code", "path", "action", "kind")
+            )
+            if (
+                type(path) is not str
+                or type(action) is not str
+                or type(kind) is not str
+            ):
+                raise ValueError("Invalid file target")
+            _validate_execution_code(code)
+            if __package__:
+                from .approval import ApprovalPayload
+                from .file_review import snapshot_file
+                from .review_dialog import review_text
+            else:
+                from approval import ApprovalPayload  # type: ignore[import-not-found,no-redef]
+                from file_review import snapshot_file  # type: ignore[import-not-found,no-redef]
+                from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+            content = code.encode("utf-8")
+            review_text(content)
+            review_text(path.encode("utf-8"))
+
+            def resolve_target() -> Any:
+                if kind == "path":
+                    return snapshot_file(path, action)
+                if kind != "macro" or not self._macro_review_roots:
+                    raise ValueError("Invalid file target kind")
+                if (
+                    not path
+                    or path in {".", ".."}
+                    or any(c in path for c in "/\\:\0\r\n")
+                ):
+                    raise ValueError("Invalid macro name")
+                roots = (
+                    self._macro_review_roots
+                    if action == "read"
+                    else self._macro_review_roots[:1]
+                )
+                for root in roots:
+                    candidate = str(Path(root) / (path + ".FCMacro"))
+                    try:
+                        return snapshot_file(candidate, action)
+                    except FileNotFoundError:
+                        if action != "read":
+                            raise
+                raise FileNotFoundError("Macro not found")
+
+            snapshot = await asyncio.to_thread(resolve_target)
+            review_text(snapshot.resolved_path.encode("utf-8"))
+            if broker is None or self._review_broker is not broker:
+                raise ValueError("File review stopped")
+            payload = ApprovalPayload("file_operation", content, file_snapshot=snapshot)
+            result = {
+                "review_id": cast("Any", broker).begin(
+                    owner, payload, REVIEW_LEASE_SECONDS
+                )
+            }
+            return {"jsonrpc": "2.0", "id": request_id, "result": result}
+        except (ValueError, TypeError, UnicodeError, OSError, RuntimeError):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32000,
+                    "message": "File review unavailable or invalid",
+                },
+            }
 
     async def _review_begin_macro(
         self,
