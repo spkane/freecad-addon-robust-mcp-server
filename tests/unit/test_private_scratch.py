@@ -67,7 +67,8 @@ def test_windows_scratch_directory_has_protected_acl(
         env["FREECAD_TEST_SCRATCH_DIRECTORY"] = path
         script = (
             "$ErrorActionPreference = 'Stop'; "
-            "$acl = Get-Acl -LiteralPath $env:FREECAD_TEST_SCRATCH_DIRECTORY; "
+            "$acl = [System.IO.Directory]::GetAccessControl("
+            "$env:FREECAD_TEST_SCRATCH_DIRECTORY); "
             "Write-Output ('Protected=' + $acl.AreAccessRulesProtected); "
             "Write-Output ('SDDL=' + $acl.Sddl); "
             "$acl.GetAccessRules($true,$true,"
