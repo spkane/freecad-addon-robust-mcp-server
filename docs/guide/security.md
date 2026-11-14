@@ -47,6 +47,12 @@ credential as described in [configuration](../getting-started/configuration.md#p
 If a credential is compromised, stop both components and replace it using the
 instructions there. Pairing fails closed when valid credentials are unavailable.
 
+In the current development version, the XML-RPC listener also rejects requests
+with a browser `Origin` header or a non-loopback `Host` header. This reduces
+exposure to browser requests and DNS rebinding; it does not replace pairing.
+SSH forwarding remains possible when the client connects to a loopback host,
+including on a different local port.
+
 ## Tools, files, and approvals
 
 The MCP server hides `execute_python`, `safe_execute`, `run_macro`,

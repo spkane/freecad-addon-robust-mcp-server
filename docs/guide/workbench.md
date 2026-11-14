@@ -127,13 +127,16 @@ Press Ctrl+C to stop.
 | Object creation          | Yes      | Yes           |
 | Boolean operations       | Yes      | Yes           |
 | Export (STEP, STL, etc.) | Yes      | Yes           |
-| Macro execution          | Yes      | Yes           |
+| MCP macro execution      | Socket   | **No**        |
 | Document management      | Yes      | Yes           |
 | Screenshots              | Yes      | **No**        |
 | Object colors            | Yes      | **No**        |
 | Object visibility        | Yes      | **No**        |
 | Camera/view control      | Yes      | **No**        |
 | Interactive selection    | Yes      | **No**        |
+
+MCP macro execution also requires unsafe tools to be enabled and is reviewed
+in FreeCAD by default. See [macro review](security.md#macro-review-and-saved-versions).
 
 !!! info "GUI-Only Features"
 When a GUI-only feature is requested in headless mode, the Robust MCP Server returns a structured error response instead of crashing: `{"success": false, "error": "GUI not available - screenshots cannot be captured in headless mode"}`

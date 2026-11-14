@@ -548,7 +548,7 @@ _result_ = {{
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
-    raise ValueError("No active document" if {doc_name!r} is None else f"Document not found: {doc_name!r}")
+    raise ValueError("No active document" if {doc_name!r} is None else "Document not found: " + repr({doc_name!r}))
 
 save_path = {path!r} or doc.FileName
 if not save_path:
@@ -704,7 +704,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 # Set properties
 for prop_name, prop_val in {properties!r}.items():
@@ -751,7 +751,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 doc.removeObject({obj_name!r})
 _result_ = True
