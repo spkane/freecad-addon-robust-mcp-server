@@ -20,6 +20,9 @@ class FreecadMode(str, Enum):
     XMLRPC = "xmlrpc"
 
 
+DEFAULT_FREECAD_MODE = FreecadMode.SOCKET
+
+
 class TransportType(str, Enum):
     """MCP transport type."""
 
@@ -57,7 +60,7 @@ class ServerConfig(BaseSettings):
     )
 
     # FreeCAD connection settings
-    mode: FreecadMode = FreecadMode.SOCKET
+    mode: FreecadMode = DEFAULT_FREECAD_MODE
     freecad_path: Annotated[
         Path | None,
         Field(

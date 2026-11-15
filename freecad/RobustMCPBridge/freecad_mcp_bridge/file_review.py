@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, cast
 
@@ -61,6 +61,7 @@ class FileReviewSnapshot:
     parent_group: int
     leaf: FileIdentity | None
     target: FileIdentity | None
+    preceding_paths: tuple[str, ...] = field(default=(), compare=False)
 
     @property
     def exists(self) -> bool:
@@ -75,7 +76,9 @@ class FileReviewSnapshot:
     def unchanged(self) -> bool:
         """Check whether the path still names the same snapshot before dispatch."""
         try:
-            return snapshot_file(self.requested_path, self.action) == self
+            return not any(os.path.lexists(path) for path in self.preceding_paths) and (
+                snapshot_file(self.requested_path, self.action) == self
+            )
         except (OSError, ValueError):
             return False
 

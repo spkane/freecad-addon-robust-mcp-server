@@ -260,11 +260,17 @@ class TestDocumentTools:
         mock_bridge.close_document.assert_not_awaited()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing", [True, False])
     async def test_close_document_missing_save_path_keeps_it_open(
-        self, register_tools, mock_bridge
+        self, register_tools, mock_bridge, missing
     ):
         """A missing saved path must not discard unsaved work."""
-        mock_bridge.get_documents = AsyncMock(return_value=[])
+        docs = (
+            []
+            if missing
+            else [DocumentInfo(name="TestDoc", label="Test", path=None, objects=[])]
+        )
+        mock_bridge.get_documents = AsyncMock(return_value=docs)
         with pytest.raises(ValueError, match="No saved path"):
             await register_tools["close_document"](
                 doc_name="TestDoc", save_changes=True

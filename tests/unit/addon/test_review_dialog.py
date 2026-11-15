@@ -84,6 +84,10 @@ def test_file_dialog_shows_resolved_target_and_overwrite(
     assert str(path.resolve()) in calls[0].args[0]
     assert "may be overwritten" in calls[0].args[0]
     assert calls[1].args[0] == "print('generated')"
+    assert (
+        "file can change after the final check"
+        in widgets.QLabel.call_args_list[0].args[0]
+    )
     dialog.finished.connect.call_args.args[0](0)
     assert request.consume() is None
 

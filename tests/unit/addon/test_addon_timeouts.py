@@ -1756,6 +1756,54 @@ async def test_macro_file_review_resolves_local_search_order_and_rejects_paths(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("create_shadow", [False, True])
+async def test_macro_file_review_rejects_new_higher_priority_target(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    create_shadow: bool,
+) -> None:
+    """A newly created user macro cannot replace a reviewed system macro."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True})
+    user, system = tmp_path / "user", tmp_path / "system"
+    user.mkdir()
+    system.mkdir()
+    (system / "Demo.FCMacro").write_text("system")
+    plugin._macro_review_roots = (str(user), str(system))
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}, "alice"
+    )
+    review_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert request.decide(approved=True)
+    assert broker.commit("alice", review_id)
+    if create_shadow:
+        (user / "Demo.FCMacro").write_text("new user macro")
+    plugin._process_queue()
+    result = broker.result("alice", review_id)
+    if create_shadow:
+        assert result["error_type"] == "FileTargetChanged"
+        plugin._execute_code_sync.assert_not_called()
+    else:
+        plugin._execute_code_sync.assert_called_once_with(
+            "pass",
+            initial_globals={
+                "_robust_mcp_reviewed_file_path": str(
+                    (system / "Demo.FCMacro").resolve()
+                )
+            },
+        )
+    broker.close()
+
+
+@pytest.mark.asyncio
 async def test_review_preference_bypass_runs_only_on_review_protocol(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

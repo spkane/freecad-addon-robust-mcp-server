@@ -643,7 +643,7 @@ Create a `.mcp.json` file in the project directory:
       "env": {
         "FREECAD_MODE": "socket",
         "FREECAD_SOCKET_HOST": "localhost",
-        "FREECAD_XMLRPC_PORT": "9875",
+        "FREECAD_SOCKET_PORT": "9876",
         "PATH": "/path/to/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
       }
     }
