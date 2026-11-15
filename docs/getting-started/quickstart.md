@@ -4,7 +4,8 @@ Install the server and FreeCAD workbench, pair them once, and connect your AI
 assistant. No source checkout or developer tools are required.
 
 > **Compatibility:** Install both the server and workbench at version 0.7.0
-> or later. Older 0.6.x releases do not support bridge pairing.
+> or later. Older 0.6.x releases do not support bridge pairing. Install both
+> components at 0.8.0 for the local file-review workflow.
 
 ## What you need
 
@@ -23,7 +24,7 @@ Choose one server installation method:
 - **Stable package:** use the `uv` command below, or [install with pip](installation.md#method-1-public-releases-with-pip).
 - **GitHub release, including RC testing:** download the server wheel and follow
   the [release asset steps](installation.md#method-2-github-release-assets).
-  The instructions include a stable 0.7.0 example for macOS, Linux, and Windows.
+  The instructions include a stable 0.8.0 example for macOS, Linux, and Windows.
 
 For the stable `uv` method, install [uv](https://docs.astral.sh/uv/getting-started/installation/) for your
 operating system, then open a new Terminal (macOS/Linux) or PowerShell (Windows)
@@ -53,16 +54,16 @@ For a downloaded server wheel, including a release candidate, see the
    select a Robust MCP Bridge workbench release compatible with your server,
    and download its `freecad-mcp-workbench` ZIP file. For stable installations,
    choose a stable release; for RC testing, choose the matching pre-release
-   version. For example, server 0.7.0 pairs with workbench `0.7.0`.
+   version. For example, server 0.8.0 pairs with workbench `0.8.0`.
 3. Extract the ZIP. Open the FreeCAD profile's `Mod` folder, and move the
    extracted workbench folder into it. The folder you move must directly contain
    `package.xml` and the `freecad` folder. If `Mod` does not exist, create it.
-   For 0.7.0, move the entire `freecad-mcp-workbench-0.7.0` folder, not the
+   For 0.8.0, move the entire `freecad-mcp-workbench-0.8.0` folder, not the
    inner `freecad` or `RobustMCPBridge` folder. The resulting structure is:
 
    ```text
    Mod/
-   └── freecad-mcp-workbench-0.7.0/
+   └── freecad-mcp-workbench-0.8.0/
        ├── package.xml
        ├── LICENSE-CODE
        ├── LICENSE-MIT

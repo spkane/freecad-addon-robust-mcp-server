@@ -6,9 +6,9 @@ the network. Use a client and models you trust, review its approval settings,
 and stop the bridge when you are finished.
 
 !!! note "Availability"
-    The persistent permissions warning and the advisory tool annotations
-    described below are available in the current development version. Check
-    your installed release for its actual behavior.
+    The permissions warning, advisory tool annotations, and local review
+    features described below are available in 0.8.0. Check older installed
+    releases for their actual behavior.
 
 ## The FreeCAD warning
 

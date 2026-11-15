@@ -36,8 +36,8 @@ versioned package directory; follow the guide when using a compatible archive.
 1. Click **Start Bridge** in the toolbar
 1. Check the status indicator or startup output to confirm the bridge is running
 
-In the current development version, the running status includes a Python
-permissions warning. Installed releases may show a different status message.
+In workbench 0.8.0 and later, the running status includes a Python
+permissions warning. Older releases may show a different status message.
 
 You'll see a confirmation message:
 
@@ -53,8 +53,8 @@ Click **Stop Bridge** in the toolbar. The status indicator turns gray.
 
 ### Status Indicator
 
-The following states describe the current development version. Status text and
-colors in older installed releases may differ.
+The following states describe workbench 0.8.0. Status text and colors in older
+releases may differ.
 
 Hover over the status indicator to see the installed bridge version, listener
 status, and the permissions available to authorized clients. The running

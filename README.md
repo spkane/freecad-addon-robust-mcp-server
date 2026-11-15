@@ -94,7 +94,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 
 The bridge accepts Python from paired clients and runs it with the FreeCAD
 user's permissions, including access to files and the network. When a GUI
-bridge is running, the current development version shows a persistent, non-modal
+bridge is running, workbench 0.8.0 and later show a persistent, non-modal
 status warning. The workbench indicator's tooltip includes listener details.
 Stop the bridge when it is not needed.
 
@@ -149,8 +149,8 @@ and captured code:
 
 You can allow the request once, deny it, or explicitly save approval for that
 path and exact file contents. If enabled in preferences, a time-limited bypass
-is also available. Saved approvals do not cover changes to arguments, imported
-files, or other dependencies. Manage saved versions in the bridge preferences.
+is also available. Saved approvals bind only the path and file contents; changes
+to arguments, imported files, or other dependencies do not require a new review. Manage saved versions in the bridge preferences.
 See the [security guide](docs/guide/security.md) for screenshots, limitations,
 and the behavior after timeouts.
 
