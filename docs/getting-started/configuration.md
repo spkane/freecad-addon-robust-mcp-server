@@ -314,7 +314,7 @@ host until the container's credential has been provisioned securely.
         "run", "--rm", "-i",
         "-e", "FREECAD_MODE=socket",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
-        "spkane/freecad-robust-mcp:0.7.0"
+        "spkane/freecad-robust-mcp:0.8.0"
       ]
     }
   }

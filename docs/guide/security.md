@@ -6,9 +6,9 @@ the network. Use a client and models you trust, review its approval settings,
 and stop the bridge when you are finished.
 
 !!! note "Availability"
-    The persistent permissions warning and the advisory tool annotations
-    described below are available in the current development version. Check
-    your installed release for its actual behavior.
+    The permissions warning, advisory tool annotations, and local review
+    features described below are available in 0.8.0. Check older installed
+    releases for their actual behavior.
 
 ## The FreeCAD warning
 
@@ -47,7 +47,7 @@ credential as described in [configuration](../getting-started/configuration.md#p
 If a credential is compromised, stop both components and replace it using the
 instructions there. Pairing fails closed when valid credentials are unavailable.
 
-In the current development version, the XML-RPC listener also rejects requests
+Starting with version 0.8.0, the XML-RPC listener also rejects requests
 with a browser `Origin` header or a non-loopback `Host` header. This reduces
 exposure to browser requests and DNS rebinding; it does not replace pairing.
 SSH forwarding remains possible when the client connects to a loopback host,
@@ -73,7 +73,7 @@ is a tool-registration setting, not a Python sandbox or a bridge access control.
 Other tools can read or write files and modify FreeCAD documents; enable unsafe
 tools only when you need them and trust the client.
 
-In the current development version, `execute_python` and `safe_execute`
+Starting with version 0.8.0, `execute_python` and `safe_execute`
 require a local FreeCAD review dialog by default when using the socket
 connection. A user can explicitly change this in the preferences below. The
 dialog displays the code to be executed and defaults to denial. These tools
