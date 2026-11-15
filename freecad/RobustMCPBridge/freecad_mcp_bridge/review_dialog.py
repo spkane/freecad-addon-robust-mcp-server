@@ -112,12 +112,18 @@ def create_review_dialog(  # noqa: PLR0912
         )
         dialog.resize(800, 600)
         layout = qtwidgets.QVBoxLayout(dialog)
-        warning = qtwidgets.QLabel(
+        warning_text = (
             "An authorized client requests Python execution with your FreeCAD "
             "user permissions, including access to files and the network. "
             "Review all code before allowing this request. The request expires "
             "after about five minutes or sooner if the client disconnects."
         )
+        if action == "file_operation":
+            warning_text += (
+                " A file can change after the final check; avoid paths that "
+                "other users can modify."
+            )
+        warning = qtwidgets.QLabel(warning_text)
         warning.setWordWrap(True)
         layout.addWidget(warning)
         if macro_approval is not None:
