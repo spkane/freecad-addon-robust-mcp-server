@@ -105,7 +105,7 @@ not prevent a trusted client from following malicious instructions in a model
 or protect against malicious software running as the same user. The MCP server
 does not expose arbitrary Python and macro execution tools by default, but
 ordinary modeling tools still execute Python through the bridge. Client tool
-approval behavior varies. In the current development version, the optional
+approval behavior varies. Starting with version 0.8.0, the optional
 `execute_python` and `safe_execute` tools require a local FreeCAD approval
 dialog by default on a supported GUI/socket connection. Users can disable review
 or enable a timed bypass in the workbench preferences. This does not prevent other
@@ -140,7 +140,7 @@ complete code and ask the user to allow it once or deny it:
 ![FreeCAD review dialog showing harmless example Python and Allow once and Deny buttons](docs/assets/images/bridge-python-review.png)
 
 The Python example was captured in an isolated test profile with an MCP test
-client. In the current development version, `run_macro` also requests local
+client. Starting with version 0.8.0, `run_macro` also requests local
 review when unsafe tools are enabled and FreeCAD is connected using a supported
 GUI/socket bridge. The dialog displays the macro's path, SHA-256, arguments,
 and captured code:
