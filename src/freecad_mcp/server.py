@@ -240,6 +240,23 @@ def register_all_components() -> None:
 register_all_components()
 
 
+def _set_cli_environment(name: str, value: str) -> None:
+    """Ensure a CLI value overrides all case variants of an environment key."""
+    for existing in list(os.environ):
+        if existing.lower() == name.lower() and existing != name:
+            del os.environ[existing]
+    os.environ[name] = value
+
+
+def _effective_mode() -> str:
+    """Read mode using the same case-insensitive environment order as settings."""
+    mode = DEFAULT_FREECAD_MODE.value
+    for name, value in os.environ.items():
+        if name.lower() == "freecad_mode":
+            mode = value
+    return mode
+
+
 async def check_freecad_connection(
     mode: str | None = None, host: str | None = None, port: int | None = None
 ) -> bool:
@@ -253,18 +270,16 @@ async def check_freecad_connection(
     Returns:
         True if connection successful, False otherwise.
     """
-    import os
-
     # Apply overrides to env
     if mode:
-        os.environ["FREECAD_MODE"] = mode
+        _set_cli_environment("FREECAD_MODE", mode)
     if host:
-        os.environ["FREECAD_SOCKET_HOST"] = host
+        _set_cli_environment("FREECAD_SOCKET_HOST", host)
     if port:
-        if os.environ.get("FREECAD_MODE", DEFAULT_FREECAD_MODE.value) == "xmlrpc":
-            os.environ["FREECAD_XMLRPC_PORT"] = str(port)
+        if _effective_mode() == "xmlrpc":
+            _set_cli_environment("FREECAD_XMLRPC_PORT", str(port))
         else:
-            os.environ["FREECAD_SOCKET_PORT"] = str(port)
+            _set_cli_environment("FREECAD_SOCKET_PORT", str(port))
 
     config = get_config()
     print(f"Testing connection to FreeCAD ({config.mode.value} mode)...")
@@ -326,24 +341,22 @@ def apply_cli_args_to_env(args: argparse.Namespace) -> None:
     Args:
         args: Parsed command-line arguments.
     """
-    import os
-
     if args.mode:
-        os.environ["FREECAD_MODE"] = args.mode
+        _set_cli_environment("FREECAD_MODE", args.mode)
     if args.transport:
-        os.environ["FREECAD_TRANSPORT"] = args.transport
+        _set_cli_environment("FREECAD_TRANSPORT", args.transport)
     if args.host:
-        os.environ["FREECAD_SOCKET_HOST"] = args.host
+        _set_cli_environment("FREECAD_SOCKET_HOST", args.host)
     if args.port:
         # Set appropriate port based on mode
-        if os.environ.get("FREECAD_MODE", DEFAULT_FREECAD_MODE.value) == "xmlrpc":
-            os.environ["FREECAD_XMLRPC_PORT"] = str(args.port)
+        if _effective_mode() == "xmlrpc":
+            _set_cli_environment("FREECAD_XMLRPC_PORT", str(args.port))
         else:
-            os.environ["FREECAD_SOCKET_PORT"] = str(args.port)
+            _set_cli_environment("FREECAD_SOCKET_PORT", str(args.port))
     if args.http_port:
-        os.environ["FREECAD_HTTP_PORT"] = str(args.http_port)
+        _set_cli_environment("FREECAD_HTTP_PORT", str(args.http_port))
     if args.log_level:
-        os.environ["FREECAD_LOG_LEVEL"] = args.log_level
+        _set_cli_environment("FREECAD_LOG_LEVEL", args.log_level)
 
 
 def parse_args() -> argparse.Namespace:
