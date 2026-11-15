@@ -61,6 +61,14 @@ def _darwin_clear_inherited_acl(path: str) -> None:
         if ctypes.get_errno() != errno.ENOENT:
             error = ctypes.get_errno()
             raise OSError(error, os.strerror(error))
+        verified = os.fstat(fd)
+        current = os.lstat(path)
+        if (
+            (verified.st_dev, verified.st_ino) != (current.st_dev, current.st_ino)
+            or verified.st_uid != os.getuid()
+            or stat.S_IMODE(verified.st_mode) != 0o700
+        ):
+            raise OSError("Scratch directory identity or permissions changed")
         if os.listdir(fd):  # noqa: PTH208 - inspect the opened directory, not a pathname
             raise OSError("Scratch directory was modified before it became private")
     finally:

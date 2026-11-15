@@ -85,6 +85,28 @@ def test_macos_scratch_removes_inherited_acl(
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL verification")
+def test_macos_rechecks_permissions_after_acl_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A permission change during ACL removal prevents use of the directory."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    real_fstat = os.fstat
+    calls = 0
+
+    def changed_fstat(fd: int) -> os.stat_result:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            os.fchmod(fd, 0o755)
+        return real_fstat(fd)
+
+    monkeypatch.setattr(os, "fstat", changed_fstat)
+    with pytest.raises(OSError, match="permissions changed"):
+        private_scratch._darwin_clear_inherited_acl(str(scratch))
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL verification")
 def test_macos_acl_failure_prevents_artifact_creation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
