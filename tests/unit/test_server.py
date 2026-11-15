@@ -12,6 +12,63 @@ from freecad_mcp.config import FreecadMode
 DEFAULT_ARGV: list[str] = ["freecad-mcp"]
 
 
+class TestDefaultPortOverrides:
+    """Port overrides follow the effective connection mode."""
+
+    def test_cli_port_targets_default_socket(self) -> None:
+        from freecad_mcp.server import apply_cli_args_to_env
+
+        args = MagicMock(
+            mode=None,
+            transport=None,
+            host=None,
+            port=12345,
+            http_port=None,
+            log_level=None,
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            apply_cli_args_to_env(args)
+            assert os.environ["FREECAD_SOCKET_PORT"] == "12345"
+            assert "FREECAD_XMLRPC_PORT" not in os.environ
+
+    def test_cli_port_respects_explicit_xmlrpc(self) -> None:
+        from freecad_mcp.server import apply_cli_args_to_env
+
+        args = MagicMock(
+            mode="xmlrpc",
+            transport=None,
+            host=None,
+            port=12345,
+            http_port=None,
+            log_level=None,
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            apply_cli_args_to_env(args)
+            assert os.environ["FREECAD_XMLRPC_PORT"] == "12345"
+            assert "FREECAD_SOCKET_PORT" not in os.environ
+
+    @pytest.mark.asyncio
+    async def test_check_port_targets_default_socket(self) -> None:
+        import freecad_mcp.server as server_module
+
+        bridge = AsyncMock()
+        bridge.get_freecad_version.return_value = {"version": "test"}
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                server_module,
+                "credentials_from_config",
+                return_value=("paired", MagicMock()),
+            ),
+            patch(
+                "freecad_mcp.bridge.socket.SocketBridge", return_value=bridge
+            ) as socket,
+        ):
+            assert await server_module.check_freecad_connection(port=12345)
+            assert socket.call_args.kwargs["port"] == 12345
+            assert "FREECAD_XMLRPC_PORT" not in os.environ
+
+
 class TestGetInstanceId:
     """Tests for get_instance_id function."""
 
@@ -112,7 +169,7 @@ class TestLifespan:
     """Tests for the lifespan context manager."""
 
     @pytest.mark.asyncio
-    async def test_unconfigured_startup_uses_xmlrpc(self) -> None:
+    async def test_unconfigured_startup_uses_socket(self) -> None:
         """Default startup uses the real configuration and never selects embedded."""
         import freecad_mcp.server as server_module
 
@@ -127,14 +184,14 @@ class TestLifespan:
                 return_value=("paired", signer),
             ),
             patch(
-                "freecad_mcp.bridge.xmlrpc.XmlRpcBridge", return_value=bridge
-            ) as xmlrpc,
+                "freecad_mcp.bridge.socket.SocketBridge", return_value=bridge
+            ) as socket,
             patch("freecad_mcp.bridge.embedded.EmbeddedBridge") as embedded,
         ):
             async with server_module.lifespan(MagicMock()):
-                xmlrpc.assert_called_once_with(
+                socket.assert_called_once_with(
                     host="localhost",
-                    port=9875,
+                    port=9876,
                     execution_timeout_ms=30000,
                     client_id="paired",
                     signer=signer,

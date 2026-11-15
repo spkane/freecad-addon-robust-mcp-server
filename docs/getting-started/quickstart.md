@@ -199,7 +199,7 @@ In a Claude Code session, use `/mcp` to check the connection.
 Other agents have similar MCP settings: add a local stdio server with the same
 executable path, following that agent's instructions. See the
 [client configuration guide](configuration.md#mcp-client-configuration) for
-more details. The default connection uses local XML-RPC, so no environment
+more details. The default connection uses a local socket, so no environment
 variables or HTTP API key are needed for this setup. Start FreeCAD and the
 bridge before asking your assistant to use the tools.
 

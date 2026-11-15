@@ -42,8 +42,8 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
         - [Checking for Legacy Components](#checking-for-legacy-components)
         - [Manual Cleanup (if needed)](#manual-cleanup-if-needed)
       - [Running Modes](#running-modes)
-        - [XML-RPC Mode (Recommended)](#xml-rpc-mode-recommended)
-        - [Socket Mode (JSON-RPC)](#socket-mode-json-rpc)
+        - [XML-RPC Mode](#xml-rpc-mode)
+        - [Socket Mode (Recommended)](#socket-mode-recommended)
         - [Headless Mode](#headless-mode)
         - [Embedded Mode (Linux Only)](#embedded-mode-linux-only)
     - [Available Tools](#available-tools)
@@ -86,7 +86,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that 
 ## Features
 
 - **150+ MCP Tools**: Comprehensive CAD operations including primitives, PartDesign, booleans, export
-- **Multiple Connection Modes**: XML-RPC (recommended), JSON-RPC socket, or embedded
+- **Multiple Connection Modes**: JSON-RPC socket (recommended), XML-RPC, or embedded
 - **GUI & Headless Support**: Full modeling in headless mode, plus screenshots/colors in GUI mode
 - **Macro Development**: Create, inspect, and template FreeCAD macros via MCP
 
@@ -115,6 +115,10 @@ Supported file tools also request local review by default. The dialog shows the
 operation and path, and the preferences offer an explicit override for automation.
 This is not a filesystem sandbox; see the security guide for connection-mode and
 CAM output limitations.
+
+The server now defaults to socket mode so the GUI can show these reviews.
+Existing client configurations that explicitly set `FREECAD_MODE=xmlrpc` keep
+using XML-RPC; change that setting to `socket` to use local review.
 
 See the [security guide](docs/guide/security.md) for the warning, pairing,
 client approvals, file access, and remote-access considerations.
@@ -249,19 +253,22 @@ host unless the container credential is already provisioned securely.
 
 | Variable              | Description                                          | Default     |
 | --------------------- | ---------------------------------------------------- | ----------- |
-| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, or `embedded`   | `xmlrpc`    |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, or `embedded`   | `socket`    |
 | `FREECAD_PATH`        | Path to FreeCAD's lib directory (embedded mode only) | Auto-detect |
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                       | `localhost` |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
 
+`FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true` explicitly bypasses local file
+review for automation; it defaults to `false`.
+
 #### Connection Modes
 
 | Mode       | Description                                 | Platform Support                  |
 | ---------- | ------------------------------------------- | --------------------------------- |
-| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms** (recommended)   |
-| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms**                 |
+| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms**                 |
+| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms** (recommended)   |
 | `embedded` | Imports FreeCAD directly into process       | **Linux only** (crashes on macOS) |
 
 **Note:** Embedded mode crashes on macOS because FreeCAD's `FreeCAD.so` links to `@rpath/libpython3.11.dylib`, which conflicts with external Python interpreters. Use `xmlrpc` or `socket` mode on macOS and Windows.
@@ -276,7 +283,7 @@ Add something like the following to your MCP client settings. For Claude Code, t
     "freecad": {
       "command": "freecad-mcp",
       "env": {
-        "FREECAD_MODE": "xmlrpc"
+        "FREECAD_MODE": "socket"
       }
     }
   }
@@ -292,7 +299,7 @@ If installed from source with mise/uv:
       "command": "/path/to/mise/shims/uv",
       "args": ["run", "--project", "/path/to/freecad-addon-robust-mcp-server", "freecad-mcp"],
       "env": {
-        "FREECAD_MODE": "xmlrpc"
+        "FREECAD_MODE": "socket"
       }
     }
   }
@@ -308,7 +315,7 @@ If using Docker Desktop on macOS or Windows:
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
-        "-e", "FREECAD_MODE=xmlrpc",
+        "-e", "FREECAD_MODE=socket",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
         "spkane/freecad-robust-mcp"
       ]
@@ -407,7 +414,7 @@ for how to find the active user data directory.
 
 #### Running Modes
 
-##### XML-RPC Mode (Recommended)
+##### XML-RPC Mode
 
 Connects to a running FreeCAD instance via XML-RPC. Works on all platforms.
 
@@ -415,7 +422,7 @@ Connects to a running FreeCAD instance via XML-RPC. Works on all platforms.
 FREECAD_MODE=xmlrpc freecad-mcp
 ```
 
-##### Socket Mode (JSON-RPC)
+##### Socket Mode (Recommended)
 
 Connects via JSON-RPC socket. Works on all platforms.
 
@@ -634,7 +641,7 @@ Create a `.mcp.json` file in the project directory:
       "command": "/path/to/mise/shims/uv",
       "args": ["run", "--project", "/path/to/freecad-addon-robust-mcp-server", "freecad-mcp"],
       "env": {
-        "FREECAD_MODE": "xmlrpc",
+        "FREECAD_MODE": "socket",
         "FREECAD_SOCKET_HOST": "localhost",
         "FREECAD_XMLRPC_PORT": "9875",
         "PATH": "/path/to/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"

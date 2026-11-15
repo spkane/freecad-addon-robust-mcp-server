@@ -8,8 +8,8 @@ The FreeCAD Robust MCP Server supports multiple ways to connect to FreeCAD. Choo
 
 | Mode       | Description                       | Platform      | Best For                         |
 | ---------- | --------------------------------- | ------------- | -------------------------------- |
-| `xmlrpc`   | XML-RPC protocol (port 9875)      | All platforms | Production use (recommended)     |
-| `socket`   | JSON-RPC over TCP sockets         | All platforms | Alternative to XML-RPC           |
+| `xmlrpc`   | XML-RPC protocol (port 9875)      | All platforms | Explicitly configured workflows  |
+| `socket`   | JSON-RPC over TCP sockets         | All platforms | GUI review (recommended)         |
 | `embedded` | FreeCAD imported into MCP process | Linux only    | Fastest execution, CI/automation |
 
 ---
@@ -27,11 +27,10 @@ loopback interface. For Linux GUI use, run the MCP server directly on the host.
 
 ---
 
-## XML-RPC Mode (Recommended)
+## XML-RPC Mode
 
-XML-RPC mode is the **default and recommended** connection method when
-`FREECAD_MODE` and `--mode` are unset. It works on all platforms and provides
-robust, reliable communication. Pair the MCP server and bridge as described in
+XML-RPC works on all platforms. Local file and code reviews are unavailable
+in this mode. Pair the MCP server and bridge as described in
 the [installation guide](../getting-started/installation.md).
 
 ### How It Works
@@ -62,9 +61,10 @@ freecad-mcp
 
 ---
 
-## Socket Mode
+## Socket Mode (Recommended)
 
-Socket mode uses JSON-RPC over TCP sockets instead of XML-RPC.
+Socket mode is the default and uses JSON-RPC over TCP sockets. With a current
+GUI workbench, it supports local file and code review.
 
 ### How It Works
 
