@@ -1422,7 +1422,18 @@ class FreecadMCPPlugin:
                     }
                 else:
                     code = payload.content.decode("utf-8", errors="strict")
-                    result = self._execute_code_sync(code)
+                    if (
+                        payload.file_target_kind == "macro"
+                        and payload.file_snapshot.action == "read"
+                    ):
+                        result = self._execute_code_sync(
+                            code,
+                            initial_globals={
+                                "_robust_mcp_reviewed_file_path": payload.file_snapshot.resolved_path
+                            },
+                        )
+                    else:
+                        result = self._execute_code_sync(code)
             elif payload.action == "run_macro":
                 if (
                     payload.macro_path is None
@@ -1977,20 +1988,31 @@ class FreecadMCPPlugin:
                     if action == "read"
                     else self._macro_review_roots[:1]
                 )
+                preceding_paths: list[str] = []
                 for root in roots:
                     candidate = str(Path(root) / (path + ".FCMacro"))
                     try:
-                        return snapshot_file(candidate, action)
+                        snapshot = snapshot_file(candidate, action)
+                        if preceding_paths:
+                            from dataclasses import replace
+
+                            snapshot = replace(
+                                snapshot, preceding_paths=tuple(preceding_paths)
+                            )
+                        return snapshot
                     except FileNotFoundError:
                         if action != "read":
                             raise
+                        preceding_paths.append(candidate)
                 raise FileNotFoundError("Macro not found")
 
             snapshot = await asyncio.to_thread(resolve_target)
             review_text(snapshot.resolved_path.encode("utf-8"))
             if broker is None or self._review_broker is not broker:
                 raise ValueError("File review stopped")
-            payload = ApprovalPayload("file_operation", content, file_snapshot=snapshot)
+            payload = ApprovalPayload(
+                "file_operation", content, file_snapshot=snapshot, file_target_kind=kind
+            )
             result = {
                 "review_id": cast("Any", broker).begin(
                     owner, payload, REVIEW_LEASE_SECONDS

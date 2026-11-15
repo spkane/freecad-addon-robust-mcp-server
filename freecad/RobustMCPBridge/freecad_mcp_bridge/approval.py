@@ -44,6 +44,7 @@ class ApprovalPayload:
     macro_sha256: str | None = None
     macro_args_json: str | None = None
     file_snapshot: FileReviewSnapshot | None = None
+    file_target_kind: str | None = None
 
 
 class ApprovalRequest:
@@ -73,6 +74,10 @@ class ApprovalRequest:
             or (
                 payload.macro_args_json is not None
                 and type(payload.macro_args_json) is not str
+            )
+            or (
+                payload.file_target_kind is not None
+                and payload.file_target_kind not in {"path", "macro"}
             )
         ):
             raise TypeError("Approval payload must contain immutable bytes")

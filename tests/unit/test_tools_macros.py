@@ -155,6 +155,36 @@ class TestMacroTools:
         mock_bridge.execute_python.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_read_macro_uses_bound_reviewed_file(
+        self, register_tools, mock_bridge, tmp_path
+    ):
+        """A later user macro cannot redirect a reviewed system-macro read."""
+        user = tmp_path / "user"
+        user.mkdir()
+        reviewed = tmp_path / "system.FCMacro"
+        reviewed.write_text("reviewed system contents")
+        (user / "MyMacro.FCMacro").write_text("unreviewed user contents")
+
+        async def execute(code):
+            env = {
+                "_robust_mcp_reviewed_file_path": str(reviewed),
+                "FreeCAD": MagicMock(getUserMacroDir=MagicMock(return_value=str(user))),
+            }
+            exec(code, env)  # noqa: S102 - execute this tool's generated code in the test
+            return ExecutionResult(
+                success=True,
+                result=env["_result_"],
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+
+        mock_bridge.execute_python = AsyncMock(side_effect=execute)
+        result = await register_tools["read_macro"](macro_name="MyMacro")
+        assert result["path"] == str(reviewed)
+        assert result["code"] == "reviewed system contents"
+
+    @pytest.mark.asyncio
     async def test_read_macro_not_found(self, register_tools, mock_bridge):
         """read_macro should raise error when macro not found."""
         mock_bridge.execute_python = AsyncMock(

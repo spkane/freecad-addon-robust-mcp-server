@@ -140,11 +140,11 @@ import os
 
 # Find macro file
 macro_name = {macro_name!r}
-macro_file = None
+macro_file = globals().get("_robust_mcp_reviewed_file_path")
 
 user_path = FreeCAD.getUserMacroDir(True)
 user_macro = os.path.join(user_path, macro_name + ".FCMacro")
-if os.path.exists(user_macro):
+if not macro_file and os.path.exists(user_macro):
     macro_file = user_macro
 
 if not macro_file:

@@ -47,7 +47,13 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
 from freecad_mcp.bridge.authentication import credentials_from_config
-from freecad_mcp.config import FreecadMode, ServerConfig, TransportType, get_config
+from freecad_mcp.config import (
+    DEFAULT_FREECAD_MODE,
+    FreecadMode,
+    ServerConfig,
+    TransportType,
+    get_config,
+)
 
 if TYPE_CHECKING:
     from freecad_mcp.bridge.base import FreecadBridge
@@ -255,7 +261,7 @@ async def check_freecad_connection(
     if host:
         os.environ["FREECAD_SOCKET_HOST"] = host
     if port:
-        if get_config().mode == FreecadMode.XMLRPC:
+        if os.environ.get("FREECAD_MODE", DEFAULT_FREECAD_MODE.value) == "xmlrpc":
             os.environ["FREECAD_XMLRPC_PORT"] = str(port)
         else:
             os.environ["FREECAD_SOCKET_PORT"] = str(port)
@@ -330,7 +336,7 @@ def apply_cli_args_to_env(args: argparse.Namespace) -> None:
         os.environ["FREECAD_SOCKET_HOST"] = args.host
     if args.port:
         # Set appropriate port based on mode
-        if get_config().mode == FreecadMode.XMLRPC:
+        if os.environ.get("FREECAD_MODE", DEFAULT_FREECAD_MODE.value) == "xmlrpc":
             os.environ["FREECAD_XMLRPC_PORT"] = str(args.port)
         else:
             os.environ["FREECAD_SOCKET_PORT"] = str(args.port)
