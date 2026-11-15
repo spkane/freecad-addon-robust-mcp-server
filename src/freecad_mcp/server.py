@@ -255,8 +255,7 @@ async def check_freecad_connection(
     if host:
         os.environ["FREECAD_SOCKET_HOST"] = host
     if port:
-        mode_val = mode or os.environ.get("FREECAD_MODE", "xmlrpc")
-        if mode_val == "xmlrpc":
+        if get_config().mode == FreecadMode.XMLRPC:
             os.environ["FREECAD_XMLRPC_PORT"] = str(port)
         else:
             os.environ["FREECAD_SOCKET_PORT"] = str(port)
@@ -331,8 +330,7 @@ def apply_cli_args_to_env(args: argparse.Namespace) -> None:
         os.environ["FREECAD_SOCKET_HOST"] = args.host
     if args.port:
         # Set appropriate port based on mode
-        mode = os.environ.get("FREECAD_MODE", "xmlrpc")
-        if mode == "xmlrpc":
+        if get_config().mode == FreecadMode.XMLRPC:
             os.environ["FREECAD_XMLRPC_PORT"] = str(args.port)
         else:
             os.environ["FREECAD_SOCKET_PORT"] = str(args.port)

@@ -176,7 +176,7 @@ The external Robust MCP Server (used by Claude Code, etc.) is configured separat
 
 | Environment Variable  | Description                                    | Default     |
 | --------------------- | ---------------------------------------------- | ----------- |
-| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, `embedded`| `xmlrpc`    |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, `embedded`| `socket`    |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                            | 9875        |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                    | 9876        |
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                 | `localhost` |
