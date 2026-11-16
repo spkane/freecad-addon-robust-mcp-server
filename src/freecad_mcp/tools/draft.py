@@ -574,7 +574,7 @@ except Exception:
             result.error_traceback or "Failed to convert ShapeString to face"
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def draft_text_on_surface(
         text: str,
         target_face: str,

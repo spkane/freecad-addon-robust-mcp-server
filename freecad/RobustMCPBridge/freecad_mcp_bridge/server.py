@@ -1426,7 +1426,11 @@ class FreecadMCPPlugin:
                         result = self._execute_code_sync(
                             code,
                             initial_globals={
-                                "_robust_mcp_reviewed_file_path": payload.file_snapshot.resolved_path
+                                "_robust_mcp_reviewed_file_path": (
+                                    payload.file_snapshot.absolute_path
+                                    if payload.file_snapshot.action == "delete"
+                                    else payload.file_snapshot.resolved_path
+                                )
                             },
                         )
                     else:

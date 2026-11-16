@@ -404,6 +404,40 @@ async def test_file_tool_rejects_missing_active_cam_document() -> None:
 
 
 @pytest.mark.asyncio
+async def test_draft_text_binds_document_before_font_review() -> None:
+    """Text is applied to the selected document even if active selection changes."""
+    from freecad_mcp.tools.draft import register_draft_tools
+
+    mcp = Tools()
+    seen = []
+
+    async def execute(code: str):
+        seen.append((code, file_review_target.get()))
+        return ExecutionResult(
+            success=True,
+            result={"name": "Text"},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=SimpleNamespace(name="Original")),
+        execute_python=execute,
+    )
+
+    async def get_bridge():
+        return bridge
+
+    register_draft_tools(mcp, get_bridge)
+    await mcp.functions["draft_text_on_surface"](
+        text="test", target_face="Face1", target_object="Box", font_path="/tmp/font.ttf"
+    )
+    assert "FreeCAD.getDocument('Original')" in seen[0][0]
+    assert seen[0][1] == ("/tmp/font.ttf", "read", "path")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("bridge_type", [SocketBridge, XmlRpcBridge, EmbeddedBridge])
 async def test_active_document_lookup_propagates_execution_errors(bridge_type) -> None:
     """A failed lookup must not be reported as an absent active document."""

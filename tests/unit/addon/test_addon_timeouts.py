@@ -1865,6 +1865,47 @@ async def test_macro_file_review_binds_mutation_path(
 
 
 @pytest.mark.asyncio
+async def test_reviewed_macro_delete_removes_link_not_target(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reviewing a macro symlink deletes its entry, preserving its target."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    target = tmp_path / "Original.FCMacro"
+    target.write_text("original")
+    link = tmp_path / "Demo.FCMacro"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._macro_review_roots = (str(tmp_path),)
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+
+    def execute(_code: str, *, initial_globals: dict[str, str]) -> dict[str, bool]:
+        Path(initial_globals["_robust_mcp_reviewed_file_path"]).unlink()
+        return {"success": True}
+
+    plugin._execute_code_sync = execute
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    response = await plugin._review_begin_file(
+        1,
+        {"code": "pass", "path": "Demo", "action": "delete", "kind": "macro"},
+        "alice",
+    )
+    review_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", review_id)
+    plugin._process_queue()
+    assert broker.result("alice", review_id)["success"]
+    assert not link.is_symlink()
+    assert target.read_text() == "original"
+    broker.close()
+
+
+@pytest.mark.asyncio
 async def test_review_preference_bypass_runs_only_on_review_protocol(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
