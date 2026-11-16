@@ -388,19 +388,20 @@ Environment Variables:
                          (default: INFO)
 
 Examples:
-  # Start with default settings (XML-RPC mode, stdio transport)
+  # Start with default settings (socket mode, stdio transport)
   freecad-mcp
 
-  # Use socket mode
-  FREECAD_MODE=socket freecad-mcp
+  # Use XML-RPC mode
+  FREECAD_MODE=xmlrpc freecad-mcp
 
   # Use local HTTP transport
   # Generate a key, store it securely, then set FREECAD_HTTP_API_KEY.
   freecad-mcp --generate-http-api-key
   FREECAD_TRANSPORT=http FREECAD_HTTP_PORT=8080 freecad-mcp
 
-  # Connect to remote FreeCAD instance
-  FREECAD_SOCKET_HOST=192.168.1.100 freecad-mcp
+  # Use a custom local socket port. Set the GUI workbench Socket Port
+  # preference to the same value, or set FREECAD_SOCKET_PORT for headless FreeCAD.
+  FREECAD_SOCKET_PORT=9877 freecad-mcp
 
 Prerequisites:
   The FreeCAD Robust MCP Bridge must be running before starting this server.

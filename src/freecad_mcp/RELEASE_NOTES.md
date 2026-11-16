@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Version 0.8.0 (2026-11-15)
+## Version 0.8.0 (2026-11-16)
 
 Install Robust MCP Bridge workbench 0.8.0 with this server to use local GUI
 review. Existing paired credentials remain valid. Socket is now the default
@@ -28,6 +28,8 @@ for limitations and automation options.
   a single explicitly named output can be reviewed.
 - Harden generated FreeCAD code against injection through model strings and
   reject invalid XML-RPC Host and Origin headers.
+- Document save paths use the exact `.FCStd` suffix before review, appending
+  it when missing, including when file review is bypassed.
 
 ### Fixed
 

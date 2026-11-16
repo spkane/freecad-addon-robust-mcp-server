@@ -8,6 +8,7 @@ import json
 import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -158,6 +159,7 @@ class TestCamTools:
 
         mcp.tool = tool_decorator
         bridge = AsyncMock()
+        bridge.get_active_document.return_value = SimpleNamespace(name="TestDocument")
         bridge.execute_python = AsyncMock(
             return_value=ExecutionResult(
                 success=True,

@@ -1422,10 +1422,7 @@ class FreecadMCPPlugin:
                     }
                 else:
                     code = payload.content.decode("utf-8", errors="strict")
-                    if (
-                        payload.file_target_kind == "macro"
-                        and payload.file_snapshot.action == "read"
-                    ):
+                    if payload.file_target_kind == "macro":
                         result = self._execute_code_sync(
                             code,
                             initial_globals={
@@ -1993,6 +1990,14 @@ class FreecadMCPPlugin:
                     candidate = str(Path(root) / (path + ".FCMacro"))
                     try:
                         snapshot = snapshot_file(candidate, action)
+                        if (
+                            action in {"write", "delete"}
+                            and Path(snapshot.resolved_path).parent
+                            != Path(root).resolve()
+                        ):
+                            raise ValueError(
+                                "Macro target is outside the user directory"
+                            )
                         if preceding_paths:
                             from dataclasses import replace
 

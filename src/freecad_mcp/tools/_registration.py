@@ -1,6 +1,6 @@
 """Helpers for registering tools that expose arbitrary code execution."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from inspect import signature
 from typing import Any
@@ -56,7 +56,12 @@ def unsafe_tool(mcp: Any, enabled: bool) -> Callable[[Any], Any]:
     return lambda function: function
 
 
-def file_tool(mcp: Any, *, read_only: bool = False) -> Callable[[Any], Any]:
+def file_tool(
+    mcp: Any,
+    *,
+    read_only: bool = False,
+    get_bridge: Callable[[], Awaitable[Any]] | None = None,
+) -> Callable[[Any], Any]:
     """Register file tools and identify explicit file targets for review.
 
     Annotations do not enforce client approval or constrain filesystem access.
@@ -70,10 +75,12 @@ def file_tool(mcp: Any, *, read_only: bool = False) -> Callable[[Any], Any]:
         )
     )
 
-    return lambda function: register(_wrap_file_target(function))
+    return lambda function: register(_wrap_file_target(function, get_bridge))
 
 
-def _wrap_file_target(function: Any) -> Any:
+def _wrap_file_target(
+    function: Any, get_bridge: Callable[[], Awaitable[Any]] | None = None
+) -> Any:
     target = _FILE_TARGETS.get(function.__name__)
     if target is None:
         return function
@@ -87,9 +94,24 @@ def _wrap_file_target(function: Any) -> Any:
         path = bound.arguments[field]
         for key in nested:
             path = path.get(key) if isinstance(path, dict) else None
+        if (
+            get_bridge is not None
+            and "doc_name" in bound.arguments
+            and not bound.arguments["doc_name"]
+            and (path or function.__name__ == "cam_create_job")
+        ):
+            clear_token = file_review_target.set(None)
+            try:
+                bridge = await get_bridge()
+                active = await bridge.get_active_document()
+            finally:
+                file_review_target.reset(clear_token)
+            if active is None:
+                raise ValueError("No active document")
+            bound.arguments["doc_name"] = active.name
         token = file_review_target.set((path, target[1], target[2]) if path else None)
         try:
-            return await function(*args, **kwargs)
+            return await function(*bound.args, **bound.kwargs)
         finally:
             file_review_target.reset(token)
 

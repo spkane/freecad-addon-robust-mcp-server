@@ -192,7 +192,7 @@ import os
 
 macro_name = {macro_name!r}
 user_path = FreeCAD.getUserMacroDir(True)
-macro_file = os.path.join(user_path, macro_name + ".FCMacro")
+macro_file = globals().get("_robust_mcp_reviewed_file_path") or os.path.join(user_path, macro_name + ".FCMacro")
 
 if not os.path.exists(macro_file):
     raise FileNotFoundError(f"User macro not found: {{macro_name}}")

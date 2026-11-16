@@ -171,7 +171,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_create_job(
         model_objects: list[str],
         doc_name: str | None = None,
@@ -288,7 +288,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             "Set CAM Stock",
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_add_tool_controller(
         tool: dict[str, Any],
         job_name: str | None = None,
@@ -716,7 +716,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_post_process(
         job_name: str | None = None,
         post_processor: str | None = None,
@@ -789,7 +789,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             "Post Process CAM Job",
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_export_job_template(
         file_path: str,
         job_name: str | None = None,
@@ -831,7 +831,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_check_job(
         job_name: str | None = None,
         report_file: str | None = None,
@@ -866,7 +866,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_simulate(
         job_name: str | None = None,
         operations: list[str] | None = None,
@@ -966,7 +966,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             "Place CAM Model",
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_import_tool_library(
         file_path: str,
         library_id: str | None = None,
@@ -1001,7 +1001,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def cam_export_tool_library(
         library: str,
         file_path: str,

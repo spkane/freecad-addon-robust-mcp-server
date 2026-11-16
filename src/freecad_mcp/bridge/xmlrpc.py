@@ -551,7 +551,13 @@ else:
 """
         )
 
-        if result.success and result.result:
+        if not result.success:
+            raise RuntimeError(
+                result.error_traceback
+                or result.stderr
+                or "Active document lookup failed"
+            )
+        if result.result:
             return DocumentInfo(**result.result)
         return None
 
@@ -1019,10 +1025,8 @@ _result_ = True
         create_code = f"""
 import os
 
-macro_path = FreeCAD.getUserMacroDir(True)
-os.makedirs(macro_path, exist_ok=True)
-
-macro_file = os.path.join(macro_path, {name!r} + ".FCMacro")
+macro_file = globals().get("_robust_mcp_reviewed_file_path") or os.path.join(FreeCAD.getUserMacroDir(True), {name!r} + ".FCMacro")
+os.makedirs(os.path.dirname(macro_file), exist_ok=True)
 
 header = ""
 if {description!r}:

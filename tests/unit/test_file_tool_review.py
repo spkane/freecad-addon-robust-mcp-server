@@ -9,6 +9,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from freecad_mcp.bridge.base import ExecutionResult
+from freecad_mcp.bridge.embedded import EmbeddedBridge
 from freecad_mcp.bridge.file_review import file_review_target
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
@@ -119,6 +120,60 @@ async def test_explicit_save_binds_active_document_before_review() -> None:
     assert observed == [
         ("Model", "/tmp/output.FCStd", ("/tmp/output.FCStd", "write", "path"))
     ]
+
+
+@pytest.mark.asyncio
+async def test_save_reviews_canonical_destination(tmp_path) -> None:
+    """A request without the native suffix reviews the file FreeCAD will write."""
+    requested = tmp_path / "model"
+    destination = tmp_path / "model.FCStd"
+    destination.write_text("existing")
+    seen = []
+
+    async def save(name, path):
+        seen.append((name, path, file_review_target.get()))
+        return path
+
+    bridge = SimpleNamespace(save_document=save)
+    mcp = Tools()
+
+    async def get_bridge():
+        return bridge
+
+    register_document_tools(mcp, get_bridge)
+    await mcp.functions["save_document"](doc_name="Model", path=str(requested))
+    assert seen == [("Model", str(destination), (str(destination), "write", "path"))]
+
+
+@pytest.mark.asyncio
+async def test_macro_creation_uses_bound_reviewed_path(tmp_path) -> None:
+    """A changed macro directory cannot redirect a reviewed write."""
+    reviewed = tmp_path / "original" / "Demo.FCMacro"
+    other = tmp_path / "new" / "Demo.FCMacro"
+    other.parent.mkdir()
+    bridge: Any = SocketBridge()
+
+    async def execute(code):
+        env = {
+            "_robust_mcp_reviewed_file_path": str(reviewed),
+            "FreeCAD": SimpleNamespace(
+                getUserMacroDir=lambda _create: str(other.parent)
+            ),
+        }
+        exec(code, env)  # noqa: S102 - run the bridge's generated code in a controlled directory
+        return ExecutionResult(
+            success=True,
+            result=env["_result_"],
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    bridge.execute_python = AsyncMock(side_effect=execute)
+    result = await bridge.create_macro("Demo", "print('example')")
+    assert result.path == str(reviewed)
+    assert reviewed.is_file()
+    assert not other.exists()
 
 
 @pytest.mark.asyncio
@@ -278,3 +333,89 @@ async def test_concurrent_file_targets_do_not_leak(
         ("/tmp/a.FCStd", "read", "path", ("/tmp/a.FCStd", "read", "path")),
         ("/tmp/b.FCStd", "read", "path", ("/tmp/b.FCStd", "read", "path")),
     ]
+
+
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [
+        ("model", "model.FCStd"),
+        ("model.fcstd", "model.fcstd.FCStd"),
+        ("model.txt", "model.txt.FCStd"),
+        ("model.", "model.FCStd"),
+        ("model.FCStd", "model.FCStd"),
+    ],
+)
+def test_save_path_is_canonical(requested: str, expected: str) -> None:
+    """FreeCAD cannot silently add a different destination after review."""
+    from freecad_mcp.tools.documents import _document_save_path
+
+    assert _document_save_path(requested) == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("doc_name", [None, ""])
+async def test_file_tool_binds_active_cam_document_before_review(doc_name) -> None:
+    """A later active-document switch cannot redirect a reviewed CAM operation."""
+    from freecad_mcp.tools._registration import file_tool
+
+    mcp = Tools()
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=SimpleNamespace(name="Original"))
+    )
+
+    async def get_bridge():
+        assert file_review_target.get() is None
+        return bridge
+
+    @file_tool(mcp, get_bridge=get_bridge)
+    async def cam_post_process(output_file: str, doc_name: str | None = None):
+        return doc_name, output_file, file_review_target.get()
+
+    assert await mcp.functions["cam_post_process"]("/tmp/test.nc", doc_name) == (
+        "Original",
+        "/tmp/test.nc",
+        ("/tmp/test.nc", "write", "path"),
+    )
+    assert file_review_target.get() is None
+
+
+@pytest.mark.asyncio
+async def test_file_tool_rejects_missing_active_cam_document() -> None:
+    """Do not open a review whose destination document cannot be bound."""
+    from freecad_mcp.tools._registration import file_tool
+
+    mcp = Tools()
+    bridge = SimpleNamespace(get_active_document=AsyncMock(return_value=None))
+    called = False
+
+    async def get_bridge():
+        return bridge
+
+    @file_tool(mcp, get_bridge=get_bridge)
+    async def cam_post_process(output_file: str, doc_name: str | None = None):
+        nonlocal called
+        called = True
+        return output_file, doc_name
+
+    with pytest.raises(ValueError, match="No active document"):
+        await mcp.functions["cam_post_process"]("/tmp/test.nc")
+    assert not called
+    assert file_review_target.get() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bridge_type", [SocketBridge, XmlRpcBridge, EmbeddedBridge])
+async def test_active_document_lookup_propagates_execution_errors(bridge_type) -> None:
+    """A failed lookup must not be reported as an absent active document."""
+    bridge = bridge_type.__new__(bridge_type)
+    bridge.execute_python = AsyncMock(
+        return_value=ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="bridge failed",
+            execution_time_ms=1,
+        )
+    )
+    with pytest.raises(RuntimeError, match="bridge failed"):
+        await bridge.get_active_document()
