@@ -51,7 +51,7 @@ def register_export_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) ->
         get_bridge: Async function returning the active bridge connection.
     """
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_step(
         file_path: str,
         object_names: list[str] | None = None,
@@ -101,7 +101,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "STEP export failed")
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_stl(
         file_path: str,
         object_names: list[str] | None = None,
@@ -163,7 +163,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "STL export failed")
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_3mf(
         file_path: str,
         object_names: list[str] | None = None,
@@ -227,7 +227,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "3MF export failed")
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_obj(
         file_path: str,
         object_names: list[str] | None = None,
@@ -288,7 +288,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "OBJ export failed")
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_iges(
         file_path: str,
         object_names: list[str] | None = None,

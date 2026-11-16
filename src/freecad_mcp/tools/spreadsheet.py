@@ -691,7 +691,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "Failed to get cell range")
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def spreadsheet_import_csv(
         spreadsheet_name: str,
         file_path: str,
@@ -806,7 +806,7 @@ except Exception:
             return result.result
         raise ValueError(result.error_traceback or "Failed to import CSV")
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def spreadsheet_export_csv(
         spreadsheet_name: str,
         file_path: str,
