@@ -39,6 +39,10 @@ jobs:
       - name: Verify listener conflicts and authentication
         run: uv run pytest tests/unit/addon/test_addon_timeouts.py -k "listener_port_conflicts or partial_start_can_stop" -v --tb=short
 
+      - name: Verify macOS inherited scratch ACLs
+        if: runner.os == 'macOS'
+        run: uv run pytest tests/unit/test_private_scratch.py -k macos_ -v --tb=short
+
       - name: Build and install the server wheel in an isolated environment
         shell: bash
         run: |

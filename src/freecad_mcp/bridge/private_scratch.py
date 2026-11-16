@@ -6,12 +6,73 @@ included in generated code for FreeCAD instances without this workbench.
 
 import contextlib
 import ctypes
+import errno
 import os
 import secrets
 import shutil
+import stat
+import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
+
+
+def _darwin_clear_inherited_acl(path: str) -> None:
+    """Remove inherited macOS ACL entries before placing artifacts in a directory."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    acl_init = libc.acl_init
+    acl_init.argtypes = [ctypes.c_int]
+    acl_init.restype = ctypes.c_void_p
+    acl_set = libc.acl_set_fd_np
+    acl_set.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+    acl_set.restype = ctypes.c_int
+    acl_get = libc.acl_get_fd_np
+    acl_get.argtypes = [ctypes.c_int, ctypes.c_int]
+    acl_get.restype = ctypes.c_void_p
+    acl_free = libc.acl_free
+    acl_free.argtypes = [ctypes.c_void_p]
+    acl_free.restype = ctypes.c_int
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+    try:
+        info = os.fstat(fd)
+        current = os.lstat(path)
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or (info.st_dev, info.st_ino) != (current.st_dev, current.st_ino)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700
+        ):
+            raise OSError("Scratch directory identity or permissions changed")
+        acl = acl_init(1)
+        if not acl:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
+        try:
+            if acl_set(fd, acl, 0x100) != 0:  # ACL_TYPE_EXTENDED
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error))
+        finally:
+            acl_free(acl)
+        ctypes.set_errno(0)
+        remaining = acl_get(fd, 0x100)
+        if remaining:
+            acl_free(remaining)
+            raise OSError("Scratch directory still has an access control list")
+        if ctypes.get_errno() != errno.ENOENT:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
+        verified = os.fstat(fd)
+        current = os.lstat(path)
+        if (
+            (verified.st_dev, verified.st_ino) != (current.st_dev, current.st_ino)
+            or verified.st_uid != os.getuid()
+            or stat.S_IMODE(verified.st_mode) != 0o700
+        ):
+            raise OSError("Scratch directory identity or permissions changed")
+        if os.listdir(fd):  # noqa: PTH208 - inspect the opened directory, not a pathname
+            raise OSError("Scratch directory was modified before it became private")
+    finally:
+        os.close(fd)
 
 
 def _windows_private_directory(parent: str, prefix: str) -> str:
@@ -111,6 +172,8 @@ def private_scratch_directory(prefix: str) -> Iterator[str]:
     parent = str(parent_path)
     if os.name != "nt":
         with tempfile.TemporaryDirectory(prefix=prefix, dir=parent) as path:
+            if sys.platform == "darwin":
+                _darwin_clear_inherited_acl(path)
             yield path
         return
     path = _windows_private_directory(parent, prefix)
