@@ -1882,9 +1882,35 @@ async def test_reviewed_macro_delete_removes_link_not_target(
     plugin._macro_review_roots = (str(tmp_path),)
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
 
-    def execute(_code: str, *, initial_globals: dict[str, str]) -> dict[str, bool]:
-        Path(initial_globals["_robust_mcp_reviewed_file_path"]).unlink()
-        return {"success": True}
+    from freecad_mcp.bridge.base import ExecutionResult
+    from freecad_mcp.tools.macros import register_macro_tools
+
+    registered: dict[str, Any] = {}
+    mcp = MagicMock()
+    mcp.tool = lambda **_kwargs: lambda func: registered.setdefault(func.__name__, func)
+    generated = []
+
+    async def capture(code: str) -> ExecutionResult:
+        generated.append(code)
+        return ExecutionResult(
+            success=True,
+            result={"success": True},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    async def get_bridge() -> Any:
+        return SimpleNamespace(execute_python=capture)
+
+    register_macro_tools(mcp, get_bridge, allow_unsafe_code=False)
+    await registered["delete_macro"]("Demo")
+
+    def execute(code: str, *, initial_globals: dict[str, str]) -> dict[str, Any]:
+        env: dict[str, Any] = dict(initial_globals)
+        env["FreeCAD"] = SimpleNamespace(getUserMacroDir=lambda _create: str(tmp_path))
+        exec(code, env)  # noqa: S102 - execute the generated macro deletion
+        return {"success": True, "result": env["_result_"]}
 
     plugin._execute_code_sync = execute
     coordinator = approval.ReviewCoordinator(2)
@@ -1892,7 +1918,7 @@ async def test_reviewed_macro_delete_removes_link_not_target(
     plugin._review_broker = broker
     response = await plugin._review_begin_file(
         1,
-        {"code": "pass", "path": "Demo", "action": "delete", "kind": "macro"},
+        {"code": generated[0], "path": "Demo", "action": "delete", "kind": "macro"},
         "alice",
     )
     review_id = response["result"]["review_id"]
