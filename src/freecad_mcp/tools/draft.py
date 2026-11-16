@@ -148,6 +148,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
 import Draft
 import os
 
+previous_doc = FreeCAD.ActiveDocument
 doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
 if doc is None:
     doc = FreeCAD.newDocument("Unnamed")
@@ -183,7 +184,6 @@ try:
         raise ValueError(f"Font file not found: {{font_path}}")
 
     # Create the ShapeString
-    previous_doc = FreeCAD.ActiveDocument
     try:
         FreeCAD.setActiveDocument(doc.Name)
         shape_string = Draft.make_shapestring(text, font_path, size)

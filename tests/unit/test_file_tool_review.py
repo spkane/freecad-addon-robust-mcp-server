@@ -601,6 +601,69 @@ async def test_import_binds_existing_or_new_document(
 
 
 @pytest.mark.asyncio
+async def test_new_shapestring_restores_document_selected_during_review() -> None:
+    """Creating the previously selected new document restores the later selection."""
+    import textwrap
+
+    from freecad_mcp.tools.draft import register_draft_tools
+
+    mcp = Tools()
+    captured = []
+
+    async def execute(code: str):
+        captured.append(code)
+        return ExecutionResult(
+            success=True,
+            result={"name": "Text"},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=None), execute_python=execute
+    )
+
+    async def get_bridge():
+        return bridge
+
+    register_draft_tools(mcp, get_bridge)
+    await mcp.functions["draft_shapestring"](text="O", font_path="/tmp/font.ttf")
+    code = captured[0]
+    setup_start = code.index("previous_doc = FreeCAD.ActiveDocument")
+    setup_end = code.index("# Wrap in transaction", setup_start)
+    setup = code[setup_start:setup_end]
+    create_start = code.index("    try:\n        FreeCAD.setActiveDocument(doc.Name)")
+    create_end = code.index("    if shape_string is None:", create_start)
+    create = textwrap.dedent(code[create_start:create_end])
+    other = SimpleNamespace(Name="Other")
+    created = SimpleNamespace(Name="Created")
+    freecad = SimpleNamespace(ActiveDocument=other)
+
+    def new_document(_name):
+        freecad.ActiveDocument = created
+        return created
+
+    def set_active(name):
+        freecad.ActiveDocument = {"Other": other, "Created": created}[name]
+
+    freecad.newDocument = new_document
+    freecad.setActiveDocument = set_active
+    draft = SimpleNamespace(make_shapestring=lambda *_args: object())
+    env = {
+        "FreeCAD": freecad,
+        "Draft": draft,
+        "text": "O",
+        "font_path": "/tmp/font.ttf",
+        "size": 10,
+    }
+    exec(setup, env)  # noqa: S102 - exercise generated document selection
+    assert env["doc"] is created
+    exec(create, env)  # noqa: S102 - exercise generated document restoration
+    assert freecad.ActiveDocument is other
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("bridge_type", [SocketBridge, XmlRpcBridge, EmbeddedBridge])
 async def test_active_document_lookup_propagates_execution_errors(bridge_type) -> None:
     """A failed lookup must not be reported as an absent active document."""
