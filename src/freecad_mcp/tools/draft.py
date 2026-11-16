@@ -707,6 +707,8 @@ try:
         shape_string = Draft.make_shapestring(text, font_path, size)
     finally:
         FreeCAD.setActiveDocument(previous_doc.Name if previous_doc is not None else "")
+        if previous_doc is None:
+            FreeCAD.ActiveDocument = None
     if shape_string is None:
         raise ValueError("Failed to create ShapeString")
 

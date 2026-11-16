@@ -446,9 +446,12 @@ async def test_draft_text_binds_document_before_font_review(fail, has_previous) 
     previous = SimpleNamespace(Name="Other") if has_previous else None
     selected = SimpleNamespace(Name="Original")
     active = {"value": previous}
+    freecad = SimpleNamespace(ActiveDocument=previous)
 
     def set_active(name):
         active["value"] = selected if name == "Original" else previous
+        if name:
+            freecad.ActiveDocument = active["value"]
 
     def make_shapestring(*_args):
         assert active["value"] is selected
@@ -457,21 +460,21 @@ async def test_draft_text_binds_document_before_font_review(fail, has_previous) 
         return object()
 
     context = {
-        "FreeCAD": SimpleNamespace(
-            ActiveDocument=previous, setActiveDocument=set_active
-        ),
+        "FreeCAD": freecad,
         "Draft": SimpleNamespace(make_shapestring=make_shapestring),
         "doc": selected,
         "text": "test",
         "font_path": "/tmp/font.ttf",
         "size": 10,
     }
+    freecad.setActiveDocument = set_active
     if fail:
         with pytest.raises(ValueError, match="font failed"):
             exec(fragment, context)  # noqa: S102 - exercise the generated code
     else:
         exec(fragment, context)  # noqa: S102 - exercise the generated code
     assert active["value"] is previous
+    assert freecad.ActiveDocument is previous
 
 
 @pytest.mark.asyncio
