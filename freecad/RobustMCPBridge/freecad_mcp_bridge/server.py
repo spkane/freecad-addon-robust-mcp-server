@@ -1990,6 +1990,14 @@ class FreecadMCPPlugin:
                     candidate = str(Path(root) / (path + ".FCMacro"))
                     try:
                         snapshot = snapshot_file(candidate, action)
+                        if (
+                            action in {"write", "delete"}
+                            and Path(snapshot.resolved_path).parent
+                            != Path(root).resolve()
+                        ):
+                            raise ValueError(
+                                "Macro target is outside the user directory"
+                            )
                         if preceding_paths:
                             from dataclasses import replace
 

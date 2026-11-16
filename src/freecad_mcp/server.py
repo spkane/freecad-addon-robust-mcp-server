@@ -399,7 +399,8 @@ Examples:
   freecad-mcp --generate-http-api-key
   FREECAD_TRANSPORT=http FREECAD_HTTP_PORT=8080 freecad-mcp
 
-  # Use a custom local socket port
+  # Use a custom local socket port. Set the GUI workbench Socket Port
+  # preference to the same value, or set FREECAD_SOCKET_PORT for headless FreeCAD.
   FREECAD_SOCKET_PORT=9877 freecad-mcp
 
 Prerequisites:

@@ -1805,6 +1805,34 @@ async def test_macro_file_review_rejects_new_higher_priority_target(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("action", ["write", "delete"])
+async def test_macro_file_review_rejects_external_symlink(
+    server_mod: Any, tmp_path: Path, action: str
+) -> None:
+    """A macro mutation cannot follow a symlink outside the user macro root."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    user = tmp_path / "user"
+    user.mkdir()
+    external = tmp_path / "external.FCMacro"
+    external.write_text("preserve")
+    try:
+        (user / "Demo.FCMacro").symlink_to(external)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._macro_review_roots = (str(user),)
+    plugin._review_broker = approval.LeasedReviewBroker(
+        approval.ReviewCoordinator(2), 2
+    )
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": action, "kind": "macro"}, "alice"
+    )
+    assert response["error"]["message"] == "File review unavailable or invalid"
+    assert external.read_text() == "preserve"
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["write", "delete"])
 async def test_macro_file_review_binds_mutation_path(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, action: str
 ) -> None:

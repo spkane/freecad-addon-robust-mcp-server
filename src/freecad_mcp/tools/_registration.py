@@ -97,7 +97,7 @@ def _wrap_file_target(
         if (
             get_bridge is not None
             and "doc_name" in bound.arguments
-            and bound.arguments["doc_name"] is None
+            and not bound.arguments["doc_name"]
             and (path or function.__name__ == "cam_create_job")
         ):
             clear_token = file_review_target.set(None)

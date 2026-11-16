@@ -352,7 +352,8 @@ def test_save_path_is_canonical(requested: str, expected: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_file_tool_binds_active_cam_document_before_review() -> None:
+@pytest.mark.parametrize("doc_name", [None, ""])
+async def test_file_tool_binds_active_cam_document_before_review(doc_name) -> None:
     """A later active-document switch cannot redirect a reviewed CAM operation."""
     from freecad_mcp.tools._registration import file_tool
 
@@ -369,7 +370,7 @@ async def test_file_tool_binds_active_cam_document_before_review() -> None:
     async def cam_post_process(output_file: str, doc_name: str | None = None):
         return doc_name, output_file, file_review_target.get()
 
-    assert await mcp.functions["cam_post_process"]("/tmp/test.nc") == (
+    assert await mcp.functions["cam_post_process"]("/tmp/test.nc", doc_name) == (
         "Original",
         "/tmp/test.nc",
         ("/tmp/test.nc", "write", "path"),
