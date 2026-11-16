@@ -802,12 +802,10 @@ class TestSocketBridgeDocuments:
 
     @pytest.mark.asyncio
     async def test_get_active_document_when_not_connected(self):
-        """get_active_document should return None when not connected."""
+        """A connection failure is distinct from having no active document."""
         bridge = SocketBridge()
-
-        doc = await bridge.get_active_document()
-
-        assert doc is None
+        with pytest.raises(RuntimeError, match="Not connected"):
+            await bridge.get_active_document()
 
     @pytest.mark.asyncio
     async def test_is_gui_available_when_not_connected(self):

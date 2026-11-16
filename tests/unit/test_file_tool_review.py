@@ -9,6 +9,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from freecad_mcp.bridge.base import ExecutionResult
+from freecad_mcp.bridge.embedded import EmbeddedBridge
 from freecad_mcp.bridge.file_review import file_review_target
 from freecad_mcp.bridge.socket import SocketBridge
 from freecad_mcp.bridge.xmlrpc import XmlRpcBridge
@@ -400,3 +401,21 @@ async def test_file_tool_rejects_missing_active_cam_document() -> None:
         await mcp.functions["cam_post_process"]("/tmp/test.nc")
     assert not called
     assert file_review_target.get() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bridge_type", [SocketBridge, XmlRpcBridge, EmbeddedBridge])
+async def test_active_document_lookup_propagates_execution_errors(bridge_type) -> None:
+    """A failed lookup must not be reported as an absent active document."""
+    bridge = bridge_type.__new__(bridge_type)
+    bridge.execute_python = AsyncMock(
+        return_value=ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="bridge failed",
+            execution_time_ms=1,
+        )
+    )
+    with pytest.raises(RuntimeError, match="bridge failed"):
+        await bridge.get_active_document()

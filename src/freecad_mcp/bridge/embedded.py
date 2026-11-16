@@ -341,7 +341,13 @@ else:
 """
         )
 
-        if result.success and result.result:
+        if not result.success:
+            raise RuntimeError(
+                result.error_traceback
+                or result.stderr
+                or "Active document lookup failed"
+            )
+        if result.result:
             return DocumentInfo(**result.result)
         return None
 
