@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Version 0.8.0 (2026-11-15)
+## Version 0.8.0 (2026-11-16)
 
 Install Robust MCP Bridge workbench 0.8.0 with this server to use local GUI
 review. Existing paired credentials remain valid. Socket is now the default
