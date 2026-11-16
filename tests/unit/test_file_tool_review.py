@@ -530,6 +530,77 @@ async def test_document_file_tools_bind_active_document(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("active", [None, "Original"])
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("import_step", {"file_path": "/tmp/model.step"}),
+        ("import_stl", {"file_path": "/tmp/model.stl"}),
+        ("insert_part_from_library", {"part_path": "/tmp/model.step"}),
+        ("draft_shapestring", {"text": "O", "font_path": "/tmp/font.ttf"}),
+    ],
+)
+async def test_import_binds_existing_or_new_document(
+    tool_name, arguments, active
+) -> None:
+    """An active-document switch during review cannot redirect an import."""
+    from freecad_mcp.bridge.file_review import file_review_new_document
+    from freecad_mcp.tools.draft import register_draft_tools
+    from freecad_mcp.tools.export import register_export_tools
+    from freecad_mcp.tools.view import register_view_tools
+
+    mcp = Tools()
+    seen = []
+
+    async def execute(code: str):
+        seen.append((code, file_review_target.get(), file_review_new_document.get()))
+        return ExecutionResult(
+            success=True,
+            result={"success": True},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    doc = SimpleNamespace(name=active) if active is not None else None
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=doc), execute_python=execute
+    )
+
+    async def get_bridge():
+        return bridge
+
+    register_export_tools(mcp, get_bridge)
+    register_view_tools(mcp, get_bridge)
+    register_draft_tools(mcp, get_bridge)
+    await mcp.functions[tool_name](**arguments)
+    code, target, new_document = seen[0]
+    path = (
+        arguments.get("file_path")
+        or arguments.get("part_path")
+        or arguments["font_path"]
+    )
+    assert target == (path, "read", "path")
+    assert new_document is (active is None)
+    if active is None:
+        assert "doc = None if True else" in code
+    else:
+        assert "FreeCAD.getDocument('Original')" in code
+    bound_doc = object()
+    later_active = object()
+    freecad = SimpleNamespace(
+        ActiveDocument=later_active,
+        getDocument=lambda _name: bound_doc,
+    )
+    assignment = next(line for line in code.splitlines() if line.startswith("doc = "))
+    env = {"FreeCAD": freecad}
+    exec(assignment, env)  # noqa: S102 - exercise the generated document selection
+    assert env["doc"] is (None if active is None else bound_doc)
+    assert file_review_new_document.get() is False
+    assert file_review_target.get() is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("bridge_type", [SocketBridge, XmlRpcBridge, EmbeddedBridge])
 async def test_active_document_lookup_propagates_execution_errors(bridge_type) -> None:
     """A failed lookup must not be reported as an absent active document."""

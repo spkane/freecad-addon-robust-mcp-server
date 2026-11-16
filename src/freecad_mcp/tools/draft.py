@@ -7,6 +7,7 @@ ShapeString for creating 3D text geometry that can be used with PartDesign.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.bridge.file_review import file_review_new_document
 from freecad_mcp.tools._registration import file_tool
 
 
@@ -93,7 +94,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
             "get_bridge must be a callable that returns an awaitable bridge"
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge, allow_new_document=True)
     async def draft_shapestring(
         text: str,
         font_path: str | None = None,
@@ -147,7 +148,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
 import Draft
 import os
 
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
 if doc is None:
     doc = FreeCAD.newDocument("Unnamed")
 
@@ -182,7 +183,14 @@ try:
         raise ValueError(f"Font file not found: {{font_path}}")
 
     # Create the ShapeString
-    shape_string = Draft.make_shapestring(text, font_path, size)
+    previous_doc = FreeCAD.ActiveDocument
+    try:
+        FreeCAD.setActiveDocument(doc.Name)
+        shape_string = Draft.make_shapestring(text, font_path, size)
+    finally:
+        FreeCAD.setActiveDocument(previous_doc.Name if previous_doc is not None else "")
+        if previous_doc is None:
+            FreeCAD.ActiveDocument = None
 
     if shape_string is None:
         raise ValueError("Failed to create ShapeString - check font file and text")

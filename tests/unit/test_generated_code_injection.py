@@ -109,6 +109,7 @@ async def test_tool_string_inputs_are_never_executable(
     """Model-selected strings remain literals even in error-message branches."""
     mcp = CaptureTools()
     bridge = AsyncMock()
+    bridge.get_active_document.return_value = None
     bridge.execute_python.side_effect = CaptureCode
 
     async def get_bridge():
