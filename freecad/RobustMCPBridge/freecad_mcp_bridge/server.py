@@ -1422,10 +1422,7 @@ class FreecadMCPPlugin:
                     }
                 else:
                     code = payload.content.decode("utf-8", errors="strict")
-                    if (
-                        payload.file_target_kind == "macro"
-                        and payload.file_snapshot.action == "read"
-                    ):
+                    if payload.file_target_kind == "macro":
                         result = self._execute_code_sync(
                             code,
                             initial_globals={

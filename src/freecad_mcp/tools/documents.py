@@ -11,6 +11,13 @@ from freecad_mcp.bridge.file_review import file_review_target
 from freecad_mcp.tools._registration import file_tool
 
 
+def _document_save_path(path: str) -> str:
+    """Use a canonical suffix that FreeCAD will not change after review."""
+    if path.endswith(".FCStd"):
+        return path
+    return path + ("FCStd" if path.endswith(".") else ".FCStd")
+
+
 def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register document-related tools with the Robust MCP Server.
 
@@ -134,7 +141,8 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
         Args:
             doc_name: Name of document to save. Uses active document if None.
             path: File path to save to. Uses existing path if None.
-                  Required for new (unsaved) documents.
+                  Required for new (unsaved) documents. A canonical `.FCStd`
+                  suffix is appended when missing, without replacing a suffix.
 
         Returns:
             Dictionary with save result:
@@ -154,9 +162,7 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             if active is None:
                 raise ValueError("No active document")
             doc_name = active.name
-        if path:
-            saved_path = await bridge.save_document(doc_name, path)
-        else:
+        if not path:
             doc = (
                 await bridge.get_active_document()
                 if doc_name is None
@@ -171,11 +177,13 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             )
             if doc is None or not doc.path:
                 raise ValueError("No saved path for the requested document")
-            token = file_review_target.set((doc.path, "write", "path"))
-            try:
-                saved_path = await bridge.save_document(doc.name, doc.path)
-            finally:
-                file_review_target.reset(token)
+            doc_name, path = doc.name, doc.path
+        path = _document_save_path(path)
+        token = file_review_target.set((path, "write", "path"))
+        try:
+            saved_path = await bridge.save_document(doc_name, path)
+        finally:
+            file_review_target.reset(token)
         return {
             "success": True,
             "path": saved_path,

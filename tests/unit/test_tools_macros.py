@@ -232,6 +232,40 @@ class TestMacroTools:
         mock_bridge.execute_python.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_delete_macro_uses_bound_reviewed_file(
+        self, register_tools, mock_bridge, tmp_path
+    ):
+        """Changing FreeCAD's macro directory does not redirect a reviewed deletion."""
+        reviewed = tmp_path / "original" / "MyMacro.FCMacro"
+        other = tmp_path / "new" / "MyMacro.FCMacro"
+        reviewed.parent.mkdir()
+        other.parent.mkdir()
+        reviewed.write_text("reviewed")
+        other.write_text("other")
+
+        async def execute(code):
+            env = {
+                "_robust_mcp_reviewed_file_path": str(reviewed),
+                "FreeCAD": MagicMock(
+                    getUserMacroDir=MagicMock(return_value=str(other.parent))
+                ),
+            }
+            exec(code, env)  # noqa: S102 - execute this tool's generated code in the test
+            return ExecutionResult(
+                success=True,
+                result=env["_result_"],
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+
+        mock_bridge.execute_python = AsyncMock(side_effect=execute)
+        result = await register_tools["delete_macro"](macro_name="MyMacro")
+        assert result["path"] == str(reviewed)
+        assert not reviewed.exists()
+        assert other.read_text() == "other"
+
+    @pytest.mark.asyncio
     async def test_delete_macro_not_found(self, register_tools, mock_bridge):
         """delete_macro should raise error when macro not found."""
         mock_bridge.execute_python = AsyncMock(
