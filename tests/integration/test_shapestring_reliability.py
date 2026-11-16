@@ -118,6 +118,45 @@ _result_ = {{"created": len(created), "object_in_created": bool(created and crea
 
 
 @pytest.mark.asyncio
+async def test_shapestring_missing_font_restores_later_selection(
+    regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed font check restores the document selected during review."""
+    bridge, name = regression_document
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+    setup = await bridge.execute_python(
+        f'FreeCAD.newDocument({name!r})\nFreeCAD.setActiveDocument("")\n'
+        "FreeCAD.ActiveDocument = None\n_result_ = list(FreeCAD.listDocuments())"
+    )
+    assert setup.success, setup.error_traceback
+    before = set(setup.result)
+
+    async def execute_after_switch(code: str):
+        switch = await bridge.execute_python(
+            f"FreeCAD.setActiveDocument({name!r})\n_result_ = True"
+        )
+        assert switch.success, switch.error_traceback
+        return await bridge.execute_python(code)
+
+    proxy = SimpleNamespace(
+        get_active_document=bridge.get_active_document,
+        execute_python=execute_after_switch,
+    )
+    try:
+        with pytest.raises(ValueError):
+            await _tools(cast("XmlRpcBridge", proxy))["draft_shapestring"](
+                text="O", font_path="/nonexistent/freecad-review-font.ttf"
+            )
+        check = await bridge.execute_python("_result_ = FreeCAD.ActiveDocument.Name")
+        assert check.success, check.error_traceback
+        assert check.result == name
+    finally:
+        await bridge.execute_python(
+            f"for n in list(FreeCAD.listDocuments()):\n    if n not in {sorted(before)!r}: FreeCAD.closeDocument(n)\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
 async def test_shapestring_new_document_remains_active_for_conversion(
     regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

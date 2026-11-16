@@ -222,6 +222,8 @@ try:
     }}
 except Exception:
     doc.abortTransaction()
+    if previous_doc is not None:
+        FreeCAD.setActiveDocument(previous_doc.Name)
     raise
 """
         result = await bridge.execute_python(code)
