@@ -601,8 +601,11 @@ async def test_import_binds_existing_or_new_document(
 
 
 @pytest.mark.asyncio
-async def test_new_shapestring_restores_document_selected_during_review() -> None:
-    """Creating the previously selected new document restores the later selection."""
+@pytest.mark.parametrize("has_later_selection", [False, True])
+async def test_new_shapestring_preserves_active_document(
+    has_later_selection: bool,
+) -> None:
+    """Restore a later selection or leave the new document active."""
     import textwrap
 
     from freecad_mcp.tools.draft import register_draft_tools
@@ -638,7 +641,7 @@ async def test_new_shapestring_restores_document_selected_during_review() -> Non
     create = textwrap.dedent(code[create_start:create_end])
     other = SimpleNamespace(Name="Other")
     created = SimpleNamespace(Name="Created")
-    freecad = SimpleNamespace(ActiveDocument=other)
+    freecad = SimpleNamespace(ActiveDocument=other if has_later_selection else None)
 
     def new_document(_name):
         freecad.ActiveDocument = created
@@ -660,7 +663,7 @@ async def test_new_shapestring_restores_document_selected_during_review() -> Non
     exec(setup, env)  # noqa: S102 - exercise generated document selection
     assert env["doc"] is created
     exec(create, env)  # noqa: S102 - exercise generated document restoration
-    assert freecad.ActiveDocument is other
+    assert freecad.ActiveDocument is (other if has_later_selection else created)
 
 
 @pytest.mark.asyncio

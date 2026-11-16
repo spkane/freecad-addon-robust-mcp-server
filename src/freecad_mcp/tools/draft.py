@@ -150,6 +150,7 @@ import os
 
 previous_doc = FreeCAD.ActiveDocument
 doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
+created_document = doc is None
 if doc is None:
     doc = FreeCAD.newDocument("Unnamed")
 
@@ -188,8 +189,10 @@ try:
         FreeCAD.setActiveDocument(doc.Name)
         shape_string = Draft.make_shapestring(text, font_path, size)
     finally:
-        FreeCAD.setActiveDocument(previous_doc.Name if previous_doc is not None else "")
-        if previous_doc is None:
+        if previous_doc is not None:
+            FreeCAD.setActiveDocument(previous_doc.Name)
+        elif not created_document:
+            FreeCAD.setActiveDocument("")
             FreeCAD.ActiveDocument = None
 
     if shape_string is None:

@@ -118,6 +118,39 @@ _result_ = {{"created": len(created), "object_in_created": bool(created and crea
 
 
 @pytest.mark.asyncio
+async def test_shapestring_new_document_remains_active_for_conversion(
+    regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new ShapeString document remains usable by implicit-document tools."""
+    bridge, _ = regression_document
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+    setup = await bridge.execute_python(
+        """
+import os
+FreeCAD.setActiveDocument("")
+FreeCAD.ActiveDocument = None
+fonts = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/System/Library/Fonts/Helvetica.ttc", "C:/Windows/Fonts/arial.ttf"]
+_result_ = {"font": next((f for f in fonts if os.path.exists(f)), None), "before": list(FreeCAD.listDocuments())}
+"""
+    )
+    assert setup.success, setup.error_traceback
+    assert setup.result["font"], "No integration-test font available"
+    before = set(setup.result["before"])
+    try:
+        tools = _tools(bridge)
+        shape = await tools["draft_shapestring"](
+            text="O", font_path=setup.result["font"]
+        )
+        face = await tools["draft_shapestring_to_face"](shapestring_name=shape["name"])
+        assert face["source"] == shape["name"]
+        assert face["face_count"] > 0
+    finally:
+        await bridge.execute_python(
+            f"for n in list(FreeCAD.listDocuments()):\n    if n not in {sorted(before)!r}: FreeCAD.closeDocument(n)\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("has_previous", [False, True])
 async def test_text_on_surface_uses_named_document_and_restores_selection(
     regression_document: tuple[XmlRpcBridge, str], has_previous: bool
