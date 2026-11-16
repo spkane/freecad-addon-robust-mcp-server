@@ -1865,6 +1865,73 @@ async def test_macro_file_review_binds_mutation_path(
 
 
 @pytest.mark.asyncio
+async def test_reviewed_macro_delete_removes_link_not_target(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reviewing a macro symlink deletes its entry, preserving its target."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    target = tmp_path / "Original.FCMacro"
+    target.write_text("original")
+    link = tmp_path / "Demo.FCMacro"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._macro_review_roots = (str(tmp_path),)
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+
+    from freecad_mcp.bridge.base import ExecutionResult
+    from freecad_mcp.tools.macros import register_macro_tools
+
+    registered: dict[str, Any] = {}
+    mcp = MagicMock()
+    mcp.tool = lambda **_kwargs: lambda func: registered.setdefault(func.__name__, func)
+    generated = []
+
+    async def capture(code: str) -> ExecutionResult:
+        generated.append(code)
+        return ExecutionResult(
+            success=True,
+            result={"success": True},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    async def get_bridge() -> Any:
+        return SimpleNamespace(execute_python=capture)
+
+    register_macro_tools(mcp, get_bridge, allow_unsafe_code=False)
+    await registered["delete_macro"]("Demo")
+
+    def execute(code: str, *, initial_globals: dict[str, str]) -> dict[str, Any]:
+        env: dict[str, Any] = dict(initial_globals)
+        env["FreeCAD"] = SimpleNamespace(getUserMacroDir=lambda _create: str(tmp_path))
+        exec(code, env)  # noqa: S102 - execute the generated macro deletion
+        return {"success": True, "result": env["_result_"]}
+
+    plugin._execute_code_sync = execute
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    response = await plugin._review_begin_file(
+        1,
+        {"code": generated[0], "path": "Demo", "action": "delete", "kind": "macro"},
+        "alice",
+    )
+    review_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", review_id)
+    plugin._process_queue()
+    assert broker.result("alice", review_id)["success"]
+    assert not link.is_symlink()
+    assert target.read_text() == "original"
+    broker.close()
+
+
+@pytest.mark.asyncio
 async def test_review_preference_bypass_runs_only_on_review_protocol(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

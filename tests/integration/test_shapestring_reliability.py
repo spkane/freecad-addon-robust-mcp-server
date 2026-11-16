@@ -62,6 +62,56 @@ async def regression_document() -> AsyncIterator[tuple[XmlRpcBridge, str]]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("has_previous", [False, True])
+async def test_text_on_surface_uses_named_document_and_restores_selection(
+    regression_document: tuple[XmlRpcBridge, str], has_previous: bool
+) -> None:
+    """A real Draft ShapeString is created in the named document, not the active one."""
+    bridge, name = regression_document
+    other = f"Other_{uuid4().hex}"
+    setup = await bridge.execute_python(
+        f"""
+import Part
+doc = FreeCAD.newDocument({name!r})
+box = doc.addObject("Part::Feature", "Box")
+box.Shape = Part.makeBox(100, 100, 10)
+doc.recompute()
+FreeCAD.newDocument({other!r})
+if not {has_previous!r}:
+    FreeCAD.setActiveDocument("")
+    FreeCAD.ActiveDocument = None
+_result_ = True
+"""
+    )
+    assert setup.success, setup.error_traceback
+    try:
+        result = await _tools(bridge)["draft_text_on_surface"](
+            text="O", target_face="Face6", target_object="Box", doc_name=name
+        )
+        check = await bridge.execute_python(
+            f"""
+_result_ = {{
+    "selected": FreeCAD.ActiveDocument.Name if FreeCAD.ActiveDocument else None,
+    "internal": FreeCAD.activeDocument().Name if FreeCAD.activeDocument() else None,
+    "target_result": bool(FreeCAD.getDocument({name!r}).getObject({result["name"]!r})),
+    "other_objects": len(FreeCAD.getDocument({other!r}).Objects),
+}}
+"""
+        )
+        assert check.success, check.error_traceback
+        assert check.result == {
+            "selected": other if has_previous else None,
+            "internal": other if has_previous else None,
+            "target_result": True,
+            "other_objects": 0,
+        }
+    finally:
+        await bridge.execute_python(
+            f"if {other!r} in FreeCAD.listDocuments(): FreeCAD.closeDocument({other!r})\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("rotate_body", [False, True])
 @pytest.mark.parametrize(("text", "contours"), [("O", 2), ("B", 3), ("BOLT", 7)])
 async def test_shapestring_conversion_preserves_name_contours_and_placement(

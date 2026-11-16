@@ -404,6 +404,132 @@ async def test_file_tool_rejects_missing_active_cam_document() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("has_previous", [False, True])
+async def test_draft_text_binds_document_before_font_review(fail, has_previous) -> None:
+    """Text is applied to the selected document even if active selection changes."""
+    from freecad_mcp.tools.draft import register_draft_tools
+
+    mcp = Tools()
+    seen = []
+
+    async def execute(code: str):
+        seen.append((code, file_review_target.get()))
+        return ExecutionResult(
+            success=True,
+            result={"name": "Text"},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=SimpleNamespace(name="Original")),
+        execute_python=execute,
+    )
+
+    async def get_bridge():
+        return bridge
+
+    register_draft_tools(mcp, get_bridge)
+    await mcp.functions["draft_text_on_surface"](
+        text="test", target_face="Face1", target_object="Box", font_path="/tmp/font.ttf"
+    )
+    assert "FreeCAD.getDocument('Original')" in seen[0][0]
+    assert seen[0][1] == ("/tmp/font.ttf", "read", "path")
+    import textwrap
+
+    code = seen[0][0]
+    start = code.index("    previous_doc = FreeCAD.ActiveDocument")
+    end = code.index("    if shape_string is None:", start)
+    fragment = textwrap.dedent(code[start:end])
+    previous = SimpleNamespace(Name="Other") if has_previous else None
+    selected = SimpleNamespace(Name="Original")
+    active = {"value": previous}
+    freecad = SimpleNamespace(ActiveDocument=previous)
+
+    def set_active(name):
+        active["value"] = selected if name == "Original" else previous
+        if name:
+            freecad.ActiveDocument = active["value"]
+
+    def make_shapestring(*_args):
+        assert active["value"] is selected
+        if fail:
+            raise ValueError("font failed")
+        return object()
+
+    context = {
+        "FreeCAD": freecad,
+        "Draft": SimpleNamespace(make_shapestring=make_shapestring),
+        "doc": selected,
+        "text": "test",
+        "font_path": "/tmp/font.ttf",
+        "size": 10,
+    }
+    freecad.setActiveDocument = set_active
+    if fail:
+        with pytest.raises(ValueError, match="font failed"):
+            exec(fragment, context)  # noqa: S102 - exercise the generated code
+    else:
+        exec(fragment, context)  # noqa: S102 - exercise the generated code
+    assert active["value"] is previous
+    assert freecad.ActiveDocument is previous
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "action"),
+    [
+        ("export_step", {"file_path": "/tmp/model.step"}, "write"),
+        (
+            "spreadsheet_import_csv",
+            {"spreadsheet_name": "Sheet", "file_path": "/tmp/data.csv"},
+            "read",
+        ),
+        (
+            "spreadsheet_export_csv",
+            {"spreadsheet_name": "Sheet", "file_path": "/tmp/data.csv"},
+            "write",
+        ),
+    ],
+)
+async def test_document_file_tools_bind_active_document(
+    tool_name, arguments, action
+) -> None:
+    """File review cannot redirect export or spreadsheet work to another document."""
+    from freecad_mcp.tools.export import register_export_tools
+    from freecad_mcp.tools.spreadsheet import register_spreadsheet_tools
+
+    mcp = Tools()
+    seen = []
+
+    async def execute(code: str):
+        seen.append((code, file_review_target.get()))
+        return ExecutionResult(
+            success=True,
+            result={"success": True},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=SimpleNamespace(name="Original")),
+        execute_python=execute,
+    )
+
+    async def get_bridge():
+        return bridge
+
+    register_export_tools(mcp, get_bridge)
+    register_spreadsheet_tools(mcp, get_bridge)
+    await mcp.functions[tool_name](**arguments)
+    assert "FreeCAD.getDocument('Original')" in seen[0][0]
+    assert seen[0][1] == (arguments["file_path"], action, "path")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("bridge_type", [SocketBridge, XmlRpcBridge, EmbeddedBridge])
 async def test_active_document_lookup_propagates_execution_errors(bridge_type) -> None:
     """A failed lookup must not be reported as an absent active document."""

@@ -574,7 +574,7 @@ except Exception:
             result.error_traceback or "Failed to convert ShapeString to face"
         )
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge)
     async def draft_text_on_surface(
         text: str,
         target_face: str,
@@ -701,7 +701,14 @@ try:
     face_normal = face.normalAt(0, 0)
 
     # Create ShapeString at the face position
-    shape_string = Draft.make_shapestring(text, font_path, size)
+    previous_doc = FreeCAD.ActiveDocument
+    try:
+        FreeCAD.setActiveDocument(doc.Name)
+        shape_string = Draft.make_shapestring(text, font_path, size)
+    finally:
+        FreeCAD.setActiveDocument(previous_doc.Name if previous_doc is not None else "")
+        if previous_doc is None:
+            FreeCAD.ActiveDocument = None
     if shape_string is None:
         raise ValueError("Failed to create ShapeString")
 
