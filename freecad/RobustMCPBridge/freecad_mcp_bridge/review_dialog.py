@@ -264,9 +264,17 @@ class ReviewDialogController:
             if self._policy is not None:
                 required, deadline = self._policy.decision(request.payload.action)
                 if not required:
-                    if deadline is None:
-                        request.decide(approved=True)
-                    elif not request.approve_until(deadline, self._policy.now):
+                    action = request.payload.action
+
+                    def policy_still_allows() -> bool:
+                        required_now, deadline_now = self._policy.decision(action)
+                        return (
+                            not required_now
+                            and deadline_now == deadline
+                            and (deadline is None or self._policy.now() < deadline)
+                        )
+
+                    if not request.approve_if_still_valid(policy_still_allows):
                         self._coordinator.cancel(request)
                     return
             if (

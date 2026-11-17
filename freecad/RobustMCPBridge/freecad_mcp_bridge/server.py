@@ -906,6 +906,12 @@ class FreecadMCPPlugin:
         # Get shiboken delete function for explicit Qt object destruction
         shiboken_delete = _get_shiboken_delete()
 
+        relay = self._review_close_relay
+        self._review_close_relay = None
+        if relay is not None and shiboken_delete is not None:
+            with contextlib.suppress(Exception):
+                shiboken_delete(relay)
+
         # Stop queue processor timer - use shiboken.delete() for immediate destruction
         if self._timer:
             timer = self._timer
