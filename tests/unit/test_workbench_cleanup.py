@@ -211,6 +211,21 @@ class TestCleanupForExit:
         assert mock_queue_timer in calls
         assert mock_status_timer in calls
 
+    def test_cleanup_for_exit_deletes_review_relay_once(self, mock_qt_env):
+        """A connected review relay is destroyed before interpreter finalization."""
+        _clear_bridge_cache()
+
+        from freecad.RobustMCPBridge.freecad_mcp_bridge import server
+
+        plugin = server.FreecadMCPPlugin()
+        relay = MagicMock()
+        plugin._review_close_relay = relay
+        mock_qt_env["shiboken_delete"].reset_mock()
+        plugin._cleanup_for_exit()
+        plugin._cleanup_for_exit()
+        mock_qt_env["shiboken_delete"].assert_called_once_with(relay)
+        assert plugin._review_close_relay is None
+
     def test_cleanup_for_exit_does_not_use_delete_later(self, mock_qt_env):
         """_cleanup_for_exit should NOT use deleteLater().
 
