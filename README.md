@@ -111,6 +111,11 @@ dialog by default on a supported GUI/socket connection. Users can disable review
 or enable a timed bypass in the workbench preferences. This does not prevent other
 paired clients from sending Python directly to the bridge.
 
+Supported file tools also request local review by default. The dialog shows the
+operation and path, and the preferences offer an explicit override for automation.
+This is not a filesystem sandbox; see the security guide for connection-mode and
+CAM output limitations.
+
 The server now defaults to socket mode so the GUI can show these reviews.
 Existing client configurations that explicitly set `FREECAD_MODE=xmlrpc` keep
 using XML-RPC; change that setting to `socket` to use local review.
@@ -254,6 +259,9 @@ host unless the container credential is already provisioned securely.
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
+
+`FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true` explicitly bypasses local file
+review for automation; it defaults to `false`.
 
 #### Connection Modes
 
