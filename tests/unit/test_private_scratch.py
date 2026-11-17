@@ -54,6 +54,7 @@ def test_windows_refuses_filesystem_without_persistent_acls(
     kernel.CreateDirectoryW.assert_not_called()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory descriptor flags required")
 @pytest.mark.parametrize(
     ("valid", "entry_result", "entry_errno", "expected"),
     [
