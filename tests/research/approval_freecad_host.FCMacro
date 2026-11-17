@@ -449,7 +449,10 @@ def start():
                 raise RuntimeError("Reviewed macro sibling imports differ from legacy")
         port = plugin._socket_server.sockets[0].getsockname()[1]
         if port_file:
-            Path(port_file).write_text(str(port))
+            port_path = Path(port_file)
+            temporary_port_path = port_path.with_name(port_path.name + ".tmp")
+            temporary_port_path.write_text(str(port))
+            os.replace(temporary_port_path, port_path)
         else:
             threading.Thread(target=worker, args=(port,), daemon=True).start()
         timer = QtCore.QTimer()
