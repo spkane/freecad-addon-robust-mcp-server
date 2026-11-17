@@ -7,6 +7,9 @@
 Use with Robust MCP Server 0.8.0 for the file-review workflow. Existing paired
 credentials remain valid. The bridge executes with the FreeCAD user's full
 permissions and is not a sandbox.
+Review applies to supported operations through the MCP server; a paired client
+can communicate directly with the bridge and bypass these prompts. Pair only
+clients you trust.
 
 ### Added
 

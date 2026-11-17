@@ -1,9 +1,12 @@
 """Tests for private scratch directories used by FreeCAD and the MCP server."""
 
+import ctypes
+import errno
 import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -49,6 +52,91 @@ def test_windows_refuses_filesystem_without_persistent_acls(
     with pytest.raises(OSError, match="persistent ACLs"):
         private_scratch._windows_private_directory("C:\\home", "scratch-")
     kernel.CreateDirectoryW.assert_not_called()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory descriptor flags required")
+@pytest.mark.parametrize(
+    ("valid", "entry_result", "entry_errno", "expected"),
+    [
+        (0, -1, errno.EINVAL, None),
+        (0, 0, 0, "still has an access control list"),
+        (0, -1, errno.EIO, "Input/output error"),
+        (-1, -1, errno.EIO, "Input/output error"),
+    ],
+)
+def test_darwin_acl_verification_handles_empty_and_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    valid: int,
+    entry_result: int,
+    entry_errno: int,
+    expected: str | None,
+) -> None:
+    """A valid empty ACL is accepted; entries and unexpected errors fail closed."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    libc = MagicMock()
+    libc.acl_init.return_value = 1
+    libc.acl_set_fd_np.return_value = 0
+    libc.acl_get_fd_np.return_value = 2
+
+    def validate(_acl: object) -> int:
+        ctypes.set_errno(errno.EIO if valid else 0)
+        return valid
+
+    def get_entry(_acl: object, _index: int, _entry: object) -> int:
+        ctypes.set_errno(entry_errno)
+        return entry_result
+
+    libc.acl_valid.side_effect = validate
+    libc.acl_get_entry.side_effect = get_entry
+    monkeypatch.setattr(private_scratch.ctypes, "CDLL", lambda *_a, **_kw: libc)
+    if expected is None:
+        private_scratch._darwin_clear_inherited_acl(str(scratch))
+    else:
+        with pytest.raises(OSError, match=expected):
+            private_scratch._darwin_clear_inherited_acl(str(scratch))
+    assert [call.args[0] for call in libc.acl_free.call_args_list] == [1, 2]
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL verification")
+@pytest.mark.parametrize("with_entry", [False, True])
+def test_darwin_real_acl_entry_enumeration(with_entry: bool) -> None:
+    """Exercise Darwin's actual empty and nonempty ACL iterator semantics."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.acl_init.argtypes = [ctypes.c_int]
+    libc.acl_init.restype = ctypes.c_void_p
+    libc.acl_create_entry.argtypes = [
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    libc.acl_create_entry.restype = ctypes.c_int
+    libc.acl_valid.argtypes = [ctypes.c_void_p]
+    libc.acl_valid.restype = ctypes.c_int
+    libc.acl_get_entry.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    libc.acl_get_entry.restype = ctypes.c_int
+    libc.acl_free.argtypes = [ctypes.c_void_p]
+    libc.acl_free.restype = ctypes.c_int
+    acl = ctypes.c_void_p(libc.acl_init(1))
+    assert acl.value
+    if with_entry:
+        entry = ctypes.c_void_p()
+        assert libc.acl_create_entry(ctypes.byref(acl), ctypes.byref(entry)) == 0
+    get_acl = SimpleNamespace(
+        acl_get_fd_np=lambda _fd, _type: acl.value,
+        acl_valid=libc.acl_valid,
+        acl_get_entry=libc.acl_get_entry,
+        acl_free=libc.acl_free,
+    )
+    if with_entry:
+        with pytest.raises(OSError, match="still has an access control list"):
+            private_scratch._darwin_verify_empty_acl(get_acl, 0)  # type: ignore[arg-type]
+    else:
+        private_scratch._darwin_verify_empty_acl(get_acl, 0)  # type: ignore[arg-type]
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL verification")

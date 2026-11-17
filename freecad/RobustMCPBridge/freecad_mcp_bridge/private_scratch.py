@@ -17,6 +17,31 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
+def _darwin_verify_empty_acl(libc: ctypes.CDLL, fd: int) -> None:
+    """Accept a missing or valid empty ACL and reject entries or errors."""
+    ctypes.set_errno(0)
+    remaining = libc.acl_get_fd_np(fd, 0x100)
+    if remaining:
+        try:
+            if libc.acl_valid(remaining) != 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error))
+            entry = ctypes.c_void_p()
+            ctypes.set_errno(0)
+            result = libc.acl_get_entry(remaining, 0, ctypes.byref(entry))
+            if result == 0:
+                raise OSError("Scratch directory still has an access control list")
+            error = ctypes.get_errno()
+            # Darwin returns EINVAL for ACL_FIRST_ENTRY on a valid empty ACL.
+            if result != -1 or error != errno.EINVAL:
+                raise OSError(error, os.strerror(error))
+        finally:
+            libc.acl_free(remaining)
+    elif ctypes.get_errno() != errno.ENOENT:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+
+
 def _darwin_clear_inherited_acl(path: str) -> None:
     """Remove inherited macOS ACL entries before placing artifacts in a directory."""
     libc = ctypes.CDLL(None, use_errno=True)
@@ -29,6 +54,16 @@ def _darwin_clear_inherited_acl(path: str) -> None:
     acl_get = libc.acl_get_fd_np
     acl_get.argtypes = [ctypes.c_int, ctypes.c_int]
     acl_get.restype = ctypes.c_void_p
+    acl_valid = libc.acl_valid
+    acl_valid.argtypes = [ctypes.c_void_p]
+    acl_valid.restype = ctypes.c_int
+    acl_get_entry = libc.acl_get_entry
+    acl_get_entry.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    acl_get_entry.restype = ctypes.c_int
     acl_free = libc.acl_free
     acl_free.argtypes = [ctypes.c_void_p]
     acl_free.restype = ctypes.c_int
@@ -53,14 +88,7 @@ def _darwin_clear_inherited_acl(path: str) -> None:
                 raise OSError(error, os.strerror(error))
         finally:
             acl_free(acl)
-        ctypes.set_errno(0)
-        remaining = acl_get(fd, 0x100)
-        if remaining:
-            acl_free(remaining)
-            raise OSError("Scratch directory still has an access control list")
-        if ctypes.get_errno() != errno.ENOENT:
-            error = ctypes.get_errno()
-            raise OSError(error, os.strerror(error))
+        _darwin_verify_empty_acl(libc, fd)
         verified = os.fstat(fd)
         current = os.lstat(path)
         if (
