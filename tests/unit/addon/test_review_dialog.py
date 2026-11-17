@@ -273,6 +273,29 @@ def test_controller_applies_local_bypass_deadline(
     policy.clear_session.assert_called_once()
 
 
+@pytest.mark.parametrize("original_deadline", [None, 200.0])
+@pytest.mark.parametrize("new_decision", [(True, None), (False, 300.0)])
+def test_controller_rechecks_revoked_or_replaced_bypass_before_execution(
+    modules: tuple, original_deadline: float | None, new_decision: tuple
+) -> None:
+    """An auto-approved request cannot outlive or inherit a different policy."""
+    approval, review, widgets = modules
+    coordinator = approval.ReviewCoordinator(1)
+    request = coordinator.submit(
+        approval.ApprovalPayload("execute_python", b"pass"), 30
+    )
+    policy = MagicMock()
+    policy.now.return_value = 100.0
+    policy.decision.return_value = (False, original_deadline)
+    controller = review.ReviewDialogController(coordinator, policy=policy)
+    controller.poll()
+    assert coordinator.wait_and_schedule(request)
+    policy.decision.return_value = new_decision
+    assert coordinator.next_execution() is None
+    widgets.QDialog.assert_not_called()
+    controller.close()
+
+
 def test_macro_review_can_save_exact_version(modules: tuple, tmp_path: Path) -> None:
     """An explicit accepted choice stores the path and digest that were shown."""
     import hashlib

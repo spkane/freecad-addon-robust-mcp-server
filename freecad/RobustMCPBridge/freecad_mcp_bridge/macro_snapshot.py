@@ -33,7 +33,12 @@ def snapshot_macro(path: str) -> MacroSnapshot:
         ValueError: If the file is not regular or exceeds the review size limit.
     """
     resolved = Path(path).resolve(strict=True)
-    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     fd = os.open(str(resolved), flags)
     with os.fdopen(fd, "rb") as stream:
         if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):

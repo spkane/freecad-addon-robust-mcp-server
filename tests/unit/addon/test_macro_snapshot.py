@@ -2,6 +2,7 @@
 
 import hashlib
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -37,6 +38,27 @@ def test_snapshot_is_unchanged_after_file_replacement(
     assert snapshot.content == original
     assert snapshot.sha256 == hashlib.sha256(original).hexdigest()
     assert snapshots.snapshot_macro(str(path)).sha256 != snapshot.sha256
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="O_NOFOLLOW unavailable")
+def test_snapshot_rejects_symlink_swapped_after_resolution(
+    snapshots: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A substituted final-component symlink cannot change the reviewed path."""
+    path = tmp_path / "example.FCMacro"
+    other = tmp_path / "other.FCMacro"
+    path.write_bytes(b"original")
+    other.write_bytes(b"substituted")
+    real_open = os.open
+
+    def swap_and_open(name: str, flags: int) -> int:
+        path.unlink()
+        path.symlink_to(other)
+        return real_open(name, flags)
+
+    monkeypatch.setattr(snapshots.os, "open", swap_and_open)
+    with pytest.raises(OSError):
+        snapshots.snapshot_macro(str(path))
 
 
 def test_snapshot_rejects_non_regular_and_oversized_files(
