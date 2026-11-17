@@ -8,6 +8,7 @@ has excellent screenshot handling with view type detection.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.bridge.file_review import file_review_new_document
 from freecad_mcp.tools._registration import file_tool
 
 
@@ -645,7 +646,7 @@ _result_ = parts
             return result.result
         return []
 
-    @file_tool(mcp)
+    @file_tool(mcp, get_bridge=get_bridge, allow_new_document=True)
     async def insert_part_from_library(
         part_path: str,
         name: str | None = None,
@@ -678,7 +679,7 @@ _result_ = parts
 import os
 import Part
 
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
 if doc is None:
     doc = FreeCAD.newDocument("Unnamed")
 

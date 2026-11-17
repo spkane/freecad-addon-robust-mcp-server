@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.types import ToolAnnotations
 
-from freecad_mcp.bridge.file_review import file_review_target
+from freecad_mcp.bridge.file_review import file_review_new_document, file_review_target
 
 # File targets are classified explicitly; a missing or ambiguous target must
 # never be inferred from arbitrary tool arguments.
@@ -61,6 +61,7 @@ def file_tool(
     *,
     read_only: bool = False,
     get_bridge: Callable[[], Awaitable[Any]] | None = None,
+    allow_new_document: bool = False,
 ) -> Callable[[Any], Any]:
     """Register file tools and identify explicit file targets for review.
 
@@ -75,11 +76,15 @@ def file_tool(
         )
     )
 
-    return lambda function: register(_wrap_file_target(function, get_bridge))
+    return lambda function: register(
+        _wrap_file_target(function, get_bridge, allow_new_document)
+    )
 
 
 def _wrap_file_target(
-    function: Any, get_bridge: Callable[[], Awaitable[Any]] | None = None
+    function: Any,
+    get_bridge: Callable[[], Awaitable[Any]] | None = None,
+    allow_new_document: bool = False,
 ) -> Any:
     target = _FILE_TARGETS.get(function.__name__)
     if target is None:
@@ -94,6 +99,7 @@ def _wrap_file_target(
         path = bound.arguments[field]
         for key in nested:
             path = path.get(key) if isinstance(path, dict) else None
+        create_new = False
         if (
             get_bridge is not None
             and "doc_name" in bound.arguments
@@ -107,12 +113,17 @@ def _wrap_file_target(
             finally:
                 file_review_target.reset(clear_token)
             if active is None:
-                raise ValueError("No active document")
-            bound.arguments["doc_name"] = active.name
+                if not allow_new_document:
+                    raise ValueError("No active document")
+                create_new = True
+            else:
+                bound.arguments["doc_name"] = active.name
         token = file_review_target.set((path, target[1], target[2]) if path else None)
+        document_token = file_review_new_document.set(create_new)
         try:
             return await function(*bound.args, **bound.kwargs)
         finally:
+            file_review_new_document.reset(document_token)
             file_review_target.reset(token)
 
     return reviewed

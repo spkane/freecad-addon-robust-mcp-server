@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 file_review_target: ContextVar[tuple[str, str, str] | None] = ContextVar(
     "file_review_target", default=None
 )
+file_review_new_document: ContextVar[bool] = ContextVar(
+    "file_review_new_document", default=False
+)
 
 
 def ensure_review_result(result: "ExecutionResult") -> "ExecutionResult":

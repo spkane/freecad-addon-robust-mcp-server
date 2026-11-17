@@ -1873,6 +1873,10 @@ async def test_reviewed_macro_delete_removes_link_not_target(
     target = tmp_path / "Original.FCMacro"
     target.write_text("original")
     link = tmp_path / "Demo.FCMacro"
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    other_macro = other_dir / "Demo.FCMacro"
+    other_macro.write_text("other")
     try:
         link.symlink_to(target)
     except OSError:
@@ -1908,7 +1912,7 @@ async def test_reviewed_macro_delete_removes_link_not_target(
 
     def execute(code: str, *, initial_globals: dict[str, str]) -> dict[str, Any]:
         env: dict[str, Any] = dict(initial_globals)
-        env["FreeCAD"] = SimpleNamespace(getUserMacroDir=lambda _create: str(tmp_path))
+        env["FreeCAD"] = SimpleNamespace(getUserMacroDir=lambda _create: str(other_dir))
         exec(code, env)  # noqa: S102 - execute the generated macro deletion
         return {"success": True, "result": env["_result_"]}
 
@@ -1928,6 +1932,7 @@ async def test_reviewed_macro_delete_removes_link_not_target(
     assert broker.result("alice", review_id)["success"]
     assert not link.is_symlink()
     assert target.read_text() == "original"
+    assert other_macro.read_text() == "other"
     broker.close()
 
 
