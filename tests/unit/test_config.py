@@ -16,7 +16,7 @@ class TestServerConfig:
         with mock.patch.dict(os.environ, {}, clear=True):
             config = ServerConfig()
 
-        assert config.mode == FreecadMode.XMLRPC
+        assert config.mode == FreecadMode.SOCKET
         assert config.socket_host == "localhost"
         assert config.socket_port == 9876
         assert config.timeout_ms == 30000
@@ -43,6 +43,11 @@ class TestServerConfig:
             config = ServerConfig()
 
         assert config.mode == FreecadMode.SOCKET
+
+    def test_existing_xmlrpc_configuration_remains_supported(self):
+        """An explicit XML-RPC selection overrides the new default."""
+        with mock.patch.dict(os.environ, {"FREECAD_MODE": "xmlrpc"}, clear=True):
+            assert ServerConfig().mode == FreecadMode.XMLRPC
 
     def test_embedded_mode_requires_explicit_selection(self) -> None:
         """The environment can explicitly opt in to embedded mode."""
@@ -119,13 +124,13 @@ class TestServerConfig:
     def test_working_directory_dotenv_is_not_loaded(self, tmp_path, monkeypatch):
         """A caller's .env cannot change configuration or prevent startup."""
         (tmp_path / ".env").write_text(
-            "FREECAD_MODE=socket\nFREECAD_ALLOW_UNSAFE_CODE=true\nUNRELATED=x\n",
+            "FREECAD_MODE=xmlrpc\nFREECAD_ALLOW_UNSAFE_CODE=true\nUNRELATED=x\n",
             encoding="utf-8",
         )
         monkeypatch.chdir(tmp_path)
         with mock.patch.dict(os.environ, {}, clear=True):
             config = ServerConfig()
-        assert config.mode == FreecadMode.XMLRPC
+        assert config.mode == FreecadMode.SOCKET
         assert config.allow_unsafe_code is False
 
     def test_environment_overrides_ignored_working_directory_dotenv(
