@@ -73,6 +73,7 @@ class TestCleanupForExit:
                 "PySide2.QtCore": mock_qtcore,
                 "PySide6": MagicMock(),
                 "PySide6.QtCore": mock_qtcore,
+                "shiboken2": mock_shiboken6,
                 "shiboken6": mock_shiboken6,
             },
         ):
@@ -211,12 +212,16 @@ class TestCleanupForExit:
         assert mock_queue_timer in calls
         assert mock_status_timer in calls
 
-    def test_cleanup_for_exit_deletes_review_relay_once(self, mock_qt_env):
+    @pytest.mark.parametrize("binding", ["PySide2", "PySide6"])
+    def test_cleanup_for_exit_deletes_review_relay_once(
+        self, mock_qt_env, monkeypatch, binding
+    ):
         """A connected review relay is destroyed before interpreter finalization."""
         _clear_bridge_cache()
 
         from freecad.RobustMCPBridge.freecad_mcp_bridge import server
 
+        monkeypatch.setattr(server, "get_host_qt_binding", lambda: binding)
         plugin = server.FreecadMCPPlugin()
         relay = MagicMock()
         plugin._review_close_relay = relay
