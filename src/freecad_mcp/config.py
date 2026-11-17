@@ -20,6 +20,9 @@ class FreecadMode(str, Enum):
     XMLRPC = "xmlrpc"
 
 
+DEFAULT_FREECAD_MODE = FreecadMode.SOCKET
+
+
 class TransportType(str, Enum):
     """MCP transport type."""
 
@@ -57,7 +60,7 @@ class ServerConfig(BaseSettings):
     )
 
     # FreeCAD connection settings
-    mode: FreecadMode = FreecadMode.SOCKET
+    mode: FreecadMode = DEFAULT_FREECAD_MODE
     freecad_path: Annotated[
         Path | None,
         Field(
@@ -124,6 +127,7 @@ class ServerConfig(BaseSettings):
     allow_file_access: bool = True
     allow_network_access: bool = False
     allow_unsafe_code: bool = False
+    allow_unreviewed_file_operations: bool = False
 
 
 def get_config() -> ServerConfig:
