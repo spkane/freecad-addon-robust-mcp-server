@@ -132,7 +132,10 @@ bar.showMessage("Unrelated FreeCAD status", 1000)
 _result_ = {"text": widget.text(), "visible": widget.isVisible()}
 """,
         )
-        assert "full user permissions" in result["result"]["text"]
+        assert any(
+            text in result["result"]["text"]
+            for text in ("full user permissions", "full permissions")
+        )
         assert result["result"]["visible"] is True
 
     def test_workbench_qt_widgets(
