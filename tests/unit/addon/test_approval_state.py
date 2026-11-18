@@ -511,3 +511,69 @@ def test_claim_expires_during_saved_approval_validation(
     assert request.approve_if_still_valid(validate)
     assert request.consume() is None
     assert request.state == approval_module.ApprovalState.EXPIRED
+
+
+def test_review_dequeue_waits_for_pruning(approval_module: ModuleType) -> None:
+    """A dequeue cannot overtake an earlier pending ticket during pruning."""
+    coordinator = approval_module.ReviewCoordinator(2)
+    payload = approval_module.ApprovalPayload("execute_python", b"pass")
+    stale = coordinator.submit(payload, 10)
+    earlier = coordinator.submit(payload, 10)
+    assert stale.decide(approved=False)
+    removed = threading.Event()
+    resume = threading.Event()
+    original = coordinator._reviews.get_nowait
+
+    def paused_get() -> Any:
+        item = original()
+        if item is earlier:
+            removed.set()
+            assert resume.wait(2)
+        return item
+
+    coordinator._reviews.get_nowait = paused_get
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        submitted = pool.submit(coordinator.submit, payload, 10)
+        assert removed.wait(2)
+        dequeued = pool.submit(coordinator.next_review)
+        assert not dequeued.done()
+        resume.set()
+        later = submitted.result(timeout=2)
+        assert dequeued.result(timeout=2) is earlier
+        assert coordinator.next_review() is later
+    coordinator.close()
+
+
+def test_denial_survives_other_client_admission(approval_module: ModuleType) -> None:
+    """A later admission cannot erase an unread owner-scoped denial."""
+    coordinator = approval_module.ReviewCoordinator(1)
+    broker = approval_module.LeasedReviewBroker(coordinator, 1)
+    payload = approval_module.ApprovalPayload("execute_python", b"pass")
+    first = broker.begin("alice", payload, 10)
+    assert coordinator.next_review().decide(approved=False)
+    broker.begin("bob", payload, 10)
+    assert broker.status("bob", first) is None
+    assert broker.status("alice", first) is approval_module.ApprovalState.DENIED
+    broker.cancel_owner("alice")
+    assert broker.status("alice", first) is None
+    broker.close()
+
+
+def test_denial_retention_does_not_evict_another_owner(
+    approval_module: ModuleType,
+) -> None:
+    """A full denial cache applies backpressure instead of losing a decision."""
+    coordinator = approval_module.ReviewCoordinator(1)
+    broker = approval_module.LeasedReviewBroker(coordinator, 1)
+    payload = approval_module.ApprovalPayload("execute_python", b"pass")
+    first = broker.begin("alice", payload, 10)
+    assert coordinator.next_review().decide(approved=False)
+    second = broker.begin("bob", payload, 10)
+    assert coordinator.next_review().decide(approved=False)
+    with pytest.raises(RuntimeError, match="full"):
+        broker.begin("carol", payload, 10)
+    assert broker.status("alice", first) is approval_module.ApprovalState.DENIED
+    assert broker.status("bob", second) is approval_module.ApprovalState.DENIED
+    broker.cancel_owner("alice")
+    broker.begin("carol", payload, 10)
+    broker.close()

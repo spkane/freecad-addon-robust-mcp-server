@@ -376,14 +376,15 @@ class ReviewCoordinator:
 
     def next_review(self) -> ApprovalRequest | None:
         """Get a still-pending request without waiting; call on the Qt thread."""
-        while True:
-            try:
-                request = self._reviews.get_nowait()
-            except queue.Empty:
-                return None
-            if request.state is ApprovalState.PENDING:
-                return request
-            self._registry.cancel(request)
+        with self._lock:
+            while True:
+                try:
+                    request = self._reviews.get_nowait()
+                except queue.Empty:
+                    return None
+                if request.state is ApprovalState.PENDING:
+                    return request
+                self._registry.cancel(request)
 
     def wait_and_schedule(self, request: ApprovalRequest) -> bool:
         """Wait for a local decision and schedule an inert ticket if approved."""
@@ -451,21 +452,33 @@ class LeasedReviewBroker:
         self._committed: set[str] = set()
         self._running: set[str] = set()
         self._results: dict[str, tuple[float, dict[str, object]]] = {}
+        self._terminal: dict[str, tuple[str, ApprovalState, float]] = {}
         self._lock = threading.Lock()
         self._closed = False
 
     def _expire_locked(self) -> None:
-        for request_id, (_, request) in list(self._entries.items()):
+        now = time.monotonic()
+        for request_id, (_, _, expiry) in list(self._terminal.items()):
+            if now >= expiry:
+                del self._terminal[request_id]
+        for request_id, (owner, request) in list(self._entries.items()):
             if request_id in self._running:
                 continue
             result = self._results.get(request_id)
             if result is not None and time.monotonic() < result[0]:
                 continue
-            if request.state in (
+            state = request.state
+            if state in (
                 ApprovalState.EXPIRED,
                 ApprovalState.DENIED,
                 ApprovalState.CONSUMED,
             ):
+                if state is ApprovalState.DENIED:
+                    if len(self._terminal) >= self._capacity:
+                        # Preserve the denial in the bounded active index until
+                        # a terminal slot expires or its owner disconnects.
+                        continue
+                    self._terminal[request_id] = (owner, state, now + 60)
                 self._coordinator.cancel(request)
                 del self._entries[request_id]
                 self._committed.discard(request_id)
@@ -488,14 +501,27 @@ class LeasedReviewBroker:
             self._entries[request.request_id] = (principal, request)
             return request.request_id
 
+    def _terminal_status_locked(
+        self, principal: str, request_id: str
+    ) -> ApprovalState | None:
+        terminal = self._terminal.get(request_id)
+        if terminal is None or terminal[0] != principal:
+            return None
+        if time.monotonic() >= terminal[2]:
+            del self._terminal[request_id]
+            return None
+        return terminal[1]
+
     def status(self, principal: str, request_id: str) -> ApprovalState | None:
         """Return a request state only to its authenticated owner."""
         if type(principal) is not str or type(request_id) is not str:
             return None
         with self._lock:
             entry = self._entries.get(request_id)
-            if self._closed or entry is None or entry[0] != principal:
+            if self._closed or (entry is not None and entry[0] != principal):
                 return None
+            if entry is None:
+                return self._terminal_status_locked(principal, request_id)
             item = self._results.get(request_id)
             if item is not None:
                 if time.monotonic() >= item[0]:
@@ -544,6 +570,9 @@ class LeasedReviewBroker:
     def cancel_owner(self, principal: str) -> None:
         """Invalidate this connection's unconsumed reviews and queued tickets."""
         with self._lock:
+            for request_id, (owner, _, _) in list(self._terminal.items()):
+                if owner == principal:
+                    del self._terminal[request_id]
             for request_id, (owner, request) in list(self._entries.items()):
                 if owner == principal:
                     self._coordinator.cancel(request)
@@ -594,6 +623,7 @@ class LeasedReviewBroker:
         with self._lock:
             self._closed = True
             self._entries.clear()
+            self._terminal.clear()
             self._committed.clear()
             self._running.clear()
             self._results.clear()
