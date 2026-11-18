@@ -103,6 +103,13 @@ indicator reports those local overrides. For automation and other connection
 modes, setting `FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true` on the MCP
 server explicitly bypasses this review. This server-side override applies to
 all supported file operations and is not visible in the FreeCAD status widget.
+On FreeCAD 1.0, CAM tool shapes are resolved to their actual files before review,
+including named shapes from the working directory or installed CAM shape directory.
+Use an explicit path for a custom shape elsewhere. A compatible workbench
+is required for this review. Tool overrides in reviewed requests are limited to
+scalar properties defined by the shape; nested, file-backed, and unsupported
+property types are rejected. The explicit server override bypasses that restriction
+as well as file review.
 CAM output using job-defined paths or split files cannot yet be reviewed as
 individual targets; use an explicit output path with `split_files=false`, or
 explicitly choose the server-side override.

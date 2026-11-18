@@ -31,7 +31,7 @@ import stat
 import sys
 import traceback
 import warnings
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from pathlib import Path as FsPath
 from typing import Any
 
@@ -633,10 +633,16 @@ def capabilities(_args: dict[str, Any]) -> dict[str, Any]:
         if hasattr(Prefs, "getAssetPath")
         else None,
         "tool_system": "assets" if _has_tool_assets() else "legacy",
+        "reviewed_legacy_tool_overrides": True,
         "freecad_home": FreeCAD.getHomePath(),
         "known_freecad_issues": FREECAD_BUGS,
         "stock_materials": _machining_materials(),
     }
+
+
+def review_capabilities(_args: dict[str, Any]) -> dict[str, bool]:
+    """Report supported review guards without loading the CAM catalog."""
+    return {"reviewed_legacy_tool_overrides": True}
 
 
 def _has_tool_assets() -> bool:
@@ -1329,7 +1335,78 @@ def _tool_bit(doc: Any, tool_spec: dict[str, Any]) -> Any:
     return bit.attach_to_doc(doc=doc)
 
 
-def _legacy_tool_bit(doc: Any, tool_spec: dict[str, Any]) -> Any:
+class _ReviewedLegacyToolError(ValueError):
+    """A rejected reviewed tool whose temporary objects were cleaned up."""
+
+
+def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:
+    """Apply only safe properties after a legacy shape has been reviewed."""
+    # FreeCAD 1.0's CreateFromAttrs passes arbitrary dotted paths to
+    # PathUtil.setProperty, including BitShape, after loading the file.
+    # Validate against the actual shape's properties before setting them.
+    import Path.Base.Util as PathUtil
+    from Path.Tool.Bit import Factory
+
+    for group in (attributes["parameter"], attributes["attribute"]):
+        if not isinstance(group, dict):
+            raise _ReviewedLegacyToolError(
+                "Tool parameters and attributes must be mappings"
+            )
+        for name in group:
+            if (
+                not isinstance(name, str)
+                or "." in name
+                or name in {"BitShape", "BitBody", "File", "Proxy"}
+            ):
+                raise _ReviewedLegacyToolError(
+                    f"Tool property {name!r} cannot be changed in reviewed mode"
+                )
+    bit = Factory.Create("ToolBit", attributes["shape"])
+    try:
+        bit.Label = attributes["name"]
+        allowed_types = {
+            "App::PropertyAngle",
+            "App::PropertyBool",
+            "App::PropertyDistance",
+            "App::PropertyEnumeration",
+            "App::PropertyFloat",
+            "App::PropertyInteger",
+            "App::PropertyLength",
+            "App::PropertyQuantity",
+        }
+        overrides = []
+        for group in (attributes["parameter"], attributes["attribute"]):
+            if not isinstance(group, dict):
+                raise _ReviewedLegacyToolError(
+                    "Tool parameters and attributes must be mappings"
+                )
+            for name, value in group.items():
+                if (
+                    not isinstance(name, str)
+                    or "." in name
+                    or name not in bit.BitPropertyNames
+                    or bit.getTypeIdOfProperty(name) not in allowed_types
+                ):
+                    raise _ReviewedLegacyToolError(
+                        f"Tool property {name!r} cannot be changed in reviewed mode"
+                    )
+                overrides.append((name, value))
+        for name, value in overrides:
+            PathUtil.setProperty(bit, name, value)
+        bit.Proxy._updateBitShape(bit)
+        bit.Proxy.unloadBitBody(bit)
+        return bit
+    except Exception as error:
+        with suppress(Exception):
+            bit.Proxy.unloadBitBody(bit)
+        with suppress(Exception):
+            doc.removeObject(bit.Name)
+        raise _ReviewedLegacyToolError(str(error)) from error
+
+
+def _legacy_tool_bit(
+    doc: Any, tool_spec: dict[str, Any], *, reviewed_shape: bool = False
+) -> Any:
     """Create a tool bit object from a .fctb file or a shape (FreeCAD 1.0)."""
     from Path.Tool.Bit import Factory
 
@@ -1341,15 +1418,17 @@ def _legacy_tool_bit(doc: Any, tool_spec: dict[str, Any]) -> Any:
         return Factory.CreateFrom(tool_spec["bit_file"])
     if "shape" in tool_spec:
         shape = tool_spec["shape"]
-        return Factory.CreateFromAttrs(
-            {
-                "version": 2,
-                "name": tool_spec.get("name") or shape,
-                "shape": shape if shape.endswith(".fcstd") else shape + ".fcstd",
-                "parameter": tool_spec.get("parameters", {}),
-                "attribute": tool_spec.get("attributes", {}),
-            }
-        )
+        attributes = {
+            "version": 2,
+            "name": tool_spec.get("name") or shape,
+            "shape": shape if shape.endswith(".fcstd") else shape + ".fcstd",
+            "parameter": tool_spec.get("parameters", {}),
+            "attribute": tool_spec.get("attributes", {}),
+        }
+        if not reviewed_shape:
+            return Factory.CreateFromAttrs(attributes)
+
+        return _reviewed_legacy_tool_bit(doc, attributes)
     raise ValueError("tool needs one of: library_bit, bit_file, shape")
 
 
@@ -1363,7 +1442,14 @@ def add_tool_controller(args: dict[str, Any]) -> dict[str, Any]:
     if _has_tool_assets():
         tool = _tool_bit(doc, tool_spec)
     else:
-        tool = _legacy_tool_bit(doc, tool_spec)
+        try:
+            tool = _legacy_tool_bit(
+                doc, tool_spec, reviewed_shape=args.get("reviewed_legacy_shape") is True
+            )
+        except _ReviewedLegacyToolError as error:
+            # The helper removed its temporary objects. Return an error value so
+            # FreeCAD commits that cleanup instead of undoing it on abort.
+            return {"reviewed_legacy_tool_error": str(error)}
     number = args.get("tool_number") or job.Proxy.nextToolNumber()
     label = args.get("label") or f"TC: {tool.Label}"
     tc = PathTC.Create(label, tool, number)
@@ -2718,6 +2804,7 @@ CAM_API_VERSION = 1
 _CAM_OPERATIONS = frozenset(
     (
         "capabilities",
+        "review_capabilities",
         "list_tools",
         "analyze_model",
         "create_job",
