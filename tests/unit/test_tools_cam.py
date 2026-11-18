@@ -513,6 +513,26 @@ class TestCamTools:
             await tools["cam_add_tool_controller"](tool={"shape": "custom"})
         assert bridge.execute_python.await_count == 1
 
+    async def test_legacy_tool_shape_with_ambiguous_backslash_fails_closed(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+    ) -> None:
+        tools, bridge = tools_and_bridge
+        bridge.execute_python.return_value = ExecutionResult(
+            success=True,
+            result={
+                "legacy": True,
+                "guard": True,
+                "unsafe_path": True,
+                "path": "/tmp/a\\b.fcstd",
+            },
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+        with pytest.raises(ToolError, match="backslash"):
+            await tools["cam_add_tool_controller"](tool={"shape": "/tmp/a\\b.fcstd"})
+        assert bridge.execute_python.await_count == 1
+
     async def test_legacy_tool_shape_unresolved_fails_closed(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
@@ -696,6 +716,11 @@ def test_reviewed_legacy_tool_rejects_file_and_nested_overrides(
             reviewed_shape=True,
         )
     set_property.assert_not_called()
+    if property_name == "ExternalFile":
+        bit.Proxy.unloadBitBody.assert_called_once_with(bit)
+        document.removeObject.assert_called_once_with(bit.Name)
+    else:
+        factory.Create.assert_not_called()
 
 
 def test_reviewed_legacy_tool_allows_shape_numeric_properties(

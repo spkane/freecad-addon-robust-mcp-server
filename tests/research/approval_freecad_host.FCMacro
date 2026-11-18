@@ -270,15 +270,18 @@ def tick():
                 if request.payload.action in {"run_macro", "file_operation"}:
                     if os.environ.get("MCP_REVIEW_PROBE_CAM") == "1":
                         snapshot = request.payload.file_snapshot
-                        details = " ".join(
+                        details = [
                             item.toPlainText()
                             for item in controller._dialog.findChildren(
                                 QtWidgets.QPlainTextEdit
                             )
-                        )
+                            if "Resolved path:" in item.toPlainText()
+                        ]
                         if (
                             snapshot is None
-                            or snapshot.requested_path not in details
+                            or len(details) != 1
+                            or f"Requested path: {snapshot.requested_path}"
+                            not in details[0].splitlines()
                             or not snapshot.requested_path.endswith("endmill.fcstd")
                         ):
                             raise RuntimeError(

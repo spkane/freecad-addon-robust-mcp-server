@@ -90,6 +90,12 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         code = build_cam_code(func, _drop_none(args), transaction)
         result = await bridge.execute_python(code, timeout_ms=CAM_TIMEOUT_MS)
         if result.success:
+            if (
+                func == "add_tool_controller"
+                and isinstance(result.result, dict)
+                and "reviewed_legacy_tool_error" in result.result
+            ):
+                raise ValueError(str(result.result["reviewed_legacy_tool_error"]))
             return result.result
         detail = result.error_traceback or result.stderr or ""
         last = detail.strip().splitlines()[-1] if detail.strip() else ""
@@ -362,8 +368,10 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 "except ImportError:\n"
                 "    from Path.Tool.Bit import findToolShape as _find_tool_shape\n"
                 f"    _shape_path = _find_tool_shape({shape_file!r})\n"
-                "    _cam_capabilities = _robust_mcp_cam_dispatch(1, 'capabilities', {})\n"
-                "    _result_ = {'legacy': True, 'guard': "
+                "    _cam_capabilities = _robust_mcp_cam_dispatch(1, 'review_capabilities', {})\n"
+                "    _unsafe_path = bool(_shape_path and _cam_os.name != 'nt' "
+                "and chr(92) in _shape_path)\n"
+                "    _result_ = {'legacy': True, 'unsafe_path': _unsafe_path, 'guard': "
                 "_cam_capabilities.get('reviewed_legacy_tool_overrides') is True, 'path': (\n"
                 "        _shape_path if not _shape_path or _cam_os.path.isabs(_shape_path)\n"
                 "        else _cam_os.path.join(_cam_os.getcwd(), _shape_path))}\n"
@@ -378,6 +386,10 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 if resolution.result.get("guard") is not True:
                     raise ToolError(
                         "ReviewUnavailable: update the FreeCAD workbench to review CAM tool shapes"
+                    )
+                if resolution.result.get("unsafe_path") is True:
+                    raise ToolError(
+                        "ReviewUnavailable: CAM shape path contains a backslash"
                     )
                 path = resolution.result.get("path")
                 if not isinstance(path, str) or not path:

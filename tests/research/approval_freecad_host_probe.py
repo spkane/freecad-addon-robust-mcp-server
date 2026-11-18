@@ -194,6 +194,12 @@ async def exercise_legacy_cam(port: int) -> None:
         )
         if abs(float(str(result["diameter"]).split()[0]) - 4.0) > 1e-6:
             raise RuntimeError(f"Unexpected CAM tool diameter: {result}")
+        object_query = (
+            "_result_ = sorted(obj.Name for obj in FreeCAD.ActiveDocument.Objects)"
+        )
+        before = await bridge.execute_python(object_query)
+        if not before.success:
+            raise RuntimeError(before.stderr)
         try:
             await registered["cam_add_tool_controller"](
                 tool={"shape": "endmill", "parameters": {"BitShape": "drill.fcstd"}},
@@ -205,6 +211,22 @@ async def exercise_legacy_cam(port: int) -> None:
                 raise
         else:
             raise RuntimeError("Reviewed CAM tool allowed a shape substitution")
+        try:
+            await registered["cam_add_tool_controller"](
+                tool={"shape": "endmill", "parameters": {"UnknownProperty": 1}},
+                doc_name=document,
+                feeds_speeds="none",
+            )
+        except ValueError as error:
+            if "cannot be changed in reviewed mode" not in str(error):
+                raise
+        else:
+            raise RuntimeError("Reviewed CAM tool allowed an unknown property")
+        after = await bridge.execute_python(object_query)
+        if not after.success or after.result != before.result:
+            raise RuntimeError(
+                f"Rejected CAM tool changed objects: before={before.result}, after={after.result}, error={after.stderr}"
+            )
     finally:
         await bridge.execute_python(
             "if 'CamReviewProbe' in FreeCAD.listDocuments():\n"
@@ -240,6 +262,8 @@ def main() -> None:  # noqa: PLR0912
     args = parser.parse_args()
     if sum((args.manual, args.mcp, args.mcp_http, args.cam_review)) > 1:
         parser.error("Choose only one of --manual, --mcp and --mcp-http")
+    if args.cam_review and args.screenshot:
+        parser.error("--cam-review cannot be combined with --screenshot")
     if args.manual and args.screenshot:
         parser.error("--manual cannot be combined with --screenshot")
     if args.preferences and args.manual:
@@ -408,7 +432,7 @@ def main() -> None:  # noqa: PLR0912
             expected = (
                 ["approved", "approved", "denied", "approved", "approved"]
                 if args.preferences
-                else ["cam-reviewed", "cam-reviewed"]
+                else ["cam-reviewed", "cam-reviewed", "cam-reviewed"]
                 if args.cam_review
                 else ["approved", "denied"]
             )
