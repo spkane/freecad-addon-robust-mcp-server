@@ -362,8 +362,9 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 "except ImportError:\n"
                 "    from Path.Tool.Bit import findToolShape as _find_tool_shape\n"
                 f"    _shape_path = _find_tool_shape({shape_file!r})\n"
-                "    _result_ = {'legacy': True, 'path': "
-                "_cam_os.path.abspath(_shape_path) if _shape_path else None}\n"
+                "    _result_ = {'legacy': True, 'path': (\n"
+                "        _shape_path if not _shape_path or _cam_os.path.isabs(_shape_path)\n"
+                "        else _cam_os.path.join(_cam_os.getcwd(), _shape_path))}\n"
                 "else:\n"
                 "    _result_ = {'legacy': False}\n"
             )
@@ -380,7 +381,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                     if active is None:
                         raise ValueError("No active document")
                     doc_name = active.name
-                tool = {**tool, "shape": path}
+                tool = {**tool, "name": tool.get("name") or shape, "shape": path}
                 token = file_review_target.set((path, "read", "path"))
             elif resolution.result.get("legacy") is not False:
                 raise ToolError("ReviewUnavailable: invalid CAM tool shape resolution")

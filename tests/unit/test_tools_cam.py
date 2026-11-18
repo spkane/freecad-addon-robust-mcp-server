@@ -142,7 +142,10 @@ class TestCamTools:
     """Tests for the registered CAM tools with a mocked bridge."""
 
     @pytest.fixture
-    def tools_and_bridge(self) -> tuple[RegisteredTools, AsyncMock]:
+    def tools_and_bridge(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> tuple[RegisteredTools, AsyncMock]:
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
         registered: RegisteredTools = {}
         mcp = MagicMock()
 
@@ -410,7 +413,10 @@ class TestCamTools:
         }
         assert observed[0][1] is None
         assert observed[1][1] == ("/tmp/custom.fcstd", "read", "path")
-        assert _payload(observed[1][0])["tool"]["shape"] == "/tmp/custom.fcstd"
+        assert _payload(observed[1][0])["tool"] == {
+            "shape": "/tmp/custom.fcstd",
+            "name": "custom",
+        }
         assert _payload(observed[1][0])["doc_name"] == "TestDocument"
         assert file_review_target.get() is None
 
