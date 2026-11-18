@@ -362,7 +362,9 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 "except ImportError:\n"
                 "    from Path.Tool.Bit import findToolShape as _find_tool_shape\n"
                 f"    _shape_path = _find_tool_shape({shape_file!r})\n"
-                "    _result_ = {'legacy': True, 'path': (\n"
+                "    _cam_capabilities = _robust_mcp_cam_dispatch(1, 'capabilities', {})\n"
+                "    _result_ = {'legacy': True, 'guard': "
+                "_cam_capabilities.get('reviewed_legacy_tool_overrides') is True, 'path': (\n"
                 "        _shape_path if not _shape_path or _cam_os.path.isabs(_shape_path)\n"
                 "        else _cam_os.path.join(_cam_os.getcwd(), _shape_path))}\n"
                 "else:\n"
@@ -373,6 +375,10 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                     "ReviewUnavailable: could not resolve the CAM tool shape"
                 )
             if resolution.result.get("legacy") is True:
+                if resolution.result.get("guard") is not True:
+                    raise ToolError(
+                        "ReviewUnavailable: update the FreeCAD workbench to review CAM tool shapes"
+                    )
                 path = resolution.result.get("path")
                 if not isinstance(path, str) or not path:
                     raise ToolError("ReviewUnavailable: CAM tool shape was not found")
@@ -390,6 +396,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 "add_tool_controller",
                 {
                     "tool": tool,
+                    "reviewed_legacy_shape": token is not None,
                     "job_name": job_name,
                     "doc_name": doc_name,
                     "tool_number": tool_number,

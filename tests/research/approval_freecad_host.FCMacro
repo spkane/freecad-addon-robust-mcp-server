@@ -268,6 +268,23 @@ def tick():
             if request.request_id not in seen:
                 seen.add(request.request_id)
                 if request.payload.action in {"run_macro", "file_operation"}:
+                    if os.environ.get("MCP_REVIEW_PROBE_CAM") == "1":
+                        snapshot = request.payload.file_snapshot
+                        details = " ".join(
+                            item.toPlainText()
+                            for item in controller._dialog.findChildren(
+                                QtWidgets.QPlainTextEdit
+                            )
+                        )
+                        if (
+                            snapshot is None
+                            or snapshot.requested_path not in details
+                            or not snapshot.requested_path.endswith("endmill.fcstd")
+                        ):
+                            raise RuntimeError(
+                                "CAM review dialog omitted the selected tool shape"
+                            )
+                        results.append("cam-reviewed")
                     controller._dialog.accept()
                 elif request.payload.content == example_code.encode() and not (
                     port_file and results

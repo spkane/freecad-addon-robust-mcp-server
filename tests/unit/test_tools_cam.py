@@ -399,7 +399,7 @@ class TestCamTools:
         async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
             observed.append((code, file_review_target.get()))
             result = (
-                {"legacy": True, "path": "/tmp/custom.fcstd"}
+                {"legacy": True, "guard": True, "path": "/tmp/custom.fcstd"}
                 if len(observed) == 1
                 else {"ok": True}
             )
@@ -418,6 +418,7 @@ class TestCamTools:
             "name": "custom",
         }
         assert _payload(observed[1][0])["doc_name"] == "TestDocument"
+        assert _payload(observed[1][0])["reviewed_legacy_shape"] is True
         assert file_review_target.get() is None
 
     async def test_legacy_shape_resolution_preserves_symlink_parent_semantics(
@@ -459,7 +460,11 @@ class TestCamTools:
         async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
             observed.append((code, file_review_target.get()))
             if len(observed) == 1:
-                namespace: dict[str, Any] = {}
+                namespace: dict[str, Any] = {
+                    "_robust_mcp_cam_dispatch": lambda *_args: {
+                        "reviewed_legacy_tool_overrides": True
+                    }
+                }
                 exec(compile(code, "<shape-resolution>", "exec"), namespace)  # noqa: S102
                 result = namespace["_result_"]
             else:
@@ -475,13 +480,43 @@ class TestCamTools:
         assert reviewed[0] == str(root / "link/../shape.fcstd")
         assert _payload(observed[1][0])["tool"]["shape"] == reviewed[0]
 
+    async def test_explicit_file_review_override_preserves_legacy_shape_dispatch(
+        self,
+        tools_and_bridge: tuple[RegisteredTools, AsyncMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        tools, bridge = tools_and_bridge
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+        await tools["cam_add_tool_controller"](
+            tool={"shape": "endmill", "parameters": {"Diameter": "4 mm"}}
+        )
+        bridge.execute_python.assert_awaited_once()
+        payload = _payload(bridge.execute_python.await_args.args[0])
+        assert payload["tool"]["shape"] == "endmill"
+        assert payload["reviewed_legacy_shape"] is False
+
+    async def test_older_bridge_without_legacy_guard_fails_closed(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+    ) -> None:
+        tools, bridge = tools_and_bridge
+        bridge.execute_python.return_value = ExecutionResult(
+            success=True,
+            result={"legacy": True, "path": "/tmp/custom.fcstd"},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+        with pytest.raises(ToolError, match="update the FreeCAD workbench"):
+            await tools["cam_add_tool_controller"](tool={"shape": "custom"})
+        assert bridge.execute_python.await_count == 1
+
     async def test_legacy_tool_shape_unresolved_fails_closed(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
         tools, bridge = tools_and_bridge
         bridge.execute_python.return_value = ExecutionResult(
             success=True,
-            result={"legacy": True, "path": None},
+            result={"legacy": True, "guard": True, "path": None},
             stdout="",
             stderr="",
             execution_time_ms=1,
@@ -610,6 +645,94 @@ def runtime(monkeypatch: pytest.MonkeyPatch) -> Any:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.mark.parametrize("group", ["parameters", "attributes"])
+@pytest.mark.parametrize(
+    "property_name", ["BitShape", "Proxy.obj.BitShape", "ExternalFile"]
+)
+def test_reviewed_legacy_tool_rejects_file_and_nested_overrides(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, property_name: str, group: str
+) -> None:
+    import sys
+    from types import ModuleType
+
+    freecad = sys.modules["FreeCAD"]
+    document = freecad.ActiveDocument
+    bit = MagicMock()
+    bit.BitPropertyNames = ["Diameter", "ExternalFile"]
+    bit.getTypeIdOfProperty.side_effect = lambda name: {
+        "Diameter": "App::PropertyLength",
+        "ExternalFile": "App::PropertyFile",
+    }[name]
+    factory = MagicMock()
+    factory.Create.return_value = bit
+    path_module = ModuleType("Path")
+    path_module.__path__ = []
+    tool_module = ModuleType("Path.Tool")
+    tool_module.__path__ = []
+    bit_module = ModuleType("Path.Tool.Bit")
+    bit_module.__dict__["Factory"] = factory
+    base_module = ModuleType("Path.Base")
+    base_module.__path__ = []
+    util_module = ModuleType("Path.Base.Util")
+    set_property = MagicMock()
+    util_module.__dict__["setProperty"] = set_property
+    for name, module in {
+        "Path": path_module,
+        "Path.Tool": tool_module,
+        "Path.Tool.Bit": bit_module,
+        "Path.Base": base_module,
+        "Path.Base.Util": util_module,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    with pytest.raises(ValueError, match="cannot be changed"):
+        runtime._legacy_tool_bit(
+            document,
+            {"shape": "/tmp/tool.fcstd", group: {property_name: "other.fcstd"}},
+            reviewed_shape=True,
+        )
+    set_property.assert_not_called()
+
+
+def test_reviewed_legacy_tool_allows_shape_numeric_properties(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sys
+    from types import ModuleType
+
+    document = sys.modules["FreeCAD"].ActiveDocument
+    bit = MagicMock()
+    bit.BitPropertyNames = ["Diameter"]
+    bit.getTypeIdOfProperty.return_value = "App::PropertyLength"
+    factory = MagicMock()
+    factory.Create.return_value = bit
+    modules = {
+        name: ModuleType(name)
+        for name in (
+            "Path",
+            "Path.Tool",
+            "Path.Tool.Bit",
+            "Path.Base",
+            "Path.Base.Util",
+        )
+    }
+    for name in ("Path", "Path.Tool", "Path.Base"):
+        modules[name].__path__ = []
+    modules["Path.Tool.Bit"].__dict__["Factory"] = factory
+    set_property = MagicMock()
+    modules["Path.Base.Util"].__dict__["setProperty"] = set_property
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    assert (
+        runtime._legacy_tool_bit(
+            document,
+            {"shape": "/tmp/tool.fcstd", "parameters": {"Diameter": "4 mm"}},
+            reviewed_shape=True,
+        )
+        is bit
+    )
+    set_property.assert_called_once_with(bit, "Diameter", "4 mm")
 
 
 def test_dispatch_rejects_incompatible_version_and_unknown_operation(
