@@ -225,10 +225,16 @@ class TestCleanupForExit:
         plugin = server.FreecadMCPPlugin()
         relay = MagicMock()
         plugin._review_close_relay = relay
-        mock_qt_env["shiboken_delete"].reset_mock()
-        plugin._cleanup_for_exit()
-        plugin._cleanup_for_exit()
-        mock_qt_env["shiboken_delete"].assert_called_once_with(relay)
+        shiboken2 = MagicMock()
+        shiboken6 = MagicMock()
+        with patch.dict(sys.modules, {"shiboken2": shiboken2, "shiboken6": shiboken6}):
+            plugin._cleanup_for_exit()
+            plugin._cleanup_for_exit()
+        selected, other = (
+            (shiboken2, shiboken6) if binding == "PySide2" else (shiboken6, shiboken2)
+        )
+        selected.delete.assert_called_once_with(relay)
+        other.delete.assert_not_called()
         assert plugin._review_close_relay is None
 
     def test_cleanup_for_exit_does_not_use_delete_later(self, mock_qt_env):
