@@ -420,6 +420,61 @@ class TestCamTools:
         assert _payload(observed[1][0])["doc_name"] == "TestDocument"
         assert file_review_target.get() is None
 
+    async def test_legacy_shape_resolution_preserves_symlink_parent_semantics(
+        self,
+        tools_and_bridge: tuple[RegisteredTools, AsyncMock],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import os
+        import sys
+        from types import ModuleType
+
+        from freecad_mcp.bridge.file_review import file_review_target
+
+        root = tmp_path / "root"
+        root.mkdir()
+        target_dir = tmp_path / "target"
+        (target_dir / "subdir").mkdir(parents=True)
+        (target_dir / "shape.fcstd").write_text("target")
+        try:
+            (root / "link").symlink_to(target_dir / "subdir", target_is_directory=True)
+        except OSError:
+            pytest.skip("Directory symlinks are unavailable on this host")
+        monkeypatch.chdir(root)
+        path_package = ModuleType("Path")
+        path_package.__path__ = []
+        tool_package = ModuleType("Path.Tool")
+        tool_package.__path__ = []
+        bit_module = ModuleType("Path.Tool.Bit")
+        bit_module.__dict__["findToolShape"] = lambda name: (
+            name if os.path.exists(name) else None
+        )
+        monkeypatch.setitem(sys.modules, "Path", path_package)
+        monkeypatch.setitem(sys.modules, "Path.Tool", tool_package)
+        monkeypatch.setitem(sys.modules, "Path.Tool.Bit", bit_module)
+        tools, bridge = tools_and_bridge
+        observed = []
+
+        async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
+            observed.append((code, file_review_target.get()))
+            if len(observed) == 1:
+                namespace: dict[str, Any] = {}
+                exec(compile(code, "<shape-resolution>", "exec"), namespace)  # noqa: S102
+                result = namespace["_result_"]
+            else:
+                result = {"ok": True}
+            return ExecutionResult(
+                success=True, result=result, stdout="", stderr="", execution_time_ms=1
+            )
+
+        bridge.execute_python.side_effect = execute
+        await tools["cam_add_tool_controller"](tool={"shape": "link/../shape"})
+        reviewed = observed[1][1]
+        assert reviewed is not None
+        assert reviewed[0] == str(root / "link/../shape.fcstd")
+        assert _payload(observed[1][0])["tool"]["shape"] == reviewed[0]
+
     async def test_legacy_tool_shape_unresolved_fails_closed(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
