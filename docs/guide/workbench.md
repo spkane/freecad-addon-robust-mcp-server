@@ -126,9 +126,9 @@ Press Ctrl+C to stop.
 | ------------------------ | -------- | ------------- |
 | Object creation          | Yes      | Yes           |
 | Boolean operations       | Yes      | Yes           |
-| Export (STEP, STL, etc.) | Yes      | Yes           |
+| Export (STEP, STL, etc.) | Yes      | See below     |
 | MCP macro execution      | Socket   | **No**        |
-| Document management      | Yes      | Yes           |
+| Document management      | Yes      | See below     |
 | Screenshots              | Yes      | **No**        |
 | Object colors            | Yes      | **No**        |
 | Object visibility        | Yes      | **No**        |
@@ -137,6 +137,11 @@ Press Ctrl+C to stop.
 
 MCP macro execution also requires unsafe tools to be enabled and is reviewed
 in FreeCAD by default. See [macro review](security.md#macro-review-and-saved-versions).
+
+In headless mode, supported file operations, including opening, saving, and
+exporting documents, require `FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true`.
+This explicit override bypasses local file review; other document operations do
+not require it. See the [security guide](security.md) for coverage and limitations.
 
 !!! info "GUI-Only Features"
 When a GUI-only feature is requested in headless mode, the Robust MCP Server returns a structured error response instead of crashing: `{"success": false, "error": "GUI not available - screenshots cannot be captured in headless mode"}`
