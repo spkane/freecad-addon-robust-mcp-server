@@ -522,6 +522,7 @@ def test_review_dequeue_waits_for_pruning(approval_module: ModuleType) -> None:
     assert stale.decide(approved=False)
     removed = threading.Event()
     resume = threading.Event()
+    dequeue_started = threading.Event()
     original = coordinator._reviews.get_nowait
 
     def paused_get() -> Any:
@@ -532,10 +533,16 @@ def test_review_dequeue_waits_for_pruning(approval_module: ModuleType) -> None:
         return item
 
     coordinator._reviews.get_nowait = paused_get
+
+    def dequeue() -> Any:
+        dequeue_started.set()
+        return coordinator.next_review()
+
     with ThreadPoolExecutor(max_workers=2) as pool:
         submitted = pool.submit(coordinator.submit, payload, 10)
         assert removed.wait(2)
-        dequeued = pool.submit(coordinator.next_review)
+        dequeued = pool.submit(dequeue)
+        assert dequeue_started.wait(2)
         assert not dequeued.done()
         resume.set()
         later = submitted.result(timeout=2)
