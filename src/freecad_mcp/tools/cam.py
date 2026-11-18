@@ -341,25 +341,72 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             feeds_speeds (what the lookup found and whether it was applied),
             properties.
         """
-        return await run(
-            "add_tool_controller",
-            {
-                "tool": tool,
-                "job_name": job_name,
-                "doc_name": doc_name,
-                "tool_number": tool_number,
-                "label": label,
-                "spindle_speed": spindle_speed,
-                "spindle_dir": spindle_dir,
-                "horiz_feed": horiz_feed,
-                "vert_feed": vert_feed,
-                "properties": properties,
-                "expressions": expressions,
-                "feeds_speeds": feeds_speeds,
-                "op_type": op_type,
-            },
-            "Add Tool Controller",
-        )
+        from freecad_mcp.config import get_config
+
+        token = None
+        if (
+            "shape" in tool
+            and "bit_file" not in tool
+            and "library_bit" not in tool
+            and not get_config().allow_unreviewed_file_operations
+        ):
+            shape = tool["shape"]
+            if not isinstance(shape, str) or not shape:
+                raise ValueError("Tool shape must be a nonempty string")
+            shape_file = shape if shape.endswith(".fcstd") else shape + ".fcstd"
+            bridge = await get_bridge()
+            resolution = await bridge.execute_python(
+                "import os as _cam_os\n"
+                "try:\n"
+                "    from Path.Tool import cam_assets as _cam_assets\n"
+                "except ImportError:\n"
+                "    from Path.Tool.Bit import findToolShape as _find_tool_shape\n"
+                f"    _shape_path = _find_tool_shape({shape_file!r})\n"
+                "    _result_ = {'legacy': True, 'path': "
+                "_cam_os.path.abspath(_shape_path) if _shape_path else None}\n"
+                "else:\n"
+                "    _result_ = {'legacy': False}\n"
+            )
+            if not resolution.success or not isinstance(resolution.result, dict):
+                raise ToolError(
+                    "ReviewUnavailable: could not resolve the CAM tool shape"
+                )
+            if resolution.result.get("legacy") is True:
+                path = resolution.result.get("path")
+                if not isinstance(path, str) or not path:
+                    raise ToolError("ReviewUnavailable: CAM tool shape was not found")
+                if not doc_name:
+                    active = await bridge.get_active_document()
+                    if active is None:
+                        raise ValueError("No active document")
+                    doc_name = active.name
+                tool = {**tool, "shape": path}
+                token = file_review_target.set((path, "read", "path"))
+            elif resolution.result.get("legacy") is not False:
+                raise ToolError("ReviewUnavailable: invalid CAM tool shape resolution")
+        try:
+            return await run(
+                "add_tool_controller",
+                {
+                    "tool": tool,
+                    "job_name": job_name,
+                    "doc_name": doc_name,
+                    "tool_number": tool_number,
+                    "label": label,
+                    "spindle_speed": spindle_speed,
+                    "spindle_dir": spindle_dir,
+                    "horiz_feed": horiz_feed,
+                    "vert_feed": vert_feed,
+                    "properties": properties,
+                    "expressions": expressions,
+                    "feeds_speeds": feeds_speeds,
+                    "op_type": op_type,
+                },
+                "Add Tool Controller",
+            )
+        finally:
+            if token is not None:
+                file_review_target.reset(token)
 
     @mcp.tool()
     async def cam_feeds_speeds(

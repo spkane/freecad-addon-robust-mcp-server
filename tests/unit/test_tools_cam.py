@@ -191,6 +191,17 @@ class TestCamTools:
         runtime: Any,
     ) -> None:
         tools, bridge = tools_and_bridge
+        if tool_name == "cam_add_tool_controller":
+            bridge.execute_python.side_effect = [
+                ExecutionResult(
+                    success=True,
+                    result={"legacy": False},
+                    stdout="",
+                    stderr="",
+                    execution_time_ms=1,
+                ),
+                bridge.execute_python.return_value,
+            ]
         assert await tools[tool_name](**TOOL_ARGS[tool_name]) == {"ok": True}
         code = bridge.execute_python.call_args.args[0]
         assert _called_function(code) in _runtime_functions()
@@ -373,6 +384,50 @@ class TestCamTools:
         await tools["cam_set_stock"](material="Steel-Generic")
         payload = _payload(bridge.execute_python.call_args.args[0])
         assert payload == {"material": "Steel-Generic"}
+
+    async def test_legacy_tool_shape_review_binds_resolved_path(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+    ) -> None:
+        from freecad_mcp.bridge.file_review import file_review_target
+
+        tools, bridge = tools_and_bridge
+        observed = []
+
+        async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
+            observed.append((code, file_review_target.get()))
+            result = (
+                {"legacy": True, "path": "/tmp/custom.fcstd"}
+                if len(observed) == 1
+                else {"ok": True}
+            )
+            return ExecutionResult(
+                success=True, result=result, stdout="", stderr="", execution_time_ms=1
+            )
+
+        bridge.execute_python.side_effect = execute
+        assert await tools["cam_add_tool_controller"](tool={"shape": "custom"}) == {
+            "ok": True
+        }
+        assert observed[0][1] is None
+        assert observed[1][1] == ("/tmp/custom.fcstd", "read", "path")
+        assert _payload(observed[1][0])["tool"]["shape"] == "/tmp/custom.fcstd"
+        assert _payload(observed[1][0])["doc_name"] == "TestDocument"
+        assert file_review_target.get() is None
+
+    async def test_legacy_tool_shape_unresolved_fails_closed(
+        self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
+    ) -> None:
+        tools, bridge = tools_and_bridge
+        bridge.execute_python.return_value = ExecutionResult(
+            success=True,
+            result={"legacy": True, "path": None},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+        with pytest.raises(ToolError, match="ReviewUnavailable"):
+            await tools["cam_add_tool_controller"](tool={"shape": "/tmp/missing.fcstd"})
+        assert bridge.execute_python.await_count == 1
 
     async def test_add_tool_controller_uses_presets_by_default(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
