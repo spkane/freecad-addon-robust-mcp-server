@@ -4,6 +4,7 @@ The CAM tools call the versioned dispatcher installed with the bridge.
 """
 
 import ast
+import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
@@ -442,6 +443,8 @@ class TestCamTools:
             (root / "link").symlink_to(target_dir / "subdir", target_is_directory=True)
         except OSError:
             pytest.skip("Directory symlinks are unavailable on this host")
+        if not await asyncio.to_thread(os.path.exists, root / "link/../shape.fcstd"):
+            pytest.skip("This host resolves parent segments before symlinks")
         monkeypatch.chdir(root)
         path_package = ModuleType("Path")
         path_package.__path__ = []
