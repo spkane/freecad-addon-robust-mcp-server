@@ -1659,10 +1659,10 @@ async def test_review_preference_bypass_runs_only_on_review_protocol(
 
 
 @pytest.mark.asyncio
-async def test_oversized_review_is_rejected_before_dispatch(
+async def test_client_rejects_oversized_review_before_dispatch(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An oversized authenticated review never reaches the local broker."""
+    """The client frame limit prevents an oversized review reaching the broker."""
     auth = importlib.import_module("freecad_mcp_bridge.authentication")
     approval = importlib.import_module("freecad_mcp_bridge.approval")
     secret = b"a" * 32

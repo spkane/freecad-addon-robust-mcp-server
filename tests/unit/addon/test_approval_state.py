@@ -278,15 +278,24 @@ def test_coordinator_decision_schedules_exact_payload(
 
 
 def test_coordinator_shutdown_wakes_waiter_without_execution(
-    approval_module: ModuleType,
+    approval_module: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A waiting worker exits promptly when the coordinator closes."""
     coordinator = approval_module.ReviewCoordinator(1)
     request = coordinator.submit(
         approval_module.ApprovalPayload("execute_python", b"pass"), 30
     )
+    waiting_started = threading.Event()
+    original_wait = request._decision_event.wait
+
+    def observed_wait(timeout: float | None = None) -> bool:
+        waiting_started.set()
+        return original_wait(timeout)
+
+    monkeypatch.setattr(request._decision_event, "wait", observed_wait)
     with ThreadPoolExecutor(max_workers=1) as executor:
         waiting = executor.submit(coordinator.wait_and_schedule, request)
+        assert waiting_started.wait(2)
         coordinator.close()
         assert not waiting.result(timeout=2)
     assert coordinator.next_execution() is None
