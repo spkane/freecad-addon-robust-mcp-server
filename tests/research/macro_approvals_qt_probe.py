@@ -44,13 +44,15 @@ def main() -> None:
             approvals.MacroApproval(str(root / f"macro-{i}.FCMacro"), f"{i:064x}")
             for i in range(40)
         ]
+        other_version = approvals.MacroApproval(items[2].path, f"{40:064x}")
+        items.append(other_version)
         for item in items:
             store.add(item)
         widget = widget_module.MacroApprovalsWidget(store=store)
         widget.resize(700, 250)
         widget.show()
         app.processEvents()
-        assert widget.table.rowCount() == 40
+        assert widget.table.rowCount() == 41
         assert widget.table.verticalScrollBar().maximum() > 0
         selected_row = next(
             row
@@ -82,7 +84,8 @@ def main() -> None:
         assert coordinator.wait_and_schedule(pending)
         widget.remove_selected()
         assert coordinator.next_execution() is None
-        assert widget.table.rowCount() == 39 and not store.contains(items[2])
+        assert widget.table.rowCount() == 40 and not store.contains(items[2])
+        assert store.contains(other_version)
         assert store.contains(items[1])
         pending = coordinator.submit(
             approval.ApprovalPayload(

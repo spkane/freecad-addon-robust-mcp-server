@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 
-def serve_http(http_port: int, bridge_port: int) -> None:
+def serve_http(http_port: int, bridge_port: int, secret: bytes) -> None:
     """Serve the actual execution tool on a disposable loopback endpoint."""
     from approval_manual_mcp import ExampleBridge
     from mcp.server.mcpserver import MCPServer
@@ -35,7 +35,7 @@ def serve_http(http_port: int, bridge_port: int) -> None:
         host="127.0.0.1",
         port=bridge_port,
         client_id="probe",
-        signer=create_hmac_signer(b"x" * 32),
+        signer=create_hmac_signer(secret),
     )
 
     async def get_bridge():
@@ -46,7 +46,7 @@ def serve_http(http_port: int, bridge_port: int) -> None:
     server.run("streamable-http", host="127.0.0.1", port=http_port)
 
 
-async def exercise_http(bridge_port: int) -> None:
+async def exercise_http(bridge_port: int, secret: bytes) -> None:
     """Test legacy and modern MCP HTTP sessions against the live bridge."""
     from mcp.client import Client
     from mcp.types import TextContent
@@ -55,7 +55,7 @@ async def exercise_http(bridge_port: int) -> None:
         listener.bind(("127.0.0.1", 0))
         http_port = listener.getsockname()[1]
     process = multiprocessing.get_context("spawn").Process(
-        target=serve_http, args=(http_port, bridge_port)
+        target=serve_http, args=(http_port, bridge_port, secret)
     )
     process.start()
     try:
@@ -101,7 +101,7 @@ async def exercise_http(bridge_port: int) -> None:
             await asyncio.to_thread(process.join)
 
 
-async def exercise_mcp(port: int, profile: Path) -> None:
+async def exercise_mcp(port: int, profile: Path, secret: bytes) -> None:
     """Call the actual MCP tool over stdio against the live bridge."""
     from mcp import StdioServerParameters
     from mcp.client import Client
@@ -110,7 +110,7 @@ async def exercise_mcp(port: int, profile: Path) -> None:
     connection = profile / "connection.json"
     fd = os.open(connection, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
-        json.dump({"port": port, "secret": "78" * 32}, stream)
+        json.dump({"port": port, "secret": secret.hex()}, stream)
     parameters = StdioServerParameters(
         command=sys.executable,
         args=[str(Path(__file__).with_name("approval_manual_mcp.py")), str(connection)],
@@ -138,6 +138,104 @@ async def exercise_mcp(port: int, profile: Path) -> None:
                 raise RuntimeError(f"Unexpected denial result: {payload}")
 
 
+async def exercise_legacy_cam(port: int, secret: bytes) -> None:
+    """Exercise reviewed CAM shape creation against the live legacy bridge."""
+    from unittest.mock import MagicMock
+
+    from freecad_mcp.bridge.authentication import create_hmac_signer
+    from freecad_mcp.bridge.socket import SocketBridge
+    from freecad_mcp.tools.cam import register_cam_tools
+
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="probe",
+        signer=create_hmac_signer(secret),
+    )
+    await bridge.connect()
+    try:
+        result = await bridge.execute_python(
+            "import FreeCAD, Part\n"
+            "doc = FreeCAD.newDocument('CamReviewProbe')\n"
+            "part = doc.addObject('Part::Feature', 'Part')\n"
+            "part.Shape = Part.makeBox(20, 20, 10)\n"
+            "doc.recompute()\n"
+            "_result_ = doc.Name\n"
+        )
+        if not result.success:
+            raise RuntimeError(result.stderr)
+        document = result.result
+        registered = {}
+        mcp = MagicMock()
+
+        def register(**_kwargs):
+            def decorator(function):
+                registered[function.__name__] = function
+                return function
+
+            return decorator
+
+        mcp.tool = register
+
+        async def get_bridge():
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        await registered["cam_create_job"](
+            model_objects=["Part"],
+            doc_name=document,
+            template="",
+            default_tool_controller=False,
+        )
+        result = await registered["cam_add_tool_controller"](
+            tool={"shape": "endmill", "parameters": {"Diameter": "4 mm"}},
+            doc_name=document,
+            feeds_speeds="none",
+        )
+        if abs(float(str(result["diameter"]).split()[0]) - 4.0) > 1e-6:
+            raise RuntimeError(f"Unexpected CAM tool diameter: {result}")
+        object_query = (
+            "_result_ = sorted(obj.Name for obj in FreeCAD.ActiveDocument.Objects)"
+        )
+        before = await bridge.execute_python(object_query)
+        if not before.success:
+            raise RuntimeError(before.stderr)
+        try:
+            await registered["cam_add_tool_controller"](
+                tool={"shape": "endmill", "parameters": {"BitShape": "drill.fcstd"}},
+                doc_name=document,
+                feeds_speeds="none",
+            )
+        except ValueError as error:
+            if "cannot be changed in reviewed mode" not in str(error):
+                raise
+        else:
+            raise RuntimeError("Reviewed CAM tool allowed a shape substitution")
+        try:
+            await registered["cam_add_tool_controller"](
+                tool={"shape": "endmill", "parameters": {"UnknownProperty": 1}},
+                doc_name=document,
+                feeds_speeds="none",
+            )
+        except ValueError as error:
+            if "cannot be changed in reviewed mode" not in str(error):
+                raise
+        else:
+            raise RuntimeError("Reviewed CAM tool allowed an unknown property")
+        after = await bridge.execute_python(object_query)
+        if not after.success or after.result != before.result:
+            raise RuntimeError(
+                f"Rejected CAM tool changed objects: before={before.result}, after={after.result}, error={after.stderr}"
+            )
+    finally:
+        await bridge.execute_python(
+            "if 'CamReviewProbe' in FreeCAD.listDocuments():\n"
+            "    FreeCAD.closeDocument('CamReviewProbe')\n"
+            "_result_ = True\n"
+        )
+        await bridge.disconnect()
+
+
 def main() -> None:  # noqa: PLR0912
     """Run the host probe and clean up the process and profile on any failure."""
     parser = argparse.ArgumentParser()
@@ -149,6 +247,9 @@ def main() -> None:  # noqa: PLR0912
         help="Save actual macro review and preferences screenshots in this directory",
     )
     parser.add_argument("--mcp", action="store_true", help="Exercise an MCP SDK client")
+    parser.add_argument(
+        "--cam-review", action="store_true", help="Exercise reviewed legacy CAM shapes"
+    )
     parser.add_argument("--mcp-http", action="store_true", help="Exercise MCP HTTP")
     parser.add_argument(
         "--preferences", action="store_true", help="Exercise the real preferences panel"
@@ -159,13 +260,15 @@ def main() -> None:  # noqa: PLR0912
         help="Keep an isolated profile for client testing",
     )
     args = parser.parse_args()
-    if sum((args.manual, args.mcp, args.mcp_http)) > 1:
+    if sum((args.manual, args.mcp, args.mcp_http, args.cam_review)) > 1:
         parser.error("Choose only one of --manual, --mcp and --mcp-http")
+    if args.cam_review and args.screenshot:
+        parser.error("--cam-review cannot be combined with --screenshot")
     if args.manual and args.screenshot:
         parser.error("--manual cannot be combined with --screenshot")
     if args.preferences and args.manual:
         parser.error("--preferences cannot be combined with --manual")
-    if args.preferences and (args.mcp or args.mcp_http):
+    if args.preferences and (args.mcp or args.mcp_http or args.cam_review):
         parser.error("--preferences cannot be combined with --mcp or --mcp-http")
     project = Path(__file__).resolve().parents[2]
     macro = Path(__file__).with_name("approval_freecad_host.FCMacro")
@@ -174,6 +277,7 @@ def main() -> None:  # noqa: PLR0912
         (profile / "data").mkdir()
         (profile / "temp").mkdir()
         result_path = profile / "result.json"
+        secret = secrets.token_bytes(32)
         env = os.environ.copy()
         env.update(
             FREECAD_USER_DATA=str(profile / "data"),
@@ -181,6 +285,7 @@ def main() -> None:  # noqa: PLR0912
             FREECAD_MCP_TESTING="1",
             MCP_REVIEW_PROBE_ADDON=str(project / "freecad" / "RobustMCPBridge"),
             MCP_REVIEW_PROBE_RESULT=str(result_path),
+            MCP_REVIEW_PROBE_SECRET=secret.hex(),
         )
         if args.screenshot:
             env["MCP_REVIEW_PROBE_SCREENSHOT"] = str(profile / "review.png")
@@ -193,12 +298,14 @@ def main() -> None:  # noqa: PLR0912
             env["MCP_MACRO_PREFERENCES_SCREENSHOT"] = str(
                 profile / "macro-preferences.png"
             )
-        if args.mcp or args.mcp_http or args.manual:
+        if args.mcp or args.mcp_http or args.manual or args.cam_review:
             env["MCP_REVIEW_PROBE_PORT"] = str(profile / "port")
             env["MCP_REVIEW_PROBE_DONE"] = str(profile / "done")
+        if args.cam_review:
+            env["MCP_REVIEW_PROBE_CAM"] = "1"
+            os.environ["FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS"] = "false"
         if args.manual:
             env["MCP_REVIEW_PROBE_MANUAL"] = "1"
-            env["MCP_REVIEW_PROBE_SECRET"] = secrets.token_hex(32)
         command = [
             args.binary,
             "--user-cfg",
@@ -211,13 +318,21 @@ def main() -> None:  # noqa: PLR0912
             command, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         try:
-            if args.mcp or args.mcp_http or args.manual:
+            if args.mcp or args.mcp_http or args.manual or args.cam_review:
                 deadline = time.monotonic() + 25
                 while not (profile / "port").is_file() and time.monotonic() < deadline:
                     if process.poll() is not None:
+                        if result_path.is_file():
+                            raise RuntimeError(
+                                f"FreeCAD host probe startup failed: {result_path.read_text()}"
+                            )
                         raise RuntimeError("FreeCAD exited before opening the bridge")
                     time.sleep(0.05)
                 if not (profile / "port").is_file():
+                    if result_path.is_file():
+                        raise RuntimeError(
+                            f"FreeCAD host probe startup failed: {result_path.read_text()}"
+                        )
                     raise RuntimeError("FreeCAD did not open the bridge in time")
                 port = int((profile / "port").read_text())
                 if args.manual:
@@ -307,9 +422,11 @@ def main() -> None:  # noqa: PLR0912
                     return
                 try:
                     if args.mcp_http:
-                        asyncio.run(exercise_http(port))
+                        asyncio.run(exercise_http(port, secret))
+                    elif args.cam_review:
+                        asyncio.run(exercise_legacy_cam(port, secret))
                     else:
-                        asyncio.run(exercise_mcp(port, profile))
+                        asyncio.run(exercise_mcp(port, profile, secret))
                 finally:
                     (profile / "done").touch()
             try:
@@ -322,15 +439,17 @@ def main() -> None:  # noqa: PLR0912
                 )
             result = json.loads(result_path.read_text())
             expected = (
-                ["approved", "approved", "denied", "approved"]
+                ["approved", "approved", "denied", "approved", "approved"]
                 if args.preferences
+                else ["cam-reviewed", "cam-reviewed", "cam-reviewed"]
+                if args.cam_review
                 else ["approved", "denied"]
             )
             if result.get("errors") or result.get("results") != expected:
                 raise RuntimeError(f"FreeCAD review probe failed: {result}")
             if args.preferences and result.get("preferences_tested") is not True:
                 raise RuntimeError(f"FreeCAD preferences probe failed: {result}")
-            if args.preferences and result.get("seen") != 3:
+            if args.preferences and result.get("seen") != 4:
                 raise RuntimeError(f"Unexpected Python or macro dialog count: {result}")
             if args.macro_screenshots:
                 args.macro_screenshots.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 """Exercise the prototype review dialog using a real offscreen PySide6 GUI.
 
-Run in a disposable process with ``QT_QPA_PLATFORM=offscreen uv run python
+Run in a disposable process with ``QT_QPA_PLATFORM=offscreen uv run --with PySide6 python
  tests/research/approval_qt_probe.py``. This tests the Python environment's Qt,
 not the Qt bundled with an actual FreeCAD host.
 """
@@ -17,6 +17,7 @@ sys.path.insert(0, str(ADDON))
 from freecad_mcp_bridge.approval import (  # noqa: E402
     ApprovalPayload,
     ApprovalRequest,
+    ApprovalState,
     ReviewCoordinator,
 )
 from freecad_mcp_bridge.review_dialog import (  # noqa: E402
@@ -44,6 +45,7 @@ def main() -> None:
     closed.close()
     app.processEvents()
     assert denied.consume() is None
+    assert denied.state == ApprovalState.DENIED
     long_code = "# review line\n" * 3000 + "_result_ = 7\n"
     long_request = ApprovalRequest(
         ApprovalPayload("execute_python", long_code.encode("utf-8")), 30
@@ -114,6 +116,7 @@ def main() -> None:
             break
     assert worker_controller._closed
     assert pending_worker.consume() is None
+    assert pending_worker.state == ApprovalState.DENIED
     print("Qt6 offscreen accept and close passed")
 
 
