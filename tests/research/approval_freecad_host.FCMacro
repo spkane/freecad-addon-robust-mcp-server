@@ -254,6 +254,7 @@ def worker(port):
                         raise RuntimeError(f"Unexpected execution result: {result}")
                 results.append(state)
     except BaseException:
+        traceback.print_exc()
         errors.append(traceback.format_exc())
     finally:
         finished.set()
@@ -539,6 +540,7 @@ def start():
         timer.timeout.connect(tick)
         timer.start(50)
     except BaseException:
+        traceback.print_exc()
         try:
             result_path.write_text(json.dumps({"errors": [traceback.format_exc()]}))
         finally:

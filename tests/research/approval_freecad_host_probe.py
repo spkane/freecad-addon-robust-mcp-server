@@ -314,9 +314,14 @@ def main() -> None:  # noqa: PLR0912
             str(profile / "system.cfg"),
             str(macro),
         ]
-        process = subprocess.Popen(  # noqa: S603 - binary is selected by the tester
-            command, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+        stderr_log = tempfile.TemporaryFile(mode="w+t")  # noqa: SIM115 - closed below
+        try:
+            process = subprocess.Popen(  # noqa: S603 - binary is selected by the tester
+                command, env=env, stdout=subprocess.DEVNULL, stderr=stderr_log
+            )
+        except BaseException:
+            stderr_log.close()
+            raise
         try:
             if args.mcp or args.mcp_http or args.manual or args.cam_review:
                 deadline = time.monotonic() + 25
@@ -469,6 +474,14 @@ def main() -> None:  # noqa: PLR0912
             )
             if args.preferences:
                 print("FreeCAD preferences and timed-bypass dialog passed")
+        except Exception as error:
+            stderr_log.seek(0)
+            diagnostics = stderr_log.read()[-8192:]
+            if diagnostics:
+                error.add_note(
+                    "FreeCAD probe stderr (last 8192 characters):\n" + diagnostics
+                )
+            raise
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -477,6 +490,7 @@ def main() -> None:  # noqa: PLR0912
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
+            stderr_log.close()
 
 
 if __name__ == "__main__":
