@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 
-def serve_http(http_port: int, bridge_port: int) -> None:
+def serve_http(http_port: int, bridge_port: int, secret: bytes) -> None:
     """Serve the actual execution tool on a disposable loopback endpoint."""
     from approval_manual_mcp import ExampleBridge
     from mcp.server.mcpserver import MCPServer
@@ -35,7 +35,7 @@ def serve_http(http_port: int, bridge_port: int) -> None:
         host="127.0.0.1",
         port=bridge_port,
         client_id="probe",
-        signer=create_hmac_signer(b"x" * 32),
+        signer=create_hmac_signer(secret),
     )
 
     async def get_bridge():
@@ -46,7 +46,7 @@ def serve_http(http_port: int, bridge_port: int) -> None:
     server.run("streamable-http", host="127.0.0.1", port=http_port)
 
 
-async def exercise_http(bridge_port: int) -> None:
+async def exercise_http(bridge_port: int, secret: bytes) -> None:
     """Test legacy and modern MCP HTTP sessions against the live bridge."""
     from mcp.client import Client
     from mcp.types import TextContent
@@ -55,7 +55,7 @@ async def exercise_http(bridge_port: int) -> None:
         listener.bind(("127.0.0.1", 0))
         http_port = listener.getsockname()[1]
     process = multiprocessing.get_context("spawn").Process(
-        target=serve_http, args=(http_port, bridge_port)
+        target=serve_http, args=(http_port, bridge_port, secret)
     )
     process.start()
     try:
@@ -101,7 +101,7 @@ async def exercise_http(bridge_port: int) -> None:
             await asyncio.to_thread(process.join)
 
 
-async def exercise_mcp(port: int, profile: Path) -> None:
+async def exercise_mcp(port: int, profile: Path, secret: bytes) -> None:
     """Call the actual MCP tool over stdio against the live bridge."""
     from mcp import StdioServerParameters
     from mcp.client import Client
@@ -110,7 +110,7 @@ async def exercise_mcp(port: int, profile: Path) -> None:
     connection = profile / "connection.json"
     fd = os.open(connection, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
-        json.dump({"port": port, "secret": "78" * 32}, stream)
+        json.dump({"port": port, "secret": secret.hex()}, stream)
     parameters = StdioServerParameters(
         command=sys.executable,
         args=[str(Path(__file__).with_name("approval_manual_mcp.py")), str(connection)],
@@ -138,7 +138,7 @@ async def exercise_mcp(port: int, profile: Path) -> None:
                 raise RuntimeError(f"Unexpected denial result: {payload}")
 
 
-async def exercise_legacy_cam(port: int) -> None:
+async def exercise_legacy_cam(port: int, secret: bytes) -> None:
     """Exercise reviewed CAM shape creation against the live legacy bridge."""
     from unittest.mock import MagicMock
 
@@ -150,7 +150,7 @@ async def exercise_legacy_cam(port: int) -> None:
         host="127.0.0.1",
         port=port,
         client_id="probe",
-        signer=create_hmac_signer(b"x" * 32),
+        signer=create_hmac_signer(secret),
     )
     await bridge.connect()
     try:
@@ -277,6 +277,7 @@ def main() -> None:  # noqa: PLR0912
         (profile / "data").mkdir()
         (profile / "temp").mkdir()
         result_path = profile / "result.json"
+        secret = secrets.token_bytes(32)
         env = os.environ.copy()
         env.update(
             FREECAD_USER_DATA=str(profile / "data"),
@@ -284,6 +285,7 @@ def main() -> None:  # noqa: PLR0912
             FREECAD_MCP_TESTING="1",
             MCP_REVIEW_PROBE_ADDON=str(project / "freecad" / "RobustMCPBridge"),
             MCP_REVIEW_PROBE_RESULT=str(result_path),
+            MCP_REVIEW_PROBE_SECRET=secret.hex(),
         )
         if args.screenshot:
             env["MCP_REVIEW_PROBE_SCREENSHOT"] = str(profile / "review.png")
@@ -304,7 +306,6 @@ def main() -> None:  # noqa: PLR0912
             os.environ["FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS"] = "false"
         if args.manual:
             env["MCP_REVIEW_PROBE_MANUAL"] = "1"
-            env["MCP_REVIEW_PROBE_SECRET"] = secrets.token_hex(32)
         command = [
             args.binary,
             "--user-cfg",
@@ -321,9 +322,17 @@ def main() -> None:  # noqa: PLR0912
                 deadline = time.monotonic() + 25
                 while not (profile / "port").is_file() and time.monotonic() < deadline:
                     if process.poll() is not None:
+                        if result_path.is_file():
+                            raise RuntimeError(
+                                f"FreeCAD host probe startup failed: {result_path.read_text()}"
+                            )
                         raise RuntimeError("FreeCAD exited before opening the bridge")
                     time.sleep(0.05)
                 if not (profile / "port").is_file():
+                    if result_path.is_file():
+                        raise RuntimeError(
+                            f"FreeCAD host probe startup failed: {result_path.read_text()}"
+                        )
                     raise RuntimeError("FreeCAD did not open the bridge in time")
                 port = int((profile / "port").read_text())
                 if args.manual:
@@ -413,11 +422,11 @@ def main() -> None:  # noqa: PLR0912
                     return
                 try:
                     if args.mcp_http:
-                        asyncio.run(exercise_http(port))
+                        asyncio.run(exercise_http(port, secret))
                     elif args.cam_review:
-                        asyncio.run(exercise_legacy_cam(port))
+                        asyncio.run(exercise_legacy_cam(port, secret))
                     else:
-                        asyncio.run(exercise_mcp(port, profile))
+                        asyncio.run(exercise_mcp(port, profile, secret))
                 finally:
                     (profile / "done").touch()
             try:

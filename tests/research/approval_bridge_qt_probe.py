@@ -8,6 +8,7 @@ import asyncio
 import hmac
 import json
 import os
+import secrets
 import socket
 import sys
 import threading
@@ -15,6 +16,8 @@ import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6 import QtCore, QtWidgets
 
@@ -200,7 +203,7 @@ def main() -> None:
     """Run and clean up the socket listener and Qt event loop."""
     app = QtWidgets.QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    secret = b"x" * 32
+    secret = secrets.token_bytes(32)
     auth = BridgeAuthenticator(
         create_hmac_verifier(lambda client: secret if client == "probe" else None)
     )

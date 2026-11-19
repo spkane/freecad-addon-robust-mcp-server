@@ -115,14 +115,20 @@ async def run_case(port: int, dispatches: Any, mode: Mode, scenario: Scenario) -
 
 async def run_concurrent(port: int, dispatches: Any, mode: Mode) -> None:
     """Ensure decisions on separate sessions do not authorize each other."""
+    entered = 0
+    both_entered = asyncio.Event()
 
     async def call(code: str, approved: bool) -> None:
         async def callback(
             context: ClientRequestContext, params: ElicitRequestParams
         ) -> ElicitResult:
+            nonlocal entered
             del context
             assert params.message == "Review exact code: " + code
-            await asyncio.sleep(0.1)
+            entered += 1
+            if entered == 2:
+                both_entered.set()
+            await asyncio.wait_for(both_entered.wait(), 5)
             return ElicitResult(action="accept", content={"approved": approved})
 
         async with Client(

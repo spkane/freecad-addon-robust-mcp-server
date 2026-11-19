@@ -26,7 +26,7 @@ from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
 from freecad_mcp_bridge.server import FreecadMCPPlugin
 
 QtCore, QtWidgets = load_qt_core_widgets()
-secret = bytes.fromhex(os.environ.get("MCP_REVIEW_PROBE_SECRET", "78" * 32))
+secret = bytes.fromhex(os.environ["MCP_REVIEW_PROBE_SECRET"])
 plugin = None
 errors = []
 finished = threading.Event()
@@ -90,7 +90,7 @@ def test_preferences():
         import hashlib
 
         example = approval_module.MacroApproval(
-            "/Users/example/FreeCAD/Macro/Example.FCMacro",
+            str(macro_dir / "Example.FCMacro"),
             hashlib.sha256(
                 b'print("Hello from a FreeCAD macro")\n_result_ = 42\n'
             ).hexdigest(),
@@ -311,20 +311,25 @@ def tick():
                         results.append("denied")
         if finished.is_set() or (done_file and Path(done_file).exists()):
             timer.stop()
-            plugin.stop()
-            result_path.write_text(
-                json.dumps(
-                    {
-                        "results": results,
-                        "errors": errors,
-                        "seen": len(seen),
-                        "freecad": FreeCAD.Version(),
-                        "qt": QtCore.qVersion(),
-                        "preferences_tested": preferences_tested,
-                    }
+            try:
+                try:
+                    plugin.stop()
+                except Exception:
+                    errors.append(traceback.format_exc())
+                result_path.write_text(
+                    json.dumps(
+                        {
+                            "results": results,
+                            "errors": errors,
+                            "seen": len(seen),
+                            "freecad": FreeCAD.Version(),
+                            "qt": QtCore.qVersion(),
+                            "preferences_tested": preferences_tested,
+                        }
+                    )
                 )
-            )
-            FreeCADGui.getMainWindow().close()
+            finally:
+                FreeCADGui.getMainWindow().close()
     except BaseException:
         errors.append(traceback.format_exc())
         finished.set()
@@ -534,10 +539,14 @@ def start():
         timer.timeout.connect(tick)
         timer.start(50)
     except BaseException:
-        result_path.write_text(json.dumps({"errors": [traceback.format_exc()]}))
-        if plugin:
-            plugin.stop()
-        FreeCADGui.getMainWindow().close()
+        try:
+            result_path.write_text(json.dumps({"errors": [traceback.format_exc()]}))
+        finally:
+            try:
+                if plugin:
+                    plugin.stop()
+            finally:
+                FreeCADGui.getMainWindow().close()
 
 
 QtCore.QTimer.singleShot(1000, start)

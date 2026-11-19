@@ -16,7 +16,7 @@ from mcp import StdioServerParameters
 from mcp.client import Client
 from mcp.client.session import ClientRequestContext, ElicitationFnT
 from mcp.server.mcpserver import Context, Elicit, MCPServer, Resolve
-from mcp.types import ElicitRequestParams, ElicitResult, ToolAnnotations
+from mcp.types import ElicitRequestParams, ElicitResult, TextContent, ToolAnnotations
 from pydantic import BaseModel
 
 Mode = Literal["legacy", "auto"]
@@ -52,6 +52,7 @@ async def run_case(mode: Mode, flow: Flow, scenario: Scenario) -> None:
     server = MCPServer("harmless-approval-probe")
     events: list[str] = []
     late_responses: list[str] = []
+    callback_entered = asyncio.Event()
 
     @server.tool()
     async def resolver_probe(
@@ -75,6 +76,7 @@ async def run_case(mode: Mode, flow: Flow, scenario: Scenario) -> None:
     ) -> ElicitResult:
         del context
         assert params.message == "Review exact code:\n" + CODE
+        callback_entered.set()
         if scenario == "accept":
             return ElicitResult(action="accept", content={"approved": True})
         if scenario == "false":
@@ -102,8 +104,22 @@ async def run_case(mode: Mode, flow: Flow, scenario: Scenario) -> None:
         server, mode=mode, elicitation_callback=callback_or_none
     ) as client:
         try:
-            with anyio.fail_after(0.25 if scenario in {"timeout", "late"} else 5):
-                result = await client.call_tool(flow + "_probe", {"code": CODE})
+            if scenario in {"timeout", "late"} and (
+                mode == "legacy" or flow == "resolver"
+            ):
+                task = asyncio.create_task(
+                    client.call_tool(flow + "_probe", {"code": CODE})
+                )
+                try:
+                    await asyncio.wait_for(callback_entered.wait(), 5)
+                    with anyio.fail_after(0.25):
+                        result = await task
+                finally:
+                    if not task.done():
+                        task.cancel()
+            else:
+                with anyio.fail_after(5):
+                    result = await client.call_tool(flow + "_probe", {"code": CODE})
                 outcome = "error" if result.is_error else "ok"
         except Exception as exc:
             outcome = type(exc).__name__
@@ -117,6 +133,8 @@ async def run_case(mode: Mode, flow: Flow, scenario: Scenario) -> None:
         assert not events
         if scenario == "late" and (mode == "legacy" or flow == "resolver"):
             assert late_responses == ["accepted"]
+        if scenario in {"timeout", "late"} and (mode == "legacy" or flow == "resolver"):
+            assert callback_entered.is_set() and outcome == "TimeoutError"
         if (scenario == "false" and (mode == "legacy" or flow == "resolver")) or (
             flow == "direct" and scenario in {"decline", "cancel"} and mode == "legacy"
         ):
@@ -156,7 +174,10 @@ async def main() -> None:
             ) as client:
                 result = await client.call_tool("resolver_probe", {"code": CODE})
                 expected = "PROBE_APPROVED" if approved else "PROBE_DENIED"
-                assert expected in str(result.model_dump())
+                assert not result.is_error
+                assert len(result.content) == 1
+                assert isinstance(result.content[0], TextContent)
+                assert result.content[0].text == expected
                 print(f"stdio  {mode:6} approved={approved} {expected}")
 
 
