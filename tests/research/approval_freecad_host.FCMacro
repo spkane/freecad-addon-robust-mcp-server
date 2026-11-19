@@ -316,6 +316,7 @@ def tick():
                 try:
                     plugin.stop()
                 except Exception:
+                    traceback.print_exc()
                     errors.append(traceback.format_exc())
                 result_path.write_text(
                     json.dumps(
