@@ -21,6 +21,32 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import BinaryIO
+
+
+def attach_stderr(error: Exception, stderr_log: BinaryIO) -> None:
+    """Attach bounded child diagnostics without hiding the original error."""
+    try:
+        stderr_log.seek(0, os.SEEK_END)
+        stderr_log.seek(max(0, stderr_log.tell() - 8192))
+        diagnostics = stderr_log.read().decode("utf-8", errors="replace")
+        if diagnostics:
+            error.add_note("FreeCAD probe stderr (last 8192 bytes):\n" + diagnostics)
+    except (OSError, ValueError) as log_error:
+        error.add_note(f"Could not read FreeCAD probe stderr: {log_error}")
+
+
+def finish_failed_process(process: subprocess.Popen) -> None:
+    """Allow normal shutdown briefly, then stop and reap the child."""
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
 
 
 def serve_http(http_port: int, bridge_port: int, secret: bytes) -> None:
@@ -314,7 +340,7 @@ def main() -> None:  # noqa: PLR0912
             str(profile / "system.cfg"),
             str(macro),
         ]
-        stderr_log = tempfile.TemporaryFile(mode="w+t")  # noqa: SIM115 - closed below
+        stderr_log = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115 - closed below
         try:
             process = subprocess.Popen(  # noqa: S603 - binary is selected by the tester
                 command, env=env, stdout=subprocess.DEVNULL, stderr=stderr_log
@@ -475,12 +501,8 @@ def main() -> None:  # noqa: PLR0912
             if args.preferences:
                 print("FreeCAD preferences and timed-bypass dialog passed")
         except Exception as error:
-            stderr_log.seek(0)
-            diagnostics = stderr_log.read()[-8192:]
-            if diagnostics:
-                error.add_note(
-                    "FreeCAD probe stderr (last 8192 characters):\n" + diagnostics
-                )
+            finish_failed_process(process)
+            attach_stderr(error, stderr_log)
             raise
         finally:
             if process.poll() is None:
