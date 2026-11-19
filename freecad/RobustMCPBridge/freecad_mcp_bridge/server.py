@@ -27,6 +27,7 @@ import hashlib
 import io
 import ipaddress
 import json
+import linecache
 import math
 import os
 import queue
@@ -1425,7 +1426,10 @@ class FreecadMCPPlugin:
                     from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
                 reviewed_code = review_text(payload.content, allow_crlf=True)
                 result = self._execute_code_sync(
-                    reviewed_code, filename=payload.macro_path, initial_globals=args
+                    reviewed_code,
+                    filename=payload.macro_path,
+                    initial_globals=args,
+                    captured_source=True,
                 )
             else:
                 raise ValueError("Unsupported reviewed action")
@@ -1515,6 +1519,7 @@ class FreecadMCPPlugin:
         *,
         filename: str = "<mcp>",
         initial_globals: dict[str, Any] | None = None,
+        captured_source: bool = False,
     ) -> dict[str, Any]:
         """Execute Python code synchronously (call on main thread only).
 
@@ -1522,6 +1527,7 @@ class FreecadMCPPlugin:
             code: Python code to execute.
             filename: Source name for the compiled code.
             initial_globals: Named values supplied to the execution environment.
+            captured_source: Use the captured text for traceback source lines.
 
         Returns:
             Execution result dictionary.
@@ -1546,9 +1552,20 @@ class FreecadMCPPlugin:
             exec_globals["FreeCADGui"] = FreeCADGui
             exec_globals["Gui"] = FreeCADGui
 
+        compile_filename = filename
+        if captured_source:
+            if not isinstance(code, str):
+                raise TypeError("Captured macro source must be text")
+            compile_filename = f"<reviewed macro {uuid.uuid4().hex}>"
+            linecache.cache[compile_filename] = (
+                len(code),
+                None,
+                code.splitlines(keepends=True),
+                compile_filename,
+            )
         try:
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                compiled = compile(code, filename, "exec")
+                compiled = compile(code, compile_filename, "exec")
                 exec(compiled, exec_globals)  # noqa: S102
 
             elapsed = (time.perf_counter() - start) * 1000
@@ -1588,6 +1605,9 @@ class FreecadMCPPlugin:
                 "error_message": message,
                 "error_traceback": formatted_traceback,
             }
+        finally:
+            if captured_source:
+                linecache.cache.pop(compile_filename, None)
 
     # =========================================================================
     # Socket Server (JSON-RPC 2.0)
@@ -1921,16 +1941,22 @@ class FreecadMCPPlugin:
                 or type(params["args"]) is not dict
             ):
                 raise ValueError("Invalid macro arguments")
-            args = params["args"]
+            import unicodedata
+
+            args = {}
             reserved = {"FreeCAD", "FreeCADGui", "App", "Gui", "_result_"}
-            if any(
-                type(key) is not str
-                or not key.isidentifier()
-                or key.startswith("_")
-                or key in reserved
-                for key in args
-            ):
-                raise ValueError("Invalid macro argument name")
+            for key, value in params["args"].items():
+                if type(key) is not str or not key.isidentifier():
+                    raise ValueError("Invalid macro argument name")
+                canonical = unicodedata.normalize("NFKC", key)
+                if (
+                    not canonical.isidentifier()
+                    or canonical.startswith("_")
+                    or canonical in reserved
+                    or canonical in args
+                ):
+                    raise ValueError("Invalid or ambiguous macro argument name")
+                args[canonical] = value
             args_json = json.dumps(
                 args, ensure_ascii=True, allow_nan=False, sort_keys=True
             )

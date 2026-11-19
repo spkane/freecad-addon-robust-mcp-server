@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,7 +41,13 @@ def snapshot_macro(path: str) -> MacroSnapshot:
         | getattr(os, "O_NOFOLLOW", 0)
     )
     fd = os.open(str(resolved), flags)
-    with os.fdopen(fd, "rb") as stream:
+    try:
+        stream = os.fdopen(fd, "rb")
+    except BaseException:
+        with suppress(OSError):
+            os.close(fd)
+        raise
+    with stream:
         if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
             raise ValueError("Macro must be a regular file")
         content = stream.read(MAX_MACRO_BYTES + 1)

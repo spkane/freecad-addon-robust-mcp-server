@@ -94,3 +94,29 @@ def test_resolve_macro_refuses_path_traversal(
     """An agent cannot choose a macro outside the configured locations by name."""
     with pytest.raises(ValueError):
         snapshots.resolve_macro("../example", (str(tmp_path),))
+
+
+def test_snapshot_closes_descriptor_when_fdopen_fails(
+    snapshots: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An fdopen failure does not leak the descriptor returned by os.open."""
+    path = tmp_path / "example.FCMacro"
+    path.write_text("pass")
+    opened = []
+    real_open = os.open
+
+    def capture_open(name: str, flags: int) -> int:
+        fd = real_open(name, flags)
+        opened.append(fd)
+        return fd
+
+    def fail_fdopen(*_args: object, **_kwargs: object) -> None:
+        raise OSError("fdopen failed")
+
+    monkeypatch.setattr(snapshots.os, "open", capture_open)
+    monkeypatch.setattr(snapshots.os, "fdopen", fail_fdopen)
+    with pytest.raises(OSError, match="fdopen failed"):
+        snapshots.snapshot_macro(str(path))
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])

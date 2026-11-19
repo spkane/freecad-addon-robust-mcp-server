@@ -2004,3 +2004,65 @@ async def test_reviewed_macro_executes_displayed_utf8_text(
     result = broker.result("alice", review_id)
     assert result["success"] and result["result"] == 42
     broker.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_normalizes_and_rejects_colliding_arguments(
+    server_mod: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review and execution use the same Python-normalized argument names."""
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._macro_review_roots = (str(tmp_path),)
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    (tmp_path / "example.FCMacro").write_text("_result_ = K\n")
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {"\u212a": 42}}, "alice"
+    )
+    request_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert json.loads(request.payload.macro_args_json) == {"K": 42}
+    assert request.decide(approved=True)
+    assert broker.commit("alice", request_id)
+    plugin._process_reviewed_queue()
+    assert broker.result("alice", request_id)["result"] == 42
+    collision = await plugin._review_begin_macro(
+        2, {"macro_name": "example", "args": {"\u212a": 42, "K": 43}}, "alice"
+    )
+    assert "error" in collision
+    assert coordinator.next_review() is None
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_traceback_uses_captured_source(
+    server_mod: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replaced macro cannot supply the traceback line for approved code."""
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._macro_review_roots = (str(tmp_path),)
+    coordinator = approval.ReviewCoordinator(1)
+    broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_broker = broker
+    macro = tmp_path / "example.FCMacro"
+    macro.write_text('raise ValueError("approved line")\n')
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {}}, "alice"
+    )
+    request_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    macro.write_text('raise ValueError("replacement line")\n')
+    assert broker.commit("alice", request_id)
+    plugin._process_reviewed_queue()
+    result = broker.result("alice", request_id)
+    assert result["success"] is False
+    assert 'raise ValueError("approved line")' in result["error_traceback"]
+    assert "replacement line" not in result["error_traceback"]
+    broker.close()
