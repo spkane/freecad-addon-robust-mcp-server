@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Version 0.8.0 (2026-11-16)
+## Version 0.8.0 (2026-11-19)
 
 Use with Robust MCP Server 0.8.0 for the file-review workflow. Existing paired
 credentials remain valid. The bridge executes with the FreeCAD user's full
