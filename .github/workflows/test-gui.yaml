@@ -184,6 +184,7 @@ jobs:
               # Start xdotool events in background to help FreeCAD GUI initialization
               (
                 for j in {1..120}; do
+                  [ ! -e /tmp/freecad-startup-input-stop ] || break
                   xdotool mousemove $((400 + j*3)) $((300 + j*3)) click 1 key Escape 2>/dev/null || true
                   sleep 0.5
                 done
@@ -221,6 +222,11 @@ jobs:
                 kill $FREECAD_PID 2>/dev/null || true
                 exit 1
               fi
+
+              # Startup input can change the active document or dismiss dialogs
+              # while tests are running. Stop it before checking GUI behavior.
+              touch /tmp/freecad-startup-input-stop
+              wait $XDOT_PID 2>/dev/null || true
 
               # Verify GUI mode is active
               echo "Verifying GUI mode..."
