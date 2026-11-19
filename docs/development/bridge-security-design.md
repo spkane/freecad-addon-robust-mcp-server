@@ -233,14 +233,22 @@ permissions; server-side tool registration does not sandbox that client.
 | Tool group | Inputs and effects | Exposure and metadata |
 | --- | --- | --- |
 | `execute_python`, `safe_execute` | Model-provided Python runs with the FreeCAD user's filesystem and network permissions. `safe_execute` is not a security sandbox. | Available only with `FREECAD_ALLOW_UNSAFE_CODE=true`; require local review over a GUI/socket bridge. Marked non-read-only, destructive, non-idempotent and open-world. |
-| `run_macro`, `create_macro`, `create_macro_from_template` | Execute or create macro code; `run_macro` exposes a name, not the file contents. | Available only with unsafe code enabled; `run_macro` fails closed until exact file contents can be reviewed and executed. Creation still writes files. |
-| `read_macro`, `delete_macro` | Read or delete a user-selected macro name. System macros may also be read. | Registered by default. `read_macro` is marked read-only; deletion is marked destructive. Both are open-world. Tool-level names reject path separators and drive prefixes; symlink behavior and approval require further review. |
+| `run_macro`, `create_macro`, `create_macro_from_template` | Execute or create macro code. `run_macro` resolves the name locally and reviews a captured copy of the file, its path, checksum, and arguments. | Available only with unsafe code enabled. `run_macro` requires a GUI/socket bridge and local review by default; local preferences, timed bypasses, and saved path-and-content approvals can change that behavior. Saved approvals do not bind arguments or imports. Macro creation is subject to file review by default. |
+| `read_macro`, `delete_macro` | Read or delete a user-selected macro name. System macros may also be read. | Registered by default and subject to file review by default. `read_macro` is marked read-only; deletion is marked destructive. Both are open-world. Tool-level names reject path separators and drive prefixes. |
 | `open_document`, `save_document` | Read or write a model-selected path; save can use the current document path. | Registered by default and marked open-world and potentially destructive. |
 | `import_step`, `import_stl`, `export_step`, `export_stl`, `export_3mf`, `export_obj`, `export_iges` | Read imported files or write exported files at supplied paths. | Registered by default and marked open-world and potentially destructive. |
 | `spreadsheet_import_csv`, `spreadsheet_export_csv` | Read or write the specified CSV file. | Registered by default and marked open-world and potentially destructive. |
 | `insert_part_from_library`, `draft_shapestring`, `draft_text_on_surface` | Read a selected part or font file and modify a document. | Registered by default and marked open-world and potentially destructive. |
 | `cam_create_job`, `cam_add_tool_controller` | Create or modify a job and optionally read a selected job template or `tool.bit_file`. | Registered by default and marked open-world and potentially destructive, including when no explicit file is selected. |
 | `cam_post_process`, `cam_export_job_template`, `cam_check_job`, `cam_simulate`, `cam_import_tool_library`, `cam_export_tool_library` | Read or write tool libraries, templates, reports, simulation files or post-processed output. Some outputs are optional or use paths from a job. | Registered by default and marked open-world and potentially destructive. |
+
+The listed operations with supported explicit file targets request local file
+review by default, including macro reads, deletions, and creation. The review
+checks the resolved target before dispatch; it does not provide an atomic
+filesystem operation or prevent a local process from changing a path afterward.
+Local preferences and the explicit server-side automation override can bypass
+review. See the [security guide](../guide/security.md#tools-files-and-approvals)
+for the scope, requirements, and limitations.
 
 Other tools manipulate FreeCAD documents, objects or the GUI. Many implement
 fixed operations by generating Python internally; the existence of that internal
