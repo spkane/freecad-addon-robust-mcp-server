@@ -31,6 +31,79 @@ def test_scratch_rejects_non_component_prefix(prefix: str) -> None:
             pass
 
 
+@pytest.mark.parametrize("supports_acls", [False, True])
+def test_windows_checks_created_directory_volume_and_closes_handle(
+    monkeypatch: pytest.MonkeyPatch, supports_acls: bool
+) -> None:
+    """Verify the target handle's volume, and close it for both outcomes."""
+    from ctypes import wintypes
+
+    kernel = MagicMock()
+    kernel.CreateFileW.return_value = 123
+
+    def volume_info(_handle, _name, _size, _serial, _max, flags, _fs, _fs_size):
+        ctypes.cast(flags, ctypes.POINTER(wintypes.DWORD))[0] = (
+            8 if supports_acls else 0
+        )
+        return True
+
+    kernel.GetVolumeInformationByHandleW.side_effect = volume_info
+    monkeypatch.setattr(
+        private_scratch.ctypes,
+        "WinDLL",
+        lambda *_args, **_kwargs: kernel,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        private_scratch.ctypes, "get_last_error", lambda: 0, raising=False
+    )
+    monkeypatch.setattr(private_scratch.ctypes, "WinError", OSError, raising=False)
+    if supports_acls:
+        private_scratch._windows_verify_created_volume("C:\\home\\scratch")
+    else:
+        with pytest.raises(OSError, match="persistent ACLs"):
+            private_scratch._windows_verify_created_volume("C:\\home\\scratch")
+    assert kernel.CreateFileW.call_args.args[0] == "C:\\home\\scratch"
+    kernel.CloseHandle.assert_called_once_with(123)
+
+
+def test_windows_removes_new_directory_when_volume_verification_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failure on the created directory does not yield or retain it."""
+    from ctypes import wintypes
+
+    kernel = MagicMock()
+    advapi = MagicMock()
+    kernel.GetVolumePathNameW.return_value = True
+
+    def volume_info(_root, _name, _size, _serial, _max, flags, _fs, _fs_size):
+        ctypes.cast(flags, ctypes.POINTER(wintypes.DWORD))[0] = 8
+        return True
+
+    kernel.GetVolumeInformationW.side_effect = volume_info
+    kernel.CreateDirectoryW.return_value = True
+    advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW.return_value = True
+    monkeypatch.setattr(
+        private_scratch.ctypes,
+        "WinDLL",
+        lambda name, **_kwargs: kernel if name == "kernel32" else advapi,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        private_scratch.ctypes, "get_last_error", lambda: 0, raising=False
+    )
+    monkeypatch.setattr(private_scratch.ctypes, "WinError", OSError, raising=False)
+    verify = MagicMock(side_effect=OSError("no persistent ACLs"))
+    monkeypatch.setattr(private_scratch, "_windows_verify_created_volume", verify)
+    remove = MagicMock()
+    monkeypatch.setattr(private_scratch.os, "rmdir", remove)
+    with pytest.raises(OSError, match="persistent ACLs"):
+        private_scratch._windows_private_directory("C:\\home", "scratch-")
+    remove.assert_called_once()
+    assert verify.call_args.args == remove.call_args.args
+
+
 def test_windows_refuses_filesystem_without_persistent_acls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

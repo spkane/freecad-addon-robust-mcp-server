@@ -103,6 +103,52 @@ def _darwin_clear_inherited_acl(path: str) -> None:
         os.close(fd)
 
 
+def _windows_verify_created_volume(path: str) -> None:
+    """Require the newly created directory's volume to enforce persistent ACLs."""
+    from ctypes import wintypes
+
+    kernel = vars(ctypes)["WinDLL"]("kernel32", use_last_error=True)
+    get_error = vars(ctypes)["get_last_error"]
+    win_error = vars(ctypes)["WinError"]
+    open_directory = kernel.CreateFileW
+    open_directory.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    open_directory.restype = wintypes.HANDLE
+    volume_info = kernel.GetVolumeInformationByHandleW
+    volume_info.argtypes = [
+        wintypes.HANDLE,
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.DWORD),
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+    ]
+    volume_info.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    # A directory requires FILE_FLAG_BACKUP_SEMANTICS. Request only metadata.
+    handle = open_directory(path, 0, 7, None, 3, 0x02000000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise win_error(get_error())
+    try:
+        flags = wintypes.DWORD()
+        if not volume_info(handle, None, 0, None, None, ctypes.byref(flags), None, 0):
+            raise win_error(get_error())
+        if not flags.value & 0x00000008:  # FILE_PERSISTENT_ACLS
+            raise OSError("Scratch filesystem does not support persistent ACLs")
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def _windows_private_directory(parent: str, prefix: str) -> str:
     """Atomically create a directory with a protected Windows DACL.
 
@@ -175,6 +221,12 @@ def _windows_private_directory(parent: str, prefix: str) -> str:
         for _ in range(100):
             path = str(Path(parent) / (prefix + secrets.token_hex(16)))
             if create(path, ctypes.byref(attributes)):
+                try:
+                    _windows_verify_created_volume(path)
+                except BaseException:
+                    with contextlib.suppress(OSError):
+                        os.rmdir(path)  # noqa: PTH106 - remove the created directory
+                    raise
                 return path
             error = get_error()
             if error != 183:  # ERROR_ALREADY_EXISTS
