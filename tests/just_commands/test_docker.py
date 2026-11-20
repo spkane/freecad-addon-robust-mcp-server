@@ -96,6 +96,9 @@ class TestDockerSyntax:
         rendered = result.stdout + result.stderr
         assert "FREECAD_MODE=socket" in rendered
         assert "FREECAD_SOCKET_HOST=host.docker.internal" in rendered
+        if command == "docker::test":
+            assert "is_port_in_use 9876" in rendered
+            assert "check_xmlrpc" not in rendered
 
 
 @pytest.mark.requires_docker

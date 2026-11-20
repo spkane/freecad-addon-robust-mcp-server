@@ -200,15 +200,6 @@ test:
     echo "=========================================="
     echo ""
 
-    # Function to check if XML-RPC server is ready using a simple POST request
-    check_xmlrpc() {
-        # Send a minimal XML-RPC system.listMethods call
-        curl -s --max-time 2 -X POST \
-            -H "Content-Type: text/xml" \
-            -d '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>' \
-            http://localhost:9875 > /dev/null 2>&1
-    }
-
     # Detect timeout command (not available on macOS by default)
     TIMEOUT_CMD=""
     if command -v timeout >/dev/null 2>&1; then
@@ -225,8 +216,8 @@ test:
 
     # Check if FreeCAD bridge is already running
     echo "Step 2: Checking for FreeCAD Robust MCP Bridge..."
-    if check_xmlrpc; then
-        echo "✓ FreeCAD Robust MCP Bridge is already running on port 9875"
+    if is_port_in_use 9876; then
+        echo "✓ A socket listener is already running on port 9876"
         STARTED_FREECAD=false
     else
         echo "FreeCAD Robust MCP Bridge not detected. Starting FreeCAD headless..."
@@ -240,7 +231,7 @@ test:
         # Wait for bridge to be ready (longer timeout for FreeCAD startup)
         MAX_RETRIES=60
         RETRY_COUNT=0
-        while ! check_xmlrpc; do
+        while ! is_port_in_use 9876; do
             RETRY_COUNT=$((RETRY_COUNT + 1))
             if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
                 echo "✗ ERROR: FreeCAD Robust MCP Bridge did not start within ${MAX_RETRIES}s"
