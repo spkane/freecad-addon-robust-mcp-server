@@ -764,15 +764,25 @@ def test_reviewed_legacy_tool_rejects_file_and_nested_overrides(
         factory.Create.assert_not_called()
 
 
+@pytest.mark.parametrize("cleanup_failure", [None, "object", "source"])
 def test_reviewed_legacy_factory_failure_closes_only_new_shape_document(
-    runtime: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    runtime: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    cleanup_failure: str | None,
 ) -> None:
     """A failed factory closes its source and restores the target document."""
     import sys
     from types import ModuleType, SimpleNamespace
 
     freecad = sys.modules["FreeCAD"]
-    doc = SimpleNamespace(Name="target")
+    existing = SimpleNamespace(Name="Existing")
+    partial = SimpleNamespace(Name="PartialToolBit")
+    doc = SimpleNamespace(Name="target", Objects=[existing], removeObject=MagicMock())
+    if cleanup_failure == "object":
+        doc.removeObject.side_effect = RuntimeError("cleanup failed")
+    if cleanup_failure == "source":
+        freecad.closeDocument.side_effect = RuntimeError("cleanup failed")
     freecad.__dict__["ActiveDocument"] = doc
     target = tmp_path / "shape.fcstd"
     opened = {
@@ -784,6 +794,7 @@ def test_reviewed_legacy_factory_failure_closes_only_new_shape_document(
 
     def fail_create(*_args: Any) -> None:
         opened["shape"] = SimpleNamespace(FileName=str(target))
+        doc.Objects.append(partial)
         raise IndexError("empty shape")
 
     factory.Create.side_effect = fail_create
@@ -802,10 +813,13 @@ def test_reviewed_legacy_factory_failure_closes_only_new_shape_document(
     modules["Path.Tool.Bit"].__dict__["Factory"] = factory
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
-    with pytest.raises(ValueError, match="empty shape"):
+    expected_type = RuntimeError if cleanup_failure else ValueError
+    expected_message = "cleanup failed" if cleanup_failure else "empty shape"
+    with pytest.raises(expected_type, match=expected_message):
         runtime._legacy_tool_bit(doc, {"shape": str(target)}, reviewed_shape=True)
     freecad.closeDocument.assert_called_once_with("shape")
     freecad.setActiveDocument.assert_called_once_with("target")
+    doc.removeObject.assert_called_once_with("PartialToolBit")
 
 
 def test_reviewed_legacy_tool_allows_shape_numeric_properties(

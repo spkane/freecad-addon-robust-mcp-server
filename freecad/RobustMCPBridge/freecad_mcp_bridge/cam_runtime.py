@@ -1342,22 +1342,38 @@ class _ReviewedLegacyToolError(ValueError):
 def _create_reviewed_tool_bit(doc: Any, factory: Any, shape: str) -> Any:
     """Create a legacy tool and clean up its own source document on failure."""
     previous_documents = set(FreeCAD.listDocuments())
+    previous_objects = {obj.Name for obj in doc.Objects}
     try:
         return factory.Create("ToolBit", shape)
     except Exception as error:
+        cleanup_error = None
         # Factory.Create may open the reviewed shape and fail before closing it.
         # Close only a newly opened document for that shape, never a user document.
         target = os.path.normcase(os.path.realpath(shape))
         for name, opened in FreeCAD.listDocuments().items():
-            with suppress(Exception):
+            try:
                 if (
                     name not in previous_documents
                     and opened.FileName
                     and os.path.normcase(os.path.realpath(opened.FileName)) == target
                 ):
                     FreeCAD.closeDocument(name)
-        with suppress(Exception):
+            except Exception as failure:
+                cleanup_error = failure
+        try:
             FreeCAD.setActiveDocument(doc.Name)
+        except Exception as failure:
+            cleanup_error = failure
+        # Factory.Create can add its ToolBit before initialization fails.
+        # A cleanup failure must propagate so the outer transaction aborts.
+        for obj in reversed(list(doc.Objects)):
+            if obj.Name not in previous_objects:
+                try:
+                    doc.removeObject(obj.Name)
+                except Exception as failure:
+                    cleanup_error = failure
+        if cleanup_error is not None:
+            raise RuntimeError("Legacy tool cleanup failed") from cleanup_error
         raise _ReviewedLegacyToolError(str(error)) from error
 
 
