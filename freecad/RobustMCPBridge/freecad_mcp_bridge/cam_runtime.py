@@ -1339,6 +1339,28 @@ class _ReviewedLegacyToolError(ValueError):
     """A rejected reviewed tool whose temporary objects were cleaned up."""
 
 
+def _create_reviewed_tool_bit(doc: Any, factory: Any, shape: str) -> Any:
+    """Create a legacy tool and clean up its own source document on failure."""
+    previous_documents = set(FreeCAD.listDocuments())
+    try:
+        return factory.Create("ToolBit", shape)
+    except Exception as error:
+        # Factory.Create may open the reviewed shape and fail before closing it.
+        # Close only a newly opened document for that shape, never a user document.
+        target = os.path.normcase(os.path.realpath(shape))
+        for name, opened in FreeCAD.listDocuments().items():
+            with suppress(Exception):
+                if (
+                    name not in previous_documents
+                    and opened.FileName
+                    and os.path.normcase(os.path.realpath(opened.FileName)) == target
+                ):
+                    FreeCAD.closeDocument(name)
+        with suppress(Exception):
+            FreeCAD.setActiveDocument(doc.Name)
+        raise _ReviewedLegacyToolError(str(error)) from error
+
+
 def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:
     """Apply only safe properties after a legacy shape has been reviewed."""
     # FreeCAD 1.0's CreateFromAttrs passes arbitrary dotted paths to
@@ -1361,7 +1383,7 @@ def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:
                 raise _ReviewedLegacyToolError(
                     f"Tool property {name!r} cannot be changed in reviewed mode"
                 )
-    bit = Factory.Create("ToolBit", attributes["shape"])
+    bit = _create_reviewed_tool_bit(doc, Factory, attributes["shape"])
     try:
         bit.Label = attributes["name"]
         allowed_types = {
