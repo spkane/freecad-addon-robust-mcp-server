@@ -91,10 +91,23 @@ RUN MISE_VER="${MISE_VERSION}" \
 SHELL ["/bin/sh", "-c"]
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:$PATH"
 
-# Copy mise config and install pinned uv version
+# Install the configured uv release without GitHub API lookups. The release
+# archive and its checksum are downloaded directly from the pinned tag.
 COPY .mise.toml /workspace/.mise.toml
-# hadolint ignore=DL3059
-RUN mise trust /workspace/.mise.toml && mise install uv && mise reshim
+# hadolint ignore=DL3003,DL3059
+RUN set -eu; \
+    UV_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("/workspace/.mise.toml", "rb"))["tools"]["uv"])')"; \
+    case "$(uname -m)" in x86_64|aarch64) UV_ARCH="$(uname -m)" ;; *) exit 1 ;; esac; \
+    UV_ARCHIVE="uv-${UV_ARCH}-unknown-linux-gnu.tar.gz"; \
+    UV_URL="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${UV_ARCHIVE}"; \
+    cd /tmp; \
+    curl -fsSL "$UV_URL" -o "$UV_ARCHIVE"; \
+    curl -fsSL "$UV_URL.sha256" -o "$UV_ARCHIVE.sha256"; \
+    sha256sum -c "$UV_ARCHIVE.sha256"; \
+    tar -xzf "$UV_ARCHIVE"; \
+    install -m 0755 "uv-${UV_ARCH}-unknown-linux-gnu/uv" /usr/local/bin/uv; \
+    /usr/local/bin/uv --version; \
+    rm -rf "$UV_ARCHIVE" "$UV_ARCHIVE.sha256" "uv-${UV_ARCH}-unknown-linux-gnu"
 
 # Select the exact release artifact in CI. Local builds retain the Qt5 baseline.
 ARG FREECAD_TAG=1.0.2
