@@ -230,10 +230,10 @@ just docker::build        # Build for local architecture
 just docker::build-multi  # Build multi-arch (amd64 + arm64)
 ```
 
-The containerized Robust MCP Server only supports `xmlrpc` and `socket`
-modes because FreeCAD runs on the host. This topology currently works only
-with Docker Desktop, whose `host.docker.internal` forwarding can reach a
-host-loopback listener.
+The containerized Robust MCP Server defaults to `socket` mode because FreeCAD
+runs on the host. This topology currently works only with Docker Desktop, whose
+`host.docker.internal` forwarding can reach a host-loopback listener. XML-RPC
+rejects that forwarded hostname and is not supported for this Docker setup.
 
 The container also needs the existing bridge pairing credential; pairing the
 host account does not provision it in the container. A portable secure

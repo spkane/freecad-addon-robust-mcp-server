@@ -49,11 +49,13 @@ def test_snapshot_rejects_symlink_swapped_after_resolution(
     other = tmp_path / "other.FCMacro"
     path.write_bytes(b"original")
     other.write_bytes(b"substituted")
+    replacement = tmp_path / "replacement"
+    replacement.symlink_to(other)
+    assert replacement.is_symlink()
     real_open = os.open
 
     def swap_and_open(name: str, flags: int) -> int:
-        path.unlink()
-        path.symlink_to(other)
+        os.replace(replacement, path)
         return real_open(name, flags)
 
     monkeypatch.setattr(snapshots.os, "open", swap_and_open)

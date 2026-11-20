@@ -1977,9 +1977,22 @@ async def test_review_preference_bypass_runs_only_on_review_protocol(
             await asyncio.sleep(0.005)
 
     worker = asyncio.create_task(process_queue())
+    requests = []
+    original_send = bridge._send_request_once
+
+    async def record_request(request, *args, **kwargs):
+        response = await original_send(request, *args, **kwargs)
+        requests.append((request["method"], request["params"], response))
+        return response
+
+    monkeypatch.setattr(bridge, "_send_request_once", record_request)
     try:
         result = await bridge.execute_reviewed_python("_result_ = 42")
         assert result.success and result.result == 42
+        begin = next(item for item in requests if item[0] == "review_begin")
+        commit = next(item for item in requests if item[0] == "review_commit")
+        assert commit[1]["review_id"] == begin[2]["review_id"]
+        assert not any(item[0] == "execute" for item in requests)
         plugin._execute_code_sync.assert_called_once_with("_result_ = 42")
     finally:
         worker.cancel()
@@ -2197,6 +2210,29 @@ def test_experimental_review_stop_cancels_pending_requests(
     plugin._enable_experimental_review()
     assert plugin._review_broker is not broker
     plugin.stop()
+
+
+def test_gui_restart_closes_pending_review_controller(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A queued worker-thread shutdown cannot disable review on GUI restart."""
+    plugin = server_mod.FreecadMCPPlugin()
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    old = MagicMock()
+    old._closed = False
+    plugin._review_controller = old
+    plugin._review_broker = None
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    old.close.assert_called_once_with()
+    assert plugin._review_controller is not old
+    assert plugin._review_broker is not None
+    plugin._shutdown_review()
 
 
 @pytest.mark.asyncio

@@ -101,7 +101,7 @@ def test_darwin_acl_verification_handles_empty_and_errors(
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL verification")
 @pytest.mark.parametrize("with_entry", [False, True])
-def test_darwin_real_acl_entry_enumeration(with_entry: bool) -> None:
+def test_macos_real_acl_entry_enumeration(with_entry: bool) -> None:
     """Exercise Darwin's actual empty and nonempty ACL iterator semantics."""
     libc = ctypes.CDLL(None, use_errno=True)
     libc.acl_init.argtypes = [ctypes.c_int]

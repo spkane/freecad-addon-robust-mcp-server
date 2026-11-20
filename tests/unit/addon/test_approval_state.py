@@ -347,8 +347,8 @@ def test_two_stage_commit_binds_identity_and_content(
     assert not broker.cancel("bob", request_id)
     assert broker.commit("alice", request_id)
     assert not broker.commit("alice", request_id)
-    assert coordinator.next_execution() == (request_id, payload)
-    assert coordinator.next_execution() is None
+    assert broker.claim_next() == (request_id, payload)
+    assert broker.claim_next() is None
 
 
 def test_expired_queued_ticket_status_survives_result_lookup(
@@ -411,8 +411,8 @@ def test_two_stage_concurrent_commits_are_single_use(
             executor.map(lambda _: broker.commit("alice", request_id), range(8))
         )
     assert sum(results) == 1
-    assert coordinator.next_execution() == (request_id, payload)
-    assert coordinator.next_execution() is None
+    assert broker.claim_next() == (request_id, payload)
+    assert broker.claim_next() is None
 
 
 def test_cancelled_review_does_not_permanently_fill_review_queue(
@@ -532,6 +532,19 @@ def test_review_dequeue_waits_for_pruning(approval_module: ModuleType) -> None:
     removed = threading.Event()
     resume = threading.Event()
     dequeue_started = threading.Event()
+    original_lock = coordinator._lock
+
+    class ObservedLock:
+        def __enter__(self):
+            if threading.current_thread().name.startswith("dequeue-review"):
+                dequeue_started.set()
+            original_lock.acquire()
+            return self
+
+        def __exit__(self, *_args):
+            original_lock.release()
+
+    coordinator._lock = ObservedLock()
     original = coordinator._reviews.get_nowait
 
     def paused_get() -> Any:
@@ -544,7 +557,7 @@ def test_review_dequeue_waits_for_pruning(approval_module: ModuleType) -> None:
     coordinator._reviews.get_nowait = paused_get
 
     def dequeue() -> Any:
-        dequeue_started.set()
+        threading.current_thread().name = "dequeue-review"
         return coordinator.next_review()
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -592,4 +605,26 @@ def test_denial_retention_does_not_evict_another_owner(
     assert broker.status("bob", second) is approval_module.ApprovalState.DENIED
     broker.cancel_owner("alice")
     broker.begin("carol", payload, 10)
+    broker.close()
+
+
+def test_committed_expiry_survives_another_owner_admission(
+    approval_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A committed request that expires before claim retains its owner status."""
+    clock = [10.0]
+    monkeypatch.setattr(
+        approval_module, "time", SimpleNamespace(monotonic=lambda: clock[0])
+    )
+    coordinator = approval_module.ReviewCoordinator(1)
+    broker = approval_module.LeasedReviewBroker(coordinator, 1)
+    payload = approval_module.ApprovalPayload("execute_python", b"pass")
+    first = broker.begin("alice", payload, 5)
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", first)
+    clock[0] = 16.0
+    broker.begin("bob", payload, 5)
+    assert broker.status("alice", first) is approval_module.ApprovalState.EXPIRED
+    assert broker.status("bob", first) is None
+    assert broker.claim_next() is None
     broker.close()

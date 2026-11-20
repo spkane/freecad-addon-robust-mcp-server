@@ -100,7 +100,7 @@ async def exercise_production_http(  # noqa: PLR0912
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         http_port = listener.getsockname()[1]
-    key = "test-only-key-0123456789abcdef0123456789"
+    key = secrets.token_urlsafe(32)
     env = {
         **os.environ,
         "FREECAD_MODE": "socket",

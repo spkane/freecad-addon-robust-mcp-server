@@ -1318,7 +1318,7 @@ class FreecadMCPPlugin:
             raise RuntimeError("Experimental review is already enabled")
         if self._review_controller is not None:
             if not self._review_controller._closed:
-                raise RuntimeError("Previous review shutdown is still pending")
+                self._review_controller.close()
             self._review_controller = None
             self._review_close_relay = None
         if __package__:

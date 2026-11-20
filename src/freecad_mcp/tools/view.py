@@ -696,13 +696,21 @@ try:
     new_obj = None
     if ext == ".fcstd":
         # Import FreeCAD document
+        # An already-open document may contain unsaved changes, rather than
+        # the reviewed file contents. Preserve it and refuse this import.
+        source_path = os.path.normcase(os.path.realpath(part_path))
+        for opened in FreeCAD.listDocuments().values():
+            if opened.FileName and os.path.normcase(os.path.realpath(opened.FileName)) == source_path:
+                raise ValueError("Close the source document before importing its reviewed file")
         src_doc = FreeCAD.openDocument(part_path)
-        for obj in src_doc.Objects:
-            if hasattr(obj, "Shape"):
-                new_obj = doc.addObject("Part::Feature", part_name)
-                new_obj.Shape = obj.Shape.copy()
-                break
-        FreeCAD.closeDocument(src_doc.Name)
+        try:
+            for obj in src_doc.Objects:
+                if hasattr(obj, "Shape"):
+                    new_obj = doc.addObject("Part::Feature", part_name)
+                    new_obj.Shape = obj.Shape.copy()
+                    break
+        finally:
+            FreeCAD.closeDocument(src_doc.Name)
     else:
         # Import STEP/IGES
         shape = Part.read(part_path)

@@ -473,7 +473,9 @@ class LeasedReviewBroker:
                 ApprovalState.DENIED,
                 ApprovalState.CONSUMED,
             ):
-                if state is ApprovalState.DENIED:
+                if state is ApprovalState.DENIED or (
+                    state is ApprovalState.EXPIRED and request_id in self._committed
+                ):
                     if len(self._terminal) >= self._capacity:
                         # Preserve the denial in the bounded active index until
                         # a terminal slot expires or its owner disconnects.

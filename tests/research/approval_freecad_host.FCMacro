@@ -148,7 +148,7 @@ def test_preferences():
         table.open_folder()
     finally:
         widget_module.load_qt_modules = original_loader
-    if opened != [str(macro_dir)]:
+    if [Path(item) for item in opened] != [macro_dir]:
         raise RuntimeError(f"Wrong macro folder opened: {opened}")
     table.remove_selected()
     if store.contains(items[2]) or not store.contains(items[1]):

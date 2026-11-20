@@ -1,5 +1,7 @@
 """Tests for view and GUI tools module."""
 
+import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -467,6 +469,45 @@ class TestViewTools:
 
         assert result["name"] == "Bolt"
         mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("source_open,copy_fails", [(True, False), (False, True)])
+    async def test_library_source_cleanup_preserves_open_document(
+        self,
+        register_tools,
+        mock_bridge,
+        monkeypatch,
+        tmp_path,
+        source_open,
+        copy_fails,
+    ):
+        """An existing source remains open; an import-owned source closes on error."""
+        path = tmp_path / "part.FCStd"
+        path.write_text("test")
+        await register_tools["insert_part_from_library"](str(path), doc_name="target")
+        code = mock_bridge.execute_python.await_args.args[0]
+        document = MagicMock()
+        shape = MagicMock()
+        if copy_fails:
+            shape.copy.side_effect = RuntimeError("copy failed")
+        source = SimpleNamespace(
+            Name="source", FileName=str(path), Objects=[SimpleNamespace(Shape=shape)]
+        )
+        app = SimpleNamespace(
+            getDocument=lambda _name: document,
+            listDocuments=lambda: {"source": source} if source_open else {},
+            openDocument=MagicMock(return_value=source),
+            closeDocument=MagicMock(),
+        )
+        monkeypatch.setitem(sys.modules, "Part", MagicMock())
+        with pytest.raises((ValueError, RuntimeError)):
+            exec(code, {"FreeCAD": app})  # noqa: S102
+        if source_open:
+            app.openDocument.assert_not_called()
+            app.closeDocument.assert_not_called()
+        else:
+            app.closeDocument.assert_called_once_with("source")
+        document.abortTransaction.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_console_log(self, register_tools, mock_bridge):
