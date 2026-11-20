@@ -215,6 +215,8 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             The job description from ``cam_inspect_job``.
         """
         token = None
+        document_context = None
+        reservation_context = None
         if template is None:
             bridge = await get_bridge()
             preference = await bridge.execute_python(
@@ -225,6 +227,21 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 raise ToolError("ReviewUnavailable: could not resolve the CAM template")
             template = preference.result
             if template:
+                from freecad_mcp.bridge.socket import SocketBridge
+                from freecad_mcp.config import get_config
+
+                if (
+                    isinstance(bridge, SocketBridge)
+                    and not get_config().allow_unreviewed_file_operations
+                ):
+                    selected = await bridge.capture_review_document(doc_name)
+                    if selected is None:
+                        raise ValueError("No active document")
+                    doc_name = selected["name"]
+                    document_context = file_review_document.set(doc_name)
+                    reservation_context = file_review_document_token.set(
+                        selected["token"]
+                    )
                 token = file_review_target.set((template, "read", "path"))
         try:
             return await run(
@@ -244,6 +261,10 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         finally:
             if token is not None:
                 file_review_target.reset(token)
+            if reservation_context is not None:
+                file_review_document_token.reset(reservation_context)
+            if document_context is not None:
+                file_review_document.reset(document_context)
 
     @mcp.tool()
     async def cam_set_stock(

@@ -109,7 +109,7 @@ def _wrap_file_target(
         if (
             get_bridge is not None
             and "doc_name" in bound.arguments
-            and (path or function.__name__ == "cam_create_job")
+            and (path or (function.__name__ == "cam_create_job" and path is not None))
         ):
             from freecad_mcp.bridge.socket import SocketBridge
             from freecad_mcp.config import get_config
@@ -120,6 +120,7 @@ def _wrap_file_target(
                 requested_name = bound.arguments["doc_name"]
                 if (
                     isinstance(bridge, SocketBridge)
+                    and bool(path)
                     and not get_config().allow_unreviewed_file_operations
                 ):
                     selected = await bridge.capture_review_document(requested_name)
