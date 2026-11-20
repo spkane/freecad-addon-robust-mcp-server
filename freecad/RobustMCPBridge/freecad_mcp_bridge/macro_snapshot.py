@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,15 +41,12 @@ def snapshot_macro(path: str) -> MacroSnapshot:
     )
     fd = os.open(str(resolved), flags)
     try:
-        stream = os.fdopen(fd, "rb")
-    except BaseException:
-        with suppress(OSError):
-            os.close(fd)
-        raise
-    with stream:
-        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise ValueError("Macro must be a regular file")
-        content = stream.read(MAX_MACRO_BYTES + 1)
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            content = stream.read(MAX_MACRO_BYTES + 1)
+    finally:
+        os.close(fd)
     if len(content) > MAX_MACRO_BYTES:
         raise ValueError("Macro exceeds the review size limit")
     return MacroSnapshot(str(resolved), content, hashlib.sha256(content).hexdigest())

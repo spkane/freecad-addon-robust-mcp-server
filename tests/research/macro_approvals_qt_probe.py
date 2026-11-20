@@ -71,7 +71,7 @@ def main() -> None:
             SimpleNamespace(QDesktopServices=SimpleNamespace(openUrl=open_url)),
         )
         widget.open_folder()
-        assert opened == [str(root)]
+        assert [Path(item) for item in opened] == [root]
         coordinator = approval.ReviewCoordinator(2)
         controller = review.ReviewDialogController(coordinator, approval_store=store)
         pending = coordinator.submit(

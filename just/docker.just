@@ -53,7 +53,7 @@ build-load: setup-buildx
 run:
     docker run --rm -i \
         --add-host=host.docker.internal:host-gateway \
-        -e FREECAD_MODE=xmlrpc \
+        -e FREECAD_MODE=socket \
         -e FREECAD_SOCKET_HOST=host.docker.internal \
         {{image_name}}
 
@@ -68,7 +68,7 @@ run-env *args:
 shell:
     docker run --rm -it \
         --add-host=host.docker.internal:host-gateway \
-        -e FREECAD_MODE=xmlrpc \
+        -e FREECAD_MODE=socket \
         -e FREECAD_SOCKET_HOST=host.docker.internal \
         --entrypoint /bin/sh \
         {{image_name}}
@@ -173,11 +173,10 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Source shared bridge helper functions (for graceful_kill_bridge_ports)
+    # Source shared bridge helper functions.
     . "{{project_root}}/scripts/bridge-helpers.sh"
 
     # Initialize variables for cleanup
-    STARTED_FREECAD=false
     FREECAD_PID=""
     FREECAD_LOG=""
     MCP_INPUT=""
@@ -186,12 +185,7 @@ test:
     cleanup() {
         [ -n "${MCP_INPUT:-}" ] && rm -f "$MCP_INPUT" 2>/dev/null || true
         [ -n "${FREECAD_LOG:-}" ] && rm -f "$FREECAD_LOG" 2>/dev/null || true
-        if [ "$STARTED_FREECAD" = true ]; then
-            # Kill the just process (may not forward signals to freecadcmd child)
-            [ -n "${FREECAD_PID:-}" ] && kill "$FREECAD_PID" 2>/dev/null || true
-            # Kill by port to catch the orphaned freecadcmd process
-            graceful_kill_bridge_ports
-        fi
+        stop_owned_freecad "$FREECAD_PID"
     }
     trap cleanup EXIT INT TERM
 
@@ -199,15 +193,6 @@ test:
     echo "Docker Integration Test"
     echo "=========================================="
     echo ""
-
-    # Function to check if XML-RPC server is ready using a simple POST request
-    check_xmlrpc() {
-        # Send a minimal XML-RPC system.listMethods call
-        curl -s --max-time 2 -X POST \
-            -H "Content-Type: text/xml" \
-            -d '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName></methodCall>' \
-            http://localhost:9875 > /dev/null 2>&1
-    }
 
     # Detect timeout command (not available on macOS by default)
     TIMEOUT_CMD=""
@@ -225,22 +210,22 @@ test:
 
     # Check if FreeCAD bridge is already running
     echo "Step 2: Checking for FreeCAD Robust MCP Bridge..."
-    if check_xmlrpc; then
-        echo "✓ FreeCAD Robust MCP Bridge is already running on port 9875"
-        STARTED_FREECAD=false
+    if is_port_in_use 9876; then
+        echo "✓ A socket listener is already running on port 9876"
     else
         echo "FreeCAD Robust MCP Bridge not detected. Starting FreeCAD headless..."
         echo "  (This may take 30-60 seconds for FreeCAD to initialize...)"
 
         # Start FreeCAD headless in background, capturing output
         FREECAD_LOG=$(mktemp)
-        just freecad::run-headless > "$FREECAD_LOG" 2>&1 &
+        FREECAD_CMD=$(find_freecad_executable headless)
+        "$FREECAD_CMD" "{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py" > "$FREECAD_LOG" 2>&1 &
         FREECAD_PID=$!
 
         # Wait for bridge to be ready (longer timeout for FreeCAD startup)
         MAX_RETRIES=60
         RETRY_COUNT=0
-        while ! check_xmlrpc; do
+        while ! is_port_in_use 9876; do
             RETRY_COUNT=$((RETRY_COUNT + 1))
             if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
                 echo "✗ ERROR: FreeCAD Robust MCP Bridge did not start within ${MAX_RETRIES}s"
@@ -258,7 +243,6 @@ test:
         rm -f "$FREECAD_LOG"
         FREECAD_LOG=""  # Clear so cleanup doesn't try to delete again
         echo "✓ FreeCAD Robust MCP Bridge started (took ${RETRY_COUNT}s)"
-        STARTED_FREECAD=true
     fi
     echo ""
 
@@ -277,13 +261,13 @@ test:
     if [ -n "$TIMEOUT_CMD" ]; then
         CONTAINER_OUTPUT=$($TIMEOUT_CMD 30 docker run --rm -i \
             --add-host=host.docker.internal:host-gateway \
-            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_MODE=socket \
             -e FREECAD_SOCKET_HOST=host.docker.internal \
             {{image_name}}:test 2>&1 < "$MCP_INPUT" || true)
     else
         CONTAINER_OUTPUT=$(docker run --rm -i \
             --add-host=host.docker.internal:host-gateway \
-            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_MODE=socket \
             -e FREECAD_SOCKET_HOST=host.docker.internal \
             {{image_name}}:test 2>&1 < "$MCP_INPUT" || true)
     fi

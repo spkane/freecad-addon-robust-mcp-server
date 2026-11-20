@@ -88,13 +88,7 @@ class ReviewPolicy:
 
     def requires_review(self, action: str) -> bool:
         """Return whether this action needs review at the instant of the check."""
-        self._validate_action(action)
-        with self._lock:
-            deadline = self._deadlines.get(action, 0.0)
-            if deadline and self._clock() >= deadline:
-                self._deadlines.pop(action, None)
-                deadline = 0.0
-            return self._review_required[action] and not deadline
+        return self.decision(action)[0]
 
     def clear_session(self) -> None:
         """Remove all temporary bypasses on bridge stop or restart."""

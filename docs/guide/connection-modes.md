@@ -148,10 +148,13 @@ graph TD
 | General development           | `xmlrpc`           |
 | Interactive modeling with GUI | `xmlrpc`           |
 | CI/CD pipelines on Linux      | `embedded`         |
-| Docker Desktop containers     | `xmlrpc`           |
+| Docker Desktop containers     | `socket`           |
 | Docker Engine on Linux        | Run server on host |
 | Remote FreeCAD instance       | Not supported      |
 | Debugging connection issues   | `socket`           |
+
+Docker Desktop also needs the server's pairing credential provisioned in the
+container. See the [Docker installation guidance](../getting-started/installation.md#method-4-docker).
 
 ---
 

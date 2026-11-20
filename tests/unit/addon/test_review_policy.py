@@ -82,3 +82,15 @@ def test_bypass_revocation_and_invalid_input_fail_closed(policy_module):
     assert policy.requires_review("execute_python")
     policy.configure("execute_python", require_review=False)
     assert not policy.requires_review("execute_python")
+
+
+def test_zero_deadline_has_consistent_review_policy(policy_module):
+    """A grant whose deadline is zero remains valid until the deadline."""
+    clock = [-60.0]
+    policy = policy_module.ReviewPolicy(clock=lambda: clock[0])
+    policy.set_timed_bypass_enabled(True)
+    policy.grant_bypass("execute_python", 60)
+    assert policy.decision("execute_python") == (False, 0.0)
+    assert not policy.requires_review("execute_python")
+    clock[0] = 0.0
+    assert policy.requires_review("execute_python")

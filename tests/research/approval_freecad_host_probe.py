@@ -447,7 +447,11 @@ def main() -> None:  # noqa: PLR0912
                         flush=True,
                     )
                     try:
-                        process.wait()
+                        returncode = process.wait()
+                        if returncode != 0:
+                            raise subprocess.CalledProcessError(
+                                returncode, process.args
+                            )
                     except KeyboardInterrupt:
                         print("Stopping the isolated FreeCAD session.", flush=True)
                     return
