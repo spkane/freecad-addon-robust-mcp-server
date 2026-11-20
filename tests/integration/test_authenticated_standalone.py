@@ -518,6 +518,22 @@ async def test_authenticated_transports_with_real_freecad(
                 )
                 try:
                     await bridge.connect()
+                    identity = await bridge.execute_python(
+                        "name = 'MCPDocumentIdentityProbe'\n"
+                        "original = FreeCAD.newDocument(name)\n"
+                        "same = FreeCAD.getDocument(name) is original\n"
+                        "FreeCAD.closeDocument(name)\n"
+                        "replacement = FreeCAD.newDocument(name)\n"
+                        "_result_ = {'same': same, 'name': replacement.Name, "
+                        "'different': replacement is not original}\n"
+                        "FreeCAD.closeDocument(replacement.Name)"
+                    )
+                    assert identity.success, identity.error_traceback
+                    assert identity.result == {
+                        "same": True,
+                        "name": "MCPDocumentIdentityProbe",
+                        "different": True,
+                    }
                     result = await bridge.execute_python(
                         "import Part\n_result_ = Part.makeBox(2, 3, 4).Volume"
                     )
