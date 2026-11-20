@@ -173,11 +173,10 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Source shared bridge helper functions (for graceful_kill_bridge_ports)
+    # Source shared bridge helper functions.
     . "{{project_root}}/scripts/bridge-helpers.sh"
 
     # Initialize variables for cleanup
-    STARTED_FREECAD=false
     FREECAD_PID=""
     FREECAD_LOG=""
     MCP_INPUT=""
@@ -186,12 +185,7 @@ test:
     cleanup() {
         [ -n "${MCP_INPUT:-}" ] && rm -f "$MCP_INPUT" 2>/dev/null || true
         [ -n "${FREECAD_LOG:-}" ] && rm -f "$FREECAD_LOG" 2>/dev/null || true
-        if [ "$STARTED_FREECAD" = true ]; then
-            # Kill the just process (may not forward signals to freecadcmd child)
-            [ -n "${FREECAD_PID:-}" ] && kill "$FREECAD_PID" 2>/dev/null || true
-            # Kill by port to catch the orphaned freecadcmd process
-            graceful_kill_bridge_ports
-        fi
+        stop_owned_freecad "$FREECAD_PID"
     }
     trap cleanup EXIT INT TERM
 
@@ -218,14 +212,14 @@ test:
     echo "Step 2: Checking for FreeCAD Robust MCP Bridge..."
     if is_port_in_use 9876; then
         echo "✓ A socket listener is already running on port 9876"
-        STARTED_FREECAD=false
     else
         echo "FreeCAD Robust MCP Bridge not detected. Starting FreeCAD headless..."
         echo "  (This may take 30-60 seconds for FreeCAD to initialize...)"
 
         # Start FreeCAD headless in background, capturing output
         FREECAD_LOG=$(mktemp)
-        just freecad::run-headless > "$FREECAD_LOG" 2>&1 &
+        FREECAD_CMD=$(find_freecad_executable headless)
+        "$FREECAD_CMD" "{{project_root}}/freecad/RobustMCPBridge/freecad_mcp_bridge/blocking_bridge.py" > "$FREECAD_LOG" 2>&1 &
         FREECAD_PID=$!
 
         # Wait for bridge to be ready (longer timeout for FreeCAD startup)
@@ -249,7 +243,6 @@ test:
         rm -f "$FREECAD_LOG"
         FREECAD_LOG=""  # Clear so cleanup doesn't try to delete again
         echo "✓ FreeCAD Robust MCP Bridge started (took ${RETRY_COUNT}s)"
-        STARTED_FREECAD=true
     fi
     echo ""
 

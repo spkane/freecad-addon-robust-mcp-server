@@ -99,6 +99,8 @@ class TestDockerSyntax:
         if command == "docker::test":
             assert "is_port_in_use 9876" in rendered
             assert "check_xmlrpc" not in rendered
+            assert 'stop_owned_freecad "$FREECAD_PID"' in rendered
+            assert "graceful_kill_bridge_ports" not in rendered
 
 
 @pytest.mark.requires_docker
