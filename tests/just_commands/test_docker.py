@@ -83,6 +83,20 @@ class TestDockerSyntax:
         result = just.dry_run(command, *args)
         assert result.success, f"Syntax error in '{command}': {result.stderr}"
 
+    @pytest.mark.just_syntax
+    @pytest.mark.parametrize(
+        "command", ["docker::run", "docker::shell", "docker::test"]
+    )
+    def test_desktop_recipes_select_socket(
+        self, just: JustRunner, command: str
+    ) -> None:
+        """Desktop's forwarded hostname requires the socket bridge."""
+        result = just.dry_run(command)
+        assert result.success
+        rendered = result.stdout + result.stderr
+        assert "FREECAD_MODE=socket" in rendered
+        assert "FREECAD_SOCKET_HOST=host.docker.internal" in rendered
+
 
 @pytest.mark.requires_docker
 class TestDockerRuntime:

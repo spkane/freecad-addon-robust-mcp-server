@@ -510,6 +510,37 @@ class TestViewTools:
         document.abortTransaction.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_failed_library_open_closes_only_new_source(
+        self, register_tools, mock_bridge, monkeypatch, tmp_path
+    ):
+        """A failed restore must not leave its partial source or close user work."""
+        path = tmp_path / "part.FCStd"
+        path.write_text("test")
+        await register_tools["insert_part_from_library"](str(path), doc_name="target")
+        code = mock_bridge.execute_python.await_args.args[0]
+        target = MagicMock()
+        existing = SimpleNamespace(Name="existing", FileName=str(tmp_path / "other"))
+        partial = SimpleNamespace(Name="partial", FileName=str(path))
+        unrelated = SimpleNamespace(Name="unrelated", FileName=str(tmp_path / "new"))
+        documents = {"existing": existing}
+
+        def failing_open(_path):
+            documents.update(partial=partial, unrelated=unrelated)
+            raise RuntimeError("restore failed")
+
+        app = SimpleNamespace(
+            getDocument=lambda _name: target,
+            listDocuments=lambda: dict(documents),
+            openDocument=failing_open,
+            closeDocument=MagicMock(),
+        )
+        monkeypatch.setitem(sys.modules, "Part", MagicMock())
+        with pytest.raises(RuntimeError, match="restore failed"):
+            exec(code, {"FreeCAD": app})  # noqa: S102
+        app.closeDocument.assert_called_once_with("partial")
+        target.abortTransaction.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_get_console_log(self, register_tools, mock_bridge):
         """get_console_log should return console messages."""
         mock_bridge.get_console_output = AsyncMock(

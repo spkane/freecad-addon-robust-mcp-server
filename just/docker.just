@@ -53,7 +53,7 @@ build-load: setup-buildx
 run:
     docker run --rm -i \
         --add-host=host.docker.internal:host-gateway \
-        -e FREECAD_MODE=xmlrpc \
+        -e FREECAD_MODE=socket \
         -e FREECAD_SOCKET_HOST=host.docker.internal \
         {{image_name}}
 
@@ -68,7 +68,7 @@ run-env *args:
 shell:
     docker run --rm -it \
         --add-host=host.docker.internal:host-gateway \
-        -e FREECAD_MODE=xmlrpc \
+        -e FREECAD_MODE=socket \
         -e FREECAD_SOCKET_HOST=host.docker.internal \
         --entrypoint /bin/sh \
         {{image_name}}
@@ -277,13 +277,13 @@ test:
     if [ -n "$TIMEOUT_CMD" ]; then
         CONTAINER_OUTPUT=$($TIMEOUT_CMD 30 docker run --rm -i \
             --add-host=host.docker.internal:host-gateway \
-            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_MODE=socket \
             -e FREECAD_SOCKET_HOST=host.docker.internal \
             {{image_name}}:test 2>&1 < "$MCP_INPUT" || true)
     else
         CONTAINER_OUTPUT=$(docker run --rm -i \
             --add-host=host.docker.internal:host-gateway \
-            -e FREECAD_MODE=xmlrpc \
+            -e FREECAD_MODE=socket \
             -e FREECAD_SOCKET_HOST=host.docker.internal \
             {{image_name}}:test 2>&1 < "$MCP_INPUT" || true)
     fi
