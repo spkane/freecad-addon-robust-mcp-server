@@ -1,6 +1,7 @@
 """Exercise review decisions in an isolated installed FreeCAD process."""
 
 import base64
+import contextlib
 import hmac
 import importlib
 import importlib.util
@@ -38,6 +39,12 @@ port_file = os.environ.get("MCP_REVIEW_PROBE_PORT")
 done_file = os.environ.get("MCP_REVIEW_PROBE_DONE")
 manual = os.environ.get("MCP_REVIEW_PROBE_MANUAL") == "1"
 preferences_tested = False
+
+
+def report_traceback():
+    """Attempt diagnostics without interrupting failure cleanup."""
+    with contextlib.suppress(Exception):
+        traceback.print_exc()
 
 
 def test_preferences():
@@ -254,7 +261,7 @@ def worker(port):
                         raise RuntimeError(f"Unexpected execution result: {result}")
                 results.append(state)
     except BaseException:
-        traceback.print_exc()
+        report_traceback()
         errors.append(traceback.format_exc())
     finally:
         finished.set()
@@ -316,7 +323,7 @@ def tick():
                 try:
                     plugin.stop()
                 except Exception:
-                    traceback.print_exc()
+                    report_traceback()
                     errors.append(traceback.format_exc())
                 result_path.write_text(
                     json.dumps(
@@ -541,7 +548,7 @@ def start():
         timer.timeout.connect(tick)
         timer.start(50)
     except BaseException:
-        traceback.print_exc()
+        report_traceback()
         try:
             result_path.write_text(json.dumps({"errors": [traceback.format_exc()]}))
         finally:

@@ -1,8 +1,17 @@
 """Regression tests for the isolated FreeCAD probe's failure diagnostics."""
 
+import ast
+import contextlib
 import io
+import json
+import os
 import subprocess
+import traceback
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
+
+import pytest
 
 from tests.research.approval_freecad_host_probe import (
     attach_stderr,
@@ -47,3 +56,45 @@ def test_failed_child_is_terminated_and_reaped_after_timeout() -> None:
     process.terminate.assert_called_once()
     process.kill.assert_called_once()
     assert process.wait.call_count == 3
+
+
+def test_startup_cleanup_survives_diagnostic_write_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unavailable stderr cannot prevent startup error cleanup."""
+    macro = (
+        Path(__file__).resolve().parents[1]
+        / "research"
+        / "approval_freecad_host.FCMacro"
+    )
+    tree = ast.parse(macro.read_text())
+    functions: list[ast.stmt] = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"report_traceback", "start"}
+    ]
+    fake_plugin = MagicMock()
+    gui = MagicMock()
+    result = MagicMock()
+    namespace: dict[str, Any] = {
+        "contextlib": contextlib,
+        "os": os,
+        "traceback": traceback,
+        "plugin": fake_plugin,
+        "FreeCADGui": gui,
+        "result_path": result,
+        "json": json,
+    }
+    exec(  # noqa: S102 - execute only functions parsed from the local test fixture
+        compile(ast.Module(body=functions, type_ignores=[]), str(macro), "exec"),
+        namespace,
+    )
+    monkeypatch.delenv("FREECAD_USER_DATA", raising=False)
+    monkeypatch.setattr(traceback, "print_exc", MagicMock(side_effect=OSError("full")))
+
+    namespace["start"]()
+
+    result.write_text.assert_called_once()
+    fake_plugin.stop.assert_called_once()
+    gui.getMainWindow.return_value.close.assert_called_once()
