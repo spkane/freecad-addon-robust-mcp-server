@@ -601,6 +601,60 @@ async def test_import_binds_existing_or_new_document(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "tool_name,module_name", [("import_step", "Part"), ("import_stl", "Mesh")]
+)
+async def test_import_without_initial_document_uses_new_document(
+    tool_name, module_name, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A later active document cannot become the destination of an import."""
+    import sys
+    from types import ModuleType
+
+    from freecad_mcp.tools.export import register_export_tools
+
+    source = tmp_path / "model.step"
+    source.write_text("fixture")
+    later = SimpleNamespace(Name="Later", Objects=[])
+    created = SimpleNamespace(Name="Imported", Objects=[], recompute=lambda: None)
+    freecad = SimpleNamespace(ActiveDocument=later, newDocument=lambda _: created)
+    module = ModuleType(module_name)
+    destinations = []
+
+    def insert(_path, name):
+        destinations.append(name)
+        created.Objects.append(SimpleNamespace(Name="ImportedObject"))
+
+    module.__dict__["insert"] = insert
+    monkeypatch.setitem(sys.modules, module_name, module)
+    mcp = Tools()
+
+    async def execute(code):
+        namespace = {"FreeCAD": freecad}
+        exec(code, namespace)  # noqa: S102 - exercise the generated import
+        return ExecutionResult(
+            success=True,
+            result=namespace["_result_"],
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    bridge = SimpleNamespace(
+        get_active_document=AsyncMock(return_value=None), execute_python=execute
+    )
+
+    async def get_bridge():
+        return bridge
+
+    register_export_tools(mcp, get_bridge)
+    result = await mcp.functions[tool_name](file_path=str(source))
+    assert result["document"] == "Imported"
+    assert destinations == ["Imported"]
+    assert not later.Objects
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("has_later_selection", [False, True])
 async def test_new_shapestring_preserves_active_document(
     has_later_selection: bool,
@@ -682,3 +736,49 @@ async def test_active_document_lookup_propagates_execution_errors(bridge_type) -
     )
     with pytest.raises(RuntimeError, match="bridge failed"):
         await bridge.get_active_document()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("explicit_name", [None, "Model"])
+async def test_save_document_reserves_selected_instance_before_review(
+    explicit_name: str | None, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """The token selected on the host follows the save into file review."""
+    from freecad_mcp.bridge.file_review import (
+        file_review_document,
+        file_review_document_token,
+    )
+
+    monkeypatch.setattr(
+        "freecad_mcp.config.get_config",
+        lambda: SimpleNamespace(allow_unreviewed_file_operations=False),
+    )
+    bridge = SocketBridge()
+    selected = {
+        "name": "Model",
+        "path": str(tmp_path / "existing.FCStd"),
+        "token": "unit-token",
+    }
+    capture = AsyncMock(return_value=selected)
+    monkeypatch.setattr(bridge, "capture_review_document", capture)
+    observed = []
+
+    async def save(name, path):
+        observed.append(
+            (name, path, file_review_document.get(), file_review_document_token.get())
+        )
+        return path
+
+    monkeypatch.setattr(bridge, "save_document", AsyncMock(side_effect=save))
+    mcp = Tools()
+
+    async def get_bridge():
+        return bridge
+
+    register_document_tools(mcp, get_bridge)
+    target = str(tmp_path / "saved.FCStd")
+    await mcp.functions["save_document"](doc_name=explicit_name, path=target)
+    capture.assert_awaited_once_with(explicit_name)
+    assert observed == [("Model", target, "Model", "unit-token")]
+    assert file_review_document.get() is None
+    assert file_review_document_token.get() is None

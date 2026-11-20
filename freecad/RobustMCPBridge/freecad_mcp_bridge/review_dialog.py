@@ -98,6 +98,8 @@ def create_review_dialog(  # noqa: PLR0912
                 raise ValueError("Missing file review snapshot")
             review_text(file_snapshot.requested_path.encode("utf-8"))
             review_text(file_snapshot.resolved_path.encode("utf-8"))
+            if payload.document_name is not None:
+                review_text(payload.document_name.encode("utf-8"))
         qtcore, qtwidgets = load_qt_core_widgets()
         app = qtwidgets.QApplication.instance()
         if app is None or qtcore.QThread.currentThread() != app.thread():
@@ -147,7 +149,12 @@ def create_review_dialog(  # noqa: PLR0912
             details.setReadOnly(True)
             detail_text = (
                 f"Operation: {file_snapshot.action}\n"
-                f"Requested path: {file_snapshot.requested_path}\n"
+                + (
+                    f"Document: {payload.document_name}\n"
+                    if payload.document_name
+                    else ""
+                )
+                + f"Requested path: {file_snapshot.requested_path}\n"
                 f"Resolved path: {file_snapshot.resolved_path}\n"
                 f"Target exists: {'yes' if file_snapshot.exists else 'no'}\n"
                 f"Final component is a symlink: {'yes' if file_snapshot.is_symlink else 'no'}"
@@ -281,12 +288,14 @@ class ReviewDialogController:
         parent: Any = None,
         policy: Any = None,
         approval_store: Any = None,
+        document_guard: Any = None,
     ) -> None:
         """Initialize the controller for an existing review coordinator."""
         self._coordinator = coordinator
         self._parent = parent
         self._policy = policy
         self._approval_store = approval_store
+        self._document_guard = document_guard
         self._request: ApprovalRequest | None = None
         self._dialog: Any = None
         self._closed = False
@@ -303,6 +312,16 @@ class ReviewDialogController:
         if request is None:
             return
         try:
+            if request.payload.document_name is not None and (
+                self._document_guard is None
+                or not request.bind_document(
+                    self._document_guard(
+                        request.payload.document_name, request.payload.document_token
+                    )
+                )
+            ):
+                self._coordinator.cancel(request)
+                return
             if self._policy is not None:
                 required, deadline = self._policy.decision(request.payload.action)
                 if not required:

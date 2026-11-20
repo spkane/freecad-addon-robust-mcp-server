@@ -483,6 +483,63 @@ class TestCamTools:
         assert reviewed[0] == str(root / "link/../shape.fcstd")
         assert _payload(observed[1][0])["tool"]["shape"] == reviewed[0]
 
+    async def test_legacy_shape_reserves_document_before_review(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The discovered legacy file review stays bound to its document."""
+        from freecad_mcp.bridge.file_review import (
+            file_review_document,
+            file_review_document_token,
+            file_review_target,
+        )
+        from freecad_mcp.bridge.socket import SocketBridge
+
+        registered: RegisteredTools = {}
+        mcp = MagicMock()
+        mcp.tool = lambda **_: (
+            lambda function: registered.setdefault(function.__name__, function)
+        )
+        bridge = SocketBridge()
+        selected = {"name": "Original", "path": "", "token": str(123)}
+        monkeypatch.setattr(
+            bridge, "capture_review_document", AsyncMock(return_value=selected)
+        )
+        calls = []
+
+        async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
+            calls.append(
+                (
+                    code,
+                    file_review_target.get(),
+                    file_review_document.get(),
+                    file_review_document_token.get(),
+                )
+            )
+            result = (
+                {"legacy": True, "guard": True, "path": "/tmp/custom.fcstd"}
+                if len(calls) == 1
+                else {"ok": True}
+            )
+            return ExecutionResult(
+                success=True, result=result, stdout="", stderr="", execution_time_ms=1
+            )
+
+        monkeypatch.setattr(bridge, "execute_python", execute)
+
+        async def get_bridge() -> SocketBridge:
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        await registered["cam_add_tool_controller"](tool={"shape": "custom"})
+        assert calls[1][1:] == (
+            ("/tmp/custom.fcstd", "read", "path"),
+            "Original",
+            str(123),
+        )
+        assert _payload(calls[1][0])["doc_name"] == "Original"
+        assert file_review_document.get() is None
+        assert file_review_document_token.get() is None
+
     async def test_explicit_file_review_override_preserves_legacy_shape_dispatch(
         self,
         tools_and_bridge: tuple[RegisteredTools, AsyncMock],

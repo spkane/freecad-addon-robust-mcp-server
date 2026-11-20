@@ -516,6 +516,7 @@ class FreecadMCPPlugin:
         self._macro_review_roots: tuple[str, ...] = ()
         self._review_controller: Any | None = None
         self._review_close_relay: Any | None = None
+        self._document_reservations: Any | None = None
         self._socket_client_count = 0
         self._timer = None
         self._queue_thread: threading.Thread | None = None
@@ -861,6 +862,9 @@ class FreecadMCPPlugin:
 
     def _shutdown_review(self) -> None:
         """Deny pending reviews and dispose of their dialog on the Qt thread."""
+        if self._document_reservations is not None:
+            self._document_reservations.clear()
+            self._document_reservations = None
         if self._review_broker is not None:
             self._review_broker.close()
             self._review_broker = None
@@ -1300,6 +1304,22 @@ class FreecadMCPPlugin:
                 "Running in headless mode (queue processor thread started)\n"
             )
 
+    def _capture_review_document(self, name: str | None) -> dict[str, str] | None:
+        """Select and reserve a document on the FreeCAD GUI thread."""
+        reservations = self._document_reservations
+        if not _review_gui_thread_ready() or reservations is None:
+            raise RuntimeError("Document review is unavailable")
+        if name is not None and (type(name) is not str or not name):
+            raise ValueError("Invalid document name")
+        document = FreeCAD.ActiveDocument if name is None else FreeCAD.getDocument(name)
+        if document is None:
+            return None
+        return {
+            "name": document.Name,
+            "path": document.FileName or "",
+            "token": reservations.reserve(document.Name, document),
+        }
+
     def _run_queue_processor_loop(self) -> None:
         """Run queue processor in a loop for headless mode."""
         while self._running:
@@ -1323,11 +1343,13 @@ class FreecadMCPPlugin:
             self._review_close_relay = None
         if __package__:
             from .approval import LeasedReviewBroker, ReviewCoordinator
+            from .document_reservations import DocumentReservations
             from .macro_approvals import freecad_approval_store
             from .review_dialog import ReviewDialogController, create_close_relay
             from .review_policy import ReviewPolicy
         else:
             from approval import LeasedReviewBroker, ReviewCoordinator  # type: ignore[import-not-found,no-redef]
+            from document_reservations import DocumentReservations  # type: ignore[import-not-found,no-redef]
             from macro_approvals import freecad_approval_store  # type: ignore[import-not-found,no-redef]
             from review_dialog import (  # type: ignore[import-not-found,no-redef]
                 ReviewDialogController,
@@ -1363,7 +1385,18 @@ class FreecadMCPPlugin:
         except Exception:
             # Macro review is unavailable if the trusted GUI cannot configure it.
             pass
-        controller = ReviewDialogController(coordinator, parent, policy, approval_store)
+
+        self._document_reservations = DocumentReservations(MAX_PENDING_REQUESTS)
+
+        def capture_document_guard(name: str, token: str) -> Any:
+            reservations = self._document_reservations
+            if reservations is None:
+                raise ValueError("Document review is unavailable")
+            return reservations.take(token, name, FreeCAD.getDocument)
+
+        controller = ReviewDialogController(
+            coordinator, parent, policy, approval_store, capture_document_guard
+        )
         self._review_close_relay = create_close_relay(controller)
         self._review_controller = controller
         self._review_broker = LeasedReviewBroker(coordinator, MAX_PENDING_REQUESTS)
@@ -1572,6 +1605,7 @@ class FreecadMCPPlugin:
         exec_globals: dict[str, Any] = {
             "__builtins__": __builtins__,
             "_robust_mcp_cam_dispatch": self._cam_dispatch,
+            "_robust_mcp_capture_document": self._capture_review_document,
         }
 
         if initial_globals is not None:
@@ -1975,8 +2009,28 @@ class FreecadMCPPlugin:
         try:
             if broker is None or type(owner) is not str:
                 raise ValueError("File review unavailable")
-            if set(params) != {"code", "path", "action", "kind"}:
+            required = {"code", "path", "action", "kind"}
+            if set(params) not in (
+                required,
+                required | {"document_name", "document_token"},
+            ):
                 raise ValueError("Invalid file review parameters")
+            document_name = params.get("document_name")
+            document_token = params.get("document_token")
+            if (document_name is None) != (document_token is None):
+                raise ValueError("Document reservation is required")
+            if document_token is not None and (
+                type(document_token) is not str
+                or not document_token
+                or len(document_token) > 128
+            ):
+                raise ValueError("Invalid document reservation")
+            if document_name is not None and (
+                type(document_name) is not str
+                or not document_name
+                or len(document_name) > 255
+            ):
+                raise ValueError("Invalid reviewed document")
             code, path, action, kind = (
                 params[k] for k in ("code", "path", "action", "kind")
             )
@@ -1996,6 +2050,8 @@ class FreecadMCPPlugin:
                 from file_review import snapshot_file  # type: ignore[import-not-found,no-redef]
                 from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
             content = code.encode("utf-8")
+            if document_name is not None:
+                review_text(document_name.encode("utf-8"))
             review_text(content)
             review_text(path.encode("utf-8"))
 
@@ -2046,7 +2102,12 @@ class FreecadMCPPlugin:
             if broker is None or self._review_broker is not broker:
                 raise ValueError("File review stopped")
             payload = ApprovalPayload(
-                "file_operation", content, file_snapshot=snapshot, file_target_kind=kind
+                "file_operation",
+                content,
+                file_snapshot=snapshot,
+                file_target_kind=kind,
+                document_name=document_name,
+                document_token=document_token,
             )
             result = {
                 "review_id": cast("Any", broker).begin(

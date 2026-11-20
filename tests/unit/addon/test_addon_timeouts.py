@@ -2435,3 +2435,130 @@ async def test_reviewed_macro_traceback_uses_captured_source(
     assert 'raise ValueError("approved line")' in result["error_traceback"]
     assert "replacement line" not in result["error_traceback"]
     broker.close()
+
+
+def test_document_selection_reservation_survives_name_reuse(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GUI selection holds the original wrapper until the review claims it."""
+    import importlib
+
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    original = SimpleNamespace(Name="Model", FileName="/tmp/model.FCStd")
+    current = [original]
+    freecad = MagicMock()
+    freecad.ActiveDocument = original
+    freecad.getDocument.side_effect = lambda _name: current[0]
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    selected = plugin._capture_review_document(None)
+    assert selected and selected["name"] == "Model"
+    current[0] = SimpleNamespace(Name="Model", FileName="/tmp/model.FCStd")
+    guard = plugin._document_reservations.take(
+        selected["token"], "Model", freecad.getDocument
+    )
+    assert not guard()
+    with pytest.raises(ValueError, match="unavailable"):
+        plugin._document_reservations.take(
+            selected["token"], "Model", freecad.getDocument
+        )
+    plugin._shutdown_review()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replace_document", [False, True])
+async def test_reserved_file_review_rejects_document_replaced_before_dialog(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    replace_document: bool,
+) -> None:
+    """The original GUI selection, not a later same-named document, is bound."""
+    from freecad_mcp.bridge.file_review import (
+        file_review_document,
+        file_review_document_token,
+    )
+
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    original = SimpleNamespace(Name="Model", FileName=str(tmp_path / "model.FCStd"))
+    current = [original]
+    freecad = MagicMock()
+    freecad.ActiveDocument = original
+    freecad.getDocument.side_effect = lambda _name: current[0]
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    secret = b"a" * 32
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        port=0,
+        authenticator=auth.BridgeAuthenticator(
+            auth.create_hmac_verifier(lambda _: secret)
+        ),
+    )
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    plugin._review_controller._policy.configure("file_operation", require_review=False)
+    original_execute = plugin._execute_code_sync
+    executed = []
+
+    def execute(code, **kwargs):
+        if "_robust_mcp_capture_document" in code:
+            return original_execute(code, **kwargs)
+        executed.append(code)
+        return {"success": True, "result": True}
+
+    monkeypatch.setattr(plugin, "_execute_code_sync", execute)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+
+    async def process_queue():
+        while True:
+            plugin._process_queue()
+            await asyncio.sleep(0.005)
+
+    worker = asyncio.create_task(process_queue())
+    target = tmp_path / "target.FCStd"
+    target.write_text("original")
+    try:
+        selected = await bridge.capture_review_document(None)
+        assert selected and selected["name"] == "Model"
+        if replace_document:
+            current[0] = SimpleNamespace(Name="Model", FileName=str(target))
+        name_token = file_review_document.set(selected["name"])
+        reservation_token = file_review_document_token.set(selected["token"])
+        try:
+            result = await bridge.execute_reviewed_file(
+                "_result_ = 42", str(target), "write", "path"
+            )
+        finally:
+            file_review_document_token.reset(reservation_token)
+            file_review_document.reset(name_token)
+        assert result.success is not replace_document
+        assert executed == ([] if replace_document else ["_result_ = 42"])
+    finally:
+        worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
+        plugin._shutdown_review()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
