@@ -31,7 +31,6 @@ import stat
 import sys
 import traceback
 import warnings
-from contextlib import nullcontext, suppress
 from pathlib import Path as FsPath
 from typing import Any
 
@@ -1343,13 +1342,19 @@ def _create_reviewed_tool_bit(doc: Any, factory: Any, shape: str) -> Any:
     """Create a legacy tool and clean up its own source document on failure."""
     previous_documents = set(FreeCAD.listDocuments())
     previous_objects = {obj.Name for obj in doc.Objects}
+    target = os.path.normcase(os.path.realpath(shape))
+    if any(
+        getattr(opened, "FileName", None)
+        and os.path.normcase(os.path.realpath(opened.FileName)) == target
+        for opened in FreeCAD.listDocuments().values()
+    ):
+        raise _ReviewedLegacyToolError("Reviewed tool shape is already open")
     try:
         return factory.Create("ToolBit", shape)
     except Exception as error:
         cleanup_error = None
         # Factory.Create may open the reviewed shape and fail before closing it.
         # Close only a newly opened document for that shape, never a user document.
-        target = os.path.normcase(os.path.realpath(shape))
         for name, opened in FreeCAD.listDocuments().items():
             try:
                 if (
@@ -1377,7 +1382,7 @@ def _create_reviewed_tool_bit(doc: Any, factory: Any, shape: str) -> Any:
         raise _ReviewedLegacyToolError(str(error)) from error
 
 
-def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:
+def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:  # noqa: PLR0912
     """Apply only safe properties after a legacy shape has been reviewed."""
     # FreeCAD 1.0's CreateFromAttrs passes arbitrary dotted paths to
     # PathUtil.setProperty, including BitShape, after loading the file.
@@ -1435,10 +1440,17 @@ def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:
         bit.Proxy.unloadBitBody(bit)
         return bit
     except Exception as error:
-        with suppress(Exception):
+        cleanup_error = None
+        try:
             bit.Proxy.unloadBitBody(bit)
-        with suppress(Exception):
+        except Exception as failure:
+            cleanup_error = failure
+        try:
             doc.removeObject(bit.Name)
+        except Exception as failure:
+            cleanup_error = failure
+        if cleanup_error is not None:
+            raise RuntimeError("Legacy tool cleanup failed") from cleanup_error
         raise _ReviewedLegacyToolError(str(error)) from error
 
 
@@ -2404,19 +2416,8 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
     job = _job(doc, args.get("job_name"))
     doc.recompute()
     report_file = args.get("report_file")
-    scratch = (
-        nullcontext(None)
-        if report_file
-        else private_scratch_directory(".freecad-mcp-cam-")
-    )
-    with scratch as tmp:
-        if report_file:
-            target = FsPath(report_file)
-        else:
-            if tmp is None:
-                raise RuntimeError("Temporary report directory unavailable")
-            target = FsPath(tmp) / "report.html"
-        target.parent.mkdir(parents=True, exist_ok=True)
+    with private_scratch_directory(".freecad-mcp-cam-") as tmp:
+        target = FsPath(tmp) / "report.html"
         # built like CAMSanity.validate_job(); images (3D views of the GUI) only
         # on request, the report then embeds them
         sanity = object.__new__(CAMSanity)
@@ -2428,6 +2429,18 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
             if args.get("images")
             else ImageBuilder.DummyImageBuilder(str(target.parent))
         )
+        if report_file and not args.get("images"):
+            # FreeCAD 1.0's dummy builder returns a directory, which its HTML
+            # renderer tries to open as an image. Provide a private placeholder.
+            import base64
+
+            placeholder = FsPath(tmp) / "empty.png"
+            placeholder.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lX2sAAAAASUVORK5CYII="
+                )
+            )
+            sanity.image_builder.build_image = lambda *_args: str(placeholder)
         sanity.data = sanity.summarize()
         if hasattr(sanity, "get_all_squawks"):  # FreeCAD 26.3+
             squawks, critical = sanity.get_all_squawks()
@@ -2442,7 +2455,9 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
                 sq for sq in squawks if sq.get("squawkType") in ("WARNING", "CAUTION")
             ]
         if report_file:
-            target.write_text(sanity.get_output_report(), encoding="utf-8")
+            output = FsPath(report_file)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(sanity.get_output_report(), encoding="utf-8")
     run = sanity.data.get("runData", {})
     findings = [
         {
@@ -2475,7 +2490,7 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
                 if k not in ("squawkData", "baseImage")
             },
         },
-        "report_file": str(target) if report_file else None,
+        "report_file": str(output) if report_file else None,
     }
 
 

@@ -1026,6 +1026,69 @@ def test_reviewed_legacy_factory_failure_closes_only_new_shape_document(
     doc.removeObject.assert_called_once_with("PartialToolBit")
 
 
+def test_reviewed_legacy_shape_rejects_open_source(
+    runtime: Any, tmp_path: Path
+) -> None:
+    """Never substitute an open source document for the reviewed disk file."""
+    import sys
+    from types import SimpleNamespace
+
+    freecad = sys.modules["FreeCAD"]
+    shape = str(tmp_path / "shape.fcstd")
+    source = SimpleNamespace(FileName=shape)
+    freecad.listDocuments.return_value = {"source": source}
+    document = SimpleNamespace(Objects=[])
+    factory = MagicMock()
+    with pytest.raises(ValueError, match="already open"):
+        runtime._create_reviewed_tool_bit(document, factory, shape)
+    factory.Create.assert_not_called()
+    freecad.closeDocument.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["unload", "remove"])
+def test_reviewed_legacy_override_cleanup_failure_propagates(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Attempt both cleanups and abort the outer transaction if either fails."""
+    import sys
+    from types import ModuleType
+
+    bit = MagicMock()
+    bit.BitPropertyNames = []
+    bit.Name = "ToolBit"
+    if failure == "unload":
+        bit.Proxy.unloadBitBody.side_effect = RuntimeError("unload failed")
+    doc = MagicMock()
+    if failure == "remove":
+        doc.removeObject.side_effect = RuntimeError("remove failed")
+    monkeypatch.setattr(runtime, "_create_reviewed_tool_bit", lambda *_: bit)
+    modules = {
+        name: ModuleType(name)
+        for name in (
+            "Path",
+            "Path.Tool",
+            "Path.Tool.Bit",
+            "Path.Base",
+            "Path.Base.Util",
+        )
+    }
+    for name in ("Path", "Path.Tool", "Path.Base"):
+        modules[name].__path__ = []
+    modules["Path.Tool.Bit"].__dict__["Factory"] = MagicMock()
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    attributes = {
+        "name": "test",
+        "shape": "shape",
+        "parameter": {"Unknown": 1},
+        "attribute": {},
+    }
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        runtime._reviewed_legacy_tool_bit(doc, attributes)
+    bit.Proxy.unloadBitBody.assert_called_once_with(bit)
+    doc.removeObject.assert_called_once_with("ToolBit")
+
+
 def test_reviewed_legacy_tool_allows_shape_numeric_properties(
     runtime: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1064,6 +1127,58 @@ def test_reviewed_legacy_tool_allows_shape_numeric_properties(
         is bit
     )
     set_property.assert_called_once_with(bit, "Diameter", "4 mm")
+
+
+@pytest.mark.parametrize("images", [False, True])
+def test_cam_report_side_files_stay_private(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, images: bool
+) -> None:
+    """The approved report path never receives the image builder's side files."""
+    import sys
+    import tempfile
+    from types import ModuleType, SimpleNamespace
+
+    modules = {
+        name: ModuleType(name)
+        for name in ("Path", "Path.Main", "Path.Main.Sanity", "Path.Main.Sanity.Sanity")
+    }
+    for name in ("Path", "Path.Main", "Path.Main.Sanity"):
+        modules[name].__path__ = []
+    builder = MagicMock()
+    modules["Path.Main.Sanity"].__dict__["ImageBuilder"] = SimpleNamespace(
+        ImageBuilderFactory=SimpleNamespace(get_image_builder=builder),
+        DummyImageBuilder=builder,
+    )
+
+    class Sanity:
+        filelocation: str
+
+        def summarize(self):
+            (Path(self.filelocation) / "T1.png").write_bytes(b"temporary")
+            return {"runData": {}, "stockData": {}}
+
+        def get_output_report(self):
+            assert (Path(self.filelocation) / "T1.png").exists()
+            return "report"
+
+    modules["Path.Main.Sanity.Sanity"].__dict__["CAMSanity"] = Sanity
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(runtime, "_doc", lambda _: MagicMock())
+    monkeypatch.setattr(runtime, "_job", lambda *_: SimpleNamespace(Name="Job"))
+    monkeypatch.setattr(
+        runtime,
+        "_embedded_private_scratch_directory",
+        lambda prefix: tempfile.TemporaryDirectory(prefix=prefix, dir=tmp_path),
+        raising=False,
+    )
+    report = tmp_path / "report.html"
+    other = tmp_path / "T1.png"
+    other.write_bytes(b"existing")
+    result = runtime.check_job({"report_file": str(report), "images": images})
+    assert result["report_file"] == str(report)
+    assert report.read_text() == "report"
+    assert other.read_bytes() == b"existing"
 
 
 def test_dispatch_rejects_incompatible_version_and_unknown_operation(

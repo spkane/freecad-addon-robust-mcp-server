@@ -474,7 +474,7 @@ async def test_place_model(tools: Tools, doc: str) -> None:
     assert (x_max, y_max, z_min) == pytest.approx((60, 40, -10), abs=1e-6)
 
 
-async def test_check_job(tools: Tools, doc: str) -> None:
+async def test_check_job(tools: Tools, doc: str, tmp_path: Path) -> None:
     """FreeCAD's job check runs and returns its findings."""
     setup = await _job_with_tools(tools, doc)
     await tools["cam_add_operation"](
@@ -483,6 +483,13 @@ async def test_check_job(tools: Tools, doc: str) -> None:
     result = await tools["cam_check_job"](doc_name=doc)
     assert isinstance(result["findings"], list)
     assert "ok" in result
+    report = tmp_path / "report.html"
+    thumbnail = tmp_path / "T1.png"
+    thumbnail.write_bytes(b"existing")
+    result = await tools["cam_check_job"](doc_name=doc, report_file=str(report))
+    assert result["report_file"] == str(report)
+    assert report.is_file()
+    assert thumbnail.read_bytes() == b"existing"
 
 
 async def test_simulate(tools: Tools, doc: str) -> None:

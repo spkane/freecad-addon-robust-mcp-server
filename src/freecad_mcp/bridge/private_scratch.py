@@ -103,6 +103,23 @@ def _darwin_clear_inherited_acl(path: str) -> None:
         os.close(fd)
 
 
+def _verify_posix_private_directory(path: str) -> None:
+    """Reject filesystems that do not enforce the requested owner-only mode."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+    try:
+        info = os.fstat(fd)
+        current = os.lstat(path)
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or (info.st_dev, info.st_ino) != (current.st_dev, current.st_ino)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700
+        ):
+            raise OSError("Scratch directory identity or permissions changed")
+    finally:
+        os.close(fd)
+
+
 def _windows_verify_created_volume(path: str) -> None:
     """Require the newly created directory's volume to enforce persistent ACLs."""
     from ctypes import wintypes
@@ -254,6 +271,7 @@ def private_scratch_directory(prefix: str) -> Iterator[str]:
         with tempfile.TemporaryDirectory(prefix=prefix, dir=parent) as path:
             if sys.platform == "darwin":
                 _darwin_clear_inherited_acl(path)
+            _verify_posix_private_directory(path)
             yield path
         return
     path = _windows_private_directory(parent, prefix)

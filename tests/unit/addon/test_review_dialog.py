@@ -92,6 +92,14 @@ def test_file_dialog_shows_resolved_target_and_overwrite(
     assert request.consume() is None
 
 
+def test_review_field_escapes_controls_and_backslashes(modules: tuple) -> None:
+    """A path cannot introduce a second field or mimic escaped controls."""
+    _, review, _ = modules
+    assert review._review_field("one\nDocument: other\t\\n") == (
+        "one\\nDocument: other\\t\\\\n"
+    )
+
+
 @pytest.mark.parametrize("result", [0, -1])
 def test_dialog_closure_denies(modules: tuple, result: int) -> None:
     """Rejected and closed dialogs never authorize execution."""
