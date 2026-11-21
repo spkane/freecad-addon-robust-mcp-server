@@ -153,6 +153,45 @@ def _version(caps: dict[str, Any]) -> tuple[int, ...]:
     return tuple(int(p) for p in caps["freecad_version"].split("."))
 
 
+@pytest.mark.asyncio
+async def test_legacy_empty_tool_shape_cleanup(
+    bridge: XmlRpcBridge, doc: str, caps: dict[str, Any]
+) -> None:
+    """FreeCAD 1.0 must not retain the factory's partial ToolBit or source."""
+    if _version(caps) >= (1, 1):
+        pytest.skip("The legacy tool factory is used by FreeCAD 1.0")
+    result = await bridge.execute_python(
+        f"""
+import importlib
+import os
+import tempfile
+
+package = _robust_mcp_cam_dispatch.__globals__.get('__package__')
+runtime = importlib.import_module((package + '.' if package else '') + 'cam_runtime')
+target = FreeCAD.getDocument({doc!r})
+before = [item.Name for item in target.Objects]
+with tempfile.TemporaryDirectory(prefix='cam-empty-shape-') as folder:
+    shape = os.path.join(folder, 'empty.fcstd')
+    source = FreeCAD.newDocument('EmptyCamShape')
+    source.saveAs(shape)
+    FreeCAD.closeDocument(source.Name)
+    FreeCAD.setActiveDocument(target.Name)
+    try:
+        runtime._legacy_tool_bit(target, {{'shape': shape}}, reviewed_shape=True)
+    except runtime._ReviewedLegacyToolError:
+        after = [item.Name for item in target.Objects]
+        sources = [name for name, item in FreeCAD.listDocuments().items()
+                   if item.FileName and os.path.realpath(item.FileName) == os.path.realpath(shape)]
+        _result_ = {{'before': before, 'after': after, 'source_documents': sources}}
+    else:
+        raise AssertionError('The empty shape unexpectedly created a tool')
+"""
+    )
+    assert result.success, result.error_traceback or result.stderr
+    assert result.result["after"] == result.result["before"]
+    assert result.result["source_documents"] == []
+
+
 def _mm(value: Any) -> float:
     """A length as returned by the tools (number or "5.0 mm") in mm."""
     return float(str(value).split()[0])
