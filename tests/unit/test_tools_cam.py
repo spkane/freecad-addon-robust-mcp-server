@@ -370,6 +370,45 @@ class TestCamTools:
             await tools["cam_post_process"](**arguments)
         bridge.execute_python.assert_not_awaited()
 
+    async def test_invalid_split_output_does_not_reserve_document(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rejected output requests do not exhaust review reservation capacity."""
+        from freecad_mcp.bridge.socket import SocketBridge
+
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
+        registered: RegisteredTools = {}
+        mcp = MagicMock()
+        mcp.tool = lambda **_: (
+            lambda function: registered.setdefault(function.__name__, function)
+        )
+        bridge = SocketBridge()
+        capture = AsyncMock(return_value={"name": "Model", "path": "", "token": "x"})
+        monkeypatch.setattr(bridge, "capture_review_document", capture)
+        execute = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={"ok": True},
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+        )
+        monkeypatch.setattr(bridge, "execute_python", execute)
+
+        async def get_bridge() -> SocketBridge:
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        for _ in range(33):
+            with pytest.raises(ToolError, match="ReviewUnavailable"):
+                await registered["cam_post_process"](output_file="/tmp/out.nc")
+        capture.assert_not_awaited()
+        await registered["cam_post_process"](
+            output_file="/tmp/out.nc", split_files=False
+        )
+        capture.assert_awaited_once_with(None)
+
     async def test_add_operation_passes_source_operations(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
@@ -483,8 +522,9 @@ class TestCamTools:
         assert reviewed[0] == str(root / "link/../shape.fcstd")
         assert _payload(observed[1][0])["tool"]["shape"] == reviewed[0]
 
+    @pytest.mark.parametrize("doc_name", [None, "Original"])
     async def test_legacy_shape_reserves_document_before_review(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, doc_name: str | None
     ) -> None:
         """The discovered legacy file review stays bound to its document."""
         from freecad_mcp.bridge.file_review import (
@@ -502,9 +542,8 @@ class TestCamTools:
         )
         bridge = SocketBridge()
         selected = {"name": "Original", "path": "", "token": str(123)}
-        monkeypatch.setattr(
-            bridge, "capture_review_document", AsyncMock(return_value=selected)
-        )
+        capture = AsyncMock(return_value=selected)
+        monkeypatch.setattr(bridge, "capture_review_document", capture)
         calls = []
 
         async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
@@ -531,7 +570,10 @@ class TestCamTools:
             return bridge
 
         register_cam_tools(mcp, get_bridge)
-        await registered["cam_add_tool_controller"](tool={"shape": "custom"})
+        await registered["cam_add_tool_controller"](
+            tool={"shape": "custom"}, doc_name=doc_name
+        )
+        capture.assert_awaited_once_with(doc_name)
         assert calls[1][1:] == (
             ("/tmp/custom.fcstd", "read", "path"),
             "Original",
@@ -542,8 +584,12 @@ class TestCamTools:
         assert file_review_document_token.get() is None
 
     @pytest.mark.parametrize("default_template", ["", "/tmp/template.json"])
+    @pytest.mark.parametrize("doc_name", [None, "Original"])
     async def test_default_cam_template_reserves_only_for_file_review(
-        self, monkeypatch: pytest.MonkeyPatch, default_template: str
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        default_template: str,
+        doc_name: str | None,
     ) -> None:
         """Headless no-template jobs avoid a GUI-only document reservation."""
         from freecad_mcp.bridge.file_review import (
@@ -586,8 +632,10 @@ class TestCamTools:
             return bridge
 
         register_cam_tools(mcp, get_bridge)
-        await registered["cam_create_job"](model_objects=["Part"])
+        await registered["cam_create_job"](model_objects=["Part"], doc_name=doc_name)
         assert capture.await_count == bool(default_template)
+        if default_template:
+            capture.assert_awaited_once_with(doc_name)
         assert calls[1][1:] == (
             (default_template, "read", "path") if default_template else None,
             "Original" if default_template else None,

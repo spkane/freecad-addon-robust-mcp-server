@@ -67,6 +67,7 @@ def file_tool(
     read_only: bool = False,
     get_bridge: Callable[[], Awaitable[Any]] | None = None,
     allow_new_document: bool = False,
+    validate: Callable[[dict[str, Any]], None] | None = None,
 ) -> Callable[[Any], Any]:
     """Register file tools and identify explicit file targets for review.
 
@@ -82,7 +83,7 @@ def file_tool(
     )
 
     return lambda function: register(
-        _wrap_file_target(function, get_bridge, allow_new_document)
+        _wrap_file_target(function, get_bridge, allow_new_document, validate)
     )
 
 
@@ -90,16 +91,19 @@ def _wrap_file_target(
     function: Any,
     get_bridge: Callable[[], Awaitable[Any]] | None = None,
     allow_new_document: bool = False,
+    validate: Callable[[dict[str, Any]], None] | None = None,
 ) -> Any:
     target = _FILE_TARGETS.get(function.__name__)
     if target is None:
         return function
     call_signature = signature(function)
+    validate_arguments = validate or (lambda _arguments: None)
 
     @wraps(function)
     async def reviewed(*args: Any, **kwargs: Any) -> Any:
         bound = call_signature.bind(*args, **kwargs)
         bound.apply_defaults()
+        validate_arguments(bound.arguments)
         field, *nested = target[0].split(".")
         path = bound.arguments[field]
         for key in nested:

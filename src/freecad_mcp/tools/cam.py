@@ -31,6 +31,21 @@ CAM_TIMEOUT_MS = 600_000
 CAM_API_VERSION = 1
 
 
+def _validate_post_process_review(args: dict[str, Any]) -> None:
+    """Reject ambiguous output targets before reserving a document."""
+    from freecad_mcp.config import get_config
+
+    if not get_config().allow_unreviewed_file_operations and (
+        args["use_job_output"] or (args["output_file"] and args["split_files"])
+    ):
+        raise ToolError(
+            "ReviewUnavailable: CAM output with job-defined paths or split "
+            "files cannot yet be reviewed as exact individual targets. "
+            "Use an explicit output_file with split_files=False, or explicitly "
+            "enable the unreviewed file-operation override."
+        )
+
+
 def build_cam_code(
     func: str,
     args: dict[str, Any],
@@ -830,7 +845,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp, get_bridge=get_bridge)
+    @file_tool(mcp, get_bridge=get_bridge, validate=_validate_post_process_review)
     async def cam_post_process(
         job_name: str | None = None,
         post_processor: str | None = None,
@@ -876,17 +891,6 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             Dictionary with machine, post_processor, args, sections, lines,
             files, cycle_time and optionally gcode.
         """
-        from freecad_mcp.config import get_config
-
-        if not get_config().allow_unreviewed_file_operations and (
-            use_job_output or (output_file and split_files)
-        ):
-            raise ToolError(
-                "ReviewUnavailable: CAM output with job-defined paths or split "
-                "files cannot yet be reviewed as exact individual targets. "
-                "Use an explicit output_file with split_files=False, or explicitly "
-                "enable the unreviewed file-operation override."
-            )
         return await run(
             "post_process",
             {

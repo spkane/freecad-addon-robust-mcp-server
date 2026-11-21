@@ -2452,7 +2452,9 @@ def test_document_selection_reservation_survives_name_reuse(
     current = [original]
     freecad = MagicMock()
     freecad.ActiveDocument = original
-    freecad.getDocument.side_effect = lambda _name: current[0]
+    freecad.getDocument.side_effect = lambda name: (
+        current[0] if name == "Model" else None
+    )
     monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
     plugin = server_mod.FreecadMCPPlugin()
     plugin._running = True
@@ -2525,7 +2527,9 @@ async def test_reserved_file_review_rejects_document_replaced_before_dialog(
     current = [original]
     freecad = MagicMock()
     freecad.ActiveDocument = original
-    freecad.getDocument.side_effect = lambda _name: current[0]
+    freecad.getDocument.side_effect = lambda name: (
+        current[0] if name == "Model" else None
+    )
     monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
     secret = b"a" * 32
     plugin = server_mod.FreecadMCPPlugin(

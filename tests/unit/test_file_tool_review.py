@@ -819,3 +819,4 @@ async def test_unsaved_document_save_can_retry_with_explicit_path(
     }
     assert capture.await_args_list[0].kwargs["require_saved_path"] is True
     assert capture.await_args_list[1].kwargs["require_saved_path"] is False
+    save.assert_awaited_once_with("Model", target)
