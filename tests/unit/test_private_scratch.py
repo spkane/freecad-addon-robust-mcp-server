@@ -31,6 +31,17 @@ def test_scratch_rejects_non_component_prefix(prefix: str) -> None:
             pass
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory mode")
+def test_posix_rejects_directory_with_public_permissions(tmp_path: Path) -> None:
+    """Do not use a directory when the filesystem exposes it to others."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    private_scratch._verify_posix_private_directory(str(scratch))
+    scratch.chmod(0o755)
+    with pytest.raises(OSError, match="permissions"):
+        private_scratch._verify_posix_private_directory(str(scratch))
+
+
 @pytest.mark.parametrize("supports_acls", [False, True])
 def test_windows_checks_created_directory_volume_and_closes_handle(
     monkeypatch: pytest.MonkeyPatch, supports_acls: bool

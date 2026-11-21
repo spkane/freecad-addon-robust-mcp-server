@@ -61,6 +61,9 @@ control list for the owner, administrators, and the system account, including
 with older bundled Python versions. Other programs running as the same user,
 administrators, and backups can still access or retain these files, and an
 unexpected process termination may leave a temporary directory behind.
+The home directory and its parent path must also be protected from changes by
+other users: permissions on the scratch directory alone do not prevent someone
+who can modify its parent from replacing the path.
 On Windows, these operations fail if the home filesystem does not support
 persistent access control lists; they do not fall back to a shared location.
 

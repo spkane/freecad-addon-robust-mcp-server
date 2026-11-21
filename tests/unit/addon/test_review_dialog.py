@@ -81,7 +81,7 @@ def test_file_dialog_shows_resolved_target_and_overwrite(
     dialog = review.create_review_dialog(request)
     calls = widgets.QPlainTextEdit.return_value.setPlainText.call_args_list
     assert "Operation: write" in calls[0].args[0]
-    assert str(path.resolve()) in calls[0].args[0]
+    assert review._review_field(str(path.resolve())) in calls[0].args[0]
     assert "may be overwritten" in calls[0].args[0]
     assert calls[1].args[0] == "print('generated')"
     assert (
@@ -90,6 +90,14 @@ def test_file_dialog_shows_resolved_target_and_overwrite(
     )
     dialog.finished.connect.call_args.args[0](0)
     assert request.consume() is None
+
+
+def test_review_field_escapes_controls_and_backslashes(modules: tuple) -> None:
+    """A path cannot introduce a second field or mimic escaped controls."""
+    _, review, _ = modules
+    assert review._review_field("one\nDocument: other\t\\n") == (
+        "one\\nDocument: other\\t\\\\n"
+    )
 
 
 @pytest.mark.parametrize("result", [0, -1])

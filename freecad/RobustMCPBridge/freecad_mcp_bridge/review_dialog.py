@@ -54,6 +54,12 @@ def review_text(content: bytes, *, allow_crlf: bool = False) -> str:
     return text
 
 
+def _review_field(value: str) -> str:
+    """Display a value unambiguously on one line without changing its bytes."""
+    review_text(value.encode("utf-8"))
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")
+
+
 def create_review_dialog(  # noqa: PLR0912
     request: ApprovalRequest,
     parent: Any = None,
@@ -132,7 +138,7 @@ def create_review_dialog(  # noqa: PLR0912
             details = qtwidgets.QPlainTextEdit(dialog)
             details.setReadOnly(True)
             details_text = (
-                f"Macro path: {payload.macro_path}\nSHA-256: {payload.macro_sha256}\n"
+                f"Macro path: {_review_field(macro_approval.path)}\nSHA-256: {payload.macro_sha256}\n"
                 f"Arguments: {payload.macro_args_json}"
             )
             if b"\r\n" in payload.content:
@@ -150,12 +156,12 @@ def create_review_dialog(  # noqa: PLR0912
             detail_text = (
                 f"Operation: {file_snapshot.action}\n"
                 + (
-                    f"Document: {payload.document_name}\n"
+                    f"Document: {_review_field(payload.document_name)}\n"
                     if payload.document_name
                     else ""
                 )
-                + f"Requested path: {file_snapshot.requested_path}\n"
-                f"Resolved path: {file_snapshot.resolved_path}\n"
+                + f"Requested path: {_review_field(file_snapshot.requested_path)}\n"
+                f"Resolved path: {_review_field(file_snapshot.resolved_path)}\n"
                 f"Target exists: {'yes' if file_snapshot.exists else 'no'}\n"
                 f"Final component is a symlink: {'yes' if file_snapshot.is_symlink else 'no'}"
             )

@@ -1026,6 +1026,69 @@ def test_reviewed_legacy_factory_failure_closes_only_new_shape_document(
     doc.removeObject.assert_called_once_with("PartialToolBit")
 
 
+def test_reviewed_legacy_shape_rejects_open_source(
+    runtime: Any, tmp_path: Path
+) -> None:
+    """Never substitute an open source document for the reviewed disk file."""
+    import sys
+    from types import SimpleNamespace
+
+    freecad = sys.modules["FreeCAD"]
+    shape = str(tmp_path / "shape.fcstd")
+    source = SimpleNamespace(FileName=shape)
+    freecad.listDocuments.return_value = {"source": source}
+    document = SimpleNamespace(Objects=[])
+    factory = MagicMock()
+    with pytest.raises(ValueError, match="already open"):
+        runtime._create_reviewed_tool_bit(document, factory, shape)
+    factory.Create.assert_not_called()
+    freecad.closeDocument.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["unload", "remove"])
+def test_reviewed_legacy_override_cleanup_failure_propagates(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Attempt both cleanups and abort the outer transaction if either fails."""
+    import sys
+    from types import ModuleType
+
+    bit = MagicMock()
+    bit.BitPropertyNames = []
+    bit.Name = "ToolBit"
+    if failure == "unload":
+        bit.Proxy.unloadBitBody.side_effect = RuntimeError("unload failed")
+    doc = MagicMock()
+    if failure == "remove":
+        doc.removeObject.side_effect = RuntimeError("remove failed")
+    monkeypatch.setattr(runtime, "_create_reviewed_tool_bit", lambda *_: bit)
+    modules = {
+        name: ModuleType(name)
+        for name in (
+            "Path",
+            "Path.Tool",
+            "Path.Tool.Bit",
+            "Path.Base",
+            "Path.Base.Util",
+        )
+    }
+    for name in ("Path", "Path.Tool", "Path.Base"):
+        modules[name].__path__ = []
+    modules["Path.Tool.Bit"].__dict__["Factory"] = MagicMock()
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    attributes = {
+        "name": "test",
+        "shape": "shape",
+        "parameter": {"Unknown": 1},
+        "attribute": {},
+    }
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        runtime._reviewed_legacy_tool_bit(doc, attributes)
+    bit.Proxy.unloadBitBody.assert_called_once_with(bit)
+    doc.removeObject.assert_called_once_with("ToolBit")
+
+
 def test_reviewed_legacy_tool_allows_shape_numeric_properties(
     runtime: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1064,6 +1127,126 @@ def test_reviewed_legacy_tool_allows_shape_numeric_properties(
         is bit
     )
     set_property.assert_called_once_with(bit, "Diameter", "4 mm")
+
+
+@pytest.mark.parametrize("images", [False, True])
+def test_cam_report_side_files_stay_private(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, images: bool
+) -> None:
+    """The approved report path never receives the image builder's side files."""
+    import sys
+    import tempfile
+    from types import ModuleType, SimpleNamespace
+
+    modules = {
+        name: ModuleType(name)
+        for name in ("Path", "Path.Main", "Path.Main.Sanity", "Path.Main.Sanity.Sanity")
+    }
+    for name in ("Path", "Path.Main", "Path.Main.Sanity"):
+        modules[name].__path__ = []
+    builder = MagicMock()
+    modules["Path.Main.Sanity"].__dict__["ImageBuilder"] = SimpleNamespace(
+        ImageBuilderFactory=SimpleNamespace(get_image_builder=builder),
+        DummyImageBuilder=builder,
+        QtCore=object(),
+    )
+
+    class Sanity:
+        filelocation: str
+        image_builder: Any
+        image_path: str
+
+        def summarize(self):
+            if images:
+                assert self.image_builder.capture_image_to_bytes() == b"captured"
+            if not images:
+                assert (
+                    self.image_builder.build_image(None, "base", as_bytes=True) == b""
+                )
+                self.image_path = self.image_builder.build_image(None, "base")
+            (Path(self.filelocation) / "T1.png").write_bytes(b"temporary")
+            return {
+                "runData": {},
+                "stockData": {"stockImage": str(Path(self.filelocation) / "T1.png")},
+            }
+
+        def get_output_report(self):
+            assert (Path(self.filelocation) / "T1.png").exists()
+            if not images:
+                assert Path(self.image_path).read_bytes().startswith(b"\x89PNG")
+            import base64
+
+            image = (Path(self.filelocation) / "T1.png").read_bytes()
+            return "data:image/png;base64," + base64.b64encode(image).decode()
+
+    modules["Path.Main.Sanity.Sanity"].__dict__["CAMSanity"] = Sanity
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(runtime, "_doc", lambda _: MagicMock())
+    monkeypatch.setattr(runtime, "_job", lambda *_: SimpleNamespace(Name="Job"))
+    capture = MagicMock(return_value=b"captured")
+    monkeypatch.setattr(runtime, "_capture_cam_image_bytes", capture)
+    monkeypatch.setattr(
+        runtime,
+        "_embedded_private_scratch_directory",
+        lambda prefix: tempfile.TemporaryDirectory(prefix=prefix, dir=tmp_path),
+        raising=False,
+    )
+    report = tmp_path / "report.html"
+    other = tmp_path / "T1.png"
+    other.write_bytes(b"existing")
+    result = runtime.check_job({"report_file": str(report), "images": images})
+    assert result["report_file"] == str(report)
+    assert report.read_text() == "data:image/png;base64,dGVtcG9yYXJ5"
+    assert "stockImage" not in result["summary"]["stock"]
+    assert other.read_bytes() == b"existing"
+    assert capture.call_count == int(images)
+    assert {item.name for item in tmp_path.iterdir()} == {"report.html", "T1.png"}
+
+
+@pytest.mark.parametrize("mode", ["memory", "fallback", "save_failure", "read_failure"])
+def test_cam_image_bytes_keep_fallback_private(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
+) -> None:
+    """A failed memory capture uses scratch and cleans even a partial image."""
+    from types import SimpleNamespace
+
+    view = MagicMock()
+    buffer = MagicMock()
+    buffer.open.return_value = True
+    buffer.data.return_value.data.return_value = b"memory-image"
+    view.grabFramebuffer.return_value.save.return_value = True
+    if mode != "memory":
+        view.grabFramebuffer.side_effect = RuntimeError("framebuffer unavailable")
+
+    def save(path: str, *_args: Any) -> None:
+        assert Path(path).parent == tmp_path
+        if mode == "read_failure":
+            return
+        Path(path).write_bytes(b"fallback-image")
+        if mode == "save_failure":
+            raise RuntimeError("capture failed")
+
+    view.saveImage.side_effect = save
+    gui = SimpleNamespace(
+        updateGui=lambda: None,
+        activeDocument=lambda: SimpleNamespace(activeView=lambda: view),
+    )
+    monkeypatch.setattr(runtime, "FreeCADGui", gui)
+    qtcore = SimpleNamespace(
+        QBuffer=lambda: buffer, QIODevice=SimpleNamespace(WriteOnly=1)
+    )
+    if mode in {"save_failure", "read_failure"}:
+        expected = RuntimeError if mode == "save_failure" else FileNotFoundError
+        with pytest.raises(expected):
+            runtime._capture_cam_image_bytes(qtcore, str(tmp_path))
+    else:
+        assert runtime._capture_cam_image_bytes(qtcore, str(tmp_path)) == (
+            b"memory-image" if mode == "memory" else b"fallback-image"
+        )
+    assert not list(tmp_path.iterdir())
+    assert view.saveImage.call_count == (0 if mode == "memory" else 1)
+    view.setAnimationEnabled.assert_called_once_with(True)
 
 
 def test_dispatch_rejects_incompatible_version_and_unknown_operation(
