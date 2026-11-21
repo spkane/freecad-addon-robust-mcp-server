@@ -23,6 +23,7 @@ from freecad_mcp.bridge.file_review import (
     file_review_document,
     file_review_document_token,
     file_review_target,
+    release_document_reservation,
 )
 from freecad_mcp.tools._registration import file_tool
 from freecad_mcp.tools.utils import wrap_with_transaction
@@ -232,6 +233,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         token = None
         document_context = None
         reservation_context = None
+        reservation = None
         if template is None:
             bridge = await get_bridge()
             preference = await bridge.execute_python(
@@ -253,6 +255,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                     if selected is None:
                         raise ValueError("No active document")
                     doc_name = selected["name"]
+                    reservation = selected["token"]
                     document_context = file_review_document.set(doc_name)
                     reservation_context = file_review_document_token.set(
                         selected["token"]
@@ -280,6 +283,8 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 file_review_document_token.reset(reservation_context)
             if document_context is not None:
                 file_review_document.reset(document_context)
+            if reservation is not None:
+                await release_document_reservation(bridge, reservation)
 
     @mcp.tool()
     async def cam_set_stock(
@@ -392,6 +397,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         token = None
         document_context = None
         reservation_context = None
+        reservation = None
         if (
             "shape" in tool
             and "bit_file" not in tool
@@ -448,6 +454,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                     if selected is None:
                         raise ValueError("No active document")
                     doc_name = selected["name"]
+                    reservation = selected["token"]
                     document_context = file_review_document.set(doc_name)
                     reservation_context = file_review_document_token.set(
                         selected["token"]
@@ -489,6 +496,8 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 file_review_document_token.reset(reservation_context)
             if document_context is not None:
                 file_review_document.reset(document_context)
+            if reservation is not None:
+                await release_document_reservation(bridge, reservation)
 
     @mcp.tool()
     async def cam_feeds_speeds(

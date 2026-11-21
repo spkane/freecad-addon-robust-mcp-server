@@ -579,6 +579,16 @@ class SocketBridge(FreecadBridge):
             raise RuntimeError("ReviewUnavailable: invalid document reservation")
         return selected
 
+    async def release_review_document(self, token: str) -> None:
+        """Best-effort release of a document reservation that was not claimed."""
+        from freecad_mcp.bridge.file_review import file_review_target
+
+        target = file_review_target.set(None)
+        try:
+            await self.execute_python(f"_robust_mcp_release_document({token!r})")
+        finally:
+            file_review_target.reset(target)
+
     async def execute_reviewed_file(
         self,
         code: str,

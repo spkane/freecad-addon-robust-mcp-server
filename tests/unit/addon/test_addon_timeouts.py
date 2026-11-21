@@ -1730,6 +1730,77 @@ async def test_file_review_binds_target_and_code_before_execution(
 
 
 @pytest.mark.asyncio
+async def test_missing_file_review_releases_document_reservation(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """Repeated setup failures do not block a subsequent valid reservation."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    plugin._review_broker = approval.LeasedReviewBroker(
+        approval.ReviewCoordinator(1), 1
+    )
+    document = object()
+    for _ in range(33):
+        token = reservations.reserve("Model", document)
+        response = await plugin._review_begin_file(
+            1,
+            {
+                "code": "pass",
+                "path": str(tmp_path / "missing"),
+                "action": "read",
+                "kind": "path",
+                "document_name": "Model",
+                "document_token": token,
+            },
+            "alice",
+        )
+        assert response.get("error")
+    assert reservations.reserve("Model", document)
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+async def test_disconnected_file_review_releases_unclaimed_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Disconnect before GUI admission frees the unclaimed document slot."""
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    reservations = plugin._document_reservations
+    document = object()
+    token = reservations.reserve("Model", document)
+    path = tmp_path / "model.step"
+    path.write_text("data")
+    response = await plugin._review_begin_file(
+        1,
+        {
+            "code": "pass",
+            "path": str(path),
+            "action": "read",
+            "kind": "path",
+            "document_name": "Model",
+            "document_token": token,
+        },
+        "alice",
+    )
+    assert response.get("result")
+    plugin._review_broker.cancel_owner("alice")
+    with pytest.raises(ValueError, match="unavailable"):
+        reservations.take(token, "Model", lambda _: document)
+    plugin._shutdown_review()
+
+
+@pytest.mark.asyncio
 async def test_macro_file_review_resolves_local_search_order_and_rejects_paths(
     server_mod: Any, tmp_path: Path
 ) -> None:
