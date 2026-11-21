@@ -129,6 +129,7 @@ nav:
       - Configuration: getting-started/configuration.md
   - User Guide:
       - Connection Modes: guide/connection-modes.md
+      - Security: guide/security.md
       - Robust MCP Bridge Workbench: guide/workbench.md
       - MCP Macro Tools: guide/macros.md
       - Tools Overview: guide/tools.md

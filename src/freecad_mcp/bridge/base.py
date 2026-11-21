@@ -318,6 +318,55 @@ class FreecadBridge(ABC):
     # Code Execution
     # =========================================================================
 
+    async def execute_reviewed_python(
+        self, code: str, timeout_ms: int | None = None
+    ) -> ExecutionResult:
+        """Execute code only after a trusted local review, if supported.
+
+        The default denies execution for transports without a verified review
+        protocol. It must never fall back to the unrestricted execution path.
+        """
+        return ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Local code review is unavailable for this connection mode. "
+            "Use FREECAD_MODE=socket with a GUI FreeCAD bridge.",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
+
+    async def execute_reviewed_macro(
+        self, macro_name: str, args: dict[str, Any] | None = None
+    ) -> ExecutionResult:
+        """Run a macro only when local review is available; never fall back."""
+        return ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Local macro review is unavailable for this connection mode.",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
+
+    async def execute_reviewed_file(
+        self,
+        code: str,
+        path: str,
+        action: str,
+        kind: str,
+        timeout_ms: int | None = None,
+    ) -> ExecutionResult:
+        """Fail closed when this connection cannot request local file review."""
+        return ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Local file review is unavailable for this connection mode.",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
+        )
+
     @abstractmethod
     async def execute_python(
         self,

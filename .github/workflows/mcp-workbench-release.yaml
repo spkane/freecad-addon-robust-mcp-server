@@ -242,7 +242,7 @@ jobs:
         run: python3 -m scripts.manage_cam_inventory marker --tag "$TAG" --artifact "freecad-mcp-workbench-${VERSION}.zip" --output cam-gate-v1.json
 
       - name: Stage GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: "Robust MCP Bridge Workbench v${{ needs.prepare.outputs.version }}"
           tag_name: ${{ github.ref_name }}
@@ -268,7 +268,7 @@ jobs:
           python3 -m scripts.verify_released_workbench source
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: "Robust MCP Bridge Workbench v${{ needs.prepare.outputs.version }}"
           tag_name: ${{ github.ref_name }}

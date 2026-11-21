@@ -12,12 +12,15 @@ your MCP client or explicitly load them into the environment before startup.
 
 | Variable              | Description                                          | Default     |
 | --------------------- | ---------------------------------------------------- | ----------- |
-| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, or `embedded`   | `xmlrpc`    |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, or `embedded`   | `socket`    |
 | `FREECAD_PATH`        | Path to FreeCAD's lib directory (embedded mode only) | Auto-detect |
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                       | `localhost` |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                          | `9876`      |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                                  | `9875`      |
 | `FREECAD_TIMEOUT_MS`  | Default execution timeout in ms (1000-600000)        | `30000`     |
+
+`FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true` explicitly bypasses local file
+review for automation; it defaults to `false`.
 
 
 ## Data and network connections
@@ -36,9 +39,15 @@ transport and the bridge keeps the other transport available when possible.
 Stop the application using the port, or choose a different port under FreeCAD
 **Preferences → Robust MCP Bridge → Network Ports** and restart the bridge.
 Set the matching `FREECAD_XMLRPC_PORT` or `FREECAD_SOCKET_PORT` in your MCP
-client configuration. XML-RPC is the default connection mode; an unavailable
-XML-RPC listener will prevent that default connection even if JSON-RPC works.
+client configuration. Socket is the default connection mode; an unavailable
+JSON-RPC listener will prevent that connection even if XML-RPC works.
 The bridge remains restricted to loopback and paired clients.
+
+Existing configurations that explicitly set `FREECAD_MODE=xmlrpc` continue to
+use XML-RPC. Switch that setting to `socket` to use local GUI review. In
+headless or XML-RPC mode, supported file operations fail closed unless the
+server's explicit unreviewed-file override is enabled; see the
+[security guide](../guide/security.md#tools-files-and-approvals).
 
 The optional auto-start preferences make the bridge start in future FreeCAD
 sessions. The optional MCP HTTP transport is separate from the FreeCAD bridge;
@@ -103,6 +112,16 @@ expose `execute_python`, `safe_execute`, `run_macro`,
 `FREECAD_ALLOW_UNSAFE_CODE=true` in the MCP server environment before startup
 to expose them. Restart the server after changing this setting.
 
+In the development version, `execute_python` and `safe_execute` require
+local approval by default in a GUI bridge over the socket connection. Review
+can be disabled or temporarily bypassed through the workbench preferences. Set
+`FREECAD_MODE=socket` in the MCP server environment and start FreeCAD with its
+GUI bridge to use those tools. They fail closed when that review is
+unavailable. `run_macro` uses the same GUI/socket requirement and reviews a
+captured copy of the file unless the user has explicitly saved an approval or
+chosen a timed macro-review bypass. See the [security guide](../guide/security.md#tools-files-and-approvals)
+for the scope and limits of the review.
+
 This setting controls the MCP tool list; it is not a sandbox or a bridge
 authorization mechanism. Other CAD tools still generate Python for FreeCAD,
 and an authenticated bridge client can submit code directly. Use it together
@@ -163,22 +182,22 @@ The Robust MCP Server supports three connection modes:
 
 | Mode       | Description                                 | Platform Support                          |
 | ---------- | ------------------------------------------- | ----------------------------------------- |
-| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms** (recommended)           |
-| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms**                         |
+| `xmlrpc`   | Connects to FreeCAD via XML-RPC (port 9875) | **All platforms**                         |
+| `socket`   | Connects via JSON-RPC socket (port 9876)    | **All platforms** (recommended)           |
 | `embedded` | Imports FreeCAD directly into process       | **Linux only** (crashes on macOS/Windows) |
 
-### XML-RPC Mode (Recommended)
+### XML-RPC Mode
 
-The default and recommended mode. Works on all platforms.
+Works on all platforms. Local file and code reviews are unavailable in this mode.
 
 ```bash
 export FREECAD_MODE=xmlrpc
 freecad-mcp
 ```
 
-### Socket Mode
+### Socket Mode (Recommended)
 
-Alternative to XML-RPC using JSON-RPC over TCP sockets.
+The default mode uses JSON-RPC and supports local review in a FreeCAD GUI.
 
 ```bash
 export FREECAD_MODE=socket
@@ -232,7 +251,7 @@ and use the full path to the installed executable. Find its directory with
     "freecad": {
       "command": "/absolute/path/to/freecad-mcp",
       "env": {
-        "FREECAD_MODE": "xmlrpc"
+        "FREECAD_MODE": "socket"
       }
     }
   }
@@ -270,7 +289,7 @@ If installed from source with mise/uv:
       "command": "/path/to/mise/shims/uv",
       "args": ["run", "--project", "/path/to/freecad-addon-robust-mcp-server", "freecad-mcp"],
       "env": {
-        "FREECAD_MODE": "xmlrpc"
+        "FREECAD_MODE": "socket"
       }
     }
   }
@@ -293,9 +312,9 @@ host until the container's credential has been provisioned securely.
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
-        "-e", "FREECAD_MODE=xmlrpc",
+        "-e", "FREECAD_MODE=socket",
         "-e", "FREECAD_SOCKET_HOST=host.docker.internal",
-        "spkane/freecad-robust-mcp:0.7.0"
+        "spkane/freecad-robust-mcp:0.8.0"
       ]
     }
   }
@@ -345,7 +364,7 @@ Add the `customInstructions` field to auto-load guidance on connection:
     "freecad": {
       "command": "freecad-mcp",
       "env": {
-        "FREECAD_MODE": "xmlrpc"
+        "FREECAD_MODE": "socket"
       },
       "customInstructions": "When connecting to FreeCAD, first invoke the 'freecad-startup' prompt to get essential guidance. For complex tasks, also read the 'freecad://best-practices' resource."
     }

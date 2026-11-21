@@ -1,7 +1,8 @@
 """Live ShapeString and recompute regression tests against FreeCAD."""
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -23,7 +24,7 @@ def _tools(bridge: XmlRpcBridge) -> dict[str, Callable[..., Awaitable[Any]]]:
         def __init__(self) -> None:
             self.tools: dict[str, Callable[..., Awaitable[Any]]] = {}
 
-        def tool(self) -> Callable[..., Any]:
+        def tool(self, **_kwargs: Any) -> Callable[..., Any]:
             def register(
                 func: Callable[..., Awaitable[Any]],
             ) -> Callable[..., Awaitable[Any]]:
@@ -59,6 +60,203 @@ async def regression_document() -> AsyncIterator[tuple[XmlRpcBridge, str]]:
             )
         finally:
             await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_document_wrapper_identity_changes_after_name_reuse(
+    regression_document: tuple[XmlRpcBridge, str],
+) -> None:
+    """Real FreeCAD preserves wrapper identity for a live document, not a replacement."""
+    bridge, name = regression_document
+    result = await bridge.execute_python(
+        f"""
+original = FreeCAD.newDocument({name!r})
+same = FreeCAD.getDocument({name!r}) is original
+FreeCAD.closeDocument({name!r})
+replacement = FreeCAD.newDocument({name!r})
+_result_ = {{"same": same, "replacement_name": replacement.Name,
+            "different": replacement is not original}}
+"""
+    )
+    assert result.success, result.error_traceback
+    assert result.result == {"same": True, "replacement_name": name, "different": True}
+
+
+@pytest.mark.asyncio
+async def test_shapestring_review_preserves_new_document_choice(
+    regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A document activated after selection cannot receive a reviewed ShapeString."""
+    bridge, name = regression_document
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+    setup = await bridge.execute_python(
+        f"""
+import os
+FreeCAD.newDocument({name!r})
+FreeCAD.setActiveDocument("")
+FreeCAD.ActiveDocument = None
+fonts = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/System/Library/Fonts/Helvetica.ttc", "C:/Windows/Fonts/arial.ttf"]
+_result_ = {{"font": next((f for f in fonts if os.path.exists(f)), None), "before": list(FreeCAD.listDocuments())}}
+"""
+    )
+    assert setup.success, setup.error_traceback
+    assert setup.result["font"], "No integration-test font available"
+    before = set(setup.result["before"])
+
+    async def execute_after_switch(code: str):
+        switch = await bridge.execute_python(
+            f"FreeCAD.setActiveDocument({name!r})\n_result_ = True"
+        )
+        assert switch.success, switch.error_traceback
+        return await bridge.execute_python(code)
+
+    proxy = SimpleNamespace(
+        get_active_document=bridge.get_active_document,
+        execute_python=execute_after_switch,
+    )
+    try:
+        result = await _tools(cast("XmlRpcBridge", proxy))["draft_shapestring"](
+            text="O", font_path=setup.result["font"]
+        )
+        check = await bridge.execute_python(
+            f"""
+docs = FreeCAD.listDocuments()
+created = [d for n, d in docs.items() if n not in {sorted(before)!r}]
+_result_ = {{"created": len(created), "object_in_created": bool(created and created[0].getObject({result["name"]!r})), "selected": FreeCAD.activeDocument().Name}}
+"""
+        )
+        assert check.success, check.error_traceback
+        assert check.result == {
+            "created": 1,
+            "object_in_created": True,
+            "selected": name,
+        }
+    finally:
+        await bridge.execute_python(
+            f"for n in list(FreeCAD.listDocuments()):\n    if n not in {sorted(before)!r}: FreeCAD.closeDocument(n)\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
+async def test_shapestring_missing_font_restores_later_selection(
+    regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed font check restores the document selected during review."""
+    bridge, name = regression_document
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+    setup = await bridge.execute_python(
+        f'FreeCAD.newDocument({name!r})\nFreeCAD.setActiveDocument("")\n'
+        "FreeCAD.ActiveDocument = None\n_result_ = list(FreeCAD.listDocuments())"
+    )
+    assert setup.success, setup.error_traceback
+    before = set(setup.result)
+
+    async def execute_after_switch(code: str):
+        switch = await bridge.execute_python(
+            f"FreeCAD.setActiveDocument({name!r})\n_result_ = True"
+        )
+        assert switch.success, switch.error_traceback
+        return await bridge.execute_python(code)
+
+    proxy = SimpleNamespace(
+        get_active_document=bridge.get_active_document,
+        execute_python=execute_after_switch,
+    )
+    try:
+        with pytest.raises(ValueError):
+            await _tools(cast("XmlRpcBridge", proxy))["draft_shapestring"](
+                text="O", font_path="/nonexistent/freecad-review-font.ttf"
+            )
+        check = await bridge.execute_python("_result_ = FreeCAD.ActiveDocument.Name")
+        assert check.success, check.error_traceback
+        assert check.result == name
+    finally:
+        await bridge.execute_python(
+            f"for n in list(FreeCAD.listDocuments()):\n    if n not in {sorted(before)!r}: FreeCAD.closeDocument(n)\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
+async def test_shapestring_new_document_remains_active_for_conversion(
+    regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new ShapeString document remains usable by implicit-document tools."""
+    bridge, _ = regression_document
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+    setup = await bridge.execute_python(
+        """
+import os
+FreeCAD.setActiveDocument("")
+FreeCAD.ActiveDocument = None
+fonts = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/System/Library/Fonts/Helvetica.ttc", "C:/Windows/Fonts/arial.ttf"]
+_result_ = {"font": next((f for f in fonts if os.path.exists(f)), None), "before": list(FreeCAD.listDocuments())}
+"""
+    )
+    assert setup.success, setup.error_traceback
+    assert setup.result["font"], "No integration-test font available"
+    before = set(setup.result["before"])
+    try:
+        tools = _tools(bridge)
+        shape = await tools["draft_shapestring"](
+            text="O", font_path=setup.result["font"]
+        )
+        face = await tools["draft_shapestring_to_face"](shapestring_name=shape["name"])
+        assert face["source"] == shape["name"]
+        assert face["face_count"] > 0
+    finally:
+        await bridge.execute_python(
+            f"for n in list(FreeCAD.listDocuments()):\n    if n not in {sorted(before)!r}: FreeCAD.closeDocument(n)\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_previous", [False, True])
+async def test_text_on_surface_uses_named_document_and_restores_selection(
+    regression_document: tuple[XmlRpcBridge, str], has_previous: bool
+) -> None:
+    """A real Draft ShapeString is created in the named document, not the active one."""
+    bridge, name = regression_document
+    other = f"Other_{uuid4().hex}"
+    setup = await bridge.execute_python(
+        f"""
+import Part
+doc = FreeCAD.newDocument({name!r})
+box = doc.addObject("Part::Feature", "Box")
+box.Shape = Part.makeBox(100, 100, 10)
+doc.recompute()
+FreeCAD.newDocument({other!r})
+if not {has_previous!r}:
+    FreeCAD.setActiveDocument("")
+    FreeCAD.ActiveDocument = None
+_result_ = True
+"""
+    )
+    assert setup.success, setup.error_traceback
+    try:
+        result = await _tools(bridge)["draft_text_on_surface"](
+            text="O", target_face="Face6", target_object="Box", doc_name=name
+        )
+        check = await bridge.execute_python(
+            f"""
+_result_ = {{
+    "selected": FreeCAD.ActiveDocument.Name if FreeCAD.ActiveDocument else None,
+    "internal": FreeCAD.activeDocument().Name if FreeCAD.activeDocument() else None,
+    "target_result": bool(FreeCAD.getDocument({name!r}).getObject({result["name"]!r})),
+    "other_objects": len(FreeCAD.getDocument({other!r}).Objects),
+}}
+"""
+        )
+        assert check.success, check.error_traceback
+        assert check.result == {
+            "selected": other if has_previous else None,
+            "internal": other if has_previous else None,
+            "target_result": True,
+            "other_objects": 0,
+        }
+    finally:
+        await bridge.execute_python(
+            f"if {other!r} in FreeCAD.listDocuments(): FreeCAD.closeDocument({other!r})\n_result_ = True"
+        )
 
 
 @pytest.mark.asyncio

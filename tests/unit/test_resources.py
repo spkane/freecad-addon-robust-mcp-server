@@ -15,6 +15,7 @@ from freecad_mcp.bridge.base import (
     ObjectInfo,
     WorkbenchInfo,
 )
+from freecad_mcp.bridge.console import ConsoleHistoryUnavailableError
 
 
 class TestFreecadResources:
@@ -419,6 +420,17 @@ class TestFreecadResources:
         assert data["count"] == 3
 
     @pytest.mark.asyncio
+    async def test_resource_console_unavailable(
+        self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
+    ) -> None:
+        """Unavailable history is reported distinctly from an empty console."""
+        mock_bridge.get_console_output = AsyncMock(
+            side_effect=ConsoleHistoryUnavailableError("Console history is unavailable")
+        )
+        result = await register_resources["freecad://console"]()
+        assert json.loads(result) == {"error": "Console history is unavailable"}
+
+    @pytest.mark.asyncio
     async def test_resource_best_practices(
         self, register_resources: dict[str, Callable[..., Any]], mock_bridge: AsyncMock
     ) -> None:
@@ -493,7 +505,9 @@ class TestFreecadResources:
         functions: dict[str, Callable[..., Any]] = {}
         server = MagicMock()
 
-        def tool_decorator() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def tool_decorator(
+            **_kwargs: Any,
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
             def register(func: Callable[..., Any]) -> Callable[..., Any]:
                 functions[func.__name__] = func
                 return func

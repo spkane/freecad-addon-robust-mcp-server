@@ -16,7 +16,7 @@ class TestMacroTools:
         mcp = MagicMock()
         mcp._registered_tools = {}
 
-        def tool_decorator():
+        def tool_decorator(**_kwargs):
             def wrapper(func):
                 mcp._registered_tools[func.__name__] = func
                 return func
@@ -82,66 +82,25 @@ class TestMacroTools:
         assert result[1]["is_system"] is True
 
     @pytest.mark.asyncio
-    async def test_run_macro_success(self, register_tools, mock_bridge):
-        """run_macro should execute a macro and return results."""
-        # run_macro calls bridge.run_macro which returns ExecutionResult
-        mock_bridge.run_macro = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result={"exported_count": 3},
-                stdout="Exported 3 objects\n",
-                stderr="",
-                execution_time_ms=150.0,
-            )
+    @pytest.mark.parametrize("args", [None, {"output_dir": "/tmp"}])
+    async def test_run_macro_uses_only_reviewed_execution(
+        self, register_tools, mock_bridge, args
+    ):
+        """Unavailable review never falls back to the unrestricted method."""
+        mock_bridge.execute_reviewed_macro.return_value = ExecutionResult(
+            success=False,
+            result=None,
+            stdout="",
+            stderr="Review unavailable",
+            execution_time_ms=0,
+            error_type="ReviewUnavailable",
         )
-
-        run_macro = register_tools["run_macro"]
-        result = await run_macro(macro_name="ExportSTL")
-
-        assert result["success"] is True
-        assert result["stdout"] == "Exported 3 objects\n"
-        mock_bridge.run_macro.assert_called_once_with("ExportSTL", None)
-
-    @pytest.mark.asyncio
-    async def test_run_macro_with_args(self, register_tools, mock_bridge):
-        """run_macro should pass arguments to macro."""
-        mock_bridge.run_macro = AsyncMock(
-            return_value=ExecutionResult(
-                success=True,
-                result=None,
-                stdout="",
-                stderr="",
-                execution_time_ms=50.0,
-            )
-        )
-
-        run_macro = register_tools["run_macro"]
-        args = {"output_dir": "/tmp", "format": "step"}
-        result = await run_macro(macro_name="CustomMacro", args=args)
-
-        assert result["success"] is True
-        mock_bridge.run_macro.assert_called_once_with("CustomMacro", args)
-
-    @pytest.mark.asyncio
-    async def test_run_macro_failure(self, register_tools, mock_bridge):
-        """run_macro should return error info on failure."""
-        mock_bridge.run_macro = AsyncMock(
-            return_value=ExecutionResult(
-                success=False,
-                result=None,
-                stdout="",
-                stderr="NameError: name 'undefined_var' is not defined",
-                execution_time_ms=10.0,
-                error_type="NameError",
-                error_traceback="Traceback...",
-            )
-        )
-
-        run_macro = register_tools["run_macro"]
-        result = await run_macro(macro_name="BrokenMacro")
-
+        result = await register_tools["run_macro"]("ExportSTL", args)
         assert result["success"] is False
-        assert result["error_type"] == "NameError"
+        assert result["error_type"] == "ReviewUnavailable"
+        mock_bridge.execute_reviewed_macro.assert_awaited_once_with("ExportSTL", args)
+        mock_bridge.run_macro.assert_not_awaited()
+        mock_bridge.execute_python.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_create_macro(self, register_tools, mock_bridge):
@@ -196,6 +155,36 @@ class TestMacroTools:
         mock_bridge.execute_python.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_read_macro_uses_bound_reviewed_file(
+        self, register_tools, mock_bridge, tmp_path
+    ):
+        """A later user macro cannot redirect a reviewed system-macro read."""
+        user = tmp_path / "user"
+        user.mkdir()
+        reviewed = tmp_path / "system.FCMacro"
+        reviewed.write_text("reviewed system contents")
+        (user / "MyMacro.FCMacro").write_text("unreviewed user contents")
+
+        async def execute(code):
+            env = {
+                "_robust_mcp_reviewed_file_path": str(reviewed),
+                "FreeCAD": MagicMock(getUserMacroDir=MagicMock(return_value=str(user))),
+            }
+            exec(code, env)  # noqa: S102 - execute this tool's generated code in the test
+            return ExecutionResult(
+                success=True,
+                result=env["_result_"],
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+
+        mock_bridge.execute_python = AsyncMock(side_effect=execute)
+        result = await register_tools["read_macro"](macro_name="MyMacro")
+        assert result["path"] == str(reviewed)
+        assert result["code"] == "reviewed system contents"
+
+    @pytest.mark.asyncio
     async def test_read_macro_not_found(self, register_tools, mock_bridge):
         """read_macro should raise error when macro not found."""
         mock_bridge.execute_python = AsyncMock(
@@ -241,6 +230,40 @@ class TestMacroTools:
         assert result["success"] is True
         assert result["path"] == "/home/user/.FreeCAD/Macro/OldMacro.FCMacro"
         mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_macro_uses_bound_reviewed_file(
+        self, register_tools, mock_bridge, tmp_path
+    ):
+        """Changing FreeCAD's macro directory does not redirect a reviewed deletion."""
+        reviewed = tmp_path / "original" / "MyMacro.FCMacro"
+        other = tmp_path / "new" / "MyMacro.FCMacro"
+        reviewed.parent.mkdir()
+        other.parent.mkdir()
+        reviewed.write_text("reviewed")
+        other.write_text("other")
+
+        async def execute(code):
+            env = {
+                "_robust_mcp_reviewed_file_path": str(reviewed),
+                "FreeCAD": MagicMock(
+                    getUserMacroDir=MagicMock(return_value=str(other.parent))
+                ),
+            }
+            exec(code, env)  # noqa: S102 - execute this tool's generated code in the test
+            return ExecutionResult(
+                success=True,
+                result=env["_result_"],
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+
+        mock_bridge.execute_python = AsyncMock(side_effect=execute)
+        result = await register_tools["delete_macro"](macro_name="MyMacro")
+        assert result["path"] == str(reviewed)
+        assert not reviewed.exists()
+        assert other.read_text() == "other"
 
     @pytest.mark.asyncio
     async def test_delete_macro_not_found(self, register_tools, mock_bridge):
@@ -389,3 +412,57 @@ class TestMacroTools:
 
         assert "Unknown template" in str(exc_info.value)
         assert "invalid_template" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        ".",
+        "..",
+        "../outside",
+        "sub/file",
+        r"sub\\file",
+        r"C:\\outside",
+        "C:outside",
+        "bad\x00name",
+        "bad\nname",
+        "bad\rname",
+    ],
+)
+@pytest.mark.parametrize(
+    ("tool_name", "argument"),
+    [
+        ("read_macro", "macro_name"),
+        ("delete_macro", "macro_name"),
+        ("run_macro", "macro_name"),
+        ("create_macro", "name"),
+        ("create_macro_from_template", "name"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_macro_tools_reject_paths_before_bridge_dispatch(
+    name, tool_name, argument
+):
+    """Macro names cannot escape the macro directory through path components."""
+    from freecad_mcp.tools.macros import register_macro_tools
+
+    registered = {}
+    mcp = MagicMock()
+
+    def tool(**_kwargs):
+        def register(func):
+            registered[func.__name__] = func
+            return func
+
+        return register
+
+    mcp.tool = tool
+    get_bridge = AsyncMock()
+    register_macro_tools(mcp, get_bridge, allow_unsafe_code=True)
+    args = {argument: name}
+    if tool_name == "create_macro":
+        args["code"] = "pass"
+    with pytest.raises(ValueError, match="single file name"):
+        await registered[tool_name](**args)
+    get_bridge.assert_not_awaited()

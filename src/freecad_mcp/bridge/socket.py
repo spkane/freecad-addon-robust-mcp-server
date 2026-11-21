@@ -32,6 +32,10 @@ from freecad_mcp.bridge.base import (
     WorkbenchInfo,
     resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.console import (
+    build_console_output_code,
+    console_output_from_result,
+)
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 
@@ -39,6 +43,12 @@ DEFAULT_SOCKET_HOST = "localhost"
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_TIMEOUT = 30.0
 EXECUTION_RESPONSE_GRACE_SECONDS = 1.0
+# The bridge's lease is 300 seconds. Leave time for a commit to reach its queue.
+REVIEW_DECISION_TIMEOUT_SECONDS = 295.0
+REVIEW_POLL_INTERVAL_SECONDS = 0.25
+# The workbench applies this limit to the complete newline-delimited envelope,
+# including base64 expansion and the request proof.
+MAX_SOCKET_REQUEST_BYTES = 64 * 1024
 # Captured streams, result values, and error diagnostics can expand substantially
 # when JSON escapes control characters. Bound the wire frame while allowing them.
 MAX_SOCKET_RESPONSE_BYTES = 32 * 1024 * 1024
@@ -279,7 +289,14 @@ class SocketBridge(FreecadBridge):
                     "body": base64.b64encode(body).decode("ascii"),
                     "proof": base64.b64encode(proof).decode("ascii"),
                 }
-                writer.write(json.dumps(envelope).encode("utf-8") + b"\n")
+                frame = json.dumps(envelope).encode("utf-8") + b"\n"
+                if len(frame) > MAX_SOCKET_REQUEST_BYTES:
+                    raise JsonRpcError(
+                        -32600,
+                        "Request exceeds the socket frame limit after encoding; "
+                        "no execution request was sent",
+                    )
+                writer.write(frame)
                 await writer.drain()
                 response_data = await self._read_response_line(reader, writer)
         except TimeoutError:
@@ -287,7 +304,8 @@ class SocketBridge(FreecadBridge):
             raise
 
         if not response_data:
-            self._connected = False
+            if self._writer is writer:
+                self._connected = False
             msg = "Connection closed by server"
             raise ConnectionError(msg)
 
@@ -521,7 +539,211 @@ class SocketBridge(FreecadBridge):
     # Code Execution
     # =========================================================================
 
-    async def execute_python(
+    async def execute_reviewed_python(
+        self, code: str, timeout_ms: int | None = None
+    ) -> ExecutionResult:
+        """Review and execute code over one non-reconnecting socket session.
+
+        A dedicated connection keeps concurrent bridge requests independent.
+        Once commit is sent, loss of a response is reported as ambiguous and
+        the request is never replayed.
+        """
+        return await self._execute_reviewed_request(
+            "review_begin", {"code": code}, timeout_ms
+        )
+
+    async def execute_reviewed_macro(
+        self, macro_name: str, args: dict[str, Any] | None = None
+    ) -> ExecutionResult:
+        """Request review of a snapshot captured by the FreeCAD bridge."""
+        return await self._execute_reviewed_request(
+            "review_begin_macro", {"macro_name": macro_name, "args": args or {}}, None
+        )
+
+    async def capture_review_document(
+        self, name: str | None, *, require_saved_path: bool = False
+    ) -> dict[str, str] | None:
+        """Select and reserve the exact document on FreeCAD's GUI thread."""
+        args = f"{name!r}, True" if require_saved_path else repr(name)
+        result = await self.execute_python(
+            f"_result_ = _robust_mcp_capture_document({args})"
+        )
+        if not result.success:
+            raise RuntimeError("ReviewUnavailable: unable to reserve document")
+        selected = result.result
+        if selected is None:
+            return None
+        if not isinstance(selected, dict) or any(
+            not isinstance(selected.get(key), str) for key in ("name", "path", "token")
+        ):
+            raise RuntimeError("ReviewUnavailable: invalid document reservation")
+        return selected
+
+    async def release_review_document(self, token: str) -> None:
+        """Best-effort release of a document reservation that was not claimed."""
+        from freecad_mcp.bridge.file_review import file_review_target
+
+        target = file_review_target.set(None)
+        try:
+            await self.execute_python(f"_robust_mcp_release_document({token!r})")
+        finally:
+            file_review_target.reset(target)
+
+    async def execute_reviewed_file(
+        self,
+        code: str,
+        path: str,
+        action: str,
+        kind: str,
+        timeout_ms: int | None = None,
+    ) -> ExecutionResult:
+        """Review one generated operation and its file target in FreeCAD."""
+        from freecad_mcp.bridge.file_review import (
+            file_review_document,
+            file_review_document_token,
+        )
+
+        params = {"code": code, "path": path, "action": action, "kind": kind}
+        document_name = file_review_document.get()
+        if document_name is not None:
+            document_token = file_review_document_token.get()
+            if document_token is None:
+                raise RuntimeError("ReviewUnavailable: document reservation missing")
+            params["document_name"] = document_name
+            params["document_token"] = document_token
+        return await self._execute_reviewed_request(
+            "review_begin_file", params, timeout_ms
+        )
+
+    async def _execute_reviewed_request(  # noqa: PLR0912
+        self, begin_method: str, params: dict[str, Any], timeout_ms: int | None
+    ) -> ExecutionResult:
+        """Run the shared single-use review protocol without replay on failure."""
+        started = time.perf_counter()
+        writer: asyncio.StreamWriter | None = None
+        committed = False
+        denied = False
+        try:
+            execution_timeout = (
+                resolve_execution_timeout_ms(timeout_ms, self._execution_timeout_ms)
+                / 1000
+            )
+            reader, stream_writer = await asyncio.wait_for(
+                asyncio.open_connection(
+                    self._host, self._port, limit=MAX_SOCKET_RESPONSE_BYTES
+                ),
+                timeout=self._timeout,
+            )
+            writer = stream_writer
+
+            async def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
+                response = await self._send_request_once(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": str(uuid.uuid4()),
+                        "method": method,
+                        "params": params,
+                    },
+                    reader,
+                    stream_writer,
+                    self._timeout,
+                )
+                if not isinstance(response, dict):
+                    raise ValueError("Bridge returned an invalid review response")
+                return response
+
+            async with asyncio.timeout(REVIEW_DECISION_TIMEOUT_SECONDS):
+                response = await request(begin_method, params)
+                review_id = response["review_id"]
+                if type(review_id) is not str or not 1 <= len(review_id) <= 64:
+                    raise ValueError("Bridge returned an invalid review identifier")
+                while True:
+                    response = await request("review_status", {"review_id": review_id})
+                    state = response.get("state")
+                    if state == "approved":
+                        break
+                    if state != "pending":
+                        denied = state == "denied"
+                        raise ValueError(f"Local review ended: {state}")
+                    await asyncio.sleep(REVIEW_POLL_INTERVAL_SECONDS)
+
+                # A lost commit response can mean the operation was scheduled.
+                committed = True
+                response = await request("review_commit", {"review_id": review_id})
+                if response.get("scheduled") is not True:
+                    committed = False
+                    raise ValueError("Local review could not be committed")
+
+            async with asyncio.timeout(execution_timeout):
+                while True:
+                    response = await request("review_result", {"review_id": review_id})
+                    result = response.get("result")
+                    if result is not None:
+                        if (
+                            not isinstance(result, dict)
+                            or type(result.get("success")) is not bool
+                        ):
+                            raise ValueError(
+                                "Bridge returned an invalid execution result"
+                            )
+                        reported_time = result.get("execution_time_ms")
+                        execution_time = (
+                            float(reported_time)
+                            if isinstance(reported_time, (int, float))
+                            and not isinstance(reported_time, bool)
+                            and 0 <= reported_time < float("inf")
+                            else (time.perf_counter() - started) * 1000
+                        )
+                        return ExecutionResult(
+                            success=result["success"],
+                            result=result.get("result"),
+                            stdout=result.get("stdout", ""),
+                            stderr=result.get("stderr")
+                            or result.get("error_message", ""),
+                            execution_time_ms=execution_time,
+                            error_type=result.get("error_type"),
+                            error_traceback=result.get("error_traceback"),
+                        )
+                    status = await request("review_status", {"review_id": review_id})
+                    state = status.get("state")
+                    if state in ("expired", "denied"):
+                        committed = False
+                        denied = state == "denied"
+                        raise ValueError("Local review ended before execution")
+                    if state == "unavailable":
+                        raise ValueError("Local review result is no longer available")
+                    await asyncio.sleep(REVIEW_POLL_INTERVAL_SECONDS)
+        except (
+            TimeoutError,
+            ConnectionError,
+            OSError,
+            JsonRpcError,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as error:
+            message = str(error) or type(error).__name__
+            if committed:
+                message += "; execution may already be running and was not retried"
+            return ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr=message,
+                execution_time_ms=(time.perf_counter() - started) * 1000,
+                error_type="ReviewDenied"
+                if denied
+                else "ReviewExecutionUnknown"
+                if committed
+                else "ReviewUnavailable",
+            )
+        finally:
+            if writer is not None:
+                writer.close()
+                with contextlib.suppress(Exception):
+                    await writer.wait_closed()
+
+    async def execute_python(  # noqa: PLR0911
         self,
         code: str,
         timeout_ms: int | None = None,
@@ -536,6 +758,17 @@ class SocketBridge(FreecadBridge):
         Returns:
             ExecutionResult with execution outcome.
         """
+        from freecad_mcp.bridge.file_review import (
+            ensure_review_result,
+            file_review_target,
+        )
+        from freecad_mcp.config import get_config
+
+        target = file_review_target.get()
+        if target is not None and not get_config().allow_unreviewed_file_operations:
+            return ensure_review_result(
+                await self.execute_reviewed_file(code, *target, timeout_ms=timeout_ms)
+            )
         try:
             effective_timeout_ms = resolve_execution_timeout_ms(
                 timeout_ms,
@@ -668,7 +901,13 @@ else:
 """
         )
 
-        if result.success and result.result:
+        if not result.success:
+            raise RuntimeError(
+                result.error_traceback
+                or result.stderr
+                or "Active document lookup failed"
+            )
+        if result.result:
             return DocumentInfo(**result.result)
         return None
 
@@ -703,7 +942,7 @@ _result_ = {{
             f"""
 import os
 if not os.path.exists({path!r}):
-    raise FileNotFoundError(f"File not found: {path!r}")
+    raise FileNotFoundError("File not found: " + repr({path!r}))
 
 doc = FreeCAD.openDocument({path!r})
 _result_ = {{
@@ -734,7 +973,7 @@ _result_ = {{
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
-    raise ValueError("No active document" if {doc_name!r} is None else f"Document not found: {doc_name!r}")
+    raise ValueError("No active document" if {doc_name!r} is None else "Document not found: " + repr({doc_name!r}))
 
 save_path = {path!r} or doc.FileName
 if not save_path:
@@ -879,7 +1118,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 # Set properties
 for prop_name, prop_val in {properties!r}.items():
@@ -918,7 +1157,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 doc.removeObject({obj_name!r})
 _result_ = True
@@ -1106,17 +1345,14 @@ _result_ = True
         create_code = f"""
 import os
 
-macro_path = FreeCAD.getUserMacroDir(True)
-os.makedirs(macro_path, exist_ok=True)
-
-macro_file = os.path.join(macro_path, {name!r} + ".FCMacro")
+macro_file = globals().get("_robust_mcp_reviewed_file_path") or os.path.join(FreeCAD.getUserMacroDir(True), {name!r} + ".FCMacro")
+os.makedirs(os.path.dirname(macro_file), exist_ok=True)
 
 header = ""
 if {description!r}:
-    header = f"# {description!r}\\n\\n"
+    header = "".join("# " + line + "\\n" for line in {description!r}.splitlines()) + "\\n"
 
-full_code = header + '''# -*- coding: utf-8 -*-
-# FreeCAD Macro: {name}
+full_code = header + "# -*- coding: utf-8 -*-\\n# FreeCAD Macro: " + " ".join({name!r}.splitlines()) + '''
 # Created via MCP Bridge
 
 import FreeCAD
@@ -1238,21 +1474,6 @@ _result_ = {
     # =========================================================================
 
     async def get_console_output(self, lines: int = 100) -> list[str]:
-        """Get recent console output."""
-        code = f"""
-output_lines = []
-
-if hasattr(FreeCAD, 'Console'):
-    console = FreeCAD.Console
-    if hasattr(console, 'GetLog'):
-        log = console.GetLog()
-        if log:
-            output_lines = log.split('\\n')[-{lines}:]
-
-_result_ = output_lines
-"""
-        result = await self.execute_python(code)
-
-        if result.success and result.result:
-            return result.result
-        return []
+        """Get recent Report view output or report that capture is unavailable."""
+        result = await self.execute_python(build_console_output_code(lines))
+        return console_output_from_result(result)

@@ -43,6 +43,61 @@ def _register_tools(
 
 
 @pytest.mark.asyncio
+async def test_live_sketch_info_reports_degrees_of_freedom() -> None:
+    """Report real degrees of freedom before and after constraining a line."""
+    doc_name = f"McpSketchDof_{uuid4().hex}"
+    bridge = XmlRpcBridge(**integration_credentials())
+    await bridge.connect()
+    try:
+        setup = await bridge.execute_python(
+            f"""
+import FreeCAD
+import Part
+import Sketcher
+doc = FreeCAD.newDocument({doc_name!r})
+sketch = doc.addObject("Sketcher::SketchObject", "Sketch")
+sketch.addGeometry(Part.LineSegment(FreeCAD.Vector(0, 0, 0),
+                                    FreeCAD.Vector(10, 0, 0)), False)
+doc.recompute()
+_result_ = {{"dof": sketch.DoF, "solve_status": sketch.solve()}}
+"""
+        )
+        assert setup.success, setup.error_traceback or setup.stderr
+        assert setup.result["dof"] > 0
+        assert setup.result["solve_status"] == 0
+
+        tool = _register_tools(bridge)["get_sketch_info"]
+        info = await tool(sketch_name="Sketch", doc_name=doc_name)
+        assert info["dof"] == setup.result["dof"]
+
+        constrained = await bridge.execute_python(
+            f"""
+import Sketcher
+doc = FreeCAD.getDocument({doc_name!r})
+sketch = doc.getObject("Sketch")
+sketch.addConstraint(Sketcher.Constraint("Block", 0))
+doc.recompute()
+_result_ = sketch.DoF
+"""
+        )
+        assert constrained.success, constrained.error_traceback or constrained.stderr
+        assert constrained.result == 0
+        info = await tool(sketch_name="Sketch", doc_name=doc_name)
+        assert info["dof"] == 0
+    finally:
+        try:
+            await bridge.execute_python(
+                f"""
+if {doc_name!r} in FreeCAD.listDocuments():
+    FreeCAD.closeDocument({doc_name!r})
+_result_ = True
+"""
+            )
+        finally:
+            await bridge.disconnect()
+
+
+@pytest.mark.asyncio
 async def test_live_external_geometry_count_uses_subelements() -> None:
     """Count each referenced edge when FreeCAD groups them under one object."""
     doc_name = f"McpExternalGeometry_{uuid4().hex}"

@@ -1,0 +1,654 @@
+"""Exercise review decisions in an isolated installed FreeCAD process."""
+
+import base64
+import contextlib
+import hmac
+import importlib
+import importlib.util
+import json
+import os
+import socket
+import sys
+import threading
+import time
+import traceback
+from pathlib import Path
+
+import FreeCAD
+import FreeCADGui
+
+sys.path.insert(0, os.environ["MCP_REVIEW_PROBE_ADDON"])
+from freecad_mcp_bridge.authentication import (
+    BridgeAuthenticator,
+    create_hmac_verifier,
+    request_proof_message,
+)
+from freecad_mcp_bridge.qt_compat import load_qt_core_widgets
+from freecad_mcp_bridge.server import FreecadMCPPlugin
+
+QtCore, QtWidgets = load_qt_core_widgets()
+secret = bytes.fromhex(os.environ["MCP_REVIEW_PROBE_SECRET"])
+plugin = None
+errors = []
+finished = threading.Event()
+seen = set()
+results = []
+result_path = Path(os.environ["MCP_REVIEW_PROBE_RESULT"])
+example_code = 'print("Hello from FreeCAD")\n_result_ = 42'
+port_file = os.environ.get("MCP_REVIEW_PROBE_PORT")
+done_file = os.environ.get("MCP_REVIEW_PROBE_DONE")
+manual = os.environ.get("MCP_REVIEW_PROBE_MANUAL") == "1"
+preferences_tested = False
+
+
+def display_path(path):
+    """Match the escaped path format used by the review dialog."""
+    return str(path).replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")
+
+
+def report_traceback():
+    """Attempt diagnostics without interrupting failure cleanup."""
+    with contextlib.suppress(Exception):
+        traceback.print_exc()
+
+
+def test_preferences():
+    """Exercise the actual preferences panel and isolated FreeCAD settings."""
+    root = Path(os.environ["MCP_REVIEW_PROBE_ADDON"])
+    spec = importlib.util.spec_from_file_location(
+        "approval_probe_addon",
+        root / "__init__.py",
+        submodule_search_locations=[str(root)],
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Could not load isolated workbench")
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = package
+    spec.loader.exec_module(package)
+    page_module = importlib.import_module("approval_probe_addon.Qt.preferences_page")
+    MCPBridgePreferencesPage = page_module.MCPBridgePreferencesPage
+
+    page = MCPBridgePreferencesPage()
+    page.loadSettings()
+    if (
+        not page.review_python_cb.isChecked()
+        or not page.review_files_cb.isChecked()
+        or page.review_bypass_cb.isChecked()
+    ):
+        raise RuntimeError("Unexpected review preference defaults")
+    page.review_python_cb.setChecked(False)
+    page.review_files_cb.setChecked(False)
+    page.review_bypass_cb.setChecked(True)
+    page.saveSettings()
+    other = MCPBridgePreferencesPage()
+    other.loadSettings()
+    if (
+        other.review_python_cb.isChecked()
+        or other.review_files_cb.isChecked()
+        or not other.review_bypass_cb.isChecked()
+    ):
+        raise RuntimeError("Review preferences did not persist")
+    approval_module = importlib.import_module(
+        "approval_probe_addon.freecad_mcp_bridge.macro_approvals"
+    )
+    widget_module = importlib.import_module(
+        "approval_probe_addon.Qt.macro_approvals_widget"
+    )
+    table = page.macro_approvals
+    store = table._store
+    macro_dir = Path(os.environ["FREECAD_USER_DATA"])
+    preferences_screenshot = os.environ.get("MCP_MACRO_PREFERENCES_SCREENSHOT")
+    if preferences_screenshot:
+        import hashlib
+
+        example = approval_module.MacroApproval(
+            str(macro_dir / "Example.FCMacro"),
+            hashlib.sha256(
+                b'print("Hello from a FreeCAD macro")\n_result_ = 42\n'
+            ).hexdigest(),
+        )
+        store.add(example)
+        table.refresh()
+        page.resize(900, 760)
+        page.review_python_cb.setChecked(True)
+        page.show()
+        QtWidgets.QApplication.processEvents()
+        if not page.grab().save(preferences_screenshot):
+            raise RuntimeError("Could not capture macro preferences")
+        store.clear()
+        page.review_python_cb.setChecked(False)
+    items = [
+        approval_module.MacroApproval(
+            str(macro_dir / f"macro-{i}.FCMacro"), f"{i:064x}"
+        )
+        for i in range(25)
+    ]
+    for item in items:
+        store.add(item)
+    table.refresh()
+    table.table.setMaximumHeight(150)
+    page.show()
+    QtWidgets.QApplication.processEvents()
+    if table.table.rowCount() != 25 or table.table.verticalScrollBar().maximum() <= 0:
+        raise RuntimeError("Saved macro approval table did not scroll")
+    selected_row = next(
+        row
+        for row in range(table.table.rowCount())
+        if table.table.item(row, 0).text() == items[2].path
+        and table.table.item(row, 1).text() == items[2].sha256
+    )
+    table.table.selectRow(selected_row)
+    opened = []
+    from types import SimpleNamespace
+
+    original_loader = widget_module.load_qt_modules
+    widget_module.load_qt_modules = lambda *_names: (
+        SimpleNamespace(
+            QDesktopServices=SimpleNamespace(
+                openUrl=lambda url: opened.append(url.toLocalFile()) or True
+            )
+        ),
+    )
+    try:
+        table.open_folder()
+    finally:
+        widget_module.load_qt_modules = original_loader
+    if [Path(item) for item in opened] != [macro_dir]:
+        raise RuntimeError(f"Wrong macro folder opened: {opened}")
+    table.remove_selected()
+    if store.contains(items[2]) or not store.contains(items[1]):
+        raise RuntimeError("Removing a saved macro approval did not persist")
+    store.clear()
+    table.refresh()
+    if table.table.rowCount() != 0:
+        raise RuntimeError("Saved macro approval table did not clear")
+    page.close()
+    page.deleteLater()
+    other.deleteLater()
+
+
+def worker(port):
+    """Run authenticated requests from a non-GUI thread."""
+    try:
+        cases = [(example_code, True), ("_result_ = 99", False)]
+        if preferences_tested:
+            cases.insert(1, (example_code, True))
+            cases.append((None, True))
+            cases.append(("__file_review_probe__", True))
+            cases.append(("__document_unchanged__", True))
+            cases.append(("__document_replaced__", True))
+        for index, (code, decision) in enumerate(cases):
+            if preferences_tested and index == 2:
+                plugin._review_controller._policy.clear_session()
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+                stream = sock.makefile("rwb")
+
+                def request(method, params, stream=stream):
+                    stream.write(b'{"type":"challenge"}\n')
+                    stream.flush()
+                    challenge = json.loads(stream.readline())["challenge"]
+                    body = json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": "one",
+                            "method": method,
+                            "params": params,
+                        }
+                    ).encode()
+                    proof = hmac.digest(
+                        secret,
+                        request_proof_message("probe", challenge, "socket", body),
+                        "sha256",
+                    )
+                    envelope = {
+                        "client": "probe",
+                        "challenge": challenge,
+                        "body": base64.b64encode(body).decode(),
+                        "proof": base64.b64encode(proof).decode(),
+                    }
+                    stream.write(json.dumps(envelope).encode() + b"\n")
+                    stream.flush()
+                    response = json.loads(stream.readline())
+                    if "error" in response:
+                        raise RuntimeError(str(response["error"]))
+                    return response["result"]
+
+                if code is None:
+                    request_id = request(
+                        "review_begin_macro",
+                        {"macro_name": "HostMacro", "args": {"value": 42}},
+                    )["review_id"]
+                    Path(plugin._macro_review_roots[0], "HostMacro.FCMacro").write_text(
+                        "_result_ = 999\n"
+                    )
+                elif code == "__file_review_probe__":
+                    target = Path(os.environ["FREECAD_USER_DATA"]) / "socket-review.txt"
+                    target.write_text("42")
+                    request_id = request(
+                        "review_begin_file",
+                        {
+                            "code": "_result_ = int(open("
+                            + repr(str(target))
+                            + ").read())",
+                            "path": str(target),
+                            "action": "read",
+                            "kind": "path",
+                        },
+                    )["review_id"]
+                elif code in {"__document_unchanged__", "__document_replaced__"}:
+                    plugin._review_controller._policy.configure(
+                        "file_operation", require_review=True
+                    )
+                    selected = request(
+                        "execute",
+                        {
+                            "code": "FreeCAD.newDocument('ReviewIdentityProbe')\n"
+                            "_result_ = _robust_mcp_capture_document('ReviewIdentityProbe')"
+                        },
+                    )
+                    if not selected.get("success"):
+                        raise RuntimeError(f"Document reservation failed: {selected}")
+                    selected = selected["result"]
+                    target = Path(os.environ["FREECAD_USER_DATA"]) / "identity.txt"
+                    target.write_text("42")
+                    marker = target.with_name("identity-executed.txt")
+                    marker.unlink(missing_ok=True)
+                    request_id = request(
+                        "review_begin_file",
+                        {
+                            "code": "open("
+                            + repr(str(marker))
+                            + ", 'w').write('ran')\n_result_ = 42",
+                            "path": str(target),
+                            "action": "read",
+                            "kind": "path",
+                            "document_name": selected["name"],
+                            "document_token": selected["token"],
+                        },
+                    )["review_id"]
+                else:
+                    request_id = request("review_begin", {"code": code})["review_id"]
+                deadline = time.monotonic() + 15
+                state = "pending"
+                while time.monotonic() < deadline:
+                    state = request("review_status", {"review_id": request_id})["state"]
+                    if state != "pending":
+                        break
+                    time.sleep(0.1)
+                if state != ("approved" if decision else "denied"):
+                    raise RuntimeError(f"Unexpected review state: {state}")
+                if decision:
+                    if code == "__document_replaced__":
+                        replacement = request(
+                            "execute",
+                            {
+                                "code": "FreeCAD.closeDocument('ReviewIdentityProbe')\n"
+                                "doc = FreeCAD.newDocument('ReviewIdentityProbe')\n"
+                                "_result_ = doc.Name"
+                            },
+                        )
+                        if (
+                            not replacement.get("success")
+                            or replacement.get("result") != "ReviewIdentityProbe"
+                        ):
+                            raise RuntimeError(
+                                f"Document replacement failed: {replacement}"
+                            )
+                    if (
+                        request("review_commit", {"review_id": request_id})["scheduled"]
+                        is not True
+                    ):
+                        raise RuntimeError("Approved request was not scheduled")
+                    result = None
+                    while time.monotonic() < deadline:
+                        result = request("review_result", {"review_id": request_id})[
+                            "result"
+                        ]
+                        if result is not None:
+                            break
+                        if code == "__document_replaced__":
+                            state = request("review_status", {"review_id": request_id})[
+                                "state"
+                            ]
+                            if state == "denied":
+                                break
+                        time.sleep(0.1)
+                    if code == "__document_replaced__":
+                        if state != "denied" or result is not None or marker.exists():
+                            raise RuntimeError(f"Replacement was not denied: {result}")
+                        results.append("document-replaced-denied")
+                        request(
+                            "execute",
+                            {"code": "FreeCAD.closeDocument('ReviewIdentityProbe')"},
+                        )
+                        continue
+                    if (
+                        result is None
+                        or not result["success"]
+                        or result["result"] != 42
+                    ):
+                        raise RuntimeError(f"Unexpected execution result: {result}")
+                    if code == "__document_unchanged__":
+                        if not marker.exists():
+                            raise RuntimeError(
+                                "Approved document operation did not execute"
+                            )
+                        request(
+                            "execute",
+                            {"code": "FreeCAD.closeDocument('ReviewIdentityProbe')"},
+                        )
+                results.append(state)
+    except BaseException:
+        report_traceback()
+        errors.append(traceback.format_exc())
+    finally:
+        finished.set()
+
+
+def tick():
+    """Decide each test dialog and close the owned application after testing."""
+    try:
+        controller = plugin._review_controller
+        if not manual and controller and controller._request and controller._dialog:
+            request = controller._request
+            if request.request_id not in seen:
+                seen.add(request.request_id)
+                if request.payload.action in {"run_macro", "file_operation"}:
+                    if request.payload.document_name:
+                        details = [
+                            item.toPlainText()
+                            for item in controller._dialog.findChildren(
+                                QtWidgets.QPlainTextEdit
+                            )
+                        ]
+                        if not any(
+                            f"Document: {request.payload.document_name}"
+                            in detail.splitlines()
+                            for detail in details
+                        ):
+                            raise RuntimeError("Document review omitted its target")
+                    if os.environ.get("MCP_REVIEW_PROBE_CAM") == "1":
+                        snapshot = request.payload.file_snapshot
+                        details = [
+                            item.toPlainText()
+                            for item in controller._dialog.findChildren(
+                                QtWidgets.QPlainTextEdit
+                            )
+                            if "Resolved path:" in item.toPlainText()
+                        ]
+                        if (
+                            snapshot is None
+                            or len(details) != 1
+                            or "Requested path: "
+                            + display_path(snapshot.requested_path)
+                            not in details[0].splitlines()
+                            or not snapshot.requested_path.endswith("endmill.fcstd")
+                        ):
+                            raise RuntimeError(
+                                "CAM review dialog omitted the selected tool shape"
+                            )
+                        results.append("cam-reviewed")
+                    controller._dialog.accept()
+                elif request.payload.content == example_code.encode() and not (
+                    port_file and results
+                ):
+                    screenshot_path = os.environ.get("MCP_REVIEW_PROBE_SCREENSHOT")
+                    if screenshot_path and not controller._dialog.grab().save(
+                        screenshot_path
+                    ):
+                        raise RuntimeError("Could not capture the review dialog")
+                    if preferences_tested:
+                        checkbox = controller._dialog.findChild(QtWidgets.QCheckBox)
+                        if checkbox is None:
+                            raise RuntimeError("Timed bypass control unavailable")
+                        checkbox.setChecked(True)
+                    controller._dialog.accept()
+                    if port_file:
+                        results.append("approved")
+                else:
+                    controller._dialog.reject()
+                    if port_file:
+                        results.append("denied")
+        if finished.is_set() or (done_file and Path(done_file).exists()):
+            timer.stop()
+            try:
+                try:
+                    plugin.stop()
+                except Exception:
+                    report_traceback()
+                    errors.append(traceback.format_exc())
+                result_path.write_text(
+                    json.dumps(
+                        {
+                            "results": results,
+                            "errors": errors,
+                            "seen": len(seen),
+                            "freecad": FreeCAD.Version(),
+                            "qt": QtCore.qVersion(),
+                            "preferences_tested": preferences_tested,
+                        }
+                    )
+                )
+            finally:
+                FreeCADGui.getMainWindow().close()
+    except BaseException:
+        errors.append(traceback.format_exc())
+        finished.set()
+
+
+def start():
+    """Start an isolated bridge after the real GUI event loop is running."""
+    global plugin, timer, preferences_tested
+    try:
+        expected_data = os.path.realpath(os.environ["FREECAD_USER_DATA"])
+        if os.path.realpath(FreeCAD.getUserAppDataDir()) != expected_data:
+            raise RuntimeError("FreeCAD did not select the temporary user profile")
+        if os.environ.get("MCP_REVIEW_PROBE_PREFERENCES") == "1":
+            test_preferences()
+            preferences_tested = True
+        auth = BridgeAuthenticator(
+            create_hmac_verifier(lambda client: secret if client == "probe" else None)
+        )
+        plugin = FreecadMCPPlugin(
+            host="127.0.0.1", port=0, xmlrpc_port=0, authenticator=auth
+        )
+        plugin.start()
+        if plugin._review_broker is None:
+            raise RuntimeError("GUI startup did not enable review")
+        if preferences_tested:
+            policy = plugin._review_controller._policy
+            if (
+                policy.requires_review("execute_python")
+                or policy.requires_review("file_operation")
+                or not policy.timed_bypass_enabled()
+            ):
+                raise RuntimeError("Bridge did not load saved review preferences")
+            # Exercise the actual host dialog with the opt-in control enabled.
+            from freecad_mcp_bridge.approval import ApprovalPayload, ApprovalRequest
+            from freecad_mcp_bridge.review_dialog import create_review_dialog
+
+            policy.configure("execute_python", require_review=True)
+            macro_screenshot = os.environ.get("MCP_MACRO_REVIEW_SCREENSHOT")
+            if macro_screenshot:
+                from freecad_mcp_bridge.macro_snapshot import snapshot_macro
+
+                macro_dir = Path(FreeCAD.getUserMacroDir(True))
+                macro_dir.mkdir(parents=True, exist_ok=True)
+                macro_file = macro_dir / "Example.FCMacro"
+                macro_file.write_text(
+                    'print("Hello from a FreeCAD macro")\n_result_ = 42\n'
+                )
+                snapshot = snapshot_macro(str(macro_file))
+                macro_request = ApprovalRequest(
+                    ApprovalPayload(
+                        "run_macro",
+                        snapshot.content,
+                        snapshot.path,
+                        snapshot.sha256,
+                        "{}",
+                    ),
+                    30,
+                )
+                macro_dialog = create_review_dialog(
+                    macro_request,
+                    FreeCADGui.getMainWindow(),
+                    policy,
+                    plugin._review_controller._approval_store,
+                )
+                macro_dialog.open()
+                QtWidgets.QApplication.processEvents()
+                if not macro_dialog.grab().save(macro_screenshot):
+                    raise RuntimeError("Could not capture macro review dialog")
+                from freecad_mcp_bridge.macro_approvals import MacroApproval
+
+                save_control = next(
+                    item
+                    for item in macro_dialog.findChildren(QtWidgets.QCheckBox)
+                    if item.text() == "Always allow this exact macro version"
+                )
+                save_control.setChecked(True)
+                macro_dialog.accept()
+                QtWidgets.QApplication.processEvents()
+                approval = MacroApproval(snapshot.path, snapshot.sha256)
+                store = plugin._review_controller._approval_store
+                if macro_request.consume() is None or not store.contains(approval):
+                    raise RuntimeError("Exact macro approval did not persist")
+                queued_id = plugin._review_broker.begin(
+                    "local-test", macro_request.payload, 30
+                )
+                plugin._review_controller.poll()
+                if not plugin._review_broker.commit("local-test", queued_id):
+                    raise RuntimeError("Saved approval did not auto-approve")
+                page_module = importlib.import_module(
+                    "approval_probe_addon.Qt.preferences_page"
+                )
+                revoke_page = page_module.MCPBridgePreferencesPage()
+                revoke_page.macro_approvals.refresh()
+                table = revoke_page.macro_approvals
+                row = next(
+                    row
+                    for row in range(table.table.rowCount())
+                    if table.table.item(row, 0).text() == approval.path
+                    and table.table.item(row, 1).text() == approval.sha256
+                )
+                table.table.selectRow(row)
+                table.remove_selected()
+                plugin._process_reviewed_queue()
+                if (
+                    store.contains(approval)
+                    or plugin._review_broker.result("local-test", queued_id) is not None
+                ):
+                    raise RuntimeError(
+                        "Removing approval failed to revoke queued request"
+                    )
+                revoke_page.deleteLater()
+                macro_dialog.deleteLater()
+            request = ApprovalRequest(ApprovalPayload("execute_python", b"pass"), 30)
+            dialog = create_review_dialog(request, FreeCADGui.getMainWindow(), policy)
+            dialog.open()
+            QtWidgets.QApplication.processEvents()
+            checkbox = dialog.findChild(QtWidgets.QCheckBox)
+            duration = dialog.findChild(QtWidgets.QSpinBox)
+            if checkbox is None or duration is None or checkbox.isChecked():
+                raise RuntimeError(
+                    "Timed bypass control unavailable or enabled by default"
+                )
+            checkbox.setChecked(True)
+            duration.setValue(1)
+            dialog.accept()
+            QtWidgets.QApplication.processEvents()
+            if request.consume() is None or policy.requires_review("execute_python"):
+                raise RuntimeError("Timed bypass did not follow local acceptance")
+            policy.clear_session()
+            if not policy.requires_review("execute_python"):
+                raise RuntimeError("Timed bypass was not cleared")
+            dialog.deleteLater()
+            from freecad_mcp_bridge.file_review import snapshot_file
+
+            reviewed_file = Path(os.environ["FREECAD_USER_DATA"]) / "review.FCStd"
+            reviewed_file.write_text("example")
+            file_request = ApprovalRequest(
+                ApprovalPayload(
+                    "file_operation",
+                    b"pass",
+                    file_snapshot=snapshot_file(str(reviewed_file), "read"),
+                ),
+                30,
+            )
+            file_dialog = create_review_dialog(
+                file_request, FreeCADGui.getMainWindow(), policy
+            )
+            file_dialog.open()
+            QtWidgets.QApplication.processEvents()
+            details = " ".join(
+                item.toPlainText()
+                for item in file_dialog.findChildren(QtWidgets.QPlainTextEdit)
+            )
+            if display_path(reviewed_file) not in details:
+                raise RuntimeError("File review dialog omitted the target")
+            file_dialog.reject()
+            QtWidgets.QApplication.processEvents()
+            if file_request.consume() is not None:
+                raise RuntimeError("Denied file request was accepted")
+            file_dialog.deleteLater()
+            plugin.stop()
+            params = FreeCAD.ParamGet(
+                "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
+            )
+            params.SetBool("ReviewPython", True)
+            params.SetBool("ReviewFiles", True)
+            params.SetBool("AllowReviewBypass", False)
+            plugin.start()
+            policy = plugin._review_controller._policy
+            if (
+                not policy.requires_review("execute_python")
+                or not policy.requires_review("file_operation")
+                or policy.timed_bypass_enabled()
+            ):
+                raise RuntimeError("Bridge did not restore default review preferences")
+            policy.set_timed_bypass_enabled(True)
+        if preferences_tested:
+            macro_dir = Path(FreeCAD.getUserMacroDir(True))
+            macro_dir.mkdir(parents=True, exist_ok=True)
+            (macro_dir / "HostMacro.FCMacro").write_text("_result_ = value\n")
+            # Compare the legacy exec wrapper and reviewed macro namespace for
+            # a sibling import without changing the process-global sys.path.
+            helper = "mcp_review_sibling_probe_475917"
+            (macro_dir / (helper + ".py")).write_text("VALUE = 42\n")
+            code = "import " + helper + "\n_result_ = " + helper + ".VALUE\n"
+            legacy = plugin._execute_code_sync("exec(" + repr(code) + ")")
+            sys.modules.pop(helper, None)
+            reviewed = plugin._execute_code_sync(
+                code, filename=str(macro_dir / "HostMacro.FCMacro"), initial_globals={}
+            )
+            sys.modules.pop(helper, None)
+            if (legacy["success"], legacy.get("result"), legacy.get("error_type")) != (
+                reviewed["success"],
+                reviewed.get("result"),
+                reviewed.get("error_type"),
+            ):
+                raise RuntimeError("Reviewed macro sibling imports differ from legacy")
+        port = plugin._socket_server.sockets[0].getsockname()[1]
+        if port_file:
+            port_path = Path(port_file)
+            temporary_port_path = port_path.with_name(port_path.name + ".tmp")
+            temporary_port_path.write_text(str(port))
+            os.replace(temporary_port_path, port_path)
+        else:
+            threading.Thread(target=worker, args=(port,), daemon=True).start()
+        timer = QtCore.QTimer()
+        timer.timeout.connect(tick)
+        timer.start(50)
+    except BaseException:
+        report_traceback()
+        try:
+            result_path.write_text(json.dumps({"errors": [traceback.format_exc()]}))
+        finally:
+            try:
+                if plugin:
+                    plugin.stop()
+            finally:
+                FreeCADGui.getMainWindow().close()
+
+
+QtCore.QTimer.singleShot(1000, start)

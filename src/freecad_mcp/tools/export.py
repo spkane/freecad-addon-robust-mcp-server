@@ -7,6 +7,9 @@ to various file formats: STEP, STL, 3MF, OBJ, IGES, and FreeCAD native.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.bridge.file_review import file_review_new_document
+from freecad_mcp.tools._registration import file_tool
+
 
 def _build_object_selection_code(object_names: list[str] | None) -> str:
     """Generate Python code for GUI-aware object selection.
@@ -49,7 +52,7 @@ def register_export_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) ->
         get_bridge: Async function returning the active bridge connection.
     """
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_step(
         file_path: str,
         object_names: list[str] | None = None,
@@ -99,7 +102,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "STEP export failed")
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_stl(
         file_path: str,
         object_names: list[str] | None = None,
@@ -161,7 +164,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "STL export failed")
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_3mf(
         file_path: str,
         object_names: list[str] | None = None,
@@ -225,7 +228,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "3MF export failed")
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_obj(
         file_path: str,
         object_names: list[str] | None = None,
@@ -286,7 +289,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "OBJ export failed")
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge)
     async def export_iges(
         file_path: str,
         object_names: list[str] | None = None,
@@ -336,7 +339,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "IGES export failed")
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge, allow_new_document=True)
     async def import_step(
         file_path: str,
         doc_name: str | None = None,
@@ -360,9 +363,9 @@ import Part
 import os
 
 if not os.path.exists({file_path!r}):
-    raise FileNotFoundError(f"File not found: {file_path!r}")
+    raise FileNotFoundError("File not found: " + repr({file_path!r}))
 
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
 if doc is None:
     doc = FreeCAD.newDocument("Imported")
 
@@ -386,7 +389,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "STEP import failed")
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge, allow_new_document=True)
     async def import_stl(
         file_path: str,
         doc_name: str | None = None,
@@ -410,9 +413,9 @@ import Mesh
 import os
 
 if not os.path.exists({file_path!r}):
-    raise FileNotFoundError(f"File not found: {file_path!r}")
+    raise FileNotFoundError("File not found: " + repr({file_path!r}))
 
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
 if doc is None:
     doc = FreeCAD.newDocument("Imported")
 

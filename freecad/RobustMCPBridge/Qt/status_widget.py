@@ -172,6 +172,9 @@ class MCPStatusWidget:
         xmlrpc_running: bool = True,
         socket_running: bool = True,
         errors: str = "",
+        review_bypassed: bool = False,
+        macro_review_bypassed: bool = False,
+        file_review_bypassed: bool = False,
     ) -> None:
         """Update the widget to show running status.
 
@@ -182,6 +185,9 @@ class MCPStatusWidget:
             xmlrpc_running: Whether XML-RPC is listening.
             socket_running: Whether JSON-RPC is listening.
             errors: Listener errors and troubleshooting guidance.
+            review_bypassed: Whether supported Python review is bypassed.
+            macro_review_bypassed: Whether local macro review is bypassed.
+            file_review_bypassed: Whether local file review is bypassed.
         """
         if self._widget is None:
             return
@@ -193,11 +199,16 @@ class MCPStatusWidget:
         state = (
             "listener error"
             if errors and not (xmlrpc_running or socket_running)
-            else "Python execution enabled, partial"
+            else "Client Python: full user permissions (partial)"
             if errors
-            else "Python execution enabled"
+            else "Client Python: full user permissions"
         )
-        self._widget.setText(f"MCP: {state} ({xmlrpc_port}/{socket_port})")
+        suffix = " | Python review bypassed" if review_bypassed else ""
+        if macro_review_bypassed:
+            suffix += " | Macro review bypassed"
+        if file_review_bypassed:
+            suffix += " | File review bypassed"
+        self._widget.setText(f"MCP: {state}{suffix} ({xmlrpc_port}/{socket_port})")
         self._widget.setStyleSheet(
             "QLabel { "
             "background-color: #9a5700; "
@@ -208,7 +219,9 @@ class MCPStatusWidget:
             "}"
         )
         self._widget.setToolTip(
-            f"MCP Bridge {__version__} is running and accepts Python from authorized clients\n"
+            f"MCP Bridge {__version__} accepts Python from authorized clients.\n"
+            "Their code runs with your full permissions, including access to "
+            "your files and network.\n"
             f"XML-RPC: {'listening' if xmlrpc_running else 'unavailable'} on localhost:{xmlrpc_port}\n"
             f"JSON-RPC: {'listening' if socket_running else 'unavailable'} on localhost:{socket_port}\n"
             f"Requests processed: {request_count}" + (f"\n{errors}" if errors else "")
@@ -319,6 +332,9 @@ def update_status_running(
     xmlrpc_running: bool = True,
     socket_running: bool = True,
     errors: str = "",
+    review_bypassed: bool = False,
+    macro_review_bypassed: bool = False,
+    file_review_bypassed: bool = False,
 ) -> None:
     """Update status widget to show running state."""
     widget = get_status_widget()
@@ -330,6 +346,9 @@ def update_status_running(
         xmlrpc_running=xmlrpc_running,
         socket_running=socket_running,
         errors=errors,
+        review_bypassed=review_bypassed,
+        macro_review_bypassed=macro_review_bypassed,
+        file_review_bypassed=file_review_bypassed,
     )
 
 
@@ -377,6 +396,11 @@ def sync_status_with_bridge() -> None:
 
         if _mcp_plugin is not None and _mcp_plugin.is_running:
             status = _mcp_plugin.get_status()
+            controller = _mcp_plugin._review_controller
+            policy = controller._policy if controller is not None else None
+            bypassed = policy is not None and not policy.requires_review(
+                "execute_python"
+            )
             widget.set_running(
                 _mcp_plugin.xmlrpc_port,
                 _mcp_plugin.socket_port,
@@ -384,6 +408,11 @@ def sync_status_with_bridge() -> None:
                 xmlrpc_running=status["listeners"]["xmlrpc"] == "running",
                 socket_running=status["listeners"]["socket"] == "running",
                 errors="\n".join(status["listener_errors"].values()),
+                review_bypassed=bypassed,
+                macro_review_bypassed=policy is not None
+                and not policy.requires_review("run_macro"),
+                file_review_bypassed=policy is not None
+                and not policy.requires_review("file_operation"),
             )
         else:
             widget.set_stopped()

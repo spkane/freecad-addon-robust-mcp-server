@@ -1,0 +1,124 @@
+"""Verify macro snapshots bind review to immutable file bytes."""
+
+import hashlib
+import importlib.util
+import os
+import sys
+from pathlib import Path
+from types import ModuleType
+
+import pytest
+
+
+@pytest.fixture
+def snapshots(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Load the snapshot module independently of FreeCAD."""
+    path = (
+        Path(__file__).parents[3]
+        / "freecad/RobustMCPBridge/freecad_mcp_bridge/macro_snapshot.py"
+    )
+    spec = importlib.util.spec_from_file_location("macro_snapshot_test", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_snapshot_is_unchanged_after_file_replacement(
+    snapshots: ModuleType, tmp_path: Path
+) -> None:
+    """Replacing the file does not change the captured or hashed content."""
+    path = tmp_path / "test.FCMacro"
+    original = b"_result_ = 42\r\n"
+    path.write_bytes(original)
+    snapshot = snapshots.snapshot_macro(str(path))
+    path.write_bytes(b"_result_ = 99\n")
+    assert snapshot.path == str(path.resolve())
+    assert snapshot.content == original
+    assert snapshot.sha256 == hashlib.sha256(original).hexdigest()
+    assert snapshots.snapshot_macro(str(path)).sha256 != snapshot.sha256
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="O_NOFOLLOW unavailable")
+def test_snapshot_rejects_symlink_swapped_after_resolution(
+    snapshots: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A substituted final-component symlink cannot change the reviewed path."""
+    path = tmp_path / "example.FCMacro"
+    other = tmp_path / "other.FCMacro"
+    path.write_bytes(b"original")
+    other.write_bytes(b"substituted")
+    replacement = tmp_path / "replacement"
+    replacement.symlink_to(other)
+    assert replacement.is_symlink()
+    real_open = os.open
+
+    def swap_and_open(name: str, flags: int) -> int:
+        os.replace(replacement, path)
+        return real_open(name, flags)
+
+    monkeypatch.setattr(snapshots.os, "open", swap_and_open)
+    with pytest.raises(OSError):
+        snapshots.snapshot_macro(str(path))
+
+
+def test_snapshot_rejects_non_regular_and_oversized_files(
+    snapshots: ModuleType, tmp_path: Path
+) -> None:
+    """Directories and oversized files cannot become review payloads."""
+    with pytest.raises((ValueError, OSError)):
+        snapshots.snapshot_macro(str(tmp_path))
+    path = tmp_path / "large.FCMacro"
+    path.write_bytes(b"x" * (snapshots.MAX_MACRO_BYTES + 1))
+    with pytest.raises(ValueError, match="size"):
+        snapshots.snapshot_macro(str(path))
+
+
+def test_resolve_macro_prefers_user_directory(
+    snapshots: ModuleType, tmp_path: Path
+) -> None:
+    """Capture the user macro when both directories contain the same name."""
+    user = tmp_path / "user"
+    system = tmp_path / "system"
+    user.mkdir()
+    system.mkdir()
+    (user / "example.FCMacro").write_bytes(b"user")
+    (system / "example.FCMacro").write_bytes(b"system")
+    assert (
+        snapshots.resolve_macro("example", (str(user), str(system))).content == b"user"
+    )
+
+
+def test_resolve_macro_refuses_path_traversal(
+    snapshots: ModuleType, tmp_path: Path
+) -> None:
+    """An agent cannot choose a macro outside the configured locations by name."""
+    with pytest.raises(ValueError):
+        snapshots.resolve_macro("../example", (str(tmp_path),))
+
+
+def test_snapshot_closes_descriptor_when_fdopen_fails(
+    snapshots: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An fdopen failure does not leak the descriptor returned by os.open."""
+    path = tmp_path / "example.FCMacro"
+    path.write_text("pass")
+    opened = []
+    real_open = os.open
+
+    def capture_open(name: str, flags: int) -> int:
+        fd = real_open(name, flags)
+        opened.append(fd)
+        return fd
+
+    def fail_fdopen(*_args: object, **_kwargs: object) -> None:
+        raise OSError("fdopen failed")
+
+    monkeypatch.setattr(snapshots.os, "open", capture_open)
+    monkeypatch.setattr(snapshots.os, "fdopen", fail_fdopen)
+    with pytest.raises(OSError, match="fdopen failed"):
+        snapshots.snapshot_macro(str(path))
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])

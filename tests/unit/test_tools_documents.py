@@ -16,7 +16,7 @@ class TestDocumentTools:
         mcp = MagicMock()
         mcp._registered_tools = {}
 
-        def tool_decorator():
+        def tool_decorator(**_kwargs):
             def wrapper(func):
                 mcp._registered_tools[func.__name__] = func
                 return func
@@ -181,6 +181,11 @@ class TestDocumentTools:
     @pytest.mark.asyncio
     async def test_save_document_default(self, register_tools, mock_bridge):
         """save_document should save active document."""
+        mock_bridge.get_active_document = AsyncMock(
+            return_value=DocumentInfo(
+                name="Doc", label="Doc", path="/tmp/saved.FCStd", objects=[]
+            )
+        )
         mock_bridge.save_document = AsyncMock(return_value="/tmp/saved.FCStd")
 
         save_document = register_tools["save_document"]
@@ -188,7 +193,7 @@ class TestDocumentTools:
 
         assert result["success"] is True
         assert result["path"] == "/tmp/saved.FCStd"
-        mock_bridge.save_document.assert_called_once_with(None, None)
+        mock_bridge.save_document.assert_called_once_with("Doc", "/tmp/saved.FCStd")
 
     @pytest.mark.asyncio
     async def test_save_document_with_path(self, register_tools, mock_bridge):
@@ -217,6 +222,13 @@ class TestDocumentTools:
     @pytest.mark.asyncio
     async def test_close_document_with_save(self, register_tools, mock_bridge):
         """close_document should save before closing when requested."""
+        mock_bridge.get_documents = AsyncMock(
+            return_value=[
+                DocumentInfo(
+                    name="TestDoc", label="Test", path="/tmp/doc.FCStd", objects=[]
+                )
+            ]
+        )
         mock_bridge.save_document = AsyncMock(return_value="/tmp/doc.FCStd")
         mock_bridge.close_document = AsyncMock()
 
@@ -225,21 +237,46 @@ class TestDocumentTools:
 
         assert result["success"] is True
         assert result["saved"] is True
-        mock_bridge.save_document.assert_called_once_with("TestDoc")
+        mock_bridge.save_document.assert_called_once_with("TestDoc", "/tmp/doc.FCStd")
         mock_bridge.close_document.assert_called_once_with("TestDoc")
 
     @pytest.mark.asyncio
     async def test_close_document_save_failure(self, register_tools, mock_bridge):
-        """close_document should still close even if save fails."""
+        """A failed save leaves the document open."""
+        mock_bridge.get_documents = AsyncMock(
+            return_value=[
+                DocumentInfo(
+                    name="TestDoc", label="Test", path="/tmp/doc.FCStd", objects=[]
+                )
+            ]
+        )
         mock_bridge.save_document = AsyncMock(side_effect=Exception("Save failed"))
         mock_bridge.close_document = AsyncMock()
 
         close_document = register_tools["close_document"]
-        result = await close_document(doc_name="TestDoc", save_changes=True)
+        with pytest.raises(Exception, match="Save failed"):
+            await close_document(doc_name="TestDoc", save_changes=True)
+        mock_bridge.save_document.assert_awaited_once_with("TestDoc", "/tmp/doc.FCStd")
+        mock_bridge.close_document.assert_not_awaited()
 
-        assert result["success"] is True
-        assert result["saved"] is False
-        mock_bridge.close_document.assert_called_once()
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing", [True, False])
+    async def test_close_document_missing_save_path_keeps_it_open(
+        self, register_tools, mock_bridge, missing
+    ):
+        """A missing saved path must not discard unsaved work."""
+        docs = (
+            []
+            if missing
+            else [DocumentInfo(name="TestDoc", label="Test", path=None, objects=[])]
+        )
+        mock_bridge.get_documents = AsyncMock(return_value=docs)
+        with pytest.raises(ValueError, match="No saved path"):
+            await register_tools["close_document"](
+                doc_name="TestDoc", save_changes=True
+            )
+        mock_bridge.save_document.assert_not_awaited()
+        mock_bridge.close_document.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_recompute_document_success(self, register_tools, mock_bridge):

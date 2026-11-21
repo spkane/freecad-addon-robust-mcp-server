@@ -8,6 +8,9 @@ has excellent screenshot handling with view type detection.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.bridge.file_review import file_review_new_document
+from freecad_mcp.tools._registration import file_tool
+
 
 def register_view_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> None:
     """Register view-related tools with the Robust MCP Server.
@@ -226,7 +229,7 @@ else:
     else:
         obj = doc.getObject({object_name!r})
         if obj is None:
-            _result_ = {{"success": False, "error": f"Object not found: {object_name!r}"}}
+            _result_ = {{"success": False, "error": "Object not found: " + repr({object_name!r})}}
         elif hasattr(obj, "ViewObject") and obj.ViewObject:
             obj.ViewObject.Visibility = {visible}
             _result_ = {{"success": True, "visible": {visible}}}
@@ -275,7 +278,7 @@ else:
     else:
         obj = doc.getObject({object_name!r})
         if obj is None:
-            _result_ = {{"success": False, "error": f"Object not found: {object_name!r}"}}
+            _result_ = {{"success": False, "error": "Object not found: " + repr({object_name!r})}}
         elif hasattr(obj, "ViewObject") and obj.ViewObject:
             obj.ViewObject.DisplayMode = {mode!r}
             _result_ = {{"success": True, "mode": {mode!r}}}
@@ -327,7 +330,7 @@ else:
     else:
         obj = doc.getObject({object_name!r})
         if obj is None:
-            _result_ = {{"success": False, "error": f"Object not found: {object_name!r}"}}
+            _result_ = {{"success": False, "error": "Object not found: " + repr({object_name!r})}}
         elif hasattr(obj, "ViewObject") and obj.ViewObject:
             obj.ViewObject.ShapeColor = ({color[0]}, {color[1]}, {color[2]})
             _result_ = {{"success": True, "color": {color}}}
@@ -643,7 +646,7 @@ _result_ = parts
             return result.result
         return []
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge, allow_new_document=True)
     async def insert_part_from_library(
         part_path: str,
         name: str | None = None,
@@ -676,7 +679,7 @@ _result_ = parts
 import os
 import Part
 
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
 if doc is None:
     doc = FreeCAD.newDocument("Unnamed")
 
@@ -693,13 +696,31 @@ try:
     new_obj = None
     if ext == ".fcstd":
         # Import FreeCAD document
-        src_doc = FreeCAD.openDocument(part_path)
-        for obj in src_doc.Objects:
-            if hasattr(obj, "Shape"):
-                new_obj = doc.addObject("Part::Feature", part_name)
-                new_obj.Shape = obj.Shape.copy()
-                break
-        FreeCAD.closeDocument(src_doc.Name)
+        # An already-open document may contain unsaved changes, rather than
+        # the reviewed file contents. Preserve it and refuse this import.
+        source_path = os.path.normcase(os.path.realpath(part_path))
+        for opened in FreeCAD.listDocuments().values():
+            if opened.FileName and os.path.normcase(os.path.realpath(opened.FileName)) == source_path:
+                raise ValueError("Close the source document before importing its reviewed file")
+        previous_documents = dict(FreeCAD.listDocuments())
+        try:
+            src_doc = FreeCAD.openDocument(part_path)
+        except Exception:
+            # FreeCAD can leave the source registered when restoration fails.
+            # Close only a newly registered document for this source path.
+            for source_name, candidate in FreeCAD.listDocuments().items():
+                if (previous_documents.get(source_name) is not candidate and candidate.FileName
+                        and os.path.normcase(os.path.realpath(candidate.FileName)) == source_path):
+                    FreeCAD.closeDocument(source_name)
+            raise
+        try:
+            for obj in src_doc.Objects:
+                if hasattr(obj, "Shape"):
+                    new_obj = doc.addObject("Part::Feature", part_name)
+                    new_obj.Shape = obj.Shape.copy()
+                    break
+        finally:
+            FreeCAD.closeDocument(src_doc.Name)
     else:
         # Import STEP/IGES
         shape = Part.read(part_path)
@@ -737,13 +758,17 @@ except Exception:
         """Get recent console output from FreeCAD.
 
         Args:
-            lines: Maximum number of lines to return. Defaults to 50.
+            lines: Maximum number of lines to return (1-1000). Defaults to 50.
 
         Returns:
             Dictionary with:
                 - messages: List of console messages
                 - warnings: List of warning messages
                 - errors: List of error messages
+
+        Raises:
+            ValueError: The line limit is outside the supported range.
+            RuntimeError: Console history is unavailable in this FreeCAD session.
         """
         bridge = await get_bridge()
         console_lines = await bridge.get_console_output(lines)

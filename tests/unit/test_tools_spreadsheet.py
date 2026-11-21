@@ -43,9 +43,9 @@ class TestSpreadsheetTools:
         registered_tools: dict[str, Callable[..., Awaitable[Any]]] = {}
         mcp._registered_tools = registered_tools
 
-        def tool_decorator() -> Callable[
-            [Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]
-        ]:
+        def tool_decorator(
+            **_kwargs: Any,
+        ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
             def wrapper(
                 func: Callable[..., Awaitable[Any]],
             ) -> Callable[..., Awaitable[Any]]:

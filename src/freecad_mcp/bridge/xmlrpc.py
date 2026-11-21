@@ -41,6 +41,10 @@ from freecad_mcp.bridge.base import (
     WorkbenchInfo,
     resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.console import (
+    build_console_output_code,
+    console_output_from_result,
+)
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 
@@ -388,7 +392,7 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
     # Code Execution
     # =========================================================================
 
-    async def execute_python(
+    async def execute_python(  # noqa: PLR0911
         self,
         code: str,
         timeout_ms: int | None = None,
@@ -403,6 +407,17 @@ The FreeCAD Robust MCP Bridge server is not running. To fix this:
         Returns:
             ExecutionResult with execution outcome.
         """
+        from freecad_mcp.bridge.file_review import (
+            ensure_review_result,
+            file_review_target,
+        )
+        from freecad_mcp.config import get_config
+
+        target = file_review_target.get()
+        if target is not None and not get_config().allow_unreviewed_file_operations:
+            return ensure_review_result(
+                await self.execute_reviewed_file(code, *target, timeout_ms=timeout_ms)
+            )
         if self._proxy is None:
             return ExecutionResult(
                 success=False,
@@ -536,7 +551,13 @@ else:
 """
         )
 
-        if result.success and result.result:
+        if not result.success:
+            raise RuntimeError(
+                result.error_traceback
+                or result.stderr
+                or "Active document lookup failed"
+            )
+        if result.result:
             return DocumentInfo(**result.result)
         return None
 
@@ -571,7 +592,7 @@ _result_ = {{
             f"""
 import os
 if not os.path.exists({path!r}):
-    raise FileNotFoundError(f"File not found: {path!r}")
+    raise FileNotFoundError("File not found: " + repr({path!r}))
 
 doc = FreeCAD.openDocument({path!r})
 _result_ = {{
@@ -602,7 +623,7 @@ _result_ = {{
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
-    raise ValueError("No active document" if {doc_name!r} is None else f"Document not found: {doc_name!r}")
+    raise ValueError("No active document" if {doc_name!r} is None else "Document not found: " + repr({doc_name!r}))
 
 save_path = {path!r} or doc.FileName
 if not save_path:
@@ -754,7 +775,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Edit Object")
@@ -800,7 +821,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Delete Object")
@@ -1004,17 +1025,14 @@ _result_ = True
         create_code = f"""
 import os
 
-macro_path = FreeCAD.getUserMacroDir(True)
-os.makedirs(macro_path, exist_ok=True)
-
-macro_file = os.path.join(macro_path, {name!r} + ".FCMacro")
+macro_file = globals().get("_robust_mcp_reviewed_file_path") or os.path.join(FreeCAD.getUserMacroDir(True), {name!r} + ".FCMacro")
+os.makedirs(os.path.dirname(macro_file), exist_ok=True)
 
 header = ""
 if {description!r}:
-    header = f"# {description!r}\\n\\n"
+    header = "".join("# " + line + "\\n" for line in {description!r}.splitlines()) + "\\n"
 
-full_code = header + '''# -*- coding: utf-8 -*-
-# FreeCAD Macro: {name}
+full_code = header + "# -*- coding: utf-8 -*-\\n# FreeCAD Macro: " + " ".join({name!r}.splitlines()) + '''
 # Created via MCP Bridge
 
 import FreeCAD
@@ -1137,23 +1155,6 @@ _result_ = {
     # =========================================================================
 
     async def get_console_output(self, lines: int = 100) -> list[str]:
-        """Get recent console output."""
-        code = f"""
-# Try to get console output from FreeCAD
-output_lines = []
-
-# Try FreeCAD.Console if available
-if hasattr(FreeCAD, 'Console'):
-    console = FreeCAD.Console
-    if hasattr(console, 'GetLog'):
-        log = console.GetLog()
-        if log:
-            output_lines = log.split('\\n')[-{lines}:]
-
-_result_ = output_lines
-"""
-        result = await self.execute_python(code)
-
-        if result.success and result.result:
-            return result.result
-        return []
+        """Get recent Report view output or report that capture is unavailable."""
+        result = await self.execute_python(build_console_output_code(lines))
+        return console_output_from_result(result)

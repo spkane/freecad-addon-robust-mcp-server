@@ -1,6 +1,7 @@
 """Tests for PartDesign tools module."""
 
 from collections.abc import Awaitable, Callable
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -1263,6 +1264,42 @@ class TestPartDesignTools:
         assert result["constraint_count"] == 8
         assert result["is_fully_constrained"] is True
         mock_bridge.execute_python.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_sketch_info_reads_dof_without_solving(
+        self, register_tools, mock_bridge
+    ):
+        """Inspection reports actual degrees of freedom without mutating a sketch."""
+        sketch = SimpleNamespace(
+            Name="Sketch",
+            Label="Sketch",
+            GeometryCount=1,
+            ConstraintCount=0,
+            ExternalGeometry=[],
+            FullyConstrained=False,
+            DoF=4,
+            State=["Up-to-date"],
+            solve=MagicMock(return_value=0),
+        )
+        doc = SimpleNamespace(getObject=lambda _name: sketch)
+
+        async def execute(code):
+            namespace = {"FreeCAD": SimpleNamespace(ActiveDocument=doc)}
+            exec(code, namespace)  # noqa: S102
+            return ExecutionResult(
+                success=True,
+                result=namespace["_result_"],
+                stdout="",
+                stderr="",
+                execution_time_ms=0,
+            )
+
+        mock_bridge.execute_python.side_effect = execute
+        result = await register_tools["get_sketch_info"](sketch_name="Sketch")
+
+        assert result["dof"] == 4
+        assert result["state"] == ["Up-to-date"]
+        sketch.solve.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_toggle_construction(self, register_tools, mock_bridge):

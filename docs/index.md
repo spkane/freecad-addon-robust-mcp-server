@@ -140,14 +140,14 @@ Configure an MCP-compatible client and start with a small request.
 The workbench toolbar starts and stops the bridge. Its status indicator shows
 when the local connection is available.
 
-[Workbench guide](guide/workbench.md) · [Connection and security settings](getting-started/configuration.md)
+[Workbench guide](guide/workbench.md) · [Security guide](guide/security.md)
 
 </div>
 <div class="landing-status__images" markdown>
 
 ![FreeCAD Robust MCP Bridge toolbar](assets/images/bridge-toolbar.png)
 
-![FreeCAD bridge running status indicator](assets/images/bridge-status.png)
+![FreeCAD with the standalone bridge permissions warning in the status bar](assets/images/bridge-permissions-full.png)
 
 </div>
 </div>

@@ -34,7 +34,12 @@ from freecad_mcp.bridge.base import (
     WorkbenchInfo,
     resolve_execution_timeout_ms,
 )
+from freecad_mcp.bridge.console import (
+    ConsoleHistoryUnavailableError,
+    validate_console_lines,
+)
 from freecad_mcp.bridge.object_inspection import build_object_inspection_code
+from freecad_mcp.bridge.private_scratch import private_scratch_directory
 from freecad_mcp.bridge.screenshot import build_screenshot_code
 
 
@@ -120,6 +125,17 @@ class EmbeddedBridge(FreecadBridge):
         Returns:
             ExecutionResult with execution outcome.
         """
+        from freecad_mcp.bridge.file_review import (
+            ensure_review_result,
+            file_review_target,
+        )
+        from freecad_mcp.config import get_config
+
+        target = file_review_target.get()
+        if target is not None and not get_config().allow_unreviewed_file_operations:
+            return ensure_review_result(
+                await self.execute_reviewed_file(code, *target, timeout_ms=timeout_ms)
+            )
         if not self._connected:
             return ExecutionResult(
                 success=False,
@@ -197,6 +213,10 @@ class EmbeddedBridge(FreecadBridge):
                 )
                 if spec and spec.loader and path.is_file():
                     runtime = importlib.util.module_from_spec(spec)
+                    # The standalone runtime has no package for relative imports.
+                    runtime.__dict__["_embedded_private_scratch_directory"] = (
+                        private_scratch_directory
+                    )
                     spec.loader.exec_module(runtime)
                     self._cam_runtime = runtime
         if self._cam_runtime is None:
@@ -321,7 +341,13 @@ else:
 """
         )
 
-        if result.success and result.result:
+        if not result.success:
+            raise RuntimeError(
+                result.error_traceback
+                or result.stderr
+                or "Active document lookup failed"
+            )
+        if result.result:
             return DocumentInfo(**result.result)
         return None
 
@@ -355,10 +381,13 @@ else:
     ) -> list[str]:
         """Get recent console output.
 
-        Note: In embedded mode, we don't have direct access to FreeCAD's
-        console history, so we return an empty list or captured output.
+        Raises:
+            RuntimeError: Embedded mode does not provide console history.
         """
-        return []
+        validate_console_lines(lines)
+        raise ConsoleHistoryUnavailableError(
+            "FreeCAD console history is unavailable in embedded mode"
+        )
 
     async def get_freecad_version(self) -> dict[str, Any]:
         """Get FreeCAD version information."""
@@ -541,7 +570,7 @@ _result_ = {{
         code = f"""
 doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
 if doc is None:
-    raise ValueError("No active document" if {doc_name!r} is None else f"Document not found: {doc_name!r}")
+    raise ValueError("No active document" if {doc_name!r} is None else "Document not found: " + repr({doc_name!r}))
 
 save_path = {path!r} or doc.FileName
 if not save_path:
@@ -697,7 +726,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 # Set properties
 for prop_name, prop_val in {properties!r}.items():
@@ -744,7 +773,7 @@ if doc is None:
 
 obj = doc.getObject({obj_name!r})
 if obj is None:
-    raise ValueError(f"Object not found: {obj_name!r}")
+    raise ValueError("Object not found: " + repr({obj_name!r}))
 
 doc.removeObject({obj_name!r})
 _result_ = True
@@ -974,17 +1003,27 @@ _result_ = True
         Returns:
             MacroInfo for the created macro.
         """
+        from freecad_mcp.bridge.file_review import file_review_target
+        from freecad_mcp.config import get_config
+
+        if (
+            file_review_target.get() is not None
+            and not get_config().allow_unreviewed_file_operations
+        ):
+            raise ValueError("Local file review is unavailable in embedded mode")
         macro_path = self._get_macro_path()
         macro_path.mkdir(parents=True, exist_ok=True)
 
         macro_file = macro_path / f"{name}.FCMacro"
 
         # Add description as header comment
-        header = f"# {description}\n\n" if description else ""
+        header = "".join(f"# {line}\n" for line in description.splitlines())
+        if description:
+            header += "\n"
 
         # Add standard imports
         full_code = f"""{header}# -*- coding: utf-8 -*-
-# FreeCAD Macro: {name}
+# FreeCAD Macro: {" ".join(name.splitlines())}
 # Created via MCP Bridge
 
 import FreeCAD

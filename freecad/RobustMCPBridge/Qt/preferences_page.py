@@ -98,6 +98,39 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
 
         layout.addWidget(display_group)
 
+        review_group = QtWidgets.QGroupBox("Local review")
+        review_layout = QtWidgets.QVBoxLayout(review_group)
+        self.review_python_cb = QtWidgets.QCheckBox(
+            "Review supported MCP Python requests in FreeCAD"
+        )
+        review_layout.addWidget(self.review_python_cb)
+        self.review_files_cb = QtWidgets.QCheckBox(
+            "Review supported MCP file operations in FreeCAD"
+        )
+        review_layout.addWidget(self.review_files_cb)
+        self.review_bypass_cb = QtWidgets.QCheckBox(
+            "Offer a time-limited review bypass in the review dialog"
+        )
+        review_layout.addWidget(self.review_bypass_cb)
+        review_warning = QtWidgets.QLabel(
+            "Disabling or bypassing review lets authorized clients run Python "
+            "or access files without a local prompt. "
+            "These settings cover supported reviewed requests only; "
+            "other paired bridge clients can already run Python without review. "
+            "Restart the bridge to apply changes."
+        )
+        review_warning.setWordWrap(True)
+        review_layout.addWidget(review_warning)
+        layout.addWidget(review_group)
+
+        from .macro_approvals_widget import MacroApprovalsWidget
+
+        approvals_group = QtWidgets.QGroupBox("Saved macro approvals")
+        approvals_layout = QtWidgets.QVBoxLayout(approvals_group)
+        self.macro_approvals = MacroApprovalsWidget(approvals_group)
+        approvals_layout.addWidget(self.macro_approvals)
+        layout.addWidget(approvals_group)
+
         # Network Ports group
         ports_group = QtWidgets.QGroupBox("Network Ports")
         ports_layout = QtWidgets.QFormLayout(ports_group)
@@ -179,11 +212,15 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
 
         This method is called by FreeCAD when the Preferences dialog opens.
         """
+        self.macro_approvals.refresh()
         # Import here to avoid circular imports and ensure module is available
         from ..preferences import (
+            get_allow_review_bypass,
             get_auto_start,
             get_auto_start_headless,
             get_auto_start_headless_batch,
+            get_review_files,
+            get_review_python,
             get_socket_port,
             get_status_bar_enabled,
             get_xmlrpc_port,
@@ -195,6 +232,9 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         self.status_bar_cb.setChecked(get_status_bar_enabled())
         self.xmlrpc_spin.setValue(get_xmlrpc_port())
         self.socket_spin.setValue(get_socket_port())
+        self.review_python_cb.setChecked(get_review_python())
+        self.review_files_cb.setChecked(get_review_files())
+        self.review_bypass_cb.setChecked(get_allow_review_bypass())
 
     def saveSettings(self) -> None:
         """Save settings from widgets to FreeCAD preferences.
@@ -204,9 +244,12 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         from ..preferences import (
             get_socket_port,
             get_xmlrpc_port,
+            set_allow_review_bypass,
             set_auto_start,
             set_auto_start_headless,
             set_auto_start_headless_batch,
+            set_review_files,
+            set_review_python,
             set_socket_port,
             set_status_bar_enabled,
             set_xmlrpc_port,
@@ -223,6 +266,9 @@ class MCPBridgePreferencesPage(QtWidgets.QWidget):
         set_status_bar_enabled(self.status_bar_cb.isChecked())
         set_xmlrpc_port(self.xmlrpc_spin.value())
         set_socket_port(self.socket_spin.value())
+        set_review_python(self.review_python_cb.isChecked())
+        set_review_files(self.review_files_cb.isChecked())
+        set_allow_review_bypass(self.review_bypass_cb.isChecked())
 
         # Check if ports changed and notify about restart if needed
         new_xmlrpc = self.xmlrpc_spin.value()

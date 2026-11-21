@@ -23,9 +23,12 @@ import base64
 import binascii
 import contextlib
 import errno
+import hashlib
+import inspect
 import io
 import ipaddress
 import json
+import linecache
 import math
 import os
 import queue
@@ -38,7 +41,9 @@ import uuid
 import weakref
 import xmlrpc.server
 from contextlib import redirect_stderr, redirect_stdout
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
     from .authentication import BridgeAuthenticator
@@ -152,6 +157,18 @@ def _freecad_gui_up() -> bool:
     return bool(getattr(FreeCAD, "GuiUp", False)) if FREECAD_AVAILABLE else False
 
 
+def _review_gui_thread_ready() -> bool:
+    """Confirm reviewed execution is running on the live Qt GUI thread."""
+    if not _freecad_gui_up():
+        return False
+    try:
+        qtcore, qtwidgets = load_qt_core_widgets()
+        app = qtwidgets.QApplication.instance()
+        return app is not None and qtcore.QThread.currentThread() == app.thread()
+    except Exception:
+        return False
+
+
 # Default configuration
 DEFAULT_SOCKET_PORT = 9876
 DEFAULT_XMLRPC_PORT = 9875
@@ -159,6 +176,7 @@ QUEUE_POLL_INTERVAL_MS = 50
 STATUS_UPDATE_INTERVAL_MS = 5000  # Update status bar every 5 seconds
 HEADLESS_POLL_INTERVAL_S = 0.1  # Headless mode poll interval in seconds
 DEFAULT_EXECUTION_TIMEOUT_MS = 30000
+REVIEW_LEASE_SECONDS = 300
 MIN_EXECUTION_TIMEOUT_MS = 1000
 MAX_EXECUTION_TIMEOUT_MS = 600000
 MAX_BRIDGE_REQUEST_BYTES = 64 * 1024
@@ -493,6 +511,12 @@ class FreecadMCPPlugin:
         self._request_queue: queue.Queue[ExecutionRequest] = queue.Queue(
             maxsize=MAX_PENDING_REQUESTS
         )
+        # Review routing stays disabled until a trusted GUI coordinator is installed.
+        self._review_broker: Any | None = None
+        self._macro_review_roots: tuple[str, ...] = ()
+        self._review_controller: Any | None = None
+        self._review_close_relay: Any | None = None
+        self._document_reservations: Any | None = None
         self._socket_client_count = 0
         self._timer = None
         self._queue_thread: threading.Thread | None = None
@@ -500,6 +524,7 @@ class FreecadMCPPlugin:
 
         # Status bar tracking
         self._status_timer = None
+        self._standalone_warning: Any | None = None
         self._request_count = 0
         self._last_request_time: float | None = None
 
@@ -694,6 +719,16 @@ class FreecadMCPPlugin:
             self.stop()
             raise RuntimeError(self._listener_failure(name, port, exc)) from exc
 
+    def _report_test_instance_id(self) -> None:
+        """Emit the test marker without treating GUI output as an error."""
+        if not os.environ.get("FREECAD_MCP_TESTING"):
+            return
+        marker = f"FREECAD_MCP_BRIDGE_INSTANCE_ID={self._instance_id}"
+        if FREECAD_AVAILABLE and getattr(FreeCAD, "GuiUp", False):
+            FreeCAD.Console.PrintMessage(f"{marker}\n")
+        else:
+            print(marker, file=sys.stderr, flush=True)
+
     def start(self) -> None:
         """Start all servers.
 
@@ -733,22 +768,25 @@ class FreecadMCPPlugin:
 
         self._running = True
 
-        # Print instance ID to stderr only for test automation (when env var is set).
-        # This avoids red error text in FreeCAD's console during normal use.
-        if os.environ.get("FREECAD_MCP_TESTING"):
-            print(
-                f"FREECAD_MCP_BRIDGE_INSTANCE_ID={self._instance_id}",
-                file=sys.stderr,
-                flush=True,
-            )
+        self._report_test_instance_id()
 
         # Start queue processing before opening either listener. If GUI queue
         # setup fails, leave the plugin stopped and refuse incoming requests.
         try:
             self._start_queue_processor()
         except Exception:
-            self._running = False
+            self.stop()
             raise
+        if self._timer is not None and _review_gui_thread_ready():
+            try:
+                self._enable_experimental_review()
+            except Exception:
+                self._shutdown_review()
+                if FREECAD_AVAILABLE:
+                    FreeCAD.Console.PrintWarning(
+                        "MCP Bridge: local code review is unavailable; "
+                        "reviewed execution is disabled.\n"
+                    )
 
         # Finish GUI setup before exposing either listener. If setup fails,
         # stop the queue processor and discard any partially created timers.
@@ -772,6 +810,8 @@ class FreecadMCPPlugin:
         Qt tries to disconnect signals from partially-destroyed Python objects.
         """
         self._running = False
+
+        self._shutdown_review()
 
         # Stop status bar updates
         self._stop_status_updates()
@@ -820,6 +860,22 @@ class FreecadMCPPlugin:
         if FREECAD_AVAILABLE:
             FreeCAD.Console.PrintMessage("MCP Bridge stopped\n")
 
+    def _shutdown_review(self) -> None:
+        """Deny pending reviews and dispose of their dialog on the Qt thread."""
+        if self._document_reservations is not None:
+            self._document_reservations.clear()
+            self._document_reservations = None
+        if self._review_broker is not None:
+            self._review_broker.close()
+            self._review_broker = None
+        if self._review_controller is not None:
+            if _review_gui_thread_ready():
+                self._review_controller.close()
+                self._review_controller = None
+                self._review_close_relay = None
+            elif self._review_close_relay is not None:
+                self._review_close_relay.requested.emit()
+
     def _cleanup_for_exit(self) -> None:
         """Clean up server resources during Python exit (atexit handler).
 
@@ -851,9 +907,17 @@ class FreecadMCPPlugin:
         ``stop()`` instead which also clears the status bar.
         """
         self._running = False
+        if self._review_broker is not None:
+            self._review_broker.close()
 
         # Get shiboken delete function for explicit Qt object destruction
         shiboken_delete = _get_shiboken_delete()
+
+        relay = self._review_close_relay
+        self._review_close_relay = None
+        if relay is not None and shiboken_delete is not None:
+            with contextlib.suppress(Exception):
+                shiboken_delete(relay)
 
         # Stop queue processor timer - use shiboken.delete() for immediate destruction
         if self._timer:
@@ -996,6 +1060,7 @@ class FreecadMCPPlugin:
 
         # Clear status bar message
         if _freecad_gui_up():
+            self._remove_standalone_warning()
             self._set_status_bar("")
             try:
                 status_module: Any = None
@@ -1038,11 +1103,11 @@ class FreecadMCPPlugin:
                     time_ago = f"{int(elapsed)}s ago"
                 else:
                     time_ago = f"{int(elapsed / 60)}m ago"
-                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests | last: {time_ago}"
+                status = f"🔌 MCP Bridge: client code has your permissions{ports} | {self._request_count} requests | last: {time_ago}"
             else:
-                status = f"🔌 MCP Bridge: Python execution enabled{ports} | {self._request_count} requests"
+                status = f"🔌 MCP Bridge: client code has your permissions{ports} | {self._request_count} requests"
         else:
-            status = f"🔌 MCP Bridge: Python execution enabled{ports} | waiting for connections..."
+            status = f"🔌 MCP Bridge: client code has your permissions{ports} | waiting for connections..."
 
         if errors:
             status += " | Listener error: " + " ".join(errors.values())
@@ -1063,8 +1128,14 @@ class FreecadMCPPlugin:
                     "freecad.RobustMCPBridge.Qt.status_widget"
                 )
             if status_module is not None:
+                self._remove_standalone_warning()
                 listener_status = self.get_status()
                 errors = listener_status["listener_errors"]
+                controller = self._review_controller
+                policy = controller._policy if controller is not None else None
+                bypassed = policy is not None and not policy.requires_review(
+                    "execute_python"
+                )
                 status_module.update_status_running(
                     self._xmlrpc_port,
                     self._port,
@@ -1072,9 +1143,64 @@ class FreecadMCPPlugin:
                     xmlrpc_running=listener_status["listeners"]["xmlrpc"] == "running",
                     socket_running=listener_status["listeners"]["socket"] == "running",
                     errors="\n".join(errors.values()),
+                    review_bypassed=bypassed,
+                    macro_review_bypassed=policy is not None
+                    and not policy.requires_review("run_macro"),
+                    file_review_bypassed=policy is not None
+                    and not policy.requires_review("file_operation"),
                 )
+            else:
+                self._show_standalone_warning()
         except Exception:
             pass
+
+    def _show_standalone_warning(self) -> None:
+        """Show a non-modal permanent warning when no workbench widget is loaded."""
+        controller = self._review_controller
+        policy = controller._policy if controller is not None else None
+        bypassed = policy is not None and not policy.requires_review("execute_python")
+        macro_bypassed = policy is not None and not policy.requires_review("run_macro")
+        bypasses = []
+        if bypassed:
+            bypasses.append("Python")
+        if macro_bypassed:
+            bypasses.append("macro")
+        if policy is not None and not policy.requires_review("file_operation"):
+            bypasses.append("file")
+        message = (
+            f"MCP: {' and '.join(bypasses)} review bypassed; client has full permissions"
+            if bypasses
+            else "MCP: Client Python has full user permissions"
+        )
+        if self._standalone_warning is not None:
+            self._standalone_warning.setText(message)
+            return
+        main_window = FreeCADGui.getMainWindow()
+        status_bar = main_window.statusBar() if main_window else None
+        if status_bar is None:
+            return
+        _, QtWidgets = load_qt_core_widgets()
+        label = QtWidgets.QLabel(message)
+        label.setObjectName("mcp_bridge_standalone_warning")
+        label.setToolTip(
+            "Authorized clients can run Python with your full permissions, "
+            "including access to your files and network."
+        )
+        label.setStyleSheet(
+            "QLabel { background-color: #9a5700; color: white; "
+            "padding: 2px 6px; border-radius: 3px; font-size: 11px; }"
+        )
+        status_bar.addPermanentWidget(label)
+        self._standalone_warning = label
+
+    def _remove_standalone_warning(self) -> None:
+        """Remove the standalone label when stopping or switching to the workbench."""
+        label = self._standalone_warning
+        self._standalone_warning = None
+        if label is not None:
+            with contextlib.suppress(RuntimeError):
+                label.setParent(None)
+                label.deleteLater()
 
     def _set_status_bar(self, message: str) -> None:
         """Set the FreeCAD main window status bar message.
@@ -1178,11 +1304,120 @@ class FreecadMCPPlugin:
                 "Running in headless mode (queue processor thread started)\n"
             )
 
+    def _capture_review_document(
+        self, name: str | None, require_saved_path: bool = False
+    ) -> dict[str, str] | None:
+        """Select and reserve a document on the FreeCAD GUI thread."""
+        reservations = self._document_reservations
+        if not _review_gui_thread_ready() or reservations is None:
+            raise RuntimeError("Document review is unavailable")
+        if name is not None and (type(name) is not str or not name):
+            raise ValueError("Invalid document name")
+        document = FreeCAD.ActiveDocument if name is None else FreeCAD.getDocument(name)
+        if document is None:
+            return None
+        if require_saved_path and not document.FileName:
+            return {"name": document.Name, "path": "", "token": ""}  # nosec B105
+        return {
+            "name": document.Name,
+            "path": document.FileName or "",
+            "token": reservations.reserve(document.Name, document),
+        }
+
+    def _release_review_document(self, token: str) -> None:
+        """Discard an unclaimed reservation without affecting a claimed guard."""
+        reservations = self._document_reservations
+        if reservations is not None:
+            reservations.discard(token)
+
     def _run_queue_processor_loop(self) -> None:
         """Run queue processor in a loop for headless mode."""
         while self._running:
             self._process_queue()
             time.sleep(QUEUE_POLL_INTERVAL_MS / 1000.0)
+
+    def _enable_experimental_review(self) -> None:
+        """Install local review on the running GUI queue's owning thread.
+
+        This does not guard legacy raw execution. Non-GUI and non-running
+        instances must fail closed for reviewed execution.
+        """
+        if not self._running or self._timer is None or not _review_gui_thread_ready():
+            raise RuntimeError("Experimental review requires a running GUI queue")
+        if self._review_broker is not None:
+            raise RuntimeError("Experimental review is already enabled")
+        if self._review_controller is not None:
+            if not self._review_controller._closed:
+                self._review_controller.close()
+            self._review_controller = None
+            self._review_close_relay = None
+        if __package__:
+            from .approval import LeasedReviewBroker, ReviewCoordinator
+            from .document_reservations import DocumentReservations
+            from .macro_approvals import freecad_approval_store
+            from .review_dialog import ReviewDialogController, create_close_relay
+            from .review_policy import ReviewPolicy
+        else:
+            from approval import LeasedReviewBroker, ReviewCoordinator  # type: ignore[import-not-found,no-redef]
+            from document_reservations import DocumentReservations  # type: ignore[import-not-found,no-redef]
+            from macro_approvals import freecad_approval_store  # type: ignore[import-not-found,no-redef]
+            from review_dialog import (  # type: ignore[import-not-found,no-redef]
+                ReviewDialogController,
+                create_close_relay,
+            )
+            from review_policy import ReviewPolicy  # type: ignore[import-not-found,no-redef]
+        coordinator = ReviewCoordinator(MAX_PENDING_REQUESTS)
+        policy = ReviewPolicy()
+        try:
+            params = FreeCAD.ParamGet(
+                "User parameter:BaseApp/Preferences/Mod/RobustMCPBridge"
+            )
+            if params.GetBool("ReviewPython", True) is False:
+                policy.configure("execute_python", require_review=False)
+            if params.GetBool("ReviewFiles", True) is False:
+                policy.configure("file_operation", require_review=False)
+            if params.GetBool("AllowReviewBypass", False) is True:
+                policy.set_timed_bypass_enabled(True)
+        except Exception:
+            # Unreadable preferences must retain review-required defaults.
+            pass
+        parent = None
+        with contextlib.suppress(Exception):
+            parent = FreeCADGui.getMainWindow()
+        self._macro_review_roots = ()
+        approval_store = None
+        try:
+            self._macro_review_roots = (
+                FreeCAD.getUserMacroDir(True),
+                str(Path(FreeCAD.getResourceDir()) / "Macro"),
+            )
+            approval_store = freecad_approval_store()
+        except Exception:
+            # Macro review is unavailable if the trusted GUI cannot configure it.
+            pass
+
+        self._document_reservations = DocumentReservations(MAX_PENDING_REQUESTS)
+
+        def capture_document_guard(name: str, token: str) -> Any:
+            reservations = self._document_reservations
+            if reservations is None:
+                raise ValueError("Document review is unavailable")
+            return reservations.take(token, name, FreeCAD.getDocument)
+
+        controller = ReviewDialogController(
+            coordinator, parent, policy, approval_store, capture_document_guard
+        )
+        self._review_close_relay = create_close_relay(controller)
+        self._review_controller = controller
+        reservations = self._document_reservations
+
+        def release_review_document(payload: Any) -> None:
+            if payload.document_token is not None:
+                reservations.discard(payload.document_token)
+
+        self._review_broker = LeasedReviewBroker(
+            coordinator, MAX_PENDING_REQUESTS, release_review_document
+        )
 
     def _process_queue(self) -> None:
         """Process pending execution requests on the main thread.
@@ -1190,6 +1425,9 @@ class FreecadMCPPlugin:
         This method is called periodically by a Qt timer to ensure
         GUI operations happen on the main thread.
         """
+        if self._review_controller is not None:
+            self._review_controller.poll()
+        self._process_reviewed_queue()
         while not self._request_queue.empty():
             try:
                 request = self._request_queue.get_nowait()
@@ -1204,6 +1442,89 @@ class FreecadMCPPlugin:
             except Exception as e:
                 if FREECAD_AVAILABLE:
                     FreeCAD.Console.PrintError(f"Queue processing error: {e}\n")
+
+    def _process_reviewed_queue(self) -> None:  # noqa: PLR0912
+        """Execute at most one claimed review on the FreeCAD thread.
+
+        Only the exact content returned by a
+        successfully claimed ticket reaches execution; stale tickets are denied.
+        """
+        broker = self._review_broker
+        if broker is None:
+            return
+        if not self._running or not _review_gui_thread_ready():
+            broker.close()
+            self._review_broker = None
+            if FREECAD_AVAILABLE and self._running:
+                FreeCAD.Console.PrintWarning(
+                    "MCP Bridge: reviewed execution disabled; GUI thread unavailable.\n"
+                )
+            return
+        item = broker.claim_next()
+        if item is None:
+            return
+        request_id, payload = item
+        try:
+            if payload.action == "execute_python":
+                code = payload.content.decode("utf-8", errors="strict")
+                result = self._execute_code_sync(code)
+            elif payload.action == "file_operation":
+                if (
+                    payload.file_snapshot is None
+                    or not payload.file_snapshot.unchanged()
+                ):
+                    result = {
+                        "success": False,
+                        "error_type": "FileTargetChanged",
+                        "error_message": "The reviewed file target changed before execution.",
+                    }
+                else:
+                    code = payload.content.decode("utf-8", errors="strict")
+                    if payload.file_target_kind == "macro":
+                        result = self._execute_code_sync(
+                            code,
+                            initial_globals={
+                                "_robust_mcp_reviewed_file_path": (
+                                    payload.file_snapshot.absolute_path
+                                    if payload.file_snapshot.action == "delete"
+                                    else payload.file_snapshot.resolved_path
+                                )
+                            },
+                        )
+                    else:
+                        result = self._execute_code_sync(code)
+            elif payload.action == "run_macro":
+                if (
+                    payload.macro_path is None
+                    or payload.macro_args_json is None
+                    or hashlib.sha256(payload.content).hexdigest()
+                    != payload.macro_sha256
+                ):
+                    raise ValueError("Invalid reviewed macro")
+                args = json.loads(payload.macro_args_json)
+                if type(args) is not dict:
+                    raise ValueError("Invalid reviewed macro arguments")
+                if __package__:
+                    from .review_dialog import review_text
+                else:
+                    from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+                reviewed_code = review_text(payload.content, allow_crlf=True)
+                result = self._execute_code_sync(
+                    reviewed_code,
+                    filename=payload.macro_path,
+                    initial_globals=args,
+                    captured_source=True,
+                )
+            else:
+                raise ValueError("Unsupported reviewed action")
+            self._record_request()
+        except Exception:
+            result = {
+                "success": False,
+                "error_type": "ReviewExecutionError",
+                "error_message": "Reviewed execution failed",
+            }
+        broker.finish(request_id, result)
 
     def _execute_via_queue(
         self,
@@ -1276,11 +1597,21 @@ class FreecadMCPPlugin:
 
             return standalone_dispatch(version, operation, args)
 
-    def _execute_code_sync(self, code: str) -> dict[str, Any]:
+    def _execute_code_sync(
+        self,
+        code: str | bytes,
+        *,
+        filename: str = "<mcp>",
+        initial_globals: dict[str, Any] | None = None,
+        captured_source: bool = False,
+    ) -> dict[str, Any]:
         """Execute Python code synchronously (call on main thread only).
 
         Args:
             code: Python code to execute.
+            filename: Source name for the compiled code.
+            initial_globals: Named values supplied to the execution environment.
+            captured_source: Use the captured text for traceback source lines.
 
         Returns:
             Execution result dictionary.
@@ -1292,7 +1623,14 @@ class FreecadMCPPlugin:
         exec_globals: dict[str, Any] = {
             "__builtins__": __builtins__,
             "_robust_mcp_cam_dispatch": self._cam_dispatch,
+            "_robust_mcp_capture_document": self._capture_review_document,
+            "_robust_mcp_release_document": self._release_review_document,
         }
+
+        if initial_globals is not None:
+            exec_globals.update(initial_globals)
+            exec_globals["__file__"] = filename
+            exec_globals["__name__"] = "__main__"
 
         if FREECAD_AVAILABLE:
             exec_globals["FreeCAD"] = FreeCAD
@@ -1300,9 +1638,20 @@ class FreecadMCPPlugin:
             exec_globals["FreeCADGui"] = FreeCADGui
             exec_globals["Gui"] = FreeCADGui
 
+        compile_filename = filename
+        if captured_source:
+            if not isinstance(code, str):
+                raise TypeError("Captured macro source must be text")
+            compile_filename = f"<reviewed macro {uuid.uuid4().hex}>"
+            linecache.cache[compile_filename] = (
+                len(code),
+                None,
+                code.splitlines(keepends=True),
+                compile_filename,
+            )
         try:
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                compiled = compile(code, "<mcp>", "exec")
+                compiled = compile(code, compile_filename, "exec")
                 exec(compiled, exec_globals)  # noqa: S102
 
             elapsed = (time.perf_counter() - start) * 1000
@@ -1342,6 +1691,9 @@ class FreecadMCPPlugin:
                 "error_message": message,
                 "error_traceback": formatted_traceback,
             }
+        finally:
+            if captured_source:
+                linecache.cache.pop(compile_filename, None)
 
     # =========================================================================
     # Socket Server (JSON-RPC 2.0)
@@ -1434,6 +1786,8 @@ class FreecadMCPPlugin:
                 await writer.wait_closed()
             return
         self._socket_client_count += 1
+        session_id = uuid.uuid4().hex
+        review_owners: set[str] = set()
         try:
             while self._running:
                 data = await asyncio.wait_for(
@@ -1446,7 +1800,9 @@ class FreecadMCPPlugin:
 
                 try:
                     envelope = json.loads(data.decode("utf-8"))
-                    response = await self._process_socket_envelope(envelope)
+                    response = await self._process_socket_envelope(
+                        envelope, session_id, review_owners
+                    )
                 except (json.JSONDecodeError, UnicodeDecodeError) as e:
                     response = {
                         "jsonrpc": "2.0",
@@ -1468,13 +1824,25 @@ class FreecadMCPPlugin:
             if FREECAD_AVAILABLE:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")
         finally:
+            broker = self._review_broker
+            if broker is not None:
+                try:
+                    for owner in review_owners:
+                        broker.cancel_owner(owner)
+                except Exception:
+                    # Deny all pending reviews if session cleanup fails.
+                    with contextlib.suppress(Exception):
+                        broker.close()
             self._socket_client_count -= 1
             writer.close()
             with contextlib.suppress(Exception):
                 await writer.wait_closed()
 
     async def _process_socket_envelope(  # noqa: PLR0911
-        self, envelope: Any
+        self,
+        envelope: Any,
+        session_id: str | None = None,
+        review_owners: set[str] | None = None,
     ) -> dict[str, Any]:
         """Authenticate a bounded socket envelope before parsing its request.
 
@@ -1514,16 +1882,44 @@ class FreecadMCPPlugin:
                 "id": None,
                 "error": {"code": -32700, "message": "Parse error"},
             }
-        return await self._process_jsonrpc_request(request)
+        client_id = envelope["client"]
+        owner = None
+        if type(client_id) is str and session_id is not None:
+            owner = hashlib.sha256(
+                client_id.encode("ascii") + b"\0" + session_id.encode("ascii")
+            ).hexdigest()
+            if (
+                review_owners is not None
+                and isinstance(request, dict)
+                and request.get("method")
+                in (
+                    "review_begin",
+                    "review_begin_macro",
+                    "review_begin_file",
+                    "review_status",
+                    "review_commit",
+                    "review_cancel",
+                    "review_result",
+                )
+            ):
+                if (
+                    owner not in review_owners
+                    and len(review_owners) >= MAX_PENDING_REQUESTS
+                ):
+                    return {"error": "Too many review identities on this connection"}
+                review_owners.add(owner)
+        return await self._process_jsonrpc_request(request, owner)
 
-    async def _process_jsonrpc_request(
+    async def _process_jsonrpc_request(  # noqa: PLR0911
         self,
         request: Any,
+        authenticated_client: str | None = None,
     ) -> dict[str, Any]:
         """Process a JSON-RPC 2.0 request.
 
         Args:
             request: JSON-RPC request dictionary.
+            authenticated_client: Client ID verified for this exact envelope.
 
         Returns:
             JSON-RPC response dictionary.
@@ -1550,6 +1946,27 @@ class FreecadMCPPlugin:
                 "id": request_id,
                 "error": {"code": -32602, "message": "Invalid params"},
             }
+
+        if method == "review_begin_file":
+            return await self._review_begin_file(
+                request_id, params, authenticated_client
+            )
+
+        if method == "review_begin_macro":
+            return await self._review_begin_macro(
+                request_id, params, authenticated_client
+            )
+
+        if method in (
+            "review_begin",
+            "review_status",
+            "review_commit",
+            "review_cancel",
+            "review_result",
+        ):
+            return self._review_request(
+                request_id, method, params, authenticated_client
+            )
 
         # Handle ping specially (no queue needed)
         if method == "ping":
@@ -1600,6 +2017,297 @@ class FreecadMCPPlugin:
             },
         }
 
+    async def _review_begin_file(  # noqa: PLR0912
+        self,
+        request_id: str | int | None,
+        params: dict[str, Any],
+        owner: str | None,
+    ) -> dict[str, Any]:
+        """Snapshot a file target before presenting the generated operation."""
+        broker = self._review_broker
+        document_token = params.get("document_token")
+        admitted = False
+        try:
+            if broker is None or type(owner) is not str:
+                raise ValueError("File review unavailable")
+            required = {"code", "path", "action", "kind"}
+            if set(params) not in (
+                required,
+                required | {"document_name", "document_token"},
+            ):
+                raise ValueError("Invalid file review parameters")
+            document_name = params.get("document_name")
+            if (document_name is None) != (document_token is None):
+                raise ValueError("Document reservation is required")
+            if document_token is not None and (
+                type(document_token) is not str
+                or not document_token
+                or len(document_token) > 128
+            ):
+                raise ValueError("Invalid document reservation")
+            if document_name is not None and (
+                type(document_name) is not str
+                or not document_name
+                or len(document_name) > 255
+            ):
+                raise ValueError("Invalid reviewed document")
+            code, path, action, kind = (
+                params[k] for k in ("code", "path", "action", "kind")
+            )
+            if (
+                type(path) is not str
+                or type(action) is not str
+                or type(kind) is not str
+            ):
+                raise ValueError("Invalid file target")
+            _validate_execution_code(code)
+            if __package__:
+                from .approval import ApprovalPayload
+                from .file_review import snapshot_file
+                from .review_dialog import review_text
+            else:
+                from approval import ApprovalPayload  # type: ignore[import-not-found,no-redef]
+                from file_review import snapshot_file  # type: ignore[import-not-found,no-redef]
+                from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+            content = code.encode("utf-8")
+            if document_name is not None:
+                review_text(document_name.encode("utf-8"))
+            review_text(content)
+            review_text(path.encode("utf-8"))
+
+            def resolve_target() -> Any:
+                if kind == "path":
+                    return snapshot_file(path, action)
+                if kind != "macro" or not self._macro_review_roots:
+                    raise ValueError("Invalid file target kind")
+                if (
+                    not path
+                    or path in {".", ".."}
+                    or any(c in path for c in "/\\:\0\r\n")
+                ):
+                    raise ValueError("Invalid macro name")
+                roots = (
+                    self._macro_review_roots
+                    if action == "read"
+                    else self._macro_review_roots[:1]
+                )
+                preceding_paths: list[str] = []
+                for root in roots:
+                    candidate = str(Path(root) / (path + ".FCMacro"))
+                    try:
+                        snapshot = snapshot_file(candidate, action)
+                        if (
+                            action in {"write", "delete"}
+                            and Path(snapshot.resolved_path).parent
+                            != Path(root).resolve()
+                        ):
+                            raise ValueError(
+                                "Macro target is outside the user directory"
+                            )
+                        if preceding_paths:
+                            from dataclasses import replace
+
+                            snapshot = replace(
+                                snapshot, preceding_paths=tuple(preceding_paths)
+                            )
+                        return snapshot
+                    except FileNotFoundError:
+                        if action != "read":
+                            raise
+                        preceding_paths.append(candidate)
+                raise FileNotFoundError("Macro not found")
+
+            snapshot = await asyncio.to_thread(resolve_target)
+            review_text(snapshot.resolved_path.encode("utf-8"))
+            if broker is None or self._review_broker is not broker:
+                raise ValueError("File review stopped")
+            payload = ApprovalPayload(
+                "file_operation",
+                content,
+                file_snapshot=snapshot,
+                file_target_kind=kind,
+                document_name=document_name,
+                document_token=document_token,
+            )
+            result = {
+                "review_id": cast("Any", broker).begin(
+                    owner, payload, REVIEW_LEASE_SECONDS
+                )
+            }
+            admitted = True
+            return {"jsonrpc": "2.0", "id": request_id, "result": result}
+        except (ValueError, TypeError, UnicodeError, OSError, RuntimeError):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32000,
+                    "message": "File review unavailable or invalid",
+                },
+            }
+        finally:
+            if not admitted and type(document_token) is str and document_token:
+                reservations = self._document_reservations
+                if reservations is not None:
+                    reservations.discard(document_token)
+
+    async def _review_begin_macro(
+        self,
+        request_id: str | int | None,
+        params: dict[str, Any],
+        owner: str | None,
+    ) -> dict[str, Any]:
+        """Capture local macro bytes off the event loop before creating a review."""
+        broker = self._review_broker
+        try:
+            if broker is None or type(owner) is not str or not self._macro_review_roots:
+                raise ValueError("Macro review unavailable")
+            if (
+                set(params) != {"macro_name", "args"}
+                or type(params["args"]) is not dict
+            ):
+                raise ValueError("Invalid macro arguments")
+            import unicodedata
+
+            args = {}
+            reserved = {"FreeCAD", "FreeCADGui", "App", "Gui", "_result_"}
+            for key, value in params["args"].items():
+                if type(key) is not str or not key.isidentifier():
+                    raise ValueError("Invalid macro argument name")
+                canonical = unicodedata.normalize("NFKC", key)
+                if (
+                    not canonical.isidentifier()
+                    or canonical.startswith("_")
+                    or canonical in reserved
+                    or canonical in args
+                ):
+                    raise ValueError("Invalid or ambiguous macro argument name")
+                args[canonical] = value
+            args_json = json.dumps(
+                args, ensure_ascii=True, allow_nan=False, sort_keys=True
+            )
+            if len(args_json.encode("utf-8")) > 4096:
+                raise ValueError("Macro arguments are too large")
+            if __package__:
+                from .approval import ApprovalPayload
+                from .macro_snapshot import resolve_macro
+                from .review_dialog import review_text
+            else:
+                from approval import ApprovalPayload  # type: ignore[import-not-found,no-redef]
+                from macro_snapshot import resolve_macro  # type: ignore[import-not-found,no-redef]
+                from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+            snapshot = await asyncio.to_thread(
+                resolve_macro, params["macro_name"], self._macro_review_roots
+            )
+            review_text(snapshot.content, allow_crlf=True)
+            review_text(snapshot.path.encode("utf-8"))
+            if broker is None or self._review_broker is not broker:
+                raise ValueError("Macro review stopped")
+            if broker is None:
+                raise ValueError("Macro review stopped")
+            payload = ApprovalPayload(
+                "run_macro", snapshot.content, snapshot.path, snapshot.sha256, args_json
+            )
+            result = {"review_id": broker.begin(owner, payload, REVIEW_LEASE_SECONDS)}
+            return {"jsonrpc": "2.0", "id": request_id, "result": result}
+        except (
+            ValueError,
+            TypeError,
+            UnicodeError,
+            OSError,
+            RuntimeError,
+            RecursionError,
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32000,
+                    "message": "Macro review unavailable or invalid",
+                },
+            }
+
+    def _review_request(  # noqa: PLR0912
+        self,
+        request_id: str | int | None,
+        method: str,
+        params: dict[str, Any],
+        authenticated_client: str | None,
+    ) -> dict[str, Any]:
+        """Route review operations only after transport authentication.
+
+        This path is disabled unless a local GUI broker has been installed.
+        It does not change or guard the legacy execute method.
+        """
+        broker = self._review_broker
+        if broker is None or type(authenticated_client) is not str:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32000, "message": "Local review is unavailable"},
+            }
+        try:
+            if method == "review_begin":
+                if set(params) != {"code"}:
+                    raise ValueError("Invalid review parameters")
+                code = params["code"]
+                _validate_execution_code(code)
+                content = code.encode("utf-8")
+                if __package__:
+                    from .approval import ApprovalPayload
+                    from .review_dialog import review_text
+                else:
+                    from approval import ApprovalPayload  # type: ignore[import-not-found,no-redef]
+                    from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+                try:
+                    review_text(content)
+                except (ValueError, UnicodeError):
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {
+                            "code": -32602,
+                            "message": "Code cannot be displayed for review: "
+                            "check control characters, line endings, and size",
+                        },
+                    }
+                result: Any = {
+                    "review_id": broker.begin(
+                        authenticated_client,
+                        ApprovalPayload("execute_python", content),
+                        REVIEW_LEASE_SECONDS,
+                    )
+                }
+            else:
+                if set(params) != {"review_id"} or type(params["review_id"]) is not str:
+                    raise ValueError("Invalid review parameters")
+                review_id = params["review_id"]
+                if method == "review_status":
+                    state = broker.status(authenticated_client, review_id)
+                    result = {
+                        "state": state.value if state is not None else "unavailable"
+                    }
+                elif method == "review_commit":
+                    result = {
+                        "scheduled": broker.commit(authenticated_client, review_id)
+                    }
+                elif method == "review_result":
+                    result = {"result": broker.result(authenticated_client, review_id)}
+                else:
+                    result = {
+                        "cancelled": broker.cancel(authenticated_client, review_id)
+                    }
+        except (ValueError, TypeError, UnicodeError, RuntimeError):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32000,
+                    "message": "Review request unavailable or invalid",
+                },
+            }
+        return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
     # =========================================================================
     # XML-RPC Server (neka-nat compatible)
     # =========================================================================
@@ -1612,6 +2320,35 @@ class FreecadMCPPlugin:
         # instead of logging "Unsupported method ('GET')" errors
         class QuietXMLRPCRequestHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
             """XML-RPC handler that responds gracefully to GET requests."""
+
+            def _validate_browser_boundary(self) -> bool:
+                """Reject browser origins and non-loopback or ambiguous Host headers."""
+                hosts = self.headers.get_all("Host") or []
+                if len(hosts) != 1 or self.headers.get_all("Origin"):
+                    self.send_error(403, "Invalid request origin or host")
+                    return False
+                host = hosts[0]
+                try:
+                    parsed = urlsplit("http://" + host)
+                    valid = (
+                        bool(host)
+                        and parsed.netloc == host
+                        and not parsed.path
+                        and not parsed.query
+                        and not parsed.fragment
+                        and parsed.username is None
+                        and parsed.password is None
+                        and parsed.hostname is not None
+                        and (parsed.port is None or 1 <= parsed.port <= 65535)
+                    )
+                    hostname = parsed.hostname
+                    if valid and hostname is not None and hostname != "localhost":
+                        valid = ipaddress.ip_address(hostname).is_loopback
+                except ValueError:
+                    valid = False
+                if not valid:
+                    self.send_error(403, "Invalid request origin or host")
+                return valid
 
             def handle(self) -> None:
                 """Treat a closed client as an expected end of its request."""
@@ -1642,6 +2379,8 @@ class FreecadMCPPlugin:
 
             def do_POST(self) -> None:
                 """Reject oversized, compressed, or ambiguously framed requests."""
+                if not self._validate_browser_boundary():
+                    return
                 lengths = self.headers.get_all("Content-Length", [])
                 if (
                     len(lengths) != 1
@@ -1700,6 +2439,8 @@ class FreecadMCPPlugin:
                         curl http://localhost:9875/
                         # Returns: FreeCAD MCP Bridge - XML-RPC endpoint (POST only)
                 """
+                if not self._validate_browser_boundary():
+                    return
                 self._read_timer.cancel()
                 if self.path == "/challenge":
                     if authenticator is None:
@@ -1793,6 +2534,7 @@ class FreecadMCPPlugin:
                 self._xmlrpc_get_instance_id, "get_instance_id"
             )  # type: ignore[arg-type]
             self._xmlrpc_server.register_function(self._xmlrpc_get_view, "get_view")  # type: ignore[arg-type]
+
             self._xmlrpc_server.register_introspection_functions()
             if self._running:
                 self._listener_update("xmlrpc", "running")
@@ -1879,9 +2621,14 @@ class FreecadMCPPlugin:
                 f"Must be one of: {', '.join(sorted(self._VALID_VIEW_TYPES))}",
             }
 
+        if __package__:
+            from . import private_scratch
+        else:
+            import private_scratch  # type: ignore[import-not-found,no-redef]
+        scratch_code = inspect.getsource(private_scratch)
         code = f"""
+{scratch_code}
 import base64
-import tempfile
 import os
 
 if not FreeCAD.GuiUp:
@@ -1922,15 +2669,11 @@ else:
                     view.viewRight()
 
                 # Capture screenshot
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-                    temp_path = f.name
-
-                view.saveImage(temp_path, {width}, {height}, "Current")
-
-                with open(temp_path, "rb") as f:
-                    image_data = base64.b64encode(f.read()).decode("utf-8")
-
-                os.unlink(temp_path)
+                with private_scratch_directory(".freecad-mcp-screenshot-") as private_dir:
+                    temp_path = os.path.join(private_dir, "screenshot.png")
+                    view.saveImage(temp_path, {width}, {height}, "Current")
+                    with open(temp_path, "rb") as f:
+                        image_data = base64.b64encode(f.read()).decode("utf-8")
 
                 _result_ = {{
                     "success": True,

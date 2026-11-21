@@ -43,6 +43,29 @@ def _remove_server_source_path(env: dict[str, str]) -> None:
         env.pop("PYTHONPATH", None)
 
 
+def _server_default_mode(env: dict[str, str]) -> str:
+    """Ask the exact server artifact, including historical releases, for its default."""
+    probe_env = dict(env)
+    probe_env.pop("FREECAD_MODE", None)
+    _remove_server_source_path(probe_env)
+    result = subprocess.run(  # noqa: S603 - interpreter is selected by the test gate
+        [
+            _server_python(),
+            "-c",
+            "from freecad_mcp.config import ServerConfig; print(ServerConfig().mode.value)",
+        ],
+        env=probe_env,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=20,
+    )
+    mode = result.stdout.strip()
+    if mode not in {"socket", "xmlrpc"}:
+        raise ValueError(f"Unsupported server default mode: {mode!r}")
+    return mode
+
+
 def _extract_candidate_archive(archive: Path, mod_dir: Path) -> Path:
     """Install a release zip into an isolated FreeCAD profile."""
     root_name = archive.stem
@@ -251,7 +274,6 @@ async def _check_harnesses(
     }
     settings.pop("FREECAD_HTTP_API_KEY", None)
     if use_default:
-        assert mode == "xmlrpc"
         settings.pop("FREECAD_MODE", None)
     params = StdioServerParameters(
         command=_server_python(), args=["-m", "freecad_mcp.server"], env=settings
@@ -496,6 +518,22 @@ async def test_authenticated_transports_with_real_freecad(
                 )
                 try:
                     await bridge.connect()
+                    identity = await bridge.execute_python(
+                        "name = 'MCPDocumentIdentityProbe'\n"
+                        "original = FreeCAD.newDocument(name)\n"
+                        "same = FreeCAD.getDocument(name) is original\n"
+                        "FreeCAD.closeDocument(name)\n"
+                        "replacement = FreeCAD.newDocument(name)\n"
+                        "_result_ = {'same': same, 'name': replacement.Name, "
+                        "'different': replacement is not original}\n"
+                        "FreeCAD.closeDocument(replacement.Name)"
+                    )
+                    assert identity.success, identity.error_traceback
+                    assert identity.result == {
+                        "same": True,
+                        "name": "MCPDocumentIdentityProbe",
+                        "different": True,
+                    }
                     result = await bridge.execute_python(
                         "import Part\n_result_ = Part.makeBox(2, 3, 4).Volume"
                     )
@@ -536,7 +574,10 @@ async def test_authenticated_transports_with_real_freecad(
                 finally:
                     await bridge.disconnect()
                 await _check_harnesses(env, ports[mode], mode)
-            await _check_harnesses(env, ports["xmlrpc"], "xmlrpc", use_default=True)
+            default_mode = _server_default_mode(env)
+            await _check_harnesses(
+                env, ports[default_mode], default_mode, use_default=True
+            )
             await _run_cam_platform_suite(env, ports["xmlrpc"])
             await _check_cam_interface_mismatches(
                 env, ports["xmlrpc"], client_id, secret_hex

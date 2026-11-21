@@ -1,6 +1,8 @@
 """Behavioral tests for the screenshot operation shared by all bridges."""
 
 import base64
+import os
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -18,9 +20,12 @@ def _environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[dict, MagicMock, MagicMock]:
     """Provide GUI objects and isolate generated temporary files."""
-    import tempfile
-
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    original_expanduser = os.path.expanduser
+    monkeypatch.setattr(
+        os.path,
+        "expanduser",
+        lambda path: str(tmp_path) if path == "~" else original_expanduser(path),
+    )
     view = MagicMock()
     view.getCamera.return_value = "original camera"
     view.isAnimationEnabled.return_value = True
@@ -54,6 +59,26 @@ def test_capture_restores_camera_and_cleans_file(
         True,
     ]
     assert not list(tmp_path.iterdir())
+
+
+def test_capture_uses_private_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Screenshot files stay in an isolated user-home directory and are removed."""
+    environment, view, _ = _environment(tmp_path, monkeypatch)
+    seen = []
+
+    def save_image(path: str, *_args: object) -> None:
+        screenshot = Path(path)
+        assert screenshot.parent.parent == tmp_path
+        if os.name != "nt":
+            assert stat.S_IMODE(screenshot.parent.stat().st_mode) == 0o700
+        seen.append(screenshot.parent)
+        screenshot.write_bytes(b"private png")
+
+    view.saveImage.side_effect = save_image
+    exec(build_screenshot_code(None, "Front", 320, 240), environment)  # noqa: S102
+    assert seen and not seen[0].exists()
 
 
 @pytest.mark.parametrize("failure", ["saveImage", "fitAll", "setCamera"])

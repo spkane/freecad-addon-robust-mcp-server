@@ -37,6 +37,13 @@ def register_execution_tools(
 
         This tool allows you to run arbitrary Python code within FreeCAD's
         environment, with access to all FreeCAD modules and the active document.
+        The code runs with the FreeCAD user's full permissions, including access
+        to files and the network. Review the complete code before execution.
+        Local approval requires a GUI bridge and a socket connection. XML-RPC,
+        embedded, headless, and older bridges return ReviewUnavailable. An
+        explicit local denial returns ReviewDenied. A lost
+        response after commit returns ReviewExecutionUnknown because code may
+        already be running and is not retried.
 
         Args:
             code: Python code to execute. Use `_result_ = value` to return data
@@ -51,7 +58,8 @@ def register_execution_tools(
                 - result: The value assigned to `_result_` variable
                 - stdout: Captured standard output
                 - stderr: Captured standard error
-                - execution_time_ms: Time taken in milliseconds
+                - execution_time_ms: Python execution time in milliseconds when
+                  reported by FreeCAD; otherwise elapsed call time, including review
                 - error_type: Type of exception if failed (None if success)
                 - error_traceback: Full traceback if failed (None if success)
 
@@ -75,7 +83,7 @@ def register_execution_tools(
                 ''')
         """
         bridge = await get_bridge()
-        result = await bridge.execute_python(code, timeout_ms)
+        result = await bridge.execute_reviewed_python(code, timeout_ms)
         return {
             "success": result.success,
             "result": result.result,
@@ -130,10 +138,14 @@ def register_execution_tools(
         """Get recent FreeCAD console output.
 
         Args:
-            lines: Maximum number of lines to return. Defaults to 100.
+            lines: Maximum number of lines to return (1-1000). Defaults to 100.
 
         Returns:
             List of console output lines, most recent last.
+
+        Raises:
+            ValueError: The line limit is outside the supported range.
+            RuntimeError: Console history is unavailable in this FreeCAD session.
         """
         bridge = await get_bridge()
         return await bridge.get_console_output(lines)
