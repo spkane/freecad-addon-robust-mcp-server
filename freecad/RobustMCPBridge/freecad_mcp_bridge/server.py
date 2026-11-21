@@ -2025,7 +2025,7 @@ class FreecadMCPPlugin:
     ) -> dict[str, Any]:
         """Snapshot a file target before presenting the generated operation."""
         broker = self._review_broker
-        document_token = None
+        document_token = params.get("document_token")
         admitted = False
         try:
             if broker is None or type(owner) is not str:
@@ -2037,7 +2037,6 @@ class FreecadMCPPlugin:
             ):
                 raise ValueError("Invalid file review parameters")
             document_name = params.get("document_name")
-            document_token = params.get("document_token")
             if (document_name is None) != (document_token is None):
                 raise ValueError("Document reservation is required")
             if document_token is not None and (
@@ -2147,7 +2146,7 @@ class FreecadMCPPlugin:
                 },
             }
         finally:
-            if not admitted and document_token is not None:
+            if not admitted and type(document_token) is str and document_token:
                 reservations = self._document_reservations
                 if reservations is not None:
                     reservations.discard(document_token)

@@ -1760,6 +1760,15 @@ async def test_missing_file_review_releases_document_reservation(
             "alice",
         )
         assert response.get("error")
+    token = reservations.reserve("Model", document)
+    response = await plugin._review_begin_file(
+        2, {"code": "pass", "document_token": token}, "alice"
+    )
+    assert response.get("error")
+    response = await plugin._review_begin_file(
+        3, {"code": "pass", "document_token": []}, "alice"
+    )
+    assert response.get("error")
     assert reservations.reserve("Model", document)
     plugin._review_broker.close()
 
