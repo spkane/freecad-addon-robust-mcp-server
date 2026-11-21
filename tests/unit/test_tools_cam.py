@@ -1148,6 +1148,7 @@ def test_cam_report_side_files_stay_private(
     modules["Path.Main.Sanity"].__dict__["ImageBuilder"] = SimpleNamespace(
         ImageBuilderFactory=SimpleNamespace(get_image_builder=builder),
         DummyImageBuilder=builder,
+        QtCore=object(),
     )
 
     class Sanity:
@@ -1156,6 +1157,8 @@ def test_cam_report_side_files_stay_private(
         image_path: str
 
         def summarize(self):
+            if images:
+                assert self.image_builder.capture_image_to_bytes() == b"captured"
             if not images:
                 assert (
                     self.image_builder.build_image(None, "base", as_bytes=True) == b""
@@ -1181,6 +1184,8 @@ def test_cam_report_side_files_stay_private(
         monkeypatch.setitem(sys.modules, name, module)
     monkeypatch.setattr(runtime, "_doc", lambda _: MagicMock())
     monkeypatch.setattr(runtime, "_job", lambda *_: SimpleNamespace(Name="Job"))
+    capture = MagicMock(return_value=b"captured")
+    monkeypatch.setattr(runtime, "_capture_cam_image_bytes", capture)
     monkeypatch.setattr(
         runtime,
         "_embedded_private_scratch_directory",
@@ -1195,7 +1200,53 @@ def test_cam_report_side_files_stay_private(
     assert report.read_text() == "data:image/png;base64,dGVtcG9yYXJ5"
     assert "stockImage" not in result["summary"]["stock"]
     assert other.read_bytes() == b"existing"
+    assert capture.call_count == int(images)
     assert {item.name for item in tmp_path.iterdir()} == {"report.html", "T1.png"}
+
+
+@pytest.mark.parametrize("mode", ["memory", "fallback", "save_failure", "read_failure"])
+def test_cam_image_bytes_keep_fallback_private(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
+) -> None:
+    """A failed memory capture uses scratch and cleans even a partial image."""
+    from types import SimpleNamespace
+
+    view = MagicMock()
+    buffer = MagicMock()
+    buffer.open.return_value = True
+    buffer.data.return_value.data.return_value = b"memory-image"
+    view.grabFramebuffer.return_value.save.return_value = True
+    if mode != "memory":
+        view.grabFramebuffer.side_effect = RuntimeError("framebuffer unavailable")
+
+    def save(path: str, *_args: Any) -> None:
+        assert Path(path).parent == tmp_path
+        if mode == "read_failure":
+            return
+        Path(path).write_bytes(b"fallback-image")
+        if mode == "save_failure":
+            raise RuntimeError("capture failed")
+
+    view.saveImage.side_effect = save
+    gui = SimpleNamespace(
+        updateGui=lambda: None,
+        activeDocument=lambda: SimpleNamespace(activeView=lambda: view),
+    )
+    monkeypatch.setattr(runtime, "FreeCADGui", gui)
+    qtcore = SimpleNamespace(
+        QBuffer=lambda: buffer, QIODevice=SimpleNamespace(WriteOnly=1)
+    )
+    if mode in {"save_failure", "read_failure"}:
+        expected = RuntimeError if mode == "save_failure" else FileNotFoundError
+        with pytest.raises(expected):
+            runtime._capture_cam_image_bytes(qtcore, str(tmp_path))
+    else:
+        assert runtime._capture_cam_image_bytes(qtcore, str(tmp_path)) == (
+            b"memory-image" if mode == "memory" else b"fallback-image"
+        )
+    assert not list(tmp_path.iterdir())
+    assert view.saveImage.call_count == (0 if mode == "memory" else 1)
+    view.setAnimationEnabled.assert_called_once_with(True)
 
 
 def test_dispatch_rejects_incompatible_version_and_unknown_operation(

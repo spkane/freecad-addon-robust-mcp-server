@@ -2400,6 +2400,33 @@ def simulate(args: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _capture_cam_image_bytes(qtcore: Any, scratch_dir: str) -> bytes:
+    """Capture in memory, keeping any disk fallback in private scratch."""
+    FreeCADGui.updateGui()
+    view = FreeCADGui.activeDocument().activeView()
+    try:
+        try:
+            image = view.grabFramebuffer()
+            buffer = qtcore.QBuffer()
+            try:
+                if not buffer.open(qtcore.QIODevice.WriteOnly):
+                    raise RuntimeError("Cannot open image buffer")
+                if not image.save(buffer, "PNG"):
+                    raise RuntimeError("Cannot encode image")
+                return bytes(buffer.data().data())
+            finally:
+                buffer.close()
+        except Exception:
+            path = FsPath(scratch_dir) / ("capture-" + secrets.token_hex(16) + ".png")
+            try:
+                view.saveImage(str(path), 800, 800, "Transparent")
+                return path.read_bytes()
+            finally:
+                path.unlink(missing_ok=True)
+    finally:
+        view.setAnimationEnabled(True)
+
+
 def check_job(args: dict[str, Any]) -> dict[str, Any]:
     """FreeCAD's job check ("Sanity"): findings, summary, optional HTML report."""
     from Path.Main.Sanity import ImageBuilder
@@ -2429,6 +2456,12 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
             if args.get("images")
             else ImageBuilder.DummyImageBuilder(str(target.parent))
         )
+        if args.get("images") and hasattr(
+            sanity.image_builder, "capture_image_to_bytes"
+        ):
+            sanity.image_builder.capture_image_to_bytes = lambda: (
+                _capture_cam_image_bytes(ImageBuilder.QtCore, tmp)
+            )
         if report_file and not args.get("images"):
             # FreeCAD 1.0's dummy builder returns a directory, which its HTML
             # renderer tries to open as an image. Provide a private placeholder.
