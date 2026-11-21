@@ -33,22 +33,13 @@ def test_cam_report_scratch_is_under_home_and_removed(
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
 
-    def unexpected_scratch(_prefix):
-        raise AssertionError("Explicit reports must not create scratch space")
-
     if embedded:
         from freecad_mcp.bridge.private_scratch import private_scratch_directory
 
         module.__dict__["_embedded_private_scratch_directory"] = (
-            unexpected_scratch if explicit_report else private_scratch_directory
+            private_scratch_directory
         )
         monkeypatch.setitem(sys.modules, "private_scratch", None)
-    elif explicit_report:
-        monkeypatch.setitem(
-            sys.modules,
-            "private_scratch",
-            SimpleNamespace(private_scratch_directory=unexpected_scratch),
-        )
     spec.loader.exec_module(module)
     original_expanduser = os.path.expanduser
     monkeypatch.setattr(
@@ -62,10 +53,7 @@ def test_cam_report_scratch_is_under_home_and_removed(
 
     def build_image(directory: str) -> object:
         folder = Path(directory)
-        if explicit_report:
-            assert folder == tmp_path
-        else:
-            assert folder.parent == tmp_path
+        assert folder.parent == tmp_path
         seen.append(folder)
         (folder / "preview.png").write_bytes(b"png")
         if fail:
@@ -104,9 +92,6 @@ def test_cam_report_scratch_is_under_home_and_removed(
     else:
         assert module.check_job(args)["ok"]
     assert seen
-    if explicit_report:
-        assert seen[0] == tmp_path
-        if not fail:
-            assert (tmp_path / "report.html").read_text() == "report"
-    else:
-        assert not seen[0].exists()
+    assert not seen[0].exists()
+    if explicit_report and not fail:
+        assert (tmp_path / "report.html").read_text() == "report"
