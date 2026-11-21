@@ -1774,6 +1774,40 @@ async def test_missing_file_review_releases_document_reservation(
 
 
 @pytest.mark.asyncio
+async def test_macro_review_uses_current_roots_once(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """A review uses the current directory and keeps its selected target."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    old, current, system = (tmp_path / name for name in ("old", "current", "system"))
+    for directory in (old, current, system):
+        directory.mkdir()
+    (old / "Demo.FCMacro").write_text("old")
+    (current / "Demo.FCMacro").write_text("current")
+    plugin._current_macro_review_roots = AsyncMock(
+        return_value=(str(current), str(system))
+    )
+    coordinator = approval.ReviewCoordinator(2)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 2)
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}, "alice"
+    )
+    assert response.get("result")
+    request = coordinator.next_review()
+    assert request.payload.file_snapshot.resolved_path == str(
+        (current / "Demo.FCMacro").resolve()
+    )
+    plugin._current_macro_review_roots.return_value = (str(old), str(system))
+    assert request.payload.file_snapshot.resolved_path == str(
+        (current / "Demo.FCMacro").resolve()
+    )
+    plugin._current_macro_review_roots.assert_awaited_once()
+    request.cancel()
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
 async def test_disconnected_file_review_releases_unclaimed_reservation(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1810,6 +1844,22 @@ async def test_disconnected_file_review_releases_unclaimed_reservation(
 
 
 @pytest.mark.asyncio
+async def test_macro_roots_captured_through_gui_queue(server_mod: Any) -> None:
+    """A failed queue capture fails closed and never uses stale roots."""
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._execute_via_queue = MagicMock(
+        return_value={"success": True, "result": ["/user", "/system"]}
+    )
+    assert await plugin._current_macro_review_roots() == ("/user", "/system")
+    plugin._execute_via_queue.assert_called_once_with(
+        "_result_ = _robust_mcp_macro_review_roots()"
+    )
+    plugin._execute_via_queue.return_value = {"success": False}
+    with pytest.raises(ValueError):
+        await plugin._current_macro_review_roots()
+
+
+@pytest.mark.asyncio
 async def test_macro_file_review_resolves_local_search_order_and_rejects_paths(
     server_mod: Any, tmp_path: Path
 ) -> None:
@@ -1820,7 +1870,9 @@ async def test_macro_file_review_resolves_local_search_order_and_rejects_paths(
     user.mkdir()
     system.mkdir()
     (system / "Demo.FCMacro").write_text("system")
-    plugin._macro_review_roots = (str(user), str(system))
+    plugin._current_macro_review_roots = AsyncMock(
+        return_value=(str(user), str(system))
+    )
     coordinator = approval.ReviewCoordinator(2)
     plugin._review_broker = approval.LeasedReviewBroker(coordinator, 2)
     params = {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}
@@ -1855,7 +1907,9 @@ async def test_macro_file_review_rejects_new_higher_priority_target(
     user.mkdir()
     system.mkdir()
     (system / "Demo.FCMacro").write_text("system")
-    plugin._macro_review_roots = (str(user), str(system))
+    plugin._current_macro_review_roots = AsyncMock(
+        return_value=(str(user), str(system))
+    )
     coordinator = approval.ReviewCoordinator(2)
     broker = approval.LeasedReviewBroker(coordinator, 2)
     plugin._review_broker = broker
@@ -1901,7 +1955,7 @@ async def test_macro_file_review_rejects_external_symlink(
     except OSError:
         pytest.skip("Symlink creation is unavailable")
     plugin = server_mod.FreecadMCPPlugin()
-    plugin._macro_review_roots = (str(user),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(user),))
     plugin._review_broker = approval.LeasedReviewBroker(
         approval.ReviewCoordinator(2), 2
     )
@@ -1926,7 +1980,7 @@ async def test_macro_file_review_binds_mutation_path(
     plugin._execute_code_sync = MagicMock(return_value={"success": True})
     if action == "delete":
         (tmp_path / "Demo.FCMacro").write_text("original")
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     coordinator = approval.ReviewCoordinator(2)
     broker = approval.LeasedReviewBroker(coordinator, 2)
     plugin._review_broker = broker
@@ -1965,7 +2019,7 @@ async def test_reviewed_macro_delete_removes_link_not_target(
         pytest.skip("Symlink creation is unavailable")
     plugin = server_mod.FreecadMCPPlugin()
     plugin._running = True
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
 
     from freecad_mcp.bridge.base import ExecutionResult
@@ -2325,7 +2379,7 @@ async def test_reviewed_macro_executes_captured_bytes(
     approval = importlib.import_module("freecad_mcp_bridge.approval")
     plugin = server_mod.FreecadMCPPlugin()
     plugin._running = True
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
     coordinator = approval.ReviewCoordinator(1)
     broker = approval.LeasedReviewBroker(coordinator, 1)
@@ -2353,7 +2407,7 @@ async def test_reviewed_macro_rejects_reserved_argument(
     """An argument cannot replace the execution environment or built-ins."""
     approval = importlib.import_module("freecad_mcp_bridge.approval")
     plugin = server_mod.FreecadMCPPlugin()
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     coordinator = approval.ReviewCoordinator(1)
     plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
     (tmp_path / "example.FCMacro").write_text("_result_ = 42\n")
@@ -2384,7 +2438,7 @@ async def test_socket_reviewed_macro_uses_authenticated_session(
         host="127.0.0.1", port=0, authenticator=authenticator
     )
     plugin._running = True
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     (tmp_path / "example.FCMacro").write_bytes(b"_result_ = value\n")
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
     coordinator = approval.ReviewCoordinator(1)
@@ -2435,7 +2489,7 @@ async def test_reviewed_macro_executes_displayed_utf8_text(
     approval = importlib.import_module("freecad_mcp_bridge.approval")
     plugin = server_mod.FreecadMCPPlugin()
     plugin._running = True
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
     coordinator = approval.ReviewCoordinator(1)
     broker = approval.LeasedReviewBroker(coordinator, 1)
@@ -2466,7 +2520,7 @@ async def test_reviewed_macro_normalizes_and_rejects_colliding_arguments(
     approval = importlib.import_module("freecad_mcp_bridge.approval")
     plugin = server_mod.FreecadMCPPlugin()
     plugin._running = True
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     coordinator = approval.ReviewCoordinator(2)
     broker = approval.LeasedReviewBroker(coordinator, 2)
     plugin._review_broker = broker
@@ -2498,7 +2552,7 @@ async def test_reviewed_macro_traceback_uses_captured_source(
     approval = importlib.import_module("freecad_mcp_bridge.approval")
     plugin = server_mod.FreecadMCPPlugin()
     plugin._running = True
-    plugin._macro_review_roots = (str(tmp_path),)
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
     coordinator = approval.ReviewCoordinator(1)
     broker = approval.LeasedReviewBroker(coordinator, 1)
     plugin._review_broker = broker
