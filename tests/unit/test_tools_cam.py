@@ -1162,13 +1162,19 @@ def test_cam_report_side_files_stay_private(
                 )
                 self.image_path = self.image_builder.build_image(None, "base")
             (Path(self.filelocation) / "T1.png").write_bytes(b"temporary")
-            return {"runData": {}, "stockData": {}}
+            return {
+                "runData": {},
+                "stockData": {"stockImage": str(Path(self.filelocation) / "T1.png")},
+            }
 
         def get_output_report(self):
             assert (Path(self.filelocation) / "T1.png").exists()
             if not images:
                 assert Path(self.image_path).read_bytes().startswith(b"\x89PNG")
-            return "report"
+            import base64
+
+            image = (Path(self.filelocation) / "T1.png").read_bytes()
+            return "data:image/png;base64," + base64.b64encode(image).decode()
 
     modules["Path.Main.Sanity.Sanity"].__dict__["CAMSanity"] = Sanity
     for name, module in modules.items():
@@ -1186,8 +1192,10 @@ def test_cam_report_side_files_stay_private(
     other.write_bytes(b"existing")
     result = runtime.check_job({"report_file": str(report), "images": images})
     assert result["report_file"] == str(report)
-    assert report.read_text() == "report"
+    assert report.read_text() == "data:image/png;base64,dGVtcG9yYXJ5"
+    assert "stockImage" not in result["summary"]["stock"]
     assert other.read_bytes() == b"existing"
+    assert {item.name for item in tmp_path.iterdir()} == {"report.html", "T1.png"}
 
 
 def test_dispatch_rejects_incompatible_version_and_unknown_operation(

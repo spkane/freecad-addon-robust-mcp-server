@@ -579,7 +579,7 @@ def start():
                 item.toPlainText()
                 for item in file_dialog.findChildren(QtWidgets.QPlainTextEdit)
             )
-            if str(reviewed_file) not in details:
+            if str(reviewed_file).replace("\\", "\\\\") not in details:
                 raise RuntimeError("File review dialog omitted the target")
             file_dialog.reject()
             QtWidgets.QApplication.processEvents()

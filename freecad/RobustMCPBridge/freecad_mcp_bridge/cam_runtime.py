@@ -2493,7 +2493,7 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
             "stock": {
                 k: _safe(v)
                 for k, v in sanity.data.get("stockData", {}).items()
-                if k not in ("squawkData", "baseImage")
+                if k not in ("squawkData", "baseImage", "stockImage")
             },
         },
         "report_file": str(output) if report_file else None,
