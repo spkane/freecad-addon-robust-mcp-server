@@ -1638,7 +1638,6 @@ class FreecadMCPPlugin:
             "_robust_mcp_cam_dispatch": self._cam_dispatch,
             "_robust_mcp_capture_document": self._capture_review_document,
             "_robust_mcp_release_document": self._release_review_document,
-
             "_robust_mcp_macro_review_roots": self._capture_macro_review_roots,
         }
 
