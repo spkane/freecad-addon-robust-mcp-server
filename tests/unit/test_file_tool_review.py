@@ -30,6 +30,39 @@ class Tools:
         return register
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_failed_file_dispatch_releases_selected_document(
+    monkeypatch: pytest.MonkeyPatch, cancelled: bool
+) -> None:
+    """Client-side failures and cancellation release the unclaimed reservation."""
+    from freecad_mcp.tools.export import register_export_tools
+
+    monkeypatch.setattr(
+        "freecad_mcp.config.get_config",
+        lambda: SimpleNamespace(allow_unreviewed_file_operations=False),
+    )
+    bridge = SocketBridge()
+    monkeypatch.setattr(
+        bridge,
+        "capture_review_document",
+        AsyncMock(return_value={"name": "Model", "path": "", "token": "token"}),
+    )
+    release = AsyncMock()
+    monkeypatch.setattr(bridge, "release_review_document", release)
+    failure = asyncio.CancelledError() if cancelled else ValueError("failed")
+    monkeypatch.setattr(bridge, "execute_python", AsyncMock(side_effect=failure))
+    mcp = Tools()
+
+    async def get_bridge():
+        return bridge
+
+    register_export_tools(mcp, get_bridge)
+    with pytest.raises(type(failure)):
+        await mcp.functions["import_step"](file_path="/tmp/model.step")
+    release.assert_awaited_once_with("token")
+
+
 def _result(path: str) -> ExecutionResult:
     return ExecutionResult(
         success=True,

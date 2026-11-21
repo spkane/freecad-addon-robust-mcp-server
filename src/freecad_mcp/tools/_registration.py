@@ -12,6 +12,7 @@ from freecad_mcp.bridge.file_review import (
     file_review_document_token,
     file_review_new_document,
     file_review_target,
+    release_document_reservation,
 )
 
 # File targets are classified explicitly; a missing or ambiguous target must
@@ -100,7 +101,7 @@ def _wrap_file_target(
     validate_arguments = validate or (lambda _arguments: None)
 
     @wraps(function)
-    async def reviewed(*args: Any, **kwargs: Any) -> Any:
+    async def reviewed(*args: Any, **kwargs: Any) -> Any:  # noqa: PLR0912
         bound = call_signature.bind(*args, **kwargs)
         bound.apply_defaults()
         validate_arguments(bound.arguments)
@@ -158,5 +159,7 @@ def _wrap_file_target(
             file_review_document.reset(name_token)
             file_review_new_document.reset(document_token)
             file_review_target.reset(token)
+            if reservation is not None:
+                await release_document_reservation(bridge, reservation)
 
     return reviewed

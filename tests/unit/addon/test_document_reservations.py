@@ -87,3 +87,18 @@ def test_reserve_evicts_expired_entries(reservations_module, monkeypatch):
     assert store.take(token, "Other", lambda _name: document)()
     with pytest.raises(ValueError, match="unavailable"):
         store.take(expired, "Model", lambda _name: None)
+
+
+def test_discard_unclaimed_is_idempotent_and_does_not_revoke_claimed_guard(
+    reservations_module,
+):
+    """Cleanup releases unused slots but cannot undo a claimed document guard."""
+    store = reservations_module.DocumentReservations(1)
+    unused = store.reserve("Model", object())
+    store.discard(unused)
+    store.discard(unused)
+    document = object()
+    claimed = store.reserve("Model", document)
+    guard = store.take(claimed, "Model", lambda _: document)
+    store.discard(claimed)
+    assert guard()

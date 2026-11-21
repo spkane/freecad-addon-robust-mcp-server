@@ -11,6 +11,7 @@ from freecad_mcp.bridge.file_review import (
     file_review_document,
     file_review_document_token,
     file_review_target,
+    release_document_reservation,
 )
 from freecad_mcp.tools._registration import file_tool
 
@@ -136,7 +137,7 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
         }
 
     @file_tool(mcp)
-    async def save_document(
+    async def save_document(  # noqa: PLR0912
         doc_name: str | None = None,
         path: str | None = None,
     ) -> dict[str, Any]:
@@ -216,6 +217,8 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             file_review_document_token.reset(reservation_token)
             file_review_document.reset(document_token)
             file_review_target.reset(token)
+            if reservation:
+                await release_document_reservation(bridge, reservation)
         return {
             "success": True,
             "path": saved_path,

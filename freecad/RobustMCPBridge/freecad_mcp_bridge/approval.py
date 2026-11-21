@@ -475,11 +475,17 @@ class LeasedReviewBroker:
     one credential, identity binding does not distinguish those processes.
     """
 
-    def __init__(self, coordinator: ReviewCoordinator, max_pending: int) -> None:
+    def __init__(
+        self,
+        coordinator: ReviewCoordinator,
+        max_pending: int,
+        release: Callable[[ApprovalPayload], None] | None = None,
+    ) -> None:
         """Use the supplied review coordinator with a bounded request index."""
         if type(max_pending) is not int or max_pending < 1:
             raise ValueError("Review capacity must be a positive integer")
         self._coordinator = coordinator
+        self._release = release
         self._capacity = max_pending
         self._entries: dict[str, tuple[str, ApprovalRequest]] = {}
         self._committed: set[str] = set()
@@ -515,6 +521,8 @@ class LeasedReviewBroker:
                         continue
                     self._terminal[request_id] = (owner, state, now + 60)
                 self._coordinator.cancel(request)
+                if self._release is not None:
+                    self._release(request.payload)
                 del self._entries[request_id]
                 self._committed.discard(request_id)
                 self._results.pop(request_id, None)
@@ -585,6 +593,8 @@ class LeasedReviewBroker:
             if scheduled:
                 self._committed.add(request_id)
             else:
+                if self._release is not None:
+                    self._release(request.payload)
                 del self._entries[request_id]
             return scheduled
 
@@ -600,6 +610,8 @@ class LeasedReviewBroker:
                 return False
             del self._entries[request_id]
             self._committed.discard(request_id)
+            if self._release is not None:
+                self._release(entry[1].payload)
             return self._coordinator.cancel(entry[1])
 
     def cancel_owner(self, principal: str) -> None:
@@ -611,6 +623,8 @@ class LeasedReviewBroker:
             for request_id, (owner, request) in list(self._entries.items()):
                 if owner == principal:
                     self._coordinator.cancel(request)
+                    if self._release is not None:
+                        self._release(request.payload)
                     del self._entries[request_id]
                     self._committed.discard(request_id)
                     self._running.discard(request_id)
@@ -657,6 +671,9 @@ class LeasedReviewBroker:
         """Deny outstanding work and disable the broker."""
         with self._lock:
             self._closed = True
+            if self._release is not None:
+                for _, request in self._entries.values():
+                    self._release(request.payload)
             self._entries.clear()
             self._terminal.clear()
             self._committed.clear()

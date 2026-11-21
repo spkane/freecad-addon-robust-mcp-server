@@ -1324,6 +1324,12 @@ class FreecadMCPPlugin:
             "token": reservations.reserve(document.Name, document),
         }
 
+    def _release_review_document(self, token: str) -> None:
+        """Discard an unclaimed reservation without affecting a claimed guard."""
+        reservations = self._document_reservations
+        if reservations is not None:
+            reservations.discard(token)
+
     def _run_queue_processor_loop(self) -> None:
         """Run queue processor in a loop for headless mode."""
         while self._running:
@@ -1403,7 +1409,15 @@ class FreecadMCPPlugin:
         )
         self._review_close_relay = create_close_relay(controller)
         self._review_controller = controller
-        self._review_broker = LeasedReviewBroker(coordinator, MAX_PENDING_REQUESTS)
+        reservations = self._document_reservations
+
+        def release_review_document(payload: Any) -> None:
+            if payload.document_token is not None:
+                reservations.discard(payload.document_token)
+
+        self._review_broker = LeasedReviewBroker(
+            coordinator, MAX_PENDING_REQUESTS, release_review_document
+        )
 
     def _process_queue(self) -> None:
         """Process pending execution requests on the main thread.
@@ -1610,6 +1624,7 @@ class FreecadMCPPlugin:
             "__builtins__": __builtins__,
             "_robust_mcp_cam_dispatch": self._cam_dispatch,
             "_robust_mcp_capture_document": self._capture_review_document,
+            "_robust_mcp_release_document": self._release_review_document,
         }
 
         if initial_globals is not None:
@@ -2002,7 +2017,7 @@ class FreecadMCPPlugin:
             },
         }
 
-    async def _review_begin_file(
+    async def _review_begin_file(  # noqa: PLR0912
         self,
         request_id: str | int | None,
         params: dict[str, Any],
@@ -2010,6 +2025,8 @@ class FreecadMCPPlugin:
     ) -> dict[str, Any]:
         """Snapshot a file target before presenting the generated operation."""
         broker = self._review_broker
+        document_token = params.get("document_token")
+        admitted = False
         try:
             if broker is None or type(owner) is not str:
                 raise ValueError("File review unavailable")
@@ -2020,7 +2037,6 @@ class FreecadMCPPlugin:
             ):
                 raise ValueError("Invalid file review parameters")
             document_name = params.get("document_name")
-            document_token = params.get("document_token")
             if (document_name is None) != (document_token is None):
                 raise ValueError("Document reservation is required")
             if document_token is not None and (
@@ -2118,6 +2134,7 @@ class FreecadMCPPlugin:
                     owner, payload, REVIEW_LEASE_SECONDS
                 )
             }
+            admitted = True
             return {"jsonrpc": "2.0", "id": request_id, "result": result}
         except (ValueError, TypeError, UnicodeError, OSError, RuntimeError):
             return {
@@ -2128,6 +2145,11 @@ class FreecadMCPPlugin:
                     "message": "File review unavailable or invalid",
                 },
             }
+        finally:
+            if not admitted and type(document_token) is str and document_token:
+                reservations = self._document_reservations
+                if reservations is not None:
+                    reservations.discard(document_token)
 
     async def _review_begin_macro(
         self,

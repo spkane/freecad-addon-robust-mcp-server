@@ -76,3 +76,10 @@ class DocumentReservations:
         with self._lock:
             self._closed = True
             self._entries.clear()
+
+    def discard(self, token: str) -> None:
+        """Release an unclaimed token; already claimed or missing tokens are harmless."""
+        if type(token) is not str:
+            return
+        with self._lock:
+            self._entries.pop(token, None)
