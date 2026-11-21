@@ -513,7 +513,6 @@ class FreecadMCPPlugin:
         )
         # Review routing stays disabled until a trusted GUI coordinator is installed.
         self._review_broker: Any | None = None
-        self._macro_review_roots: tuple[str, ...] = ()
         self._review_controller: Any | None = None
         self._review_close_relay: Any | None = None
         self._document_reservations: Any | None = None
@@ -1330,6 +1329,28 @@ class FreecadMCPPlugin:
         if reservations is not None:
             reservations.discard(token)
 
+    @staticmethod
+    def _capture_macro_review_roots() -> list[str]:
+        """Read FreeCAD's current macro directories on the GUI thread."""
+        if not _review_gui_thread_ready():
+            raise RuntimeError("Macro review is unavailable")
+        return [
+            FreeCAD.getUserMacroDir(True),
+            str(Path(FreeCAD.getResourceDir()) / "Macro"),
+        ]
+
+    async def _current_macro_review_roots(self) -> tuple[str, ...]:
+        """Capture one immutable set of roots for the current review."""
+        result = await asyncio.to_thread(
+            self._execute_via_queue, "_result_ = _robust_mcp_macro_review_roots()"
+        )
+        roots = result.get("result")
+        if not result.get("success") or not isinstance(roots, list) or len(roots) != 2:
+            raise ValueError("Macro directories unavailable")
+        if any(type(root) is not str or not root for root in roots):
+            raise ValueError("Invalid macro directories")
+        return tuple(roots)
+
     def _run_queue_processor_loop(self) -> None:
         """Run queue processor in a loop for headless mode."""
         while self._running:
@@ -1384,17 +1405,9 @@ class FreecadMCPPlugin:
         parent = None
         with contextlib.suppress(Exception):
             parent = FreeCADGui.getMainWindow()
-        self._macro_review_roots = ()
         approval_store = None
-        try:
-            self._macro_review_roots = (
-                FreeCAD.getUserMacroDir(True),
-                str(Path(FreeCAD.getResourceDir()) / "Macro"),
-            )
+        with contextlib.suppress(Exception):
             approval_store = freecad_approval_store()
-        except Exception:
-            # Macro review is unavailable if the trusted GUI cannot configure it.
-            pass
 
         self._document_reservations = DocumentReservations(MAX_PENDING_REQUESTS)
 
@@ -1625,6 +1638,8 @@ class FreecadMCPPlugin:
             "_robust_mcp_cam_dispatch": self._cam_dispatch,
             "_robust_mcp_capture_document": self._capture_review_document,
             "_robust_mcp_release_document": self._release_review_document,
+
+            "_robust_mcp_macro_review_roots": self._capture_macro_review_roots,
         }
 
         if initial_globals is not None:
@@ -2074,11 +2089,14 @@ class FreecadMCPPlugin:
                 review_text(document_name.encode("utf-8"))
             review_text(content)
             review_text(path.encode("utf-8"))
+            macro_roots = (
+                await self._current_macro_review_roots() if kind == "macro" else ()
+            )
 
             def resolve_target() -> Any:
                 if kind == "path":
                     return snapshot_file(path, action)
-                if kind != "macro" or not self._macro_review_roots:
+                if kind != "macro" or not macro_roots:
                     raise ValueError("Invalid file target kind")
                 if (
                     not path
@@ -2086,11 +2104,7 @@ class FreecadMCPPlugin:
                     or any(c in path for c in "/\\:\0\r\n")
                 ):
                     raise ValueError("Invalid macro name")
-                roots = (
-                    self._macro_review_roots
-                    if action == "read"
-                    else self._macro_review_roots[:1]
-                )
+                roots = macro_roots if action == "read" else macro_roots[:1]
                 preceding_paths: list[str] = []
                 for root in roots:
                     candidate = str(Path(root) / (path + ".FCMacro"))
@@ -2160,7 +2174,7 @@ class FreecadMCPPlugin:
         """Capture local macro bytes off the event loop before creating a review."""
         broker = self._review_broker
         try:
-            if broker is None or type(owner) is not str or not self._macro_review_roots:
+            if broker is None or type(owner) is not str:
                 raise ValueError("Macro review unavailable")
             if (
                 set(params) != {"macro_name", "args"}
@@ -2196,8 +2210,9 @@ class FreecadMCPPlugin:
                 from approval import ApprovalPayload  # type: ignore[import-not-found,no-redef]
                 from macro_snapshot import resolve_macro  # type: ignore[import-not-found,no-redef]
                 from review_dialog import review_text  # type: ignore[import-not-found,no-redef]
+            macro_roots = await self._current_macro_review_roots()
             snapshot = await asyncio.to_thread(
-                resolve_macro, params["macro_name"], self._macro_review_roots
+                resolve_macro, params["macro_name"], macro_roots
             )
             review_text(snapshot.content, allow_crlf=True)
             review_text(snapshot.path.encode("utf-8"))
