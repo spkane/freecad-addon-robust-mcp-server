@@ -167,7 +167,9 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
         ):
             lookup_token = file_review_target.set(None)
             try:
-                selected = await bridge.capture_review_document(doc_name)
+                selected = await bridge.capture_review_document(
+                    doc_name, require_saved_path=not bool(path)
+                )
             finally:
                 file_review_target.reset(lookup_token)
             if selected is None:

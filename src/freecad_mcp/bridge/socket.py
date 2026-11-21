@@ -560,10 +560,13 @@ class SocketBridge(FreecadBridge):
             "review_begin_macro", {"macro_name": macro_name, "args": args or {}}, None
         )
 
-    async def capture_review_document(self, name: str | None) -> dict[str, str] | None:
+    async def capture_review_document(
+        self, name: str | None, *, require_saved_path: bool = False
+    ) -> dict[str, str] | None:
         """Select and reserve the exact document on FreeCAD's GUI thread."""
+        args = f"{name!r}, True" if require_saved_path else repr(name)
         result = await self.execute_python(
-            f"_result_ = _robust_mcp_capture_document({name!r})"
+            f"_result_ = _robust_mcp_capture_document({args})"
         )
         if not result.success:
             raise RuntimeError("ReviewUnavailable: unable to reserve document")

@@ -1304,7 +1304,9 @@ class FreecadMCPPlugin:
                 "Running in headless mode (queue processor thread started)\n"
             )
 
-    def _capture_review_document(self, name: str | None) -> dict[str, str] | None:
+    def _capture_review_document(
+        self, name: str | None, require_saved_path: bool = False
+    ) -> dict[str, str] | None:
         """Select and reserve a document on the FreeCAD GUI thread."""
         reservations = self._document_reservations
         if not _review_gui_thread_ready() or reservations is None:
@@ -1314,6 +1316,8 @@ class FreecadMCPPlugin:
         document = FreeCAD.ActiveDocument if name is None else FreeCAD.getDocument(name)
         if document is None:
             return None
+        if require_saved_path and not document.FileName:
+            return {"name": document.Name, "path": "", "token": ""}  # nosec B105
         return {
             "name": document.Name,
             "path": document.FileName or "",

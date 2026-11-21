@@ -778,7 +778,44 @@ async def test_save_document_reserves_selected_instance_before_review(
     register_document_tools(mcp, get_bridge)
     target = str(tmp_path / "saved.FCStd")
     await mcp.functions["save_document"](doc_name=explicit_name, path=target)
-    capture.assert_awaited_once_with(explicit_name)
+    capture.assert_awaited_once_with(explicit_name, require_saved_path=False)
     assert observed == [("Model", target, "Model", "unit-token")]
     assert file_review_document.get() is None
     assert file_review_document_token.get() is None
+
+
+@pytest.mark.asyncio
+async def test_unsaved_document_save_can_retry_with_explicit_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """An unsaved path check does not prevent a later explicit save."""
+    monkeypatch.setattr(
+        "freecad_mcp.config.get_config",
+        lambda: SimpleNamespace(allow_unreviewed_file_operations=False),
+    )
+    bridge = SocketBridge()
+    capture = AsyncMock(
+        side_effect=[
+            {"name": "Model", "path": "", "token": ""},
+            {"name": "Model", "path": "", "token": "unit-token"},
+        ]
+    )
+    monkeypatch.setattr(bridge, "capture_review_document", capture)
+    target = str(tmp_path / "saved.FCStd")
+    save = AsyncMock(return_value=target)
+    monkeypatch.setattr(bridge, "save_document", save)
+    mcp = Tools()
+
+    async def get_bridge():
+        return bridge
+
+    register_document_tools(mcp, get_bridge)
+    with pytest.raises(ValueError, match="No saved path"):
+        await mcp.functions["save_document"]()
+    save.assert_not_awaited()
+    assert await mcp.functions["save_document"](path=target) == {
+        "success": True,
+        "path": target,
+    }
+    assert capture.await_args_list[0].kwargs["require_saved_path"] is True
+    assert capture.await_args_list[1].kwargs["require_saved_path"] is False

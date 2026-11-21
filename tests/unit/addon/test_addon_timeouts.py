@@ -2472,6 +2472,34 @@ def test_document_selection_reservation_survives_name_reuse(
     plugin._shutdown_review()
 
 
+def test_unsaved_document_selection_does_not_consume_reservations(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repeated invalid saves leave capacity for a corrected save."""
+    import importlib
+
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    document = SimpleNamespace(Name="Model", FileName="")
+    freecad = MagicMock()
+    freecad.ActiveDocument = document
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    for _ in range(server_mod.MAX_PENDING_REQUESTS + 1):
+        assert plugin._capture_review_document(None, True) == {
+            "name": "Model",
+            "path": "",
+            "token": "",
+        }
+    selected = plugin._capture_review_document(None)
+    assert selected and selected["token"]
+    plugin._shutdown_review()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("replace_document", [False, True])
 async def test_reserved_file_review_rejects_document_replaced_before_dialog(
