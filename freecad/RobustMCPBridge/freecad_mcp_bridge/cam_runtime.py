@@ -2440,7 +2440,13 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
                     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lX2sAAAAASUVORK5CYII="
                 )
             )
-            sanity.image_builder.build_image = lambda *_args: str(placeholder)
+
+            def placeholder_image(
+                _obj: Any, _name: str, as_bytes: bool = False, **_kwargs: Any
+            ) -> bytes | str:
+                return b"" if as_bytes else str(placeholder)
+
+            sanity.image_builder.build_image = placeholder_image
         sanity.data = sanity.summarize()
         if hasattr(sanity, "get_all_squawks"):  # FreeCAD 26.3+
             squawks, critical = sanity.get_all_squawks()

@@ -1152,13 +1152,22 @@ def test_cam_report_side_files_stay_private(
 
     class Sanity:
         filelocation: str
+        image_builder: Any
+        image_path: str
 
         def summarize(self):
+            if not images:
+                assert (
+                    self.image_builder.build_image(None, "base", as_bytes=True) == b""
+                )
+                self.image_path = self.image_builder.build_image(None, "base")
             (Path(self.filelocation) / "T1.png").write_bytes(b"temporary")
             return {"runData": {}, "stockData": {}}
 
         def get_output_report(self):
             assert (Path(self.filelocation) / "T1.png").exists()
+            if not images:
+                assert Path(self.image_path).read_bytes().startswith(b"\x89PNG")
             return "report"
 
     modules["Path.Main.Sanity.Sanity"].__dict__["CAMSanity"] = Sanity
