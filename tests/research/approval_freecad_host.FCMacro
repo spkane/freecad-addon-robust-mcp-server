@@ -357,7 +357,8 @@ def tick():
                             )
                         ]
                         if not any(
-                            "Document: ReviewIdentityProbe" in detail
+                            f"Document: {request.payload.document_name}"
+                            in detail.splitlines()
                             for detail in details
                         ):
                             raise RuntimeError("Document review omitted its target")

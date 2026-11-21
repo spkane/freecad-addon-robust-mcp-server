@@ -71,3 +71,19 @@ def test_token_cannot_be_rebound_to_another_name(reservations_module):
         store.take(token, "Other", lambda _name: None)
     with pytest.raises(ValueError, match="unavailable"):
         store.take(token, "Model", lambda _name: None)
+
+
+def test_reserve_evicts_expired_entries(reservations_module, monkeypatch):
+    """A new reservation recovers capacity without claiming an expired token."""
+    clock = [10.0]
+    monkeypatch.setattr(
+        reservations_module, "time", SimpleNamespace(monotonic=lambda: clock[0])
+    )
+    store = reservations_module.DocumentReservations(1, lifetime=5)
+    expired = store.reserve("Model", object())
+    clock[0] = 15.0
+    document = object()
+    token = store.reserve("Other", document)
+    assert store.take(token, "Other", lambda _name: document)()
+    with pytest.raises(ValueError, match="unavailable"):
+        store.take(expired, "Model", lambda _name: None)

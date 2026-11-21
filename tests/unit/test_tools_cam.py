@@ -494,6 +494,7 @@ class TestCamTools:
         )
         from freecad_mcp.bridge.socket import SocketBridge
 
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
         registered: RegisteredTools = {}
         mcp = MagicMock()
         mcp.tool = lambda **_: (
@@ -592,6 +593,10 @@ class TestCamTools:
             "Original" if default_template else None,
             str(123) if default_template else None,
         )
+        payload = _payload(calls[1][0])
+        assert payload["template"] == default_template
+        if default_template:
+            assert payload["doc_name"] == "Original"
 
     async def test_no_template_cam_job_does_not_require_gui_reservation(
         self, monkeypatch: pytest.MonkeyPatch
@@ -612,19 +617,16 @@ class TestCamTools:
             "get_active_document",
             AsyncMock(return_value=SimpleNamespace(name="Model")),
         )
-        monkeypatch.setattr(
-            bridge,
-            "execute_python",
-            AsyncMock(
-                return_value=ExecutionResult(
-                    success=True,
-                    result={"ok": True},
-                    stdout="",
-                    stderr="",
-                    execution_time_ms=1,
-                )
-            ),
+        execute = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={"ok": True},
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
         )
+        monkeypatch.setattr(bridge, "execute_python", execute)
 
         async def get_bridge() -> SocketBridge:
             return bridge
@@ -634,6 +636,8 @@ class TestCamTools:
             model_objects=["Part"], template=""
         ) == {"ok": True}
         capture.assert_not_awaited()
+        assert execute.await_args is not None
+        assert _payload(execute.await_args.args[0])["template"] == ""
 
     async def test_explicit_file_review_override_preserves_legacy_shape_dispatch(
         self,
