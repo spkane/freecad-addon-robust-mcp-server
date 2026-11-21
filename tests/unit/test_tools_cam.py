@@ -552,6 +552,7 @@ class TestCamTools:
         )
         from freecad_mcp.bridge.socket import SocketBridge
 
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
         registered: RegisteredTools = {}
         mcp = MagicMock()
         mcp.tool = lambda **_: (
