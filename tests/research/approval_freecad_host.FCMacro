@@ -41,6 +41,11 @@ manual = os.environ.get("MCP_REVIEW_PROBE_MANUAL") == "1"
 preferences_tested = False
 
 
+def display_path(path):
+    """Match the escaped path format used by the review dialog."""
+    return str(path).replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")
+
+
 def report_traceback():
     """Attempt diagnostics without interrupting failure cleanup."""
     with contextlib.suppress(Exception):
@@ -375,7 +380,7 @@ def tick():
                             snapshot is None
                             or len(details) != 1
                             or "Requested path: "
-                            + snapshot.requested_path.replace("\\", "\\\\")
+                            + display_path(snapshot.requested_path)
                             not in details[0].splitlines()
                             or not snapshot.requested_path.endswith("endmill.fcstd")
                         ):
@@ -579,7 +584,7 @@ def start():
                 item.toPlainText()
                 for item in file_dialog.findChildren(QtWidgets.QPlainTextEdit)
             )
-            if str(reviewed_file).replace("\\", "\\\\") not in details:
+            if display_path(reviewed_file) not in details:
                 raise RuntimeError("File review dialog omitted the target")
             file_dialog.reject()
             QtWidgets.QApplication.processEvents()

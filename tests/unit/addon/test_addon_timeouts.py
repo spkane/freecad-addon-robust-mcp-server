@@ -611,6 +611,7 @@ def test_xmlrpc_screenshot_uses_and_cleans_user_directory(
         "FreeCADGui": SimpleNamespace(ActiveDocument=SimpleNamespace(ActiveView=view)),
     }
     plugin = server_mod.FreecadMCPPlugin()
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", False)
 
     def execute(code: str, _timeout: int) -> dict[str, Any]:
         return plugin._execute_code_sync(code, initial_globals=environment)
