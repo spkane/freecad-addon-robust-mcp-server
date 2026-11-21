@@ -1,5 +1,6 @@
 """Exercise review decisions in an isolated installed FreeCAD process."""
 
+import asyncio
 import base64
 import contextlib
 import hmac
@@ -218,9 +219,8 @@ def worker(port):
                         "review_begin_macro",
                         {"macro_name": "HostMacro", "args": {"value": 42}},
                     )["review_id"]
-                    Path(plugin._macro_review_roots[0], "HostMacro.FCMacro").write_text(
-                        "_result_ = 999\n"
-                    )
+                    roots = asyncio.run(plugin._current_macro_review_roots())
+                    Path(roots[0], "HostMacro.FCMacro").write_text("_result_ = 999\n")
                 elif code == "__file_review_probe__":
                     target = Path(os.environ["FREECAD_USER_DATA"]) / "socket-review.txt"
                     target.write_text("42")
