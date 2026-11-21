@@ -374,7 +374,8 @@ def tick():
                         if (
                             snapshot is None
                             or len(details) != 1
-                            or f"Requested path: {snapshot.requested_path}"
+                            or "Requested path: "
+                            + snapshot.requested_path.replace("\\", "\\\\")
                             not in details[0].splitlines()
                             or not snapshot.requested_path.endswith("endmill.fcstd")
                         ):
