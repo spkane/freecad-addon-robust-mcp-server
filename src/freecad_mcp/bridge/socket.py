@@ -560,6 +560,25 @@ class SocketBridge(FreecadBridge):
             "review_begin_macro", {"macro_name": macro_name, "args": args or {}}, None
         )
 
+    async def capture_review_document(
+        self, name: str | None, *, require_saved_path: bool = False
+    ) -> dict[str, str] | None:
+        """Select and reserve the exact document on FreeCAD's GUI thread."""
+        args = f"{name!r}, True" if require_saved_path else repr(name)
+        result = await self.execute_python(
+            f"_result_ = _robust_mcp_capture_document({args})"
+        )
+        if not result.success:
+            raise RuntimeError("ReviewUnavailable: unable to reserve document")
+        selected = result.result
+        if selected is None:
+            return None
+        if not isinstance(selected, dict) or any(
+            not isinstance(selected.get(key), str) for key in ("name", "path", "token")
+        ):
+            raise RuntimeError("ReviewUnavailable: invalid document reservation")
+        return selected
+
     async def execute_reviewed_file(
         self,
         code: str,
@@ -569,10 +588,21 @@ class SocketBridge(FreecadBridge):
         timeout_ms: int | None = None,
     ) -> ExecutionResult:
         """Review one generated operation and its file target in FreeCAD."""
+        from freecad_mcp.bridge.file_review import (
+            file_review_document,
+            file_review_document_token,
+        )
+
+        params = {"code": code, "path": path, "action": action, "kind": kind}
+        document_name = file_review_document.get()
+        if document_name is not None:
+            document_token = file_review_document_token.get()
+            if document_token is None:
+                raise RuntimeError("ReviewUnavailable: document reservation missing")
+            params["document_name"] = document_name
+            params["document_token"] = document_token
         return await self._execute_reviewed_request(
-            "review_begin_file",
-            {"code": code, "path": path, "action": action, "kind": kind},
-            timeout_ms,
+            "review_begin_file", params, timeout_ms
         )
 
     async def _execute_reviewed_request(  # noqa: PLR0912

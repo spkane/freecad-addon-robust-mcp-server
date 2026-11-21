@@ -63,6 +63,26 @@ async def regression_document() -> AsyncIterator[tuple[XmlRpcBridge, str]]:
 
 
 @pytest.mark.asyncio
+async def test_document_wrapper_identity_changes_after_name_reuse(
+    regression_document: tuple[XmlRpcBridge, str],
+) -> None:
+    """Real FreeCAD preserves wrapper identity for a live document, not a replacement."""
+    bridge, name = regression_document
+    result = await bridge.execute_python(
+        f"""
+original = FreeCAD.newDocument({name!r})
+same = FreeCAD.getDocument({name!r}) is original
+FreeCAD.closeDocument({name!r})
+replacement = FreeCAD.newDocument({name!r})
+_result_ = {{"same": same, "replacement_name": replacement.Name,
+            "different": replacement is not original}}
+"""
+    )
+    assert result.success, result.error_traceback
+    assert result.result == {"same": True, "replacement_name": name, "different": True}
+
+
+@pytest.mark.asyncio
 async def test_shapestring_review_preserves_new_document_choice(
     regression_document: tuple[XmlRpcBridge, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

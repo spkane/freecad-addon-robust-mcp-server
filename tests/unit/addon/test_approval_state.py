@@ -628,3 +628,36 @@ def test_committed_expiry_survives_another_owner_admission(
     assert broker.status("bob", first) is None
     assert broker.claim_next() is None
     broker.close()
+
+
+@pytest.mark.parametrize("bound", [False, True])
+def test_document_binding_rejects_replaced_document(
+    approval_module: ModuleType, bound: bool
+) -> None:
+    """An approved ticket cannot claim a different same-named document."""
+    current = [object()]
+    original = current[0]
+    payload = approval_module.ApprovalPayload(
+        "file_operation", b"pass", document_name="Model", document_token=str(123)
+    )
+    request = approval_module.ApprovalRequest(payload, 30)
+    if bound:
+        assert request.bind_document(lambda: current[0] is original)
+    assert request.decide(approved=True)
+    current[0] = object()
+    assert request.consume() is None
+    assert request.state is approval_module.ApprovalState.DENIED
+
+
+def test_document_binding_and_local_policy_both_apply(
+    approval_module: ModuleType,
+) -> None:
+    """A document guard cannot override a revoked bypass or vice versa."""
+    payload = approval_module.ApprovalPayload(
+        "file_operation", b"pass", document_name="Model", document_token=str(123)
+    )
+    request = approval_module.ApprovalRequest(payload, 30)
+    assert request.bind_document(lambda: True)
+    assert request.approve_if_still_valid(lambda: False)
+    assert request.consume() is None
+    assert request.state is approval_module.ApprovalState.DENIED

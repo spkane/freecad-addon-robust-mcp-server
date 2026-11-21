@@ -19,12 +19,31 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from freecad_mcp.bridge.file_review import file_review_target
+from freecad_mcp.bridge.file_review import (
+    file_review_document,
+    file_review_document_token,
+    file_review_target,
+)
 from freecad_mcp.tools._registration import file_tool
 from freecad_mcp.tools.utils import wrap_with_transaction
 
 CAM_TIMEOUT_MS = 600_000
 CAM_API_VERSION = 1
+
+
+def _validate_post_process_review(args: dict[str, Any]) -> None:
+    """Reject ambiguous output targets before reserving a document."""
+    from freecad_mcp.config import get_config
+
+    if not get_config().allow_unreviewed_file_operations and (
+        args["use_job_output"] or (args["output_file"] and args["split_files"])
+    ):
+        raise ToolError(
+            "ReviewUnavailable: CAM output with job-defined paths or split "
+            "files cannot yet be reviewed as exact individual targets. "
+            "Use an explicit output_file with split_files=False, or explicitly "
+            "enable the unreviewed file-operation override."
+        )
 
 
 def build_cam_code(
@@ -211,6 +230,8 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             The job description from ``cam_inspect_job``.
         """
         token = None
+        document_context = None
+        reservation_context = None
         if template is None:
             bridge = await get_bridge()
             preference = await bridge.execute_python(
@@ -221,6 +242,21 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 raise ToolError("ReviewUnavailable: could not resolve the CAM template")
             template = preference.result
             if template:
+                from freecad_mcp.bridge.socket import SocketBridge
+                from freecad_mcp.config import get_config
+
+                if (
+                    isinstance(bridge, SocketBridge)
+                    and not get_config().allow_unreviewed_file_operations
+                ):
+                    selected = await bridge.capture_review_document(doc_name)
+                    if selected is None:
+                        raise ValueError("No active document")
+                    doc_name = selected["name"]
+                    document_context = file_review_document.set(doc_name)
+                    reservation_context = file_review_document_token.set(
+                        selected["token"]
+                    )
                 token = file_review_target.set((template, "read", "path"))
         try:
             return await run(
@@ -240,6 +276,10 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         finally:
             if token is not None:
                 file_review_target.reset(token)
+            if reservation_context is not None:
+                file_review_document_token.reset(reservation_context)
+            if document_context is not None:
+                file_review_document.reset(document_context)
 
     @mcp.tool()
     async def cam_set_stock(
@@ -295,7 +335,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         )
 
     @file_tool(mcp, get_bridge=get_bridge)
-    async def cam_add_tool_controller(
+    async def cam_add_tool_controller(  # noqa: PLR0912
         tool: dict[str, Any],
         job_name: str | None = None,
         doc_name: str | None = None,
@@ -350,6 +390,8 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         from freecad_mcp.config import get_config
 
         token = None
+        document_context = None
+        reservation_context = None
         if (
             "shape" in tool
             and "bit_file" not in tool
@@ -399,7 +441,18 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
                 path = resolution.result.get("path")
                 if not isinstance(path, str) or not path:
                     raise ToolError("ReviewUnavailable: CAM tool shape was not found")
-                if not doc_name:
+                from freecad_mcp.bridge.socket import SocketBridge
+
+                if isinstance(bridge, SocketBridge):
+                    selected = await bridge.capture_review_document(doc_name)
+                    if selected is None:
+                        raise ValueError("No active document")
+                    doc_name = selected["name"]
+                    document_context = file_review_document.set(doc_name)
+                    reservation_context = file_review_document_token.set(
+                        selected["token"]
+                    )
+                elif not doc_name:
                     active = await bridge.get_active_document()
                     if active is None:
                         raise ValueError("No active document")
@@ -432,6 +485,10 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
         finally:
             if token is not None:
                 file_review_target.reset(token)
+            if reservation_context is not None:
+                file_review_document_token.reset(reservation_context)
+            if document_context is not None:
+                file_review_document.reset(document_context)
 
     @mcp.tool()
     async def cam_feeds_speeds(
@@ -788,7 +845,7 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             },
         )
 
-    @file_tool(mcp, get_bridge=get_bridge)
+    @file_tool(mcp, get_bridge=get_bridge, validate=_validate_post_process_review)
     async def cam_post_process(
         job_name: str | None = None,
         post_processor: str | None = None,
@@ -834,17 +891,6 @@ def register_cam_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> No
             Dictionary with machine, post_processor, args, sections, lines,
             files, cycle_time and optionally gcode.
         """
-        from freecad_mcp.config import get_config
-
-        if not get_config().allow_unreviewed_file_operations and (
-            use_job_output or (output_file and split_files)
-        ):
-            raise ToolError(
-                "ReviewUnavailable: CAM output with job-defined paths or split "
-                "files cannot yet be reviewed as exact individual targets. "
-                "Use an explicit output_file with split_files=False, or explicitly "
-                "enable the unreviewed file-operation override."
-            )
         return await run(
             "post_process",
             {

@@ -370,6 +370,45 @@ class TestCamTools:
             await tools["cam_post_process"](**arguments)
         bridge.execute_python.assert_not_awaited()
 
+    async def test_invalid_split_output_does_not_reserve_document(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rejected output requests do not exhaust review reservation capacity."""
+        from freecad_mcp.bridge.socket import SocketBridge
+
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
+        registered: RegisteredTools = {}
+        mcp = MagicMock()
+        mcp.tool = lambda **_: (
+            lambda function: registered.setdefault(function.__name__, function)
+        )
+        bridge = SocketBridge()
+        capture = AsyncMock(return_value={"name": "Model", "path": "", "token": "x"})
+        monkeypatch.setattr(bridge, "capture_review_document", capture)
+        execute = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={"ok": True},
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+        )
+        monkeypatch.setattr(bridge, "execute_python", execute)
+
+        async def get_bridge() -> SocketBridge:
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        for _ in range(33):
+            with pytest.raises(ToolError, match="ReviewUnavailable"):
+                await registered["cam_post_process"](output_file="/tmp/out.nc")
+        capture.assert_not_awaited()
+        await registered["cam_post_process"](
+            output_file="/tmp/out.nc", split_files=False
+        )
+        capture.assert_awaited_once_with(None)
+
     async def test_add_operation_passes_source_operations(
         self, tools_and_bridge: tuple[RegisteredTools, AsyncMock]
     ) -> None:
@@ -482,6 +521,171 @@ class TestCamTools:
         assert reviewed is not None
         assert reviewed[0] == str(root / "link/../shape.fcstd")
         assert _payload(observed[1][0])["tool"]["shape"] == reviewed[0]
+
+    @pytest.mark.parametrize("doc_name", [None, "Original"])
+    async def test_legacy_shape_reserves_document_before_review(
+        self, monkeypatch: pytest.MonkeyPatch, doc_name: str | None
+    ) -> None:
+        """The discovered legacy file review stays bound to its document."""
+        from freecad_mcp.bridge.file_review import (
+            file_review_document,
+            file_review_document_token,
+            file_review_target,
+        )
+        from freecad_mcp.bridge.socket import SocketBridge
+
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
+        registered: RegisteredTools = {}
+        mcp = MagicMock()
+        mcp.tool = lambda **_: (
+            lambda function: registered.setdefault(function.__name__, function)
+        )
+        bridge = SocketBridge()
+        selected = {"name": "Original", "path": "", "token": str(123)}
+        capture = AsyncMock(return_value=selected)
+        monkeypatch.setattr(bridge, "capture_review_document", capture)
+        calls = []
+
+        async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
+            calls.append(
+                (
+                    code,
+                    file_review_target.get(),
+                    file_review_document.get(),
+                    file_review_document_token.get(),
+                )
+            )
+            result = (
+                {"legacy": True, "guard": True, "path": "/tmp/custom.fcstd"}
+                if len(calls) == 1
+                else {"ok": True}
+            )
+            return ExecutionResult(
+                success=True, result=result, stdout="", stderr="", execution_time_ms=1
+            )
+
+        monkeypatch.setattr(bridge, "execute_python", execute)
+
+        async def get_bridge() -> SocketBridge:
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        await registered["cam_add_tool_controller"](
+            tool={"shape": "custom"}, doc_name=doc_name
+        )
+        capture.assert_awaited_once_with(doc_name)
+        assert calls[1][1:] == (
+            ("/tmp/custom.fcstd", "read", "path"),
+            "Original",
+            str(123),
+        )
+        assert _payload(calls[1][0])["doc_name"] == "Original"
+        assert file_review_document.get() is None
+        assert file_review_document_token.get() is None
+
+    @pytest.mark.parametrize("default_template", ["", "/tmp/template.json"])
+    @pytest.mark.parametrize("doc_name", [None, "Original"])
+    async def test_default_cam_template_reserves_only_for_file_review(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        default_template: str,
+        doc_name: str | None,
+    ) -> None:
+        """Headless no-template jobs avoid a GUI-only document reservation."""
+        from freecad_mcp.bridge.file_review import (
+            file_review_document,
+            file_review_document_token,
+            file_review_target,
+        )
+        from freecad_mcp.bridge.socket import SocketBridge
+
+        monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "false")
+        registered: RegisteredTools = {}
+        mcp = MagicMock()
+        mcp.tool = lambda **_: (
+            lambda function: registered.setdefault(function.__name__, function)
+        )
+        bridge = SocketBridge()
+        capture = AsyncMock(
+            return_value={"name": "Original", "path": "", "token": str(123)}
+        )
+        monkeypatch.setattr(bridge, "capture_review_document", capture)
+        calls = []
+
+        async def execute(code: str, **_kwargs: Any) -> ExecutionResult:
+            calls.append(
+                (
+                    code,
+                    file_review_target.get(),
+                    file_review_document.get(),
+                    file_review_document_token.get(),
+                )
+            )
+            result = default_template if len(calls) == 1 else {"ok": True}
+            return ExecutionResult(
+                success=True, result=result, stdout="", stderr="", execution_time_ms=1
+            )
+
+        monkeypatch.setattr(bridge, "execute_python", execute)
+
+        async def get_bridge() -> SocketBridge:
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        await registered["cam_create_job"](model_objects=["Part"], doc_name=doc_name)
+        assert capture.await_count == bool(default_template)
+        if default_template:
+            capture.assert_awaited_once_with(doc_name)
+        assert calls[1][1:] == (
+            (default_template, "read", "path") if default_template else None,
+            "Original" if default_template else None,
+            str(123) if default_template else None,
+        )
+        payload = _payload(calls[1][0])
+        assert payload["template"] == default_template
+        if default_template:
+            assert payload["doc_name"] == "Original"
+
+    async def test_no_template_cam_job_does_not_require_gui_reservation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicitly disabling a template remains available in headless mode."""
+        from freecad_mcp.bridge.socket import SocketBridge
+
+        registered: RegisteredTools = {}
+        mcp = MagicMock()
+        mcp.tool = lambda **_: (
+            lambda function: registered.setdefault(function.__name__, function)
+        )
+        bridge = SocketBridge()
+        capture = AsyncMock(side_effect=AssertionError("GUI reservation requested"))
+        monkeypatch.setattr(bridge, "capture_review_document", capture)
+        monkeypatch.setattr(
+            bridge,
+            "get_active_document",
+            AsyncMock(return_value=SimpleNamespace(name="Model")),
+        )
+        execute = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result={"ok": True},
+                stdout="",
+                stderr="",
+                execution_time_ms=1,
+            )
+        )
+        monkeypatch.setattr(bridge, "execute_python", execute)
+
+        async def get_bridge() -> SocketBridge:
+            return bridge
+
+        register_cam_tools(mcp, get_bridge)
+        assert await registered["cam_create_job"](
+            model_objects=["Part"], template=""
+        ) == {"ok": True}
+        capture.assert_not_awaited()
+        assert execute.await_args is not None
+        assert _payload(execute.await_args.args[0])["template"] == ""
 
     async def test_explicit_file_review_override_preserves_legacy_shape_dispatch(
         self,

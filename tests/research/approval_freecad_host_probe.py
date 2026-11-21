@@ -474,7 +474,15 @@ def main() -> None:  # noqa: PLR0912
                 )
             result = json.loads(result_path.read_text())
             expected = (
-                ["approved", "approved", "denied", "approved", "approved"]
+                [
+                    "approved",
+                    "approved",
+                    "denied",
+                    "approved",
+                    "approved",
+                    "approved",
+                    "document-replaced-denied",
+                ]
                 if args.preferences
                 else ["cam-reviewed", "cam-reviewed", "cam-reviewed"]
                 if args.cam_review
@@ -484,7 +492,7 @@ def main() -> None:  # noqa: PLR0912
                 raise RuntimeError(f"FreeCAD review probe failed: {result}")
             if args.preferences and result.get("preferences_tested") is not True:
                 raise RuntimeError(f"FreeCAD preferences probe failed: {result}")
-            if args.preferences and result.get("seen") != 4:
+            if args.preferences and result.get("seen") != 6:
                 raise RuntimeError(f"Unexpected Python or macro dialog count: {result}")
             if args.macro_screenshots:
                 args.macro_screenshots.mkdir(parents=True, exist_ok=True)
@@ -504,6 +512,7 @@ def main() -> None:  # noqa: PLR0912
             )
             if args.preferences:
                 print("FreeCAD preferences and timed-bypass dialog passed")
+                print("Reviewed document identity and replacement denial passed")
         except Exception as error:
             finish_failed_process(process)
             attach_stderr(error, stderr_log)

@@ -7,7 +7,11 @@ creating, opening, saving, closing, and listing documents.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from freecad_mcp.bridge.file_review import file_review_target
+from freecad_mcp.bridge.file_review import (
+    file_review_document,
+    file_review_document_token,
+    file_review_target,
+)
 from freecad_mcp.tools._registration import file_tool
 
 
@@ -153,36 +157,64 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             ValueError: If document not found or no path specified for new doc.
         """
         bridge = await get_bridge()
-        if path and doc_name is None:
+        from freecad_mcp.bridge.socket import SocketBridge
+        from freecad_mcp.config import get_config
+
+        reservation = None
+        if (
+            isinstance(bridge, SocketBridge)
+            and not get_config().allow_unreviewed_file_operations
+        ):
             lookup_token = file_review_target.set(None)
             try:
-                active = await bridge.get_active_document()
+                selected = await bridge.capture_review_document(
+                    doc_name, require_saved_path=not bool(path)
+                )
             finally:
                 file_review_target.reset(lookup_token)
-            if active is None:
+            if selected is None:
                 raise ValueError("No active document")
-            doc_name = active.name
-        if not path:
-            doc = (
-                await bridge.get_active_document()
-                if doc_name is None
-                else next(
-                    (
-                        item
-                        for item in await bridge.get_documents()
-                        if item.name == doc_name
-                    ),
-                    None,
+            doc_name = selected["name"]
+            reservation = selected["token"]
+            if not path:
+                path = selected["path"]
+                if not path:
+                    raise ValueError("No saved path for the requested document")
+        else:
+            if path and doc_name is None:
+                lookup_token = file_review_target.set(None)
+                try:
+                    active = await bridge.get_active_document()
+                finally:
+                    file_review_target.reset(lookup_token)
+                if active is None:
+                    raise ValueError("No active document")
+                doc_name = active.name
+            if not path:
+                doc = (
+                    await bridge.get_active_document()
+                    if doc_name is None
+                    else next(
+                        (
+                            item
+                            for item in await bridge.get_documents()
+                            if item.name == doc_name
+                        ),
+                        None,
+                    )
                 )
-            )
-            if doc is None or not doc.path:
-                raise ValueError("No saved path for the requested document")
-            doc_name, path = doc.name, doc.path
+                if doc is None or not doc.path:
+                    raise ValueError("No saved path for the requested document")
+                doc_name, path = doc.name, doc.path
         path = _document_save_path(path)
         token = file_review_target.set((path, "write", "path"))
+        document_token = file_review_document.set(doc_name)
+        reservation_token = file_review_document_token.set(reservation)
         try:
             saved_path = await bridge.save_document(doc_name, path)
         finally:
+            file_review_document_token.reset(reservation_token)
+            file_review_document.reset(document_token)
             file_review_target.reset(token)
         return {
             "success": True,

@@ -406,3 +406,48 @@ def test_persisted_revocation_blocks_queued_macro(
         assert store.remove(entry)
     assert coordinator.next_execution() is None
     assert request.state == approval.ApprovalState.DENIED
+
+
+def test_document_guard_binds_before_bypass_and_prevents_replacement(
+    modules: tuple, tmp_path: Path
+) -> None:
+    """Even bypassed review cannot execute against a replacement document."""
+    import importlib
+
+    approval, review, widgets = modules
+    snapshot_file = importlib.import_module(
+        "review_dialog_test.file_review"
+    ).snapshot_file
+    path = tmp_path / "model.FCStd"
+    path.write_text("original")
+    snapshot = snapshot_file(str(path), "read")
+    coordinator = approval.ReviewCoordinator(1)
+    request = coordinator.submit(
+        approval.ApprovalPayload(
+            "file_operation",
+            b"pass",
+            file_snapshot=snapshot,
+            file_target_kind="path",
+            document_name="Model",
+            document_token=str(123),
+        ),
+        30,
+    )
+    current = [object()]
+    captured = current[0]
+    policy = MagicMock()
+    policy.decision.return_value = (False, None)
+    controller = review.ReviewDialogController(
+        coordinator,
+        policy=policy,
+        document_guard=lambda name, _token: (
+            lambda: name == "Model" and current[0] is captured
+        ),
+    )
+    controller.poll()
+    assert coordinator.wait_and_schedule(request)
+    current[0] = object()
+    assert coordinator.next_execution() is None
+    assert request.state is approval.ApprovalState.DENIED
+    widgets.QDialog.assert_not_called()
+    controller.close()

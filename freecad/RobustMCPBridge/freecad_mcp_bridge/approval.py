@@ -45,6 +45,8 @@ class ApprovalPayload:
     macro_args_json: str | None = None
     file_snapshot: FileReviewSnapshot | None = None
     file_target_kind: str | None = None
+    document_name: str | None = None
+    document_token: str | None = None
 
 
 class ApprovalRequest:
@@ -76,6 +78,15 @@ class ApprovalRequest:
                 and type(payload.macro_args_json) is not str
             )
             or (
+                payload.document_name is not None
+                and type(payload.document_name) is not str
+            )
+            or (
+                payload.document_token is not None
+                and type(payload.document_token) is not str
+            )
+            or ((payload.document_name is None) != (payload.document_token is None))
+            or (
                 payload.file_target_kind is not None
                 and payload.file_target_kind not in {"path", "macro"}
             )
@@ -100,6 +111,7 @@ class ApprovalRequest:
         self._bypass_deadline: float | None = None
         self._bypass_clock: Callable[[], float] | None = None
         self._claim_validator: Callable[[], bool] | None = None
+        self._document_validator: Callable[[], bool] | None = None
         self._state = ApprovalState.PENDING
         self._lock = threading.Lock()
         self._decision_event = threading.Event()
@@ -160,6 +172,20 @@ class ApprovalRequest:
             self._decision_event.set()
             return True
 
+    def bind_document(self, validator: Callable[[], bool]) -> bool:
+        """Bind a GUI-thread document identity before a decision is made."""
+        if not callable(validator):
+            raise TypeError("Document validator must be callable")
+        with self._lock:
+            self._expire_locked()
+            if (
+                self._state is not ApprovalState.PENDING
+                or self._document_validator is not None
+            ):
+                return False
+            self._document_validator = validator
+            return True
+
     def approve_if_still_valid(self, validator: Callable[[], bool]) -> bool:
         """Approve provisionally, checking a local policy again at claim time."""
         if not callable(validator):
@@ -202,17 +228,24 @@ class ApprovalRequest:
             self._expire_locked()
             if self._state is not ApprovalState.APPROVED:
                 return None
-            if self._claim_validator is not None:
-                try:
-                    valid = self._claim_validator() is True
-                except Exception:
-                    valid = False
-                if not valid:
-                    self._state = ApprovalState.DENIED
-                    return None
-                self._expire_locked()
-                if self._state is not ApprovalState.APPROVED:
-                    return None
+            if (
+                self._payload.document_name is not None
+                and self._document_validator is None
+            ):
+                self._state = ApprovalState.DENIED
+                return None
+            for validator in (self._document_validator, self._claim_validator):
+                if validator is not None:
+                    try:
+                        valid = validator() is True
+                    except Exception:
+                        valid = False
+                    if not valid:
+                        self._state = ApprovalState.DENIED
+                        return None
+                    self._expire_locked()
+                    if self._state is not ApprovalState.APPROVED:
+                        return None
             self._state = ApprovalState.CONSUMED
             return self._payload
 

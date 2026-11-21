@@ -7,7 +7,12 @@ from typing import Any
 
 from mcp.types import ToolAnnotations
 
-from freecad_mcp.bridge.file_review import file_review_new_document, file_review_target
+from freecad_mcp.bridge.file_review import (
+    file_review_document,
+    file_review_document_token,
+    file_review_new_document,
+    file_review_target,
+)
 
 # File targets are classified explicitly; a missing or ambiguous target must
 # never be inferred from arbitrary tool arguments.
@@ -62,6 +67,7 @@ def file_tool(
     read_only: bool = False,
     get_bridge: Callable[[], Awaitable[Any]] | None = None,
     allow_new_document: bool = False,
+    validate: Callable[[dict[str, Any]], None] | None = None,
 ) -> Callable[[Any], Any]:
     """Register file tools and identify explicit file targets for review.
 
@@ -77,7 +83,7 @@ def file_tool(
     )
 
     return lambda function: register(
-        _wrap_file_target(function, get_bridge, allow_new_document)
+        _wrap_file_target(function, get_bridge, allow_new_document, validate)
     )
 
 
@@ -85,44 +91,71 @@ def _wrap_file_target(
     function: Any,
     get_bridge: Callable[[], Awaitable[Any]] | None = None,
     allow_new_document: bool = False,
+    validate: Callable[[dict[str, Any]], None] | None = None,
 ) -> Any:
     target = _FILE_TARGETS.get(function.__name__)
     if target is None:
         return function
     call_signature = signature(function)
+    validate_arguments = validate or (lambda _arguments: None)
 
     @wraps(function)
     async def reviewed(*args: Any, **kwargs: Any) -> Any:
         bound = call_signature.bind(*args, **kwargs)
         bound.apply_defaults()
+        validate_arguments(bound.arguments)
         field, *nested = target[0].split(".")
         path = bound.arguments[field]
         for key in nested:
             path = path.get(key) if isinstance(path, dict) else None
         create_new = False
+        reservation = None
         if (
             get_bridge is not None
             and "doc_name" in bound.arguments
-            and not bound.arguments["doc_name"]
-            and (path or function.__name__ == "cam_create_job")
+            and (path or (function.__name__ == "cam_create_job" and path is not None))
         ):
+            from freecad_mcp.bridge.socket import SocketBridge
+            from freecad_mcp.config import get_config
+
             clear_token = file_review_target.set(None)
             try:
                 bridge = await get_bridge()
-                active = await bridge.get_active_document()
+                requested_name = bound.arguments["doc_name"]
+                if (
+                    isinstance(bridge, SocketBridge)
+                    and bool(path)
+                    and not get_config().allow_unreviewed_file_operations
+                ):
+                    selected = await bridge.capture_review_document(requested_name)
+                    if selected is None:
+                        if requested_name is not None or not allow_new_document:
+                            raise ValueError("No active document")
+                        create_new = True
+                    else:
+                        bound.arguments["doc_name"] = selected["name"]
+                        reservation = selected["token"]
+                elif not requested_name:
+                    active = await bridge.get_active_document()
+                    if active is None:
+                        if not allow_new_document:
+                            raise ValueError("No active document")
+                        create_new = True
+                    else:
+                        bound.arguments["doc_name"] = active.name
             finally:
                 file_review_target.reset(clear_token)
-            if active is None:
-                if not allow_new_document:
-                    raise ValueError("No active document")
-                create_new = True
-            else:
-                bound.arguments["doc_name"] = active.name
         token = file_review_target.set((path, target[1], target[2]) if path else None)
         document_token = file_review_new_document.set(create_new)
+        name_token = file_review_document.set(
+            bound.arguments.get("doc_name") if reservation is not None else None
+        )
+        reservation_token = file_review_document_token.set(reservation)
         try:
             return await function(*bound.args, **bound.kwargs)
         finally:
+            file_review_document_token.reset(reservation_token)
+            file_review_document.reset(name_token)
             file_review_new_document.reset(document_token)
             file_review_target.reset(token)
 

@@ -170,6 +170,8 @@ def worker(port):
             cases.insert(1, (example_code, True))
             cases.append((None, True))
             cases.append(("__file_review_probe__", True))
+            cases.append(("__document_unchanged__", True))
+            cases.append(("__document_replaced__", True))
         for index, (code, decision) in enumerate(cases):
             if preferences_tested and index == 2:
                 plugin._review_controller._policy.clear_session()
@@ -228,6 +230,37 @@ def worker(port):
                             "kind": "path",
                         },
                     )["review_id"]
+                elif code in {"__document_unchanged__", "__document_replaced__"}:
+                    plugin._review_controller._policy.configure(
+                        "file_operation", require_review=True
+                    )
+                    selected = request(
+                        "execute",
+                        {
+                            "code": "FreeCAD.newDocument('ReviewIdentityProbe')\n"
+                            "_result_ = _robust_mcp_capture_document('ReviewIdentityProbe')"
+                        },
+                    )
+                    if not selected.get("success"):
+                        raise RuntimeError(f"Document reservation failed: {selected}")
+                    selected = selected["result"]
+                    target = Path(os.environ["FREECAD_USER_DATA"]) / "identity.txt"
+                    target.write_text("42")
+                    marker = target.with_name("identity-executed.txt")
+                    marker.unlink(missing_ok=True)
+                    request_id = request(
+                        "review_begin_file",
+                        {
+                            "code": "open("
+                            + repr(str(marker))
+                            + ", 'w').write('ran')\n_result_ = 42",
+                            "path": str(target),
+                            "action": "read",
+                            "kind": "path",
+                            "document_name": selected["name"],
+                            "document_token": selected["token"],
+                        },
+                    )["review_id"]
                 else:
                     request_id = request("review_begin", {"code": code})["review_id"]
                 deadline = time.monotonic() + 15
@@ -240,6 +273,22 @@ def worker(port):
                 if state != ("approved" if decision else "denied"):
                     raise RuntimeError(f"Unexpected review state: {state}")
                 if decision:
+                    if code == "__document_replaced__":
+                        replacement = request(
+                            "execute",
+                            {
+                                "code": "FreeCAD.closeDocument('ReviewIdentityProbe')\n"
+                                "doc = FreeCAD.newDocument('ReviewIdentityProbe')\n"
+                                "_result_ = doc.Name"
+                            },
+                        )
+                        if (
+                            not replacement.get("success")
+                            or replacement.get("result") != "ReviewIdentityProbe"
+                        ):
+                            raise RuntimeError(
+                                f"Document replacement failed: {replacement}"
+                            )
                     if (
                         request("review_commit", {"review_id": request_id})["scheduled"]
                         is not True
@@ -252,13 +301,37 @@ def worker(port):
                         ]
                         if result is not None:
                             break
+                        if code == "__document_replaced__":
+                            state = request("review_status", {"review_id": request_id})[
+                                "state"
+                            ]
+                            if state == "denied":
+                                break
                         time.sleep(0.1)
+                    if code == "__document_replaced__":
+                        if state != "denied" or result is not None or marker.exists():
+                            raise RuntimeError(f"Replacement was not denied: {result}")
+                        results.append("document-replaced-denied")
+                        request(
+                            "execute",
+                            {"code": "FreeCAD.closeDocument('ReviewIdentityProbe')"},
+                        )
+                        continue
                     if (
                         result is None
                         or not result["success"]
                         or result["result"] != 42
                     ):
                         raise RuntimeError(f"Unexpected execution result: {result}")
+                    if code == "__document_unchanged__":
+                        if not marker.exists():
+                            raise RuntimeError(
+                                "Approved document operation did not execute"
+                            )
+                        request(
+                            "execute",
+                            {"code": "FreeCAD.closeDocument('ReviewIdentityProbe')"},
+                        )
                 results.append(state)
     except BaseException:
         report_traceback()
@@ -276,6 +349,19 @@ def tick():
             if request.request_id not in seen:
                 seen.add(request.request_id)
                 if request.payload.action in {"run_macro", "file_operation"}:
+                    if request.payload.document_name:
+                        details = [
+                            item.toPlainText()
+                            for item in controller._dialog.findChildren(
+                                QtWidgets.QPlainTextEdit
+                            )
+                        ]
+                        if not any(
+                            f"Document: {request.payload.document_name}"
+                            in detail.splitlines()
+                            for detail in details
+                        ):
+                            raise RuntimeError("Document review omitted its target")
                     if os.environ.get("MCP_REVIEW_PROBE_CAM") == "1":
                         snapshot = request.payload.file_snapshot
                         details = [
