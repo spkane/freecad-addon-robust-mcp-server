@@ -613,13 +613,14 @@ def test_xmlrpc_screenshot_uses_and_cleans_user_directory(
     plugin = server_mod.FreecadMCPPlugin()
 
     def execute(code: str, _timeout: int) -> dict[str, Any]:
-        exec(code, environment)  # noqa: S102
-        return {"success": True, "result": environment["_result_"]}
+        return plugin._execute_code_sync(code, initial_globals=environment)
 
     plugin._execute_via_queue = execute
     if fail:
-        with pytest.raises(RuntimeError, match="capture failed"):
-            plugin._xmlrpc_get_view()
+        assert plugin._xmlrpc_get_view() == {
+            "success": False,
+            "error": "capture failed",
+        }
     else:
         assert base64.b64decode(plugin._xmlrpc_get_view()["data"]) == b"png"
     assert created and not created[0].exists()
