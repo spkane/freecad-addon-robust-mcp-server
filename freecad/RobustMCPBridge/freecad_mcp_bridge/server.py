@@ -1304,7 +1304,10 @@ class FreecadMCPPlugin:
             )
 
     def _capture_review_document(
-        self, name: str | None, require_saved_path: bool = False
+        self,
+        name: str | None,
+        require_saved_path: bool = False,
+        owner: str | None = None,
     ) -> dict[str, str] | None:
         """Select and reserve a document on the FreeCAD GUI thread."""
         reservations = self._document_reservations
@@ -1320,7 +1323,7 @@ class FreecadMCPPlugin:
         return {
             "name": document.Name,
             "path": document.FileName or "",
-            "token": reservations.reserve(document.Name, document),
+            "token": reservations.reserve(document.Name, document, owner),
         }
 
     def _release_review_document(self, token: str) -> None:
@@ -1328,6 +1331,13 @@ class FreecadMCPPlugin:
         reservations = self._document_reservations
         if reservations is not None:
             reservations.discard(token)
+
+    def _release_session_reservations(self, owners: set[str]) -> None:
+        """Discard unclaimed captures when their socket session closes."""
+        reservations = self._document_reservations
+        if reservations is not None:
+            for owner in owners:
+                reservations.discard_owner(owner)
 
     @staticmethod
     def _capture_macro_review_roots() -> list[str]:
@@ -1839,6 +1849,7 @@ class FreecadMCPPlugin:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")
         finally:
             broker = self._review_broker
+            self._release_session_reservations(review_owners)
             if broker is not None:
                 try:
                     for owner in review_owners:
@@ -1914,6 +1925,7 @@ class FreecadMCPPlugin:
                     "review_commit",
                     "review_cancel",
                     "review_result",
+                    "capture_review_document",
                 )
             ):
                 if (
@@ -1965,6 +1977,43 @@ class FreecadMCPPlugin:
             return await self._review_begin_file(
                 request_id, params, authenticated_client
             )
+
+        if method == "capture_review_document":
+            name = params.get("name")
+            require_saved_path = params.get("require_saved_path", False)
+            if (
+                authenticated_client is None
+                or (name is not None and (type(name) is not str or not name))
+                or type(require_saved_path) is not bool
+            ):
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32602, "message": "Invalid capture request"},
+                }
+            code = (
+                "_result_ = _robust_mcp_capture_document("
+                f"{name!r}, {require_saved_path!r}, {authenticated_client!r})"
+            )
+            capture = asyncio.create_task(
+                asyncio.to_thread(self._execute_via_queue, code)
+            )
+            try:
+                result = await asyncio.shield(capture)
+            except asyncio.CancelledError:
+                # The queue worker can outlive a cancelled connection handler.
+                # Discard again after it finishes in case it reserved late.
+                reservations = self._document_reservations
+                if reservations is not None:
+
+                    def discard_late(task: asyncio.Task[Any]) -> None:
+                        with contextlib.suppress(Exception, asyncio.CancelledError):
+                            task.result()
+                        reservations.discard_owner(authenticated_client)
+
+                    capture.add_done_callback(discard_late)
+                raise
+            return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
         if method == "review_begin_macro":
             return await self._review_begin_macro(

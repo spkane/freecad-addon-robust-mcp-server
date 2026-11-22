@@ -1844,6 +1844,114 @@ async def test_disconnected_file_review_releases_unclaimed_reservation(
 
 
 @pytest.mark.asyncio
+async def test_cancelled_capture_releases_late_session_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A capture queued before disconnect is reclaimed after it runs."""
+    from freecad_mcp.bridge.socket import SocketBridge
+
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    document = SimpleNamespace(Name="Model", FileName=str(tmp_path / "model.FCStd"))
+    monkeypatch.setattr(
+        server_mod, "FreeCAD", SimpleNamespace(ActiveDocument=document), raising=False
+    )
+    secret = b"a" * 32
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        port=0,
+        authenticator=auth.BridgeAuthenticator(
+            auth.create_hmac_verifier(lambda _: secret)
+        ),
+    )
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    reservations = plugin._document_reservations
+    reserve = MagicMock(wraps=reservations.reserve)
+    monkeypatch.setattr(reservations, "reserve", reserve)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+    task = asyncio.create_task(bridge.capture_review_document(None))
+    try:
+        async with asyncio.timeout(5):
+            while plugin._request_queue.empty():  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        plugin._process_queue()
+        reserve.assert_called_once()
+        async with asyncio.timeout(5):
+            while plugin._socket_client_count:  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+        assert not reservations._entries
+    finally:
+        await bridge.disconnect()
+        plugin._shutdown_review()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Handler cancellation cannot leave an executor's later reservation behind."""
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    started, resume, created = threading.Event(), threading.Event(), threading.Event()
+
+    def capture(_code: str) -> dict[str, Any]:
+        started.set()
+        assert resume.wait(5)
+        reservations.reserve("Model", object(), "owner")
+        created.set()
+        return {"success": True}
+
+    monkeypatch.setattr(plugin, "_execute_via_queue", capture)
+    task = asyncio.create_task(
+        plugin._process_jsonrpc_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "capture_review_document",
+                "params": {},
+            },
+            "owner",
+        )
+    )
+    try:
+        assert await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        reservations.discard_owner("owner")
+        resume.set()
+        async with asyncio.timeout(5):
+            while not created.is_set():  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+            while reservations._entries:  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+    finally:
+        resume.set()
+
+
+@pytest.mark.asyncio
 async def test_macro_roots_capture_uses_registered_gui_helper(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

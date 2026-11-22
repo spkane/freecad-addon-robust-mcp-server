@@ -564,13 +564,16 @@ class SocketBridge(FreecadBridge):
         self, name: str | None, *, require_saved_path: bool = False
     ) -> dict[str, str] | None:
         """Select and reserve the exact document on FreeCAD's GUI thread."""
-        args = f"{name!r}, True" if require_saved_path else repr(name)
-        result = await self.execute_python(
-            f"_result_ = _robust_mcp_capture_document({args})"
+        timeout_ms = resolve_execution_timeout_ms(None, self._execution_timeout_ms)
+        result = await self._send_request(
+            "capture_review_document",
+            {"name": name, "require_saved_path": require_saved_path},
+            response_timeout=timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS,
+            request_timeout=timeout_ms / 1000,
         )
-        if not result.success:
+        if not isinstance(result, dict) or not result.get("success"):
             raise RuntimeError("ReviewUnavailable: unable to reserve document")
-        selected = result.result
+        selected = result.get("result")
         if selected is None:
             return None
         if not isinstance(selected, dict) or any(

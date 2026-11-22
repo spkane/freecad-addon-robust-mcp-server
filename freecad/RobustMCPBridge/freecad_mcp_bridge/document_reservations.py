@@ -26,11 +26,11 @@ class DocumentReservations:
             raise ValueError("Invalid document reservation limits")
         self._capacity = capacity
         self._lifetime = lifetime
-        self._entries: dict[str, tuple[str, Any, float]] = {}
+        self._entries: dict[str, tuple[str, Any, float, str | None]] = {}
         self._lock = threading.Lock()
         self._closed = False
 
-    def reserve(self, name: str, document: Any) -> str:
+    def reserve(self, name: str, document: Any, owner: str | None = None) -> str:
         """Reserve the exact document selected on the GUI thread."""
         if not isinstance(name, str) or not name or document is None:
             raise ValueError("A named live document is required")
@@ -38,13 +38,13 @@ class DocumentReservations:
             if self._closed:
                 raise RuntimeError("Document reservations are closed")
             now = time.monotonic()
-            for token, (_, _, expiry) in list(self._entries.items()):
+            for token, (_, _, expiry, _) in list(self._entries.items()):
                 if now >= expiry:
                     del self._entries[token]
             if len(self._entries) >= self._capacity:
                 raise RuntimeError("Document reservation capacity reached")
             token = secrets.token_urlsafe(32)
-            self._entries[token] = (name, document, now + self._lifetime)
+            self._entries[token] = (name, document, now + self._lifetime, owner)
             return token
 
     def take(
@@ -83,3 +83,10 @@ class DocumentReservations:
             return
         with self._lock:
             self._entries.pop(token, None)
+
+    def discard_owner(self, owner: str) -> None:
+        """Release unclaimed reservations associated with a closed session."""
+        with self._lock:
+            for token, entry in list(self._entries.items()):
+                if entry[3] == owner:
+                    del self._entries[token]
