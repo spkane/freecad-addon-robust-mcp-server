@@ -27,6 +27,7 @@ class DocumentReservations:
         self._capacity = capacity
         self._lifetime = lifetime
         self._entries: dict[str, tuple[str, Any, float, str | None]] = {}
+        self._owners: dict[str, bool] = {}
         self._lock = threading.Lock()
         self._closed = False
 
@@ -37,6 +38,8 @@ class DocumentReservations:
         with self._lock:
             if self._closed:
                 raise RuntimeError("Document reservations are closed")
+            if owner is not None and not self._owners.get(owner, False):
+                raise RuntimeError("Document reservation session is closed")
             now = time.monotonic()
             for token, (_, _, expiry, _) in list(self._entries.items()):
                 if now >= expiry:
@@ -76,6 +79,16 @@ class DocumentReservations:
         with self._lock:
             self._closed = True
             self._entries.clear()
+            self._owners.clear()
+
+    def open_owner(self, owner: str) -> None:
+        """Permit captures while the authenticated socket session is live."""
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Document reservations are closed")
+            if self._owners.get(owner) is False:
+                raise RuntimeError("Document reservation session is closed")
+            self._owners[owner] = True
 
     def discard(self, token: str) -> None:
         """Release an unclaimed token; already claimed or missing tokens are harmless."""
@@ -87,6 +100,16 @@ class DocumentReservations:
     def discard_owner(self, owner: str) -> None:
         """Release unclaimed reservations associated with a closed session."""
         with self._lock:
+            if owner in self._owners:
+                self._owners[owner] = False
+            for token, entry in list(self._entries.items()):
+                if entry[3] == owner:
+                    del self._entries[token]
+
+    def forget_owner(self, owner: str) -> None:
+        """Remove a closed session after its socket handler exits."""
+        with self._lock:
+            self._owners.pop(owner, None)
             for token, entry in list(self._entries.items()):
                 if entry[3] == owner:
                     del self._entries[token]

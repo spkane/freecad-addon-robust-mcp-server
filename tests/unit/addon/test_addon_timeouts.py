@@ -1919,8 +1919,10 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
     def capture(_code: str, _timeout_ms: int) -> dict[str, Any]:
         started.set()
         assert resume.wait(5)
-        reservations.reserve("Model", object(), "owner")
-        created.set()
+        try:
+            reservations.reserve("Model", object(), "owner")
+        finally:
+            created.set()
         return {"success": True}
 
     monkeypatch.setattr(plugin, "_execute_via_queue", capture)
@@ -1949,6 +1951,31 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
                 await asyncio.sleep(0.005)
     finally:
         resume.set()
+
+
+@pytest.mark.asyncio
+async def test_timed_out_capture_closes_session_before_late_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A running GUI call cannot reserve after the request reports a timeout."""
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    monkeypatch.setattr(plugin, "_execute_via_queue", lambda *_args: {"success": False})
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "capture_review_document",
+        "params": {},
+    }
+    response = await plugin._process_jsonrpc_request(request, "owner")
+    assert response["result"]["success"] is False
+    with pytest.raises(RuntimeError, match="session is closed"):
+        reservations.reserve("Model", object(), "owner")
+    assert "error" in await plugin._process_jsonrpc_request(request, "owner")
 
 
 @pytest.mark.asyncio

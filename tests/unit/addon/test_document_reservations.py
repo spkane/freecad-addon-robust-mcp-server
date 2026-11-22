@@ -108,11 +108,17 @@ def test_session_cleanup_only_discards_its_unclaimed_tokens(reservations_module)
     """A closed session cannot invalidate another session or a claimed guard."""
     store = reservations_module.DocumentReservations(3)
     doc = object()
+    store.open_owner("first")
+    store.open_owner("second")
     abandoned = store.reserve("Model", doc, "first")
     other = store.reserve("Model", doc, "second")
     claimed = store.reserve("Model", doc, "first")
     guard = store.take(claimed, "Model", lambda _: doc)
     store.discard_owner("first")
+    with pytest.raises(RuntimeError, match="session is closed"):
+        store.reserve("Model", doc, "first")
+    with pytest.raises(RuntimeError, match="session is closed"):
+        store.open_owner("first")
     with pytest.raises(ValueError, match="unavailable"):
         store.take(abandoned, "Model", lambda _: doc)
     assert store.take(other, "Model", lambda _: doc)()
