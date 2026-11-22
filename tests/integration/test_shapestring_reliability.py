@@ -1,6 +1,7 @@
 """Live ShapeString and recompute regression tests against FreeCAD."""
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
@@ -60,6 +61,28 @@ async def regression_document() -> AsyncIterator[tuple[XmlRpcBridge, str]]:
             )
         finally:
             await bridge.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_save_and_close_document_in_one_dispatch(
+    regression_document: tuple[XmlRpcBridge, str], tmp_path: Path
+) -> None:
+    """The document tool saves and closes successfully against real FreeCAD."""
+    bridge, name = regression_document
+    path = tmp_path / f"{name}.FCStd"
+    setup = await bridge.execute_python(
+        f"doc = FreeCAD.newDocument({name!r})\n"
+        f"doc.addObject('Part::Box', 'Box')\n"
+        f"doc.recompute()\ndoc.saveAs({str(path)!r})\n_result_ = True"
+    )
+    assert setup.success, setup.error_traceback
+    result = await _tools(bridge)["close_document"](name, save_changes=True)
+    assert result == {"success": True, "saved": True}
+    assert path.is_file()
+    remaining = await bridge.execute_python(
+        f"_result_ = {name!r} in FreeCAD.listDocuments()"
+    )
+    assert remaining.success and remaining.result is False
 
 
 @pytest.mark.asyncio
