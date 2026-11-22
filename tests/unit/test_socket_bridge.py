@@ -13,6 +13,20 @@ class TestSocketBridge:
     """Tests for SocketBridge class."""
 
     @pytest.mark.asyncio
+    async def test_old_workbench_capture_fails_closed_with_upgrade_guidance(self):
+        """An unsupported capture method must not bypass document review."""
+        bridge = SocketBridge()
+        with (
+            mock.patch.object(
+                bridge,
+                "_send_request",
+                side_effect=JsonRpcError(-32601, "Method not found"),
+            ),
+            pytest.raises(RuntimeError, match="update the FreeCAD workbench"),
+        ):
+            await bridge.capture_review_document("Model")
+
+    @pytest.mark.asyncio
     async def test_reviewed_execution_reports_freecad_execution_time(self):
         """A completed result excludes time spent waiting for local approval."""
         bridge = SocketBridge()

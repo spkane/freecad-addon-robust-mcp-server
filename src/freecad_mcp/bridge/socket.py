@@ -565,12 +565,20 @@ class SocketBridge(FreecadBridge):
     ) -> dict[str, str] | None:
         """Select and reserve the exact document on FreeCAD's GUI thread."""
         timeout_ms = resolve_execution_timeout_ms(None, self._execution_timeout_ms)
-        result = await self._send_request(
-            "capture_review_document",
-            {"name": name, "require_saved_path": require_saved_path},
-            response_timeout=timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS,
-            request_timeout=timeout_ms / 1000,
-        )
+        try:
+            result = await self._send_request(
+                "capture_review_document",
+                {"name": name, "require_saved_path": require_saved_path},
+                response_timeout=timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS,
+                request_timeout=timeout_ms / 1000,
+            )
+        except JsonRpcError as exc:
+            if exc.code == -32601:
+                raise RuntimeError(
+                    "ReviewUnavailable: update the FreeCAD workbench to a "
+                    "version compatible with this server"
+                ) from exc
+            raise
         if not isinstance(result, dict) or not result.get("success"):
             raise RuntimeError("ReviewUnavailable: unable to reserve document")
         selected = result.get("result")
