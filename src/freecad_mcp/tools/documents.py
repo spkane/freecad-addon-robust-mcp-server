@@ -254,7 +254,20 @@ _result_ = save_path
         doc_name: str | None = None,
         path: str | None = None,
     ) -> dict[str, Any]:
-        """Save a FreeCAD document to its existing or specified path."""
+        """Save a FreeCAD document.
+
+        Args:
+            doc_name: Name of document to save. Uses active document if None.
+            path: File path to save to. Uses existing path if None.
+                Required for new (unsaved) documents. A canonical `.FCStd`
+                suffix is appended when missing, without replacing a suffix.
+
+        Returns:
+            Dictionary containing the success status and saved path.
+
+        Raises:
+            ValueError: If the document is not found or a new document has no path.
+        """
         return await _save_document(doc_name, path)
 
     @mcp.tool()
