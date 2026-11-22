@@ -1,5 +1,6 @@
 """Tests for document tools module."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -41,6 +42,68 @@ class TestDocumentTools:
 
         register_document_tools(mock_mcp, get_bridge)
         return mock_mcp._registered_tools
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("outcome", ["ok", "failed", "replacement"])
+    async def test_save_and_close_keeps_unsaved_or_replaced_document(
+        self, register_tools, mock_bridge, outcome
+    ):
+        """Save and close use one dispatch and refuse changed document instances."""
+        doc = SimpleNamespace(Name="TestDoc", FileName="/tmp/doc.FCStd")
+        documents = {"TestDoc": doc}
+        replacement = SimpleNamespace(Name="TestDoc")
+
+        def save(_path):
+            if outcome == "failed":
+                raise RuntimeError("save failed")
+            if outcome == "replacement":
+                documents["TestDoc"] = replacement
+
+        doc.saveAs = save
+        freecad = SimpleNamespace(
+            getDocument=documents.get,
+            closeDocument=documents.pop,
+        )
+        mock_bridge.get_documents = AsyncMock(
+            return_value=[
+                DocumentInfo(
+                    name="TestDoc", label="Test", path=doc.FileName, objects=[]
+                )
+            ]
+        )
+
+        async def execute(code):
+            scope = {"FreeCAD": freecad}
+            try:
+                exec(code, scope)  # noqa: S102
+                return ExecutionResult(
+                    success=True,
+                    result=scope.get("_result_"),
+                    stdout="",
+                    stderr="",
+                    execution_time_ms=0,
+                )
+            except Exception as exc:
+                return ExecutionResult(
+                    success=False,
+                    result=None,
+                    stdout="",
+                    stderr=str(exc),
+                    execution_time_ms=0,
+                )
+
+        mock_bridge.execute_python = AsyncMock(side_effect=execute)
+        if outcome == "ok":
+            assert (await register_tools["close_document"]("TestDoc", True))["saved"]
+            assert "TestDoc" not in documents
+        else:
+            with pytest.raises(ValueError):
+                await register_tools["close_document"]("TestDoc", True)
+            assert documents["TestDoc"] is (
+                replacement if outcome == "replacement" else doc
+            )
+        mock_bridge.execute_python.assert_awaited_once()
+        mock_bridge.close_document.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_list_documents_empty(self, register_tools, mock_bridge):
@@ -229,7 +292,15 @@ class TestDocumentTools:
                 )
             ]
         )
-        mock_bridge.save_document = AsyncMock(return_value="/tmp/doc.FCStd")
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=True,
+                result="/tmp/doc.FCStd",
+                stdout="",
+                stderr="",
+                execution_time_ms=0,
+            )
+        )
         mock_bridge.close_document = AsyncMock()
 
         close_document = register_tools["close_document"]
@@ -237,8 +308,8 @@ class TestDocumentTools:
 
         assert result["success"] is True
         assert result["saved"] is True
-        mock_bridge.save_document.assert_called_once_with("TestDoc", "/tmp/doc.FCStd")
-        mock_bridge.close_document.assert_called_once_with("TestDoc")
+        mock_bridge.execute_python.assert_awaited_once()
+        mock_bridge.close_document.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_close_document_save_failure(self, register_tools, mock_bridge):
@@ -250,13 +321,21 @@ class TestDocumentTools:
                 )
             ]
         )
-        mock_bridge.save_document = AsyncMock(side_effect=Exception("Save failed"))
+        mock_bridge.execute_python = AsyncMock(
+            return_value=ExecutionResult(
+                success=False,
+                result=None,
+                stdout="",
+                stderr="Save failed",
+                execution_time_ms=0,
+            )
+        )
         mock_bridge.close_document = AsyncMock()
 
         close_document = register_tools["close_document"]
         with pytest.raises(Exception, match="Save failed"):
             await close_document(doc_name="TestDoc", save_changes=True)
-        mock_bridge.save_document.assert_awaited_once_with("TestDoc", "/tmp/doc.FCStd")
+        mock_bridge.execute_python.assert_awaited_once()
         mock_bridge.close_document.assert_not_awaited()
 
     @pytest.mark.asyncio

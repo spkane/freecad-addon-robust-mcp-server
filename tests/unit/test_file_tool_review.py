@@ -219,7 +219,7 @@ async def test_close_with_save_propagates_review_denial() -> None:
         get_documents=AsyncMock(
             return_value=[SimpleNamespace(name="Model", path="/tmp/model.FCStd")]
         ),
-        save_document=AsyncMock(side_effect=ToolError("ReviewDenied")),
+        execute_python=AsyncMock(side_effect=ToolError("ReviewDenied")),
         close_document=AsyncMock(),
     )
     mcp = Tools()
@@ -240,7 +240,9 @@ async def test_close_with_save_keeps_original_active_document() -> None:
     bridge = SimpleNamespace(
         get_active_document=AsyncMock(return_value=doc),
         get_documents=AsyncMock(return_value=[doc]),
-        save_document=AsyncMock(return_value=doc.path),
+        execute_python=AsyncMock(
+            return_value=SimpleNamespace(success=True, result=doc.path)
+        ),
         close_document=AsyncMock(),
     )
     mcp = Tools()
@@ -250,7 +252,8 @@ async def test_close_with_save_keeps_original_active_document() -> None:
 
     register_document_tools(mcp, get_bridge)
     await mcp.functions["close_document"](save_changes=True)
-    bridge.close_document.assert_awaited_once_with("Model")
+    bridge.execute_python.assert_awaited_once()
+    bridge.close_document.assert_not_awaited()
 
 
 @pytest.mark.asyncio
