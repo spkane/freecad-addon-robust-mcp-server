@@ -65,9 +65,12 @@ async def regression_document() -> AsyncIterator[tuple[XmlRpcBridge, str]]:
 
 @pytest.mark.asyncio
 async def test_save_and_close_document_in_one_dispatch(
-    regression_document: tuple[XmlRpcBridge, str], tmp_path: Path
+    regression_document: tuple[XmlRpcBridge, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The document tool saves and closes successfully against real FreeCAD."""
+    """The explicitly unreviewed XML-RPC tool saves and closes in FreeCAD."""
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
     bridge, name = regression_document
     path = tmp_path / f"{name}.FCStd"
     setup = await bridge.execute_python(
