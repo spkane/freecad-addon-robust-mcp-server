@@ -502,6 +502,34 @@ class TestSocketBridgeCommunication:
         assert bridge._connected is False
 
     @pytest.mark.asyncio
+    async def test_cancelled_request_discards_inflight_connection(
+        self, mock_streams
+    ) -> None:
+        """A late response to a cancelled request cannot satisfy the next call."""
+        reader, writer = mock_streams
+        response_waiting = asyncio.Event()
+
+        async def read() -> bytes:
+            if reader.readline.await_count == 1:
+                return json.dumps({"challenge": "A" * 43}).encode() + b"\n"
+            response_waiting.set()
+            await asyncio.Event().wait()
+            return b""
+
+        reader.readline.side_effect = read
+        bridge = SocketBridge()
+        bridge._reader, bridge._writer, bridge._connected = reader, writer, True
+        task = asyncio.create_task(bridge._send_request("execute", {"code": "pass"}))
+        await asyncio.wait_for(response_waiting.wait(), timeout=2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert writer.write.call_count == 2
+        writer.close.assert_called_once_with()
+        assert bridge._reader is None and bridge._writer is None
+        assert bridge._connected is False and not bridge._lock.locked()
+
+    @pytest.mark.asyncio
     async def test_oversized_response_discards_connection(self, mock_streams) -> None:
         """An oversized response must close the stream and report a clear error."""
         reader, writer = mock_streams
