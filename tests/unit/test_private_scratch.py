@@ -37,6 +37,9 @@ def test_posix_rejects_directory_with_public_permissions(tmp_path: Path) -> None
     scratch = tmp_path / "scratch"
     scratch.mkdir(mode=0o700)
     private_scratch._verify_posix_private_directory(str(scratch))
+    scratch.chmod(0o2700)
+    if scratch.stat().st_mode & 0o2000:
+        private_scratch._verify_posix_private_directory(str(scratch))
     scratch.chmod(0o755)
     with pytest.raises(OSError, match="permissions"):
         private_scratch._verify_posix_private_directory(str(scratch))
