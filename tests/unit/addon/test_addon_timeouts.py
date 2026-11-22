@@ -1916,7 +1916,7 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
     plugin._document_reservations = reservations
     started, resume, created = threading.Event(), threading.Event(), threading.Event()
 
-    def capture(_code: str) -> dict[str, Any]:
+    def capture(_code: str, _timeout_ms: int) -> dict[str, Any]:
         started.set()
         assert resume.wait(5)
         reservations.reserve("Model", object(), "owner")

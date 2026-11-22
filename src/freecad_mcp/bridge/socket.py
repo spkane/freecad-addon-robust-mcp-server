@@ -568,7 +568,11 @@ class SocketBridge(FreecadBridge):
         try:
             result = await self._send_request(
                 "capture_review_document",
-                {"name": name, "require_saved_path": require_saved_path},
+                {
+                    "name": name,
+                    "require_saved_path": require_saved_path,
+                    "timeout_ms": timeout_ms,
+                },
                 response_timeout=timeout_ms / 1000 + EXECUTION_RESPONSE_GRACE_SECONDS,
                 request_timeout=timeout_ms / 1000,
             )

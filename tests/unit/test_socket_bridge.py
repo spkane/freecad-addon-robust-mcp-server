@@ -13,6 +13,19 @@ class TestSocketBridge:
     """Tests for SocketBridge class."""
 
     @pytest.mark.asyncio
+    async def test_document_capture_passes_execution_deadline_to_bridge(self):
+        """The capture queue uses the same configured deadline as the caller."""
+        bridge = SocketBridge(execution_timeout_ms=45000)
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            return_value={"success": True, "result": None},
+        ) as request:
+            assert await bridge.capture_review_document(None) is None
+        assert request.await_args is not None
+        assert request.await_args.args[1]["timeout_ms"] == 45000
+
+    @pytest.mark.asyncio
     async def test_old_workbench_capture_fails_closed_with_upgrade_guidance(self):
         """An unsupported capture method must not bypass document review."""
         bridge = SocketBridge()

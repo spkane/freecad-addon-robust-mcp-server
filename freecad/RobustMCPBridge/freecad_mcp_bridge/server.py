@@ -1981,6 +1981,7 @@ class FreecadMCPPlugin:
         if method == "capture_review_document":
             name = params.get("name")
             require_saved_path = params.get("require_saved_path", False)
+            timeout_ms = params.get("timeout_ms", DEFAULT_EXECUTION_TIMEOUT_MS)
             if (
                 authenticated_client is None
                 or (name is not None and (type(name) is not str or not name))
@@ -1996,7 +1997,7 @@ class FreecadMCPPlugin:
                 f"{name!r}, {require_saved_path!r}, {authenticated_client!r})"
             )
             capture = asyncio.create_task(
-                asyncio.to_thread(self._execute_via_queue, code)
+                asyncio.to_thread(self._execute_via_queue, code, timeout_ms)
             )
             try:
                 result = await asyncio.shield(capture)
