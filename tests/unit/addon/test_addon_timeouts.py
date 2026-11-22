@@ -1844,6 +1844,32 @@ async def test_disconnected_file_review_releases_unclaimed_reservation(
 
 
 @pytest.mark.asyncio
+async def test_macro_roots_capture_uses_registered_gui_helper(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The actual execution globals capture live roots and reject non-GUI use."""
+    plugin = server_mod.FreecadMCPPlugin()
+    freecad = SimpleNamespace(
+        getUserMacroDir=MagicMock(return_value=str(tmp_path / "first")),
+        getResourceDir=MagicMock(return_value=str(tmp_path / "resources")),
+    )
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    monkeypatch.setattr(server_mod, "FreeCADGui", object(), raising=False)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_via_queue = plugin._execute_code_sync
+    assert await plugin._current_macro_review_roots() == (
+        str(tmp_path / "first"),
+        str(tmp_path / "resources" / "Macro"),
+    )
+    freecad.getUserMacroDir.return_value = str(tmp_path / "second")
+    assert (await plugin._current_macro_review_roots())[0] == str(tmp_path / "second")
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: False)
+    with pytest.raises(ValueError, match="Macro directories unavailable"):
+        await plugin._current_macro_review_roots()
+
+
+@pytest.mark.asyncio
 async def test_macro_roots_captured_through_gui_queue(server_mod: Any) -> None:
     """A failed queue capture fails closed and never uses stale roots."""
     plugin = server_mod.FreecadMCPPlugin()
