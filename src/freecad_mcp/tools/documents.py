@@ -219,6 +219,9 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
 doc = FreeCAD.getDocument({doc_name!r})
 if doc is None:
     raise ValueError("Document not found")
+if doc.Partial:
+    # FreeCAD skips saving partial documents without raising an error.
+    raise RuntimeError("Document is partially loaded; open it fully before saving")
 save_path = globals().get("_robust_mcp_reviewed_file_path") or {path!r}
 saved = doc.saveAs(save_path)
 if saved is False:
