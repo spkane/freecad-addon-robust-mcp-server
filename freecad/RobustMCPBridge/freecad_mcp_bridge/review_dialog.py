@@ -341,7 +341,14 @@ class ReviewDialogController:
                             and (deadline is None or self._policy.now() < deadline)
                         )
 
-                    if not request.approve_if_still_valid(policy_still_allows):
+                    approved = (
+                        request.approve_if_still_valid(policy_still_allows)
+                        if deadline is None
+                        else request.approve_until(
+                            deadline, self._policy.now, validator=policy_still_allows
+                        )
+                    )
+                    if not approved:
                         self._coordinator.cancel(request)
                     return
             if (

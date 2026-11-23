@@ -101,12 +101,13 @@ class TestTestingRuntime:
         assert result.returncode == expected, result.stdout + result.stderr
 
     @pytest.mark.just_runtime
+    @pytest.mark.parametrize("installation", ["FreeCAD 1.0", "FreeCAD 1.1", "FreeCAD"])
     def test_freecad_executable_finds_windows_installation(
-        self, tmp_path: Path
+        self, tmp_path: Path, installation: str
     ) -> None:
         """Find FreeCAD under Program Files when it is absent from PATH."""
         helper = Path(__file__).resolve().parents[2] / "scripts/bridge-helpers.sh"
-        executable = tmp_path / "FreeCAD 1.0" / "bin" / "FreeCADCmd.exe"
+        executable = tmp_path / installation / "bin" / "FreeCADCmd.exe"
         executable.parent.mkdir(parents=True)
         executable.write_text("")
         executable.chmod(0o755)

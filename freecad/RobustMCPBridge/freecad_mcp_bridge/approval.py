@@ -160,7 +160,13 @@ class ApprovalRequest:
             self._decision_event.set()
             return True
 
-    def approve_until(self, deadline: float, clock: Callable[[], float]) -> bool:
+    def approve_until(
+        self,
+        deadline: float,
+        clock: Callable[[], float],
+        *,
+        validator: Callable[[], bool] | None = None,
+    ) -> bool:
         """Approve only until a local temporary bypass expires."""
         with self._lock:
             self._expire_locked()
@@ -168,6 +174,7 @@ class ApprovalRequest:
                 return False
             self._bypass_deadline = deadline
             self._bypass_clock = clock
+            self._claim_validator = validator
             self._state = ApprovalState.APPROVED
             self._decision_event.set()
             return True
@@ -516,9 +523,7 @@ class LeasedReviewBroker:
                     state is ApprovalState.EXPIRED and request_id in self._committed
                 ):
                     if len(self._terminal) >= self._capacity:
-                        # Preserve the denial in the bounded active index until
-                        # a terminal slot expires or its owner disconnects.
-                        continue
+                        del self._terminal[next(iter(self._terminal))]
                     self._terminal[request_id] = (owner, state, now + 60)
                 self._coordinator.cancel(request)
                 if self._release is not None:

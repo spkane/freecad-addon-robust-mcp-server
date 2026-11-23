@@ -471,19 +471,12 @@ class SocketBridge(FreecadBridge):
                 else:
                     request_may_have_been_sent = True
                     try:
-                        result = await self._send_request_once(
+                        return await self._send_request_once(
                             request,
                             reader,
                             writer,
                             response_deadline,
                         )
-                        if (
-                            method == "capture_review_document"
-                            and isinstance(result, dict)
-                            and not result.get("success")
-                        ):
-                            self._discard_request_streams(writer)
-                        return result
                     except (ConnectionResetError, BrokenPipeError) as e:
                         self._discard_request_streams(writer)
                         raise ConnectionError(

@@ -1307,7 +1307,7 @@ class FreecadMCPPlugin:
         self,
         name: str | None,
         require_saved_path: bool = False,
-        owner: str | None = None,
+        capture: str | None = None,
     ) -> dict[str, str] | None:
         """Select and reserve a document on the FreeCAD GUI thread."""
         reservations = self._document_reservations
@@ -1323,7 +1323,7 @@ class FreecadMCPPlugin:
         return {
             "name": document.Name,
             "path": document.FileName or "",
-            "token": reservations.reserve(document.Name, document, owner),
+            "token": reservations.reserve(document.Name, document, capture),
         }
 
     def _release_review_document(self, token: str) -> None:
@@ -1992,10 +1992,6 @@ class FreecadMCPPlugin:
                     "id": request_id,
                     "error": {"code": -32602, "message": "Invalid capture request"},
                 }
-            code = (
-                "_result_ = _robust_mcp_capture_document("
-                f"{name!r}, {require_saved_path!r}, {authenticated_client!r})"
-            )
             reservations = self._document_reservations
             if reservations is None:
                 return {
@@ -2004,32 +2000,26 @@ class FreecadMCPPlugin:
                     "error": {"code": -32000, "message": "Document review unavailable"},
                 }
             try:
-                reservations.open_owner(authenticated_client)
+                capture = reservations.begin_capture(authenticated_client)
             except RuntimeError:
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
                     "error": {"code": -32000, "message": "Document review unavailable"},
                 }
-            capture = asyncio.create_task(
-                asyncio.to_thread(self._execute_via_queue, code, timeout_ms)
+            code = (
+                "_result_ = _robust_mcp_capture_document("
+                f"{name!r}, {require_saved_path!r}, {capture!r})"
             )
+            keep = False
             try:
-                result = await asyncio.shield(capture)
-            except asyncio.CancelledError:
-                # The queue worker can outlive a cancelled connection handler.
-                # Discard again after it finishes in case it reserved late.
-                def discard_late(task: asyncio.Task[Any]) -> None:
-                    with contextlib.suppress(Exception, asyncio.CancelledError):
-                        task.result()
-                    reservations.discard_owner(authenticated_client)
-
-                capture.add_done_callback(discard_late)
-                raise
-            if not result.get("success"):
-                # A timed-out GUI operation may still reach reserve later.
-                # Close this session's unclaimed captures before responding.
-                reservations.discard_owner(authenticated_client)
+                result = await asyncio.to_thread(
+                    self._execute_via_queue, code, timeout_ms
+                )
+                keep = bool(result.get("success"))
+            finally:
+                # The GUI worker can finish after its request timed out or was cancelled.
+                reservations.finish_capture(capture, keep=keep)
             return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
         if method == "review_begin_macro":

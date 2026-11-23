@@ -917,10 +917,20 @@ def runtime(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 @pytest.mark.parametrize("group", ["parameters", "attributes"])
 @pytest.mark.parametrize(
-    "property_name", ["BitShape", "Proxy.obj.BitShape", "ExternalFile"]
+    ("property_name", "value"),
+    [
+        ("BitShape", "other.fcstd"),
+        ("Proxy.obj.BitShape", "other.fcstd"),
+        ("ExternalFile", "other.fcstd"),
+        ("Finish", [["Matte", "Gloss"], 0]),
+    ],
 )
 def test_reviewed_legacy_tool_rejects_file_and_nested_overrides(
-    runtime: Any, monkeypatch: pytest.MonkeyPatch, property_name: str, group: str
+    runtime: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    property_name: str,
+    value: Any,
+    group: str,
 ) -> None:
     import sys
     from types import ModuleType
@@ -928,10 +938,11 @@ def test_reviewed_legacy_tool_rejects_file_and_nested_overrides(
     freecad = sys.modules["FreeCAD"]
     document = freecad.ActiveDocument
     bit = MagicMock()
-    bit.BitPropertyNames = ["Diameter", "ExternalFile"]
+    bit.BitPropertyNames = ["Diameter", "ExternalFile", "Finish"]
     bit.getTypeIdOfProperty.side_effect = lambda name: {
         "Diameter": "App::PropertyLength",
         "ExternalFile": "App::PropertyFile",
+        "Finish": "App::PropertyEnumeration",
     }[name]
     factory = MagicMock()
     factory.Create.return_value = bit
@@ -957,11 +968,11 @@ def test_reviewed_legacy_tool_rejects_file_and_nested_overrides(
     with pytest.raises(ValueError, match="cannot be changed"):
         runtime._legacy_tool_bit(
             document,
-            {"shape": "/tmp/tool.fcstd", group: {property_name: "other.fcstd"}},
+            {"shape": "/tmp/tool.fcstd", group: {property_name: value}},
             reviewed_shape=True,
         )
     set_property.assert_not_called()
-    if property_name == "ExternalFile":
+    if property_name in {"ExternalFile", "Finish"}:
         bit.Proxy.unloadBitBody.assert_called_once_with(bit)
         document.removeObject.assert_called_once_with(bit.Name)
     else:
@@ -1089,16 +1100,27 @@ def test_reviewed_legacy_override_cleanup_failure_propagates(
     doc.removeObject.assert_called_once_with("ToolBit")
 
 
-def test_reviewed_legacy_tool_allows_shape_numeric_properties(
-    runtime: Any, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("property_name", "property_type", "value"),
+    [
+        ("Diameter", "App::PropertyLength", "4 mm"),
+        ("Finish", "App::PropertyEnumeration", "Matte"),
+    ],
+)
+def test_reviewed_legacy_tool_allows_scalar_properties(
+    runtime: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    property_name: str,
+    property_type: str,
+    value: str,
 ) -> None:
     import sys
     from types import ModuleType
 
     document = sys.modules["FreeCAD"].ActiveDocument
     bit = MagicMock()
-    bit.BitPropertyNames = ["Diameter"]
-    bit.getTypeIdOfProperty.return_value = "App::PropertyLength"
+    bit.BitPropertyNames = [property_name]
+    bit.getTypeIdOfProperty.return_value = property_type
     factory = MagicMock()
     factory.Create.return_value = bit
     modules = {
@@ -1121,12 +1143,48 @@ def test_reviewed_legacy_tool_allows_shape_numeric_properties(
     assert (
         runtime._legacy_tool_bit(
             document,
-            {"shape": "/tmp/tool.fcstd", "parameters": {"Diameter": "4 mm"}},
+            {"shape": "/tmp/tool.fcstd", "parameters": {property_name: value}},
             reviewed_shape=True,
         )
         is bit
     )
-    set_property.assert_called_once_with(bit, "Diameter", "4 mm")
+    set_property.assert_called_once_with(bit, property_name, value)
+
+
+@pytest.mark.parametrize("capture_fails", [False, True])
+def test_cam_report_image_view_cleanup(
+    runtime: Any, monkeypatch: pytest.MonkeyPatch, capture_fails: bool
+) -> None:
+    """Close the prepared view once and preserve the original capture outcome."""
+    from types import SimpleNamespace
+
+    error = OSError("Scratch write failed")
+    capture = MagicMock(
+        return_value=b"png", side_effect=error if capture_fails else None
+    )
+    monkeypatch.setattr(runtime, "_capture_cam_image_bytes", capture)
+    prepare_view = MagicMock(return_value=4)
+    destroy_view = MagicMock()
+    builder = SimpleNamespace(prepare_view=prepare_view, destroy_view=destroy_view)
+
+    def summarize() -> bytes:
+        index = builder.prepare_view("object", view="headon")
+        image = builder.capture_image_to_bytes()
+        builder.destroy_view(index)
+        return image
+
+    sanity = SimpleNamespace(image_builder=builder, summarize=summarize)
+    if capture_fails:
+        with pytest.raises(OSError, match="Scratch write failed") as exc:
+            runtime._summarize_cam_report(sanity, object(), "/scratch")
+        assert exc.value is error
+    else:
+        assert runtime._summarize_cam_report(sanity, object(), "/scratch") == b"png"
+    prepare_view.assert_called_once_with("object", view="headon")
+    destroy_view.assert_called_once_with(4)
+    assert builder.prepare_view is prepare_view
+    assert builder.destroy_view is destroy_view
+    assert not hasattr(builder, "capture_image_to_bytes")
 
 
 @pytest.mark.parametrize("images", [False, True])

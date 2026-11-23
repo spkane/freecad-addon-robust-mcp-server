@@ -99,7 +99,12 @@ def snapshot_file(path: str, action: str) -> FileReviewSnapshot:
         raise ValueError("A nonempty file path is required")
     if action not in ("read", "write", "delete"):
         raise ValueError("Unsupported file operation")
-    absolute = path if Path(path).is_absolute() else str(Path.cwd() / path)
+    # pathlib drops trailing directory components before the filesystem sees them.
+    if os.path.basename(path) in ("", ".", ".."):  # noqa: PTH119
+        raise ValueError("File target must name a regular file")
+    absolute = (
+        path if Path(path).is_absolute() else os.path.join(Path.cwd(), path)  # noqa: PTH118
+    )
     if not Path(absolute).is_absolute():
         raise ValueError("File target must resolve to an absolute path")
     resolved = os.path.realpath(absolute)
@@ -122,7 +127,7 @@ def snapshot_file(path: str, action: str) -> FileReviewSnapshot:
         leaf_stat = None
         target_stat = None
     else:
-        target_stat = Path(absolute).stat()
+        target_stat = os.stat(absolute)  # noqa: PTH116
         if not stat.S_ISREG(target_stat.st_mode):
             raise ValueError("File target must be a regular file")
     return FileReviewSnapshot(

@@ -588,10 +588,10 @@ def test_denial_survives_other_client_admission(approval_module: ModuleType) -> 
     broker.close()
 
 
-def test_denial_retention_does_not_evict_another_owner(
+def test_full_denial_history_does_not_consume_active_capacity(
     approval_module: ModuleType,
 ) -> None:
-    """A full denial cache applies backpressure instead of losing a decision."""
+    """Keep the newest terminal decision and reclaim its active slot."""
     coordinator = approval_module.ReviewCoordinator(1)
     broker = approval_module.LeasedReviewBroker(coordinator, 1)
     payload = approval_module.ApprovalPayload("execute_python", b"pass")
@@ -599,12 +599,11 @@ def test_denial_retention_does_not_evict_another_owner(
     assert coordinator.next_review().decide(approved=False)
     second = broker.begin("bob", payload, 10)
     assert coordinator.next_review().decide(approved=False)
-    with pytest.raises(RuntimeError, match="full"):
-        broker.begin("carol", payload, 10)
-    assert broker.status("alice", first) is approval_module.ApprovalState.DENIED
-    assert broker.status("bob", second) is approval_module.ApprovalState.DENIED
-    broker.cancel_owner("alice")
     broker.begin("carol", payload, 10)
+    assert broker.status("alice", first) is None
+    assert not broker.commit("alice", first)
+    assert broker.status("bob", second) is approval_module.ApprovalState.DENIED
+    assert not broker.commit("bob", second)
     broker.close()
 
 
