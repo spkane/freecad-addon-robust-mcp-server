@@ -69,14 +69,21 @@ async def test_save_and_close_document_in_one_dispatch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The explicitly unreviewed XML-RPC tool saves and closes in FreeCAD."""
+    """Save-and-close persists pending edits through the XML-RPC override."""
     monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
     bridge, name = regression_document
     path = tmp_path / f"{name}.FCStd"
     setup = await bridge.execute_python(
-        f"doc = FreeCAD.newDocument({name!r})\n"
-        f"doc.addObject('Part::Box', 'Box')\n"
-        f"doc.recompute()\ndoc.saveAs({str(path)!r})\n_result_ = True"
+        f"""
+doc = FreeCAD.newDocument({name!r})
+box = doc.addObject("Part::Box", "Box")
+box.Length = 10
+doc.recompute()
+doc.saveAs({str(path)!r})
+box.Length = 23
+doc.recompute()
+_result_ = True
+"""
     )
     assert setup.success, setup.error_traceback
     result = await _tools(bridge)["close_document"](name, save_changes=True)
@@ -86,6 +93,17 @@ async def test_save_and_close_document_in_one_dispatch(
         f"_result_ = {name!r} in FreeCAD.listDocuments()"
     )
     assert remaining.success and remaining.result is False
+    persisted = await bridge.execute_python(
+        f"""
+doc = FreeCAD.openDocument({str(path)!r})
+try:
+    _result_ = doc.getObject("Box").Length.Value
+finally:
+    FreeCAD.closeDocument(doc.Name)
+"""
+    )
+    assert persisted.success, persisted.error_traceback or persisted.stderr
+    assert persisted.result == pytest.approx(23.0)
 
 
 @pytest.mark.asyncio
