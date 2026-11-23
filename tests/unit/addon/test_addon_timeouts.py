@@ -1808,10 +1808,14 @@ async def test_macro_review_uses_current_roots_once(
 
 
 @pytest.mark.asyncio
-async def test_disconnected_file_review_releases_unclaimed_reservation(
-    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+@pytest.mark.parametrize("cancel_review", [False, True])
+async def test_queued_review_owns_capture_after_capture_session_closes(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    cancel_review: bool,
 ) -> None:
-    """Disconnect before GUI admission frees the unclaimed document slot."""
+    """A queued review keeps its capture until its own claim or cancellation."""
     review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
     monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
@@ -1821,26 +1825,167 @@ async def test_disconnected_file_review_releases_unclaimed_reservation(
     plugin._enable_experimental_review()
     reservations = plugin._document_reservations
     document = object()
-    token = reservations.reserve("Model", document)
+    reservations.open_owner("capture-session")
+    token = reservations.reserve("Model", document, "capture-session")
     path = tmp_path / "model.step"
     path.write_text("data")
-    response = await plugin._review_begin_file(
-        1,
-        {
-            "code": "pass",
-            "path": str(path),
-            "action": "read",
-            "kind": "path",
-            "document_name": "Model",
-            "document_token": token,
-        },
-        "alice",
-    )
+    params = {
+        "code": "pass",
+        "path": str(path),
+        "action": "read",
+        "kind": "path",
+        "document_name": "Model",
+        "document_token": token,
+    }
+    response = await plugin._review_begin_file(1, params, "review-session")
     assert response.get("result")
-    plugin._review_broker.cancel_owner("alice")
-    with pytest.raises(ValueError, match="unavailable"):
-        reservations.take(token, "Model", lambda _: document)
+    plugin._release_session_reservations({"capture-session"})
+    plugin._release_review_document(token)
+    duplicate = await plugin._review_begin_file(2, params, "other-review-session")
+    assert duplicate.get("error")
+    if cancel_review:
+        plugin._review_broker.cancel_owner("review-session")
+        with pytest.raises(ValueError, match="unavailable"):
+            reservations.take(token, "Model", lambda _: document)
+    else:
+        assert reservations.take(token, "Model", lambda _: document)()
     plugin._shutdown_review()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_capture_releases_late_session_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A capture queued before disconnect is reclaimed after it runs."""
+    from freecad_mcp.bridge.socket import SocketBridge
+
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    document = SimpleNamespace(Name="Model", FileName=str(tmp_path / "model.FCStd"))
+    monkeypatch.setattr(
+        server_mod, "FreeCAD", SimpleNamespace(ActiveDocument=document), raising=False
+    )
+    secret = b"a" * 32
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        port=0,
+        authenticator=auth.BridgeAuthenticator(
+            auth.create_hmac_verifier(lambda _: secret)
+        ),
+    )
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    reservations = plugin._document_reservations
+    reserve = MagicMock(wraps=reservations.reserve)
+    monkeypatch.setattr(reservations, "reserve", reserve)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+    task = asyncio.create_task(bridge.capture_review_document(None))
+    try:
+        async with asyncio.timeout(5):
+            while plugin._request_queue.empty():  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        plugin._process_queue()
+        reserve.assert_called_once()
+        async with asyncio.timeout(5):
+            while plugin._socket_client_count:  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+        assert not reservations._entries
+    finally:
+        await bridge.disconnect()
+        plugin._shutdown_review()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Handler cancellation cannot leave an executor's later reservation behind."""
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    started, resume, created = threading.Event(), threading.Event(), threading.Event()
+    reservation_token: str | None = None
+
+    def capture(_code: str, _timeout_ms: int) -> dict[str, Any]:
+        nonlocal reservation_token
+        started.set()
+        assert resume.wait(5)
+        try:
+            reservation_token = reservations.reserve("Model", object(), "owner")
+        finally:
+            created.set()
+        return {"success": True}
+
+    monkeypatch.setattr(plugin, "_execute_via_queue", capture)
+    task = asyncio.create_task(
+        plugin._process_jsonrpc_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "capture_review_document",
+                "params": {},
+            },
+            "owner",
+        )
+    )
+    try:
+        assert await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        resume.set()
+        assert await asyncio.to_thread(created.wait, 5)
+        assert reservation_token is not None
+        async with asyncio.timeout(5):
+            while reservation_token in reservations._entries:  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+    finally:
+        resume.set()
+
+
+@pytest.mark.asyncio
+async def test_timed_out_capture_closes_session_before_late_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A running GUI call cannot reserve after the request reports a timeout."""
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    monkeypatch.setattr(plugin, "_execute_via_queue", lambda *_args: {"success": False})
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "capture_review_document",
+        "params": {},
+    }
+    response = await plugin._process_jsonrpc_request(request, "owner")
+    assert response["result"]["success"] is False
+    with pytest.raises(RuntimeError, match="session is closed"):
+        reservations.reserve("Model", object(), "owner")
+    assert "error" in await plugin._process_jsonrpc_request(request, "owner")
 
 
 @pytest.mark.asyncio

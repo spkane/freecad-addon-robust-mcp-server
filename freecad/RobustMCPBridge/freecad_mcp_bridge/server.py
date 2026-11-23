@@ -1304,7 +1304,10 @@ class FreecadMCPPlugin:
             )
 
     def _capture_review_document(
-        self, name: str | None, require_saved_path: bool = False
+        self,
+        name: str | None,
+        require_saved_path: bool = False,
+        owner: str | None = None,
     ) -> dict[str, str] | None:
         """Select and reserve a document on the FreeCAD GUI thread."""
         reservations = self._document_reservations
@@ -1320,14 +1323,21 @@ class FreecadMCPPlugin:
         return {
             "name": document.Name,
             "path": document.FileName or "",
-            "token": reservations.reserve(document.Name, document),
+            "token": reservations.reserve(document.Name, document, owner),
         }
 
     def _release_review_document(self, token: str) -> None:
-        """Discard an unclaimed reservation without affecting a claimed guard."""
+        """Discard a capture that the client did not hand off to review."""
+        reservations = self._document_reservations
+        if reservations is not None and type(token) is str:
+            reservations.discard_capture(token)
+
+    def _release_session_reservations(self, owners: set[str]) -> None:
+        """Discard unclaimed captures when their socket session closes."""
         reservations = self._document_reservations
         if reservations is not None:
-            reservations.discard(token)
+            for owner in owners:
+                reservations.forget_owner(owner)
 
     @staticmethod
     def _capture_macro_review_roots() -> list[str]:
@@ -1839,6 +1849,7 @@ class FreecadMCPPlugin:
                 FreeCAD.Console.PrintError(f"MCP socket error: {e}\n")
         finally:
             broker = self._review_broker
+            self._release_session_reservations(review_owners)
             if broker is not None:
                 try:
                     for owner in review_owners:
@@ -1914,6 +1925,7 @@ class FreecadMCPPlugin:
                     "review_commit",
                     "review_cancel",
                     "review_result",
+                    "capture_review_document",
                 )
             ):
                 if (
@@ -1924,7 +1936,7 @@ class FreecadMCPPlugin:
                 review_owners.add(owner)
         return await self._process_jsonrpc_request(request, owner)
 
-    async def _process_jsonrpc_request(  # noqa: PLR0911
+    async def _process_jsonrpc_request(  # noqa: PLR0911, PLR0912
         self,
         request: Any,
         authenticated_client: str | None = None,
@@ -1965,6 +1977,60 @@ class FreecadMCPPlugin:
             return await self._review_begin_file(
                 request_id, params, authenticated_client
             )
+
+        if method == "capture_review_document":
+            name = params.get("name")
+            require_saved_path = params.get("require_saved_path", False)
+            timeout_ms = params.get("timeout_ms", DEFAULT_EXECUTION_TIMEOUT_MS)
+            if (
+                authenticated_client is None
+                or (name is not None and (type(name) is not str or not name))
+                or type(require_saved_path) is not bool
+            ):
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32602, "message": "Invalid capture request"},
+                }
+            code = (
+                "_result_ = _robust_mcp_capture_document("
+                f"{name!r}, {require_saved_path!r}, {authenticated_client!r})"
+            )
+            reservations = self._document_reservations
+            if reservations is None:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32000, "message": "Document review unavailable"},
+                }
+            try:
+                reservations.open_owner(authenticated_client)
+            except RuntimeError:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32000, "message": "Document review unavailable"},
+                }
+            capture = asyncio.create_task(
+                asyncio.to_thread(self._execute_via_queue, code, timeout_ms)
+            )
+            try:
+                result = await asyncio.shield(capture)
+            except asyncio.CancelledError:
+                # The queue worker can outlive a cancelled connection handler.
+                # Discard again after it finishes in case it reserved late.
+                def discard_late(task: asyncio.Task[Any]) -> None:
+                    with contextlib.suppress(Exception, asyncio.CancelledError):
+                        task.result()
+                    reservations.discard_owner(authenticated_client)
+
+                capture.add_done_callback(discard_late)
+                raise
+            if not result.get("success"):
+                # A timed-out GUI operation may still reach reserve later.
+                # Close this session's unclaimed captures before responding.
+                reservations.discard_owner(authenticated_client)
+            return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
         if method == "review_begin_macro":
             return await self._review_begin_macro(
@@ -2039,7 +2105,9 @@ class FreecadMCPPlugin:
     ) -> dict[str, Any]:
         """Snapshot a file target before presenting the generated operation."""
         broker = self._review_broker
+        reservations = self._document_reservations
         document_token = params.get("document_token")
+        transferred = False
         admitted = False
         try:
             if broker is None or type(owner) is not str:
@@ -2142,6 +2210,11 @@ class FreecadMCPPlugin:
                 document_name=document_name,
                 document_token=document_token,
             )
+            if document_token is not None:
+                if reservations is None:
+                    raise ValueError("Document review unavailable")
+                reservations.admit(document_token, document_name)
+                transferred = True
             result = {
                 "review_id": cast("Any", broker).begin(
                     owner, payload, REVIEW_LEASE_SECONDS
@@ -2159,10 +2232,15 @@ class FreecadMCPPlugin:
                 },
             }
         finally:
-            if not admitted and type(document_token) is str and document_token:
-                reservations = self._document_reservations
-                if reservations is not None:
+            if (
+                not admitted
+                and reservations is not None
+                and type(document_token) is str
+            ):
+                if transferred:
                     reservations.discard(document_token)
+                else:
+                    reservations.discard_capture(document_token)
 
     async def _review_begin_macro(
         self,

@@ -13,6 +13,33 @@ class TestSocketBridge:
     """Tests for SocketBridge class."""
 
     @pytest.mark.asyncio
+    async def test_document_capture_passes_execution_deadline_to_bridge(self):
+        """The capture queue uses the same configured deadline as the caller."""
+        bridge = SocketBridge(execution_timeout_ms=45000)
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            return_value={"success": True, "result": None},
+        ) as request:
+            assert await bridge.capture_review_document(None) is None
+        assert request.await_args is not None
+        assert request.await_args.args[1]["timeout_ms"] == 45000
+
+    @pytest.mark.asyncio
+    async def test_old_workbench_capture_fails_closed_with_upgrade_guidance(self):
+        """An unsupported capture method must not bypass document review."""
+        bridge = SocketBridge()
+        with (
+            mock.patch.object(
+                bridge,
+                "_send_request",
+                side_effect=JsonRpcError(-32601, "Method not found"),
+            ),
+            pytest.raises(RuntimeError, match="update the FreeCAD workbench"),
+        ):
+            await bridge.capture_review_document("Model")
+
+    @pytest.mark.asyncio
     async def test_reviewed_execution_reports_freecad_execution_time(self):
         """A completed result excludes time spent waiting for local approval."""
         bridge = SocketBridge()
@@ -500,6 +527,21 @@ class TestSocketBridgeCommunication:
         assert bridge._reader is None
         assert bridge._writer is None
         assert bridge._connected is False
+
+    @pytest.mark.asyncio
+    async def test_failed_capture_discards_session_before_another_request(
+        self, mock_streams
+    ) -> None:
+        """A failed capture revokes the session and forces the next call to reconnect."""
+        reader, writer = mock_streams
+        reader.readline.side_effect = self.authenticated_responses({"success": False})
+        bridge = SocketBridge()
+        bridge._reader, bridge._writer, bridge._connected = reader, writer, True
+        with pytest.raises(RuntimeError, match="unable to reserve document"):
+            await bridge.capture_review_document("Model")
+        writer.close.assert_called_once_with()
+        assert bridge._reader is None and bridge._writer is None
+        assert not bridge._connected
 
     @pytest.mark.asyncio
     async def test_cancelled_request_discards_inflight_connection(

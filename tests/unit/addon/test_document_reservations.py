@@ -1,6 +1,7 @@
 """Verify strong, single-use FreeCAD document identity reservations."""
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,7 +9,7 @@ import pytest
 
 
 @pytest.fixture
-def reservations_module():
+def reservations_module(monkeypatch):
     """Load the helper without starting FreeCAD."""
     path = Path(__file__).parents[3] / (
         "freecad/RobustMCPBridge/freecad_mcp_bridge/document_reservations.py"
@@ -16,6 +17,7 @@ def reservations_module():
     spec = importlib.util.spec_from_file_location("document_reservations_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
     return module
 
@@ -101,4 +103,25 @@ def test_discard_unclaimed_is_idempotent_and_does_not_revoke_claimed_guard(
     claimed = store.reserve("Model", document)
     guard = store.take(claimed, "Model", lambda _: document)
     store.discard(claimed)
+    assert guard()
+
+
+def test_session_cleanup_only_discards_its_unclaimed_tokens(reservations_module):
+    """A closed session cannot invalidate another session or a claimed guard."""
+    store = reservations_module.DocumentReservations(3)
+    doc = object()
+    store.open_owner("first")
+    store.open_owner("second")
+    abandoned = store.reserve("Model", doc, "first")
+    other = store.reserve("Model", doc, "second")
+    claimed = store.reserve("Model", doc, "first")
+    guard = store.take(claimed, "Model", lambda _: doc)
+    store.discard_owner("first")
+    with pytest.raises(RuntimeError, match="session is closed"):
+        store.reserve("Model", doc, "first")
+    with pytest.raises(RuntimeError, match="session is closed"):
+        store.open_owner("first")
+    with pytest.raises(ValueError, match="unavailable"):
+        store.take(abandoned, "Model", lambda _: doc)
+    assert store.take(other, "Model", lambda _: doc)()
     assert guard()
