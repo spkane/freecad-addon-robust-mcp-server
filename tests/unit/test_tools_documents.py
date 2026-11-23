@@ -44,12 +44,14 @@ class TestDocumentTools:
         return mock_mcp._registered_tools
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("outcome", ["ok", "failed", "replacement"])
+    @pytest.mark.parametrize("outcome", ["ok", "failed", "partial", "replacement"])
     async def test_save_and_close_keeps_unsaved_or_replaced_document(
         self, register_tools, mock_bridge, outcome
     ):
-        """Save and close use one dispatch and refuse changed document instances."""
-        doc = SimpleNamespace(Name="TestDoc", FileName="/tmp/doc.FCStd")
+        """Save and close never discard a partial, unsaved, or replaced document."""
+        doc = SimpleNamespace(
+            Name="TestDoc", FileName="/tmp/doc.FCStd", Partial=outcome == "partial"
+        )
         documents = {"TestDoc": doc}
         replacement = SimpleNamespace(Name="TestDoc")
 
@@ -59,7 +61,7 @@ class TestDocumentTools:
             if outcome == "replacement":
                 documents["TestDoc"] = replacement
 
-        doc.saveAs = save
+        doc.saveAs = MagicMock(side_effect=save)
         freecad = SimpleNamespace(
             getDocument=documents.get,
             closeDocument=documents.pop,
@@ -97,11 +99,20 @@ class TestDocumentTools:
             assert (await register_tools["close_document"]("TestDoc", True))["saved"]
             assert "TestDoc" not in documents
         else:
-            with pytest.raises(ValueError):
+            expected_error = {
+                "failed": "save failed",
+                "partial": "partially loaded",
+                "replacement": "replaced during save",
+            }[outcome]
+            with pytest.raises(ValueError, match=expected_error):
                 await register_tools["close_document"]("TestDoc", True)
             assert documents["TestDoc"] is (
                 replacement if outcome == "replacement" else doc
             )
+        if outcome == "partial":
+            doc.saveAs.assert_not_called()
+        else:
+            doc.saveAs.assert_called_once_with(doc.FileName)
         mock_bridge.execute_python.assert_awaited_once()
         mock_bridge.close_document.assert_not_awaited()
 

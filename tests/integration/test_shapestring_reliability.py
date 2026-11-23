@@ -107,6 +107,59 @@ finally:
 
 
 @pytest.mark.asyncio
+async def test_save_and_close_refuses_partial_document(
+    regression_document: tuple[XmlRpcBridge, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An externally linked document can be partial and must stay open."""
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
+    bridge, name = regression_document
+    path = tmp_path / f"{name}.FCStd"
+    parent_name = f"{name}Link"
+    parent_path = tmp_path / f"{parent_name}.FCStd"
+    try:
+        setup = await bridge.execute_python(
+            f"""
+source = FreeCAD.newDocument({name!r})
+linked = source.addObject("Part::Box", "Linked")
+source.addObject("Part::Box", "Unlinked")
+source.recompute()
+source.saveAs({str(path)!r})
+parent = FreeCAD.newDocument({parent_name!r})
+parent.saveAs({str(parent_path)!r})
+parent.addObject("App::Link", "ExternalBox").setLink(linked)
+parent.recompute()
+parent.save()
+FreeCAD.closeDocument(parent.Name)
+FreeCAD.closeDocument(source.Name)
+preferences = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Document")
+previous = preferences.GetBool("NoPartialLoading", False)
+preferences.SetBool("NoPartialLoading", False)
+try:
+    FreeCAD.openDocument({str(parent_path)!r})
+finally:
+    preferences.SetBool("NoPartialLoading", previous)
+_result_ = FreeCAD.getDocument({name!r}).Partial
+"""
+        )
+        assert setup.success and setup.result is True, setup.error_traceback
+        original = path.read_bytes()
+        with pytest.raises(ValueError, match="partially loaded"):
+            await _tools(bridge)["close_document"](name, save_changes=True)
+        remaining = await bridge.execute_python(
+            f"_result_ = FreeCAD.getDocument({name!r}).Partial"
+        )
+        assert remaining.success and remaining.result is True
+        assert path.read_bytes() == original
+    finally:
+        await bridge.execute_python(
+            f"if {parent_name!r} in FreeCAD.listDocuments(): "
+            f"FreeCAD.closeDocument({parent_name!r})\n_result_ = True"
+        )
+
+
+@pytest.mark.asyncio
 async def test_document_wrapper_identity_changes_after_name_reuse(
     regression_document: tuple[XmlRpcBridge, str],
 ) -> None:
