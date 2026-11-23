@@ -39,26 +39,36 @@ class DocumentReservations:
         self._capacity = capacity
         self._lifetime = lifetime
         self._entries: dict[str, _Reservation] = {}
-        self._owners: dict[str, bool] = {}
+        self._captures: dict[str, str] = {}
         self._lock = threading.Lock()
         self._closed = False
 
-    def reserve(self, name: str, document: Any, owner: str | None = None) -> str:
+    def begin_capture(self, owner: str) -> str:
+        """Allocate one pending capture for an authenticated socket session."""
+        with self._lock:
+            if self._closed or len(self._captures) >= self._capacity:
+                raise RuntimeError("Document capture unavailable")
+            token = secrets.token_urlsafe(32)
+            self._captures[token] = owner
+            return token
+
+    def reserve(self, name: str, document: Any, capture: str | None = None) -> str:
         """Reserve the exact document selected on the GUI thread."""
         if not isinstance(name, str) or not name or document is None:
             raise ValueError("A named live document is required")
         with self._lock:
             if self._closed:
                 raise RuntimeError("Document reservations are closed")
-            if owner is not None and not self._owners.get(owner, False):
-                raise RuntimeError("Document reservation session is closed")
+            owner = self._captures.pop(capture, None) if capture is not None else None
+            if capture is not None and owner is None:
+                raise RuntimeError("Document capture was cancelled or completed")
             now = time.monotonic()
             for token, entry in list(self._entries.items()):
                 if now >= entry.expiry:
                     del self._entries[token]
             if len(self._entries) >= self._capacity:
                 raise RuntimeError("Document reservation capacity reached")
-            token = secrets.token_urlsafe(32)
+            token = capture if capture is not None else secrets.token_urlsafe(32)
             self._entries[token] = _Reservation(
                 name, document, now + self._lifetime, owner
             )
@@ -110,16 +120,7 @@ class DocumentReservations:
         with self._lock:
             self._closed = True
             self._entries.clear()
-            self._owners.clear()
-
-    def open_owner(self, owner: str) -> None:
-        """Permit captures while the authenticated socket session is live."""
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("Document reservations are closed")
-            if self._owners.get(owner) is False:
-                raise RuntimeError("Document reservation session is closed")
-            self._owners[owner] = True
+            self._captures.clear()
 
     def discard(self, token: str) -> None:
         """Release an unclaimed token; already claimed or missing tokens are harmless."""
@@ -130,24 +131,22 @@ class DocumentReservations:
 
     def discard_capture(self, token: str) -> None:
         """Release a capture unless an admitted review owns it."""
+        self.finish_capture(token, keep=False)
+
+    def finish_capture(self, token: str, *, keep: bool) -> None:
+        """Close an attempt and keep its unclaimed reservation only on success."""
         with self._lock:
+            self._captures.pop(token, None)
             entry = self._entries.get(token)
-            if entry is not None and not entry.admitted:
+            if not keep and entry is not None and not entry.admitted:
                 del self._entries[token]
 
-    def discard_owner(self, owner: str) -> None:
-        """Release unclaimed reservations associated with a closed session."""
-        with self._lock:
-            if owner in self._owners:
-                self._owners[owner] = False
-            for token, entry in list(self._entries.items()):
-                if entry.owner == owner:
-                    del self._entries[token]
-
     def forget_owner(self, owner: str) -> None:
-        """Remove a closed session after its socket handler exits."""
+        """Discard pending and unclaimed captures when their session closes."""
         with self._lock:
-            self._owners.pop(owner, None)
+            for token, principal in list(self._captures.items()):
+                if principal == owner:
+                    del self._captures[token]
             for token, entry in list(self._entries.items()):
                 if entry.owner == owner:
                     del self._entries[token]

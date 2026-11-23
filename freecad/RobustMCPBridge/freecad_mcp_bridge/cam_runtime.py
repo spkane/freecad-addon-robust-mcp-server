@@ -31,6 +31,7 @@ import stat
 import sys
 import traceback
 import warnings
+from contextlib import suppress
 from pathlib import Path as FsPath
 from typing import Any
 
@@ -1427,6 +1428,7 @@ def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:  # n
                 if (
                     not isinstance(name, str)
                     or "." in name
+                    or type(value) not in (str, bool, int, float)
                     or name not in bit.BitPropertyNames
                     or bit.getTypeIdOfProperty(name) not in allowed_types
                 ):
@@ -2427,6 +2429,42 @@ def _capture_cam_image_bytes(qtcore: Any, scratch_dir: str) -> bytes:
         view.setAnimationEnabled(True)
 
 
+def _summarize_cam_report(sanity: Any, qtcore: Any, scratch_dir: str) -> Any:
+    """Capture images privately and close views left open by older builders."""
+    builder = sanity.image_builder
+    prepare_view = builder.prepare_view
+    destroy_view = builder.destroy_view
+    pending: list[int] = []
+
+    def track_view(*args: Any, **kwargs: Any) -> int:
+        index = prepare_view(*args, **kwargs)
+        pending.append(index)
+        return index
+
+    def close_view(index: int) -> None:
+        if index in pending:
+            pending.remove(index)
+        destroy_view(index)
+
+    overrides = {
+        "prepare_view": track_view,
+        "destroy_view": close_view,
+        "capture_image_to_bytes": lambda: _capture_cam_image_bytes(qtcore, scratch_dir),
+    }
+    attributes = vars(builder)
+    original = {name: attributes[name] for name in overrides if name in attributes}
+    attributes.update(overrides)
+    try:
+        return sanity.summarize()
+    finally:
+        for name in overrides:
+            attributes.pop(name, None)
+        attributes.update(original)
+        for index in reversed(pending):
+            with suppress(Exception):
+                destroy_view(index)
+
+
 def check_job(args: dict[str, Any]) -> dict[str, Any]:
     """FreeCAD's job check ("Sanity"): findings, summary, optional HTML report."""
     from Path.Main.Sanity import ImageBuilder
@@ -2456,12 +2494,6 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
             if args.get("images")
             else ImageBuilder.DummyImageBuilder(str(target.parent))
         )
-        if args.get("images") and hasattr(
-            sanity.image_builder, "capture_image_to_bytes"
-        ):
-            sanity.image_builder.capture_image_to_bytes = lambda: (
-                _capture_cam_image_bytes(ImageBuilder.QtCore, tmp)
-            )
         if report_file and not args.get("images"):
             # FreeCAD 1.0's dummy builder returns a directory, which its HTML
             # renderer tries to open as an image. Provide a private placeholder.
@@ -2480,7 +2512,12 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
                 return b"" if as_bytes else str(placeholder)
 
             sanity.image_builder.build_image = placeholder_image
-        sanity.data = sanity.summarize()
+        sanity.data = (
+            _summarize_cam_report(sanity, ImageBuilder.QtCore, tmp)
+            if args.get("images")
+            and hasattr(sanity.image_builder, "capture_image_to_bytes")
+            else sanity.summarize()
+        )
         if hasattr(sanity, "get_all_squawks"):  # FreeCAD 26.3+
             squawks, critical = sanity.get_all_squawks()
         else:  # before: each report section holds its own findings

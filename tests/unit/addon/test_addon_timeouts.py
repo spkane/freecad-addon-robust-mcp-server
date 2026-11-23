@@ -1825,8 +1825,8 @@ async def test_queued_review_owns_capture_after_capture_session_closes(
     plugin._enable_experimental_review()
     reservations = plugin._document_reservations
     document = object()
-    reservations.open_owner("capture-session")
-    token = reservations.reserve("Model", document, "capture-session")
+    capture = reservations.begin_capture("capture-session")
+    token = reservations.reserve("Model", document, capture)
     path = tmp_path / "model.step"
     path.write_text("data")
     params = {
@@ -1913,8 +1913,9 @@ async def test_cancelled_capture_releases_late_session_reservation(
 
 
 @pytest.mark.asyncio
-async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
-    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("reserved_before_cancel", [True, False])
+async def test_cancelled_capture_handler_reclaims_worker_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, reserved_before_cancel: bool
 ) -> None:
     """Handler cancellation cannot leave an executor's later reservation behind."""
     reservations_module = importlib.import_module(
@@ -1923,17 +1924,22 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
     plugin = server_mod.FreecadMCPPlugin()
     reservations = reservations_module.DocumentReservations(1)
     plugin._document_reservations = reservations
-    started, resume, created = threading.Event(), threading.Event(), threading.Event()
-    reservation_token: str | None = None
+    started, resume, finished = threading.Event(), threading.Event(), threading.Event()
+    rejected: list[RuntimeError] = []
 
     def capture(_code: str, _timeout_ms: int) -> dict[str, Any]:
-        nonlocal reservation_token
+        token = next(iter(reservations._captures))
+        if reserved_before_cancel:
+            reservations.reserve("Model", object(), token)
         started.set()
         assert resume.wait(5)
         try:
-            reservation_token = reservations.reserve("Model", object(), "owner")
+            if not reserved_before_cancel:
+                reservations.reserve("Model", object(), token)
+        except RuntimeError as error:
+            rejected.append(error)
         finally:
-            created.set()
+            finished.set()
         return {"success": True}
 
     monkeypatch.setattr(plugin, "_execute_via_queue", capture)
@@ -1954,27 +1960,34 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
         with pytest.raises(asyncio.CancelledError):
             await task
         resume.set()
-        assert await asyncio.to_thread(created.wait, 5)
-        assert reservation_token is not None
-        async with asyncio.timeout(5):
-            while reservation_token in reservations._entries:  # noqa: ASYNC110
-                await asyncio.sleep(0.005)
+        assert await asyncio.to_thread(finished.wait, 5)
+        assert bool(rejected) is not reserved_before_cancel
+        assert not reservations._entries
     finally:
         resume.set()
 
 
 @pytest.mark.asyncio
-async def test_timed_out_capture_closes_session_before_late_reservation(
+async def test_timed_out_capture_does_not_discard_other_captures(
     server_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A running GUI call cannot reserve after the request reports a timeout."""
+    """A timed-out capture invalidates its own attempt before a late reserve."""
     reservations_module = importlib.import_module(
         "freecad_mcp_bridge.document_reservations"
     )
     plugin = server_mod.FreecadMCPPlugin()
-    reservations = reservations_module.DocumentReservations(1)
+    reservations = reservations_module.DocumentReservations(2)
     plugin._document_reservations = reservations
-    monkeypatch.setattr(plugin, "_execute_via_queue", lambda *_args: {"success": False})
+    document = object()
+    existing = reservations.begin_capture("owner")
+    reservations.reserve("Model", document, existing)
+    failed_attempts: list[str] = []
+
+    def timeout(_code: str, _timeout_ms: int) -> dict[str, Any]:
+        failed_attempts.append(next(iter(reservations._captures)))
+        return {"success": False}
+
+    monkeypatch.setattr(plugin, "_execute_via_queue", timeout)
     request = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -1983,9 +1996,9 @@ async def test_timed_out_capture_closes_session_before_late_reservation(
     }
     response = await plugin._process_jsonrpc_request(request, "owner")
     assert response["result"]["success"] is False
-    with pytest.raises(RuntimeError, match="session is closed"):
-        reservations.reserve("Model", object(), "owner")
-    assert "error" in await plugin._process_jsonrpc_request(request, "owner")
+    with pytest.raises(RuntimeError, match="cancelled"):
+        reservations.reserve("Other", object(), failed_attempts[0])
+    assert reservations.take(existing, "Model", lambda _: document)()
 
 
 @pytest.mark.asyncio

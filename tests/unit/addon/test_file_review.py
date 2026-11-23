@@ -87,6 +87,24 @@ def test_symlink_retarget_and_dangling_target(file_review: Any, tmp_path: Path) 
         file_review.snapshot_file(str(link), "write")
 
 
+@pytest.mark.parametrize(
+    ("path", "action"),
+    [("model.FCStd/.", "read"), ("model.FCStd/", "read"), ("missing.FCStd/.", "write")],
+)
+def test_file_target_rejects_directory_spelling(
+    file_review: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    action: str,
+) -> None:
+    """Validate the requested file name before normalizing directory suffixes."""
+    (tmp_path / "model.FCStd").write_text("model")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="regular file"):
+        file_review.snapshot_file(path, action)
+
+
 def test_relative_parent_after_symlink_uses_filesystem_resolution(
     file_review: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

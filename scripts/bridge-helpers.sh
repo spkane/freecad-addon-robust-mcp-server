@@ -76,7 +76,10 @@ find_freecad_executable() {
         if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* || "$OSTYPE" == win32* ]]; then
             local executable="FreeCADCmd.exe"
             [[ "$mode" == gui ]] && executable="FreeCAD.exe"
-            for candidate in "${PROGRAMFILES:-}/FreeCAD 1.0/bin/$executable" "${PROGRAMFILES:-}/FreeCAD/bin/$executable"; do
+            for candidate in \
+                "${PROGRAMFILES:-}/FreeCAD 1.1/bin/$executable" \
+                "${PROGRAMFILES:-}/FreeCAD 1.0/bin/$executable" \
+                "${PROGRAMFILES:-}/FreeCAD/bin/$executable"; do
                 if [[ -n "${PROGRAMFILES:-}" && -x "$candidate" ]]; then printf '%s\n' "$candidate"; return 0; fi
             done
         else

@@ -253,8 +253,9 @@ def test_timed_bypass_requires_affirmative_decision(
         assert request.consume() is None
 
 
+@pytest.mark.parametrize("scheduled_before_expiry", [False, True])
 def test_controller_applies_local_bypass_deadline(
-    modules: tuple, monkeypatch: pytest.MonkeyPatch
+    modules: tuple, monkeypatch: pytest.MonkeyPatch, scheduled_before_expiry: bool
 ) -> None:
     """An auto-approved request cannot be claimed after bypass expiry."""
     from types import SimpleNamespace
@@ -273,9 +274,13 @@ def test_controller_applies_local_bypass_deadline(
     controller = review.ReviewDialogController(coordinator, policy=policy)
     controller.poll()
     widgets.QDialog.assert_not_called()
-    assert coordinator.wait_and_schedule(request)
+    if scheduled_before_expiry:
+        assert coordinator.wait_and_schedule(request)
     # Simulate sleep: elapsed time advances while the request clock pauses.
     bypass_clock[0] = 101.0
+    assert request.state is approval.ApprovalState.EXPIRED
+    if not scheduled_before_expiry:
+        assert not coordinator.wait_and_schedule(request)
     assert coordinator.next_execution() is None
     controller.close()
     policy.clear_session.assert_called_once()

@@ -529,19 +529,19 @@ class TestSocketBridgeCommunication:
         assert bridge._connected is False
 
     @pytest.mark.asyncio
-    async def test_failed_capture_discards_session_before_another_request(
+    async def test_failed_capture_keeps_session_for_other_requests(
         self, mock_streams
     ) -> None:
-        """A failed capture revokes the session and forces the next call to reconnect."""
+        """A complete capture failure leaves other reservations on the stream."""
         reader, writer = mock_streams
         reader.readline.side_effect = self.authenticated_responses({"success": False})
         bridge = SocketBridge()
         bridge._reader, bridge._writer, bridge._connected = reader, writer, True
         with pytest.raises(RuntimeError, match="unable to reserve document"):
             await bridge.capture_review_document("Model")
-        writer.close.assert_called_once_with()
-        assert bridge._reader is None and bridge._writer is None
-        assert not bridge._connected
+        writer.close.assert_not_called()
+        assert bridge._reader is reader and bridge._writer is writer
+        assert bridge._connected
 
     @pytest.mark.asyncio
     async def test_cancelled_request_discards_inflight_connection(
