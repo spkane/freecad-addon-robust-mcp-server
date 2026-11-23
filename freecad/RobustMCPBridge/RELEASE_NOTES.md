@@ -31,9 +31,9 @@ clients you trust.
 
 ### Fixed
 
-- Reclaim abandoned document reservations when a capture connection closes.
-  Reviews already in the queue keep their reservation until the review uses
-  or releases it.
+- Reclaim unclaimed document reservations when their capture connection closes.
+  A queued review takes ownership of its reservation and renews its expiry.
+  Pending reviews are cancelled if their own connection closes.
 
 ## Version 0.7.2 (2026-11-07)
 
