@@ -73,6 +73,7 @@ class TestCleanupForExit:
                 "PySide2.QtCore": mock_qtcore,
                 "PySide6": MagicMock(),
                 "PySide6.QtCore": mock_qtcore,
+                "shiboken2": mock_shiboken6,
                 "shiboken6": mock_shiboken6,
             },
         ):
@@ -210,6 +211,31 @@ class TestCleanupForExit:
         calls = [call[0][0] for call in mock_qt_env["shiboken_delete"].call_args_list]
         assert mock_queue_timer in calls
         assert mock_status_timer in calls
+
+    @pytest.mark.parametrize("binding", ["PySide2", "PySide6"])
+    def test_cleanup_for_exit_deletes_review_relay_once(
+        self, mock_qt_env, monkeypatch, binding
+    ):
+        """A connected review relay is destroyed before interpreter finalization."""
+        _clear_bridge_cache()
+
+        from freecad.RobustMCPBridge.freecad_mcp_bridge import server
+
+        monkeypatch.setattr(server, "get_host_qt_binding", lambda: binding)
+        plugin = server.FreecadMCPPlugin()
+        relay = MagicMock()
+        plugin._review_close_relay = relay
+        shiboken2 = MagicMock()
+        shiboken6 = MagicMock()
+        with patch.dict(sys.modules, {"shiboken2": shiboken2, "shiboken6": shiboken6}):
+            plugin._cleanup_for_exit()
+            plugin._cleanup_for_exit()
+        selected, other = (
+            (shiboken2, shiboken6) if binding == "PySide2" else (shiboken6, shiboken2)
+        )
+        selected.delete.assert_called_once_with(relay)
+        other.delete.assert_not_called()
+        assert plugin._review_close_relay is None
 
     def test_cleanup_for_exit_does_not_use_delete_later(self, mock_qt_env):
         """_cleanup_for_exit should NOT use deleteLater().

@@ -10,7 +10,13 @@ macro-centric workflow with templates and validation.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from freecad_mcp.tools._registration import unsafe_tool
+from freecad_mcp.tools._registration import file_tool, unsafe_tool
+
+
+def _validate_macro_name(name: str) -> None:
+    """Reject path-like names before any bridge operation is dispatched."""
+    if not name or name in {".", ".."} or any(c in name for c in "/\\:\0\r\n"):
+        raise ValueError("Macro name must be a single file name, not a path")
 
 
 def register_macro_tools(
@@ -55,26 +61,26 @@ def register_macro_tools(
         macro_name: str,
         args: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Run a FreeCAD macro by name.
+        """Run a macro after reviewing its exact locally captured contents.
+
+        Local GUI review is required unless the user explicitly enabled a
+        saved version or a temporary bypass. Code runs with the FreeCAD user's
+        permissions; arguments and dependencies may change independently of
+        a saved approval. Unsupported transports fail closed.
 
         Args:
-            macro_name: Name of the macro to run (without .FCMacro extension).
-            args: Optional dictionary of arguments to pass to the macro.
-                  These will be set as variables before execution.
+            macro_name: Name without the .FCMacro extension.
+            args: JSON-compatible named variables supplied to the macro.
 
         Returns:
-            Dictionary with execution result:
-                - success: Whether macro executed successfully
-                - stdout: Captured standard output
-                - stderr: Captured standard error
-                - execution_time_ms: Execution time in milliseconds
-                - error_type: Error type if failed
-                - error_traceback: Full traceback if failed
+            Execution result, or a failure if review is unavailable or denied.
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
-        result = await bridge.run_macro(macro_name, args)
+        result = await bridge.execute_reviewed_macro(macro_name, args)
         return {
             "success": result.success,
+            "result": result.result,
             "stdout": result.stdout,
             "stderr": result.stderr,
             "execution_time_ms": result.execution_time_ms,
@@ -104,6 +110,7 @@ def register_macro_tools(
                 - path: Full path to created macro file
                 - description: Macro description
         """
+        _validate_macro_name(name)
         bridge = await get_bridge()
         macro = await bridge.create_macro(name, code, description)
         return {
@@ -112,7 +119,7 @@ def register_macro_tools(
             "description": macro.description,
         }
 
-    @mcp.tool()
+    @file_tool(mcp, read_only=True)
     async def read_macro(macro_name: str) -> dict[str, Any]:
         """Read the contents of a FreeCAD macro.
 
@@ -125,6 +132,7 @@ def register_macro_tools(
                 - code: Full macro code
                 - path: Path to macro file
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
 
         code = f"""
@@ -132,11 +140,11 @@ import os
 
 # Find macro file
 macro_name = {macro_name!r}
-macro_file = None
+macro_file = globals().get("_robust_mcp_reviewed_file_path")
 
 user_path = FreeCAD.getUserMacroDir(True)
 user_macro = os.path.join(user_path, macro_name + ".FCMacro")
-if os.path.exists(user_macro):
+if not macro_file and os.path.exists(user_macro):
     macro_file = user_macro
 
 if not macro_file:
@@ -162,7 +170,7 @@ _result_ = {{
             return result.result
         raise ValueError(result.error_traceback or "Read macro failed")
 
-    @mcp.tool()
+    @file_tool(mcp)
     async def delete_macro(macro_name: str) -> dict[str, Any]:
         """Delete a user macro.
 
@@ -176,6 +184,7 @@ _result_ = {{
                 - success: Whether deletion was successful
                 - path: Path of deleted macro
         """
+        _validate_macro_name(macro_name)
         bridge = await get_bridge()
 
         code = f"""
@@ -183,7 +192,7 @@ import os
 
 macro_name = {macro_name!r}
 user_path = FreeCAD.getUserMacroDir(True)
-macro_file = os.path.join(user_path, macro_name + ".FCMacro")
+macro_file = globals().get("_robust_mcp_reviewed_file_path") or os.path.join(user_path, macro_name + ".FCMacro")
 
 if not os.path.exists(macro_file):
     raise FileNotFoundError(f"User macro not found: {{macro_name}}")
@@ -226,6 +235,7 @@ _result_ = {{
                 - path: Full path to created macro file
                 - template: Template used
         """
+        _validate_macro_name(name)
         templates = {
             "basic": """
 # Your macro code goes here

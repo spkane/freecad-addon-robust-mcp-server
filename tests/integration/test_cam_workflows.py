@@ -81,7 +81,7 @@ def _register(bridge: XmlRpcBridge) -> Tools:
     mcp = MagicMock()
     tools: Tools = {}
 
-    def tool_decorator() -> Callable[[Any], Any]:
+    def tool_decorator(**_kwargs: Any) -> Callable[[Any], Any]:
         def wrapper(func: Any) -> Any:
             tools[func.__name__] = func
             return func
@@ -114,8 +114,13 @@ async def bridge() -> AsyncIterator[XmlRpcBridge]:
 
 
 @pytest.fixture
-async def tools(bridge: XmlRpcBridge) -> Tools:
-    """The CAM tools, registered against the live bridge."""
+async def tools(bridge: XmlRpcBridge, monkeypatch: pytest.MonkeyPatch) -> Tools:
+    """Run unattended CAM coverage with the explicit XML-RPC automation override.
+
+    Default-deny and reviewed socket behavior have separate tests; this suite
+    exercises CAM itself and cannot interact with a GUI review dialog.
+    """
+    monkeypatch.setenv("FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS", "true")
     return _register(bridge)
 
 
@@ -146,6 +151,45 @@ async def doc(bridge: XmlRpcBridge) -> AsyncIterator[str]:
 def _version(caps: dict[str, Any]) -> tuple[int, ...]:
     """The connected FreeCAD's version as a tuple, e.g. (1, 1, 4)."""
     return tuple(int(p) for p in caps["freecad_version"].split("."))
+
+
+@pytest.mark.asyncio
+async def test_legacy_empty_tool_shape_cleanup(
+    bridge: XmlRpcBridge, doc: str, caps: dict[str, Any]
+) -> None:
+    """FreeCAD 1.0 must not retain the factory's partial ToolBit or source."""
+    if _version(caps) >= (1, 1):
+        pytest.skip("The legacy tool factory is used by FreeCAD 1.0")
+    result = await bridge.execute_python(
+        f"""
+import importlib
+import os
+import tempfile
+
+package = _robust_mcp_cam_dispatch.__globals__.get('__package__')
+runtime = importlib.import_module((package + '.' if package else '') + 'cam_runtime')
+target = FreeCAD.getDocument({doc!r})
+before = [item.Name for item in target.Objects]
+with tempfile.TemporaryDirectory(prefix='cam-empty-shape-') as folder:
+    shape = os.path.join(folder, 'empty.fcstd')
+    source = FreeCAD.newDocument('EmptyCamShape')
+    source.saveAs(shape)
+    FreeCAD.closeDocument(source.Name)
+    FreeCAD.setActiveDocument(target.Name)
+    try:
+        runtime._legacy_tool_bit(target, {{'shape': shape}}, reviewed_shape=True)
+    except runtime._ReviewedLegacyToolError:
+        after = [item.Name for item in target.Objects]
+        sources = [name for name, item in FreeCAD.listDocuments().items()
+                   if item.FileName and os.path.realpath(item.FileName) == os.path.realpath(shape)]
+        _result_ = {{'before': before, 'after': after, 'source_documents': sources}}
+    else:
+        raise AssertionError('The empty shape unexpectedly created a tool')
+"""
+    )
+    assert result.success, result.error_traceback or result.stderr
+    assert result.result["after"] == result.result["before"]
+    assert result.result["source_documents"] == []
 
 
 def _mm(value: Any) -> float:
@@ -430,7 +474,7 @@ async def test_place_model(tools: Tools, doc: str) -> None:
     assert (x_max, y_max, z_min) == pytest.approx((60, 40, -10), abs=1e-6)
 
 
-async def test_check_job(tools: Tools, doc: str) -> None:
+async def test_check_job(tools: Tools, doc: str, tmp_path: Path) -> None:
     """FreeCAD's job check runs and returns its findings."""
     setup = await _job_with_tools(tools, doc)
     await tools["cam_add_operation"](
@@ -439,6 +483,13 @@ async def test_check_job(tools: Tools, doc: str) -> None:
     result = await tools["cam_check_job"](doc_name=doc)
     assert isinstance(result["findings"], list)
     assert "ok" in result
+    report = tmp_path / "report.html"
+    thumbnail = tmp_path / "T1.png"
+    thumbnail.write_bytes(b"existing")
+    result = await tools["cam_check_job"](doc_name=doc, report_file=str(report))
+    assert result["report_file"] == str(report)
+    assert report.is_file()
+    assert thumbnail.read_bytes() == b"existing"
 
 
 async def test_simulate(tools: Tools, doc: str) -> None:

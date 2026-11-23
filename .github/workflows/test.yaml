@@ -101,7 +101,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
 
       - name: Cache uv dependencies
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -131,10 +131,13 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --python 3.11.9 --all-extras
 
       - name: Verify Credential Manager pairing
         run: uv run pytest tests/unit/test_windows_bridge_credential_store.py -v --tb=short
+
+      - name: Verify Windows private scratch ACL and cleanup
+        run: uv run pytest tests/unit/test_private_scratch.py tests/unit/test_screenshot_capture.py tests/unit/addon/test_cam_scratch.py -v --tb=short
 
       - name: Verify XML-RPC slow-client deadline on Windows
         shell: pwsh
@@ -154,7 +157,7 @@ jobs:
         run: uv run pytest tests/unit/test_workbench_installer.py -v --tb=short
 
       - name: Install just on Windows
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
           install_args: just
           env: "false"
@@ -176,7 +179,7 @@ jobs:
         uses: ./.github/actions/setup-freecad
 
       - name: Install mise
-        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
 
       - name: Cache uv dependencies
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3

@@ -97,8 +97,8 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    # Default to xmlrpc mode (requires FreeCAD running externally)
-    FREECAD_MODE="xmlrpc" \
+    # Default to socket mode (requires FreeCAD running externally)
+    FREECAD_MODE="socket" \
     FREECAD_SOCKET_HOST="host.docker.internal" \
     FREECAD_SOCKET_PORT="9876" \
     FREECAD_XMLRPC_PORT="9875" \

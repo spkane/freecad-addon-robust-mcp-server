@@ -34,7 +34,10 @@ versioned package directory; follow the guide when using a compatible archive.
 
 1. Switch to the **MCP Bridge** workbench in FreeCAD
 1. Click **Start Bridge** in the toolbar
-1. The status indicator turns green when running
+1. Check the status indicator or startup output to confirm the bridge is running
+
+In workbench 0.8.0 and later, the running status includes a Python
+permissions warning. Older releases may show a different status message.
 
 You'll see a confirmation message:
 
@@ -46,18 +49,27 @@ MCP Bridge started!
 
 ### Stopping the Bridge
 
-Click **Stop Bridge** in the toolbar. The status indicator turns red.
+Click **Stop Bridge** in the toolbar. The status indicator turns gray.
 
 ### Status Indicator
 
-Hover over the status indicator to see the installed bridge version and its
-current status.
+The following states describe workbench 0.8.0. Status text and colors in older
+releases may differ.
 
-| Color  | Status                                |
-| ------ | ------------------------------------- |
-| Green  | Bridge running, accepting connections |
-| Red    | Bridge stopped                        |
-| Yellow | Bridge starting/stopping              |
+Hover over the status indicator to see the installed bridge version, listener
+status, and the permissions available to authorized clients. The running
+warning remains visible without interrupting automation. It also appears when
+the bridge is started without selecting the workbench.
+
+| Color  | Status                                                       |
+| ------ | ------------------------------------------------------------ |
+| Amber  | Bridge running, accepting Python with the user's permissions |
+| Gray   | Bridge stopped                                               |
+| Yellow | Bridge starting                                              |
+| Red    | Bridge error                                                 |
+
+See the [security guide](security.md) for what pairing and the warning do and
+do not protect against.
 
 ---
 
@@ -114,14 +126,22 @@ Press Ctrl+C to stop.
 | ------------------------ | -------- | ------------- |
 | Object creation          | Yes      | Yes           |
 | Boolean operations       | Yes      | Yes           |
-| Export (STEP, STL, etc.) | Yes      | Yes           |
-| Macro execution          | Yes      | Yes           |
-| Document management      | Yes      | Yes           |
+| Export (STEP, STL, etc.) | Yes      | See below     |
+| MCP macro execution      | Socket   | **No**        |
+| Document management      | Yes      | See below     |
 | Screenshots              | Yes      | **No**        |
 | Object colors            | Yes      | **No**        |
 | Object visibility        | Yes      | **No**        |
 | Camera/view control      | Yes      | **No**        |
 | Interactive selection    | Yes      | **No**        |
+
+MCP macro execution also requires unsafe tools to be enabled and is reviewed
+in FreeCAD by default. See [macro review](security.md#macro-review-and-saved-versions).
+
+In headless mode, supported file operations, including opening, saving, and
+exporting documents, require `FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true`.
+This explicit override bypasses local file review; other document operations do
+not require it. See the [security guide](security.md) for coverage and limitations.
 
 !!! info "GUI-Only Features"
 When a GUI-only feature is requested in headless mode, the Robust MCP Server returns a structured error response instead of crashing: `{"success": false, "error": "GUI not available - screenshots cannot be captured in headless mode"}`
@@ -161,7 +181,7 @@ The external Robust MCP Server (used by Claude Code, etc.) is configured separat
 
 | Environment Variable  | Description                                    | Default     |
 | --------------------- | ---------------------------------------------- | ----------- |
-| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, `embedded`| `xmlrpc`    |
+| `FREECAD_MODE`        | Connection mode: `xmlrpc`, `socket`, `embedded`| `socket`    |
 | `FREECAD_XMLRPC_PORT` | XML-RPC server port                            | 9875        |
 | `FREECAD_SOCKET_PORT` | JSON-RPC socket server port                    | 9876        |
 | `FREECAD_SOCKET_HOST` | Socket/XML-RPC server hostname                 | `localhost` |
@@ -183,8 +203,8 @@ Example MCP client configuration with custom ports:
 ```
 
 !!! info "Choosing a Connection Mode"
-    - **`xmlrpc`** (recommended): Most reliable, works on all platforms. Connects to FreeCAD via XML-RPC protocol.
-    - **`socket`**: Alternative protocol using JSON-RPC over TCP sockets. Also works on all platforms.
+    - **`xmlrpc`**: Connects via XML-RPC. Local file and code review are unavailable.
+    - **`socket`** (recommended): Connects via JSON-RPC and supports local review in GUI mode.
     - **`embedded`**: Direct Python import of FreeCAD (Linux only). Does not require the workbench but crashes on macOS due to library linking issues. Not recommended for production use.
 
 !!! warning "Port Matching Required"
@@ -250,7 +270,7 @@ If the console reports that FreeCAD's matching PySide binding could not be loade
 
 **Solution:**
 
-1. Verify the bridge is running (green status indicator)
+1. Verify the bridge is running using its status indicator or startup output
 1. Check that ports match between workbench and Robust MCP Server config
 1. On Docker Desktop, verify that `FREECAD_SOCKET_HOST` is set to
    `host.docker.internal`
@@ -258,7 +278,7 @@ If the console reports that FreeCAD's matching PySide binding could not be loade
    container gateway cannot reach the bridge's loopback-only listener
 
 Do not rebind the bridge to `0.0.0.0` to resolve this error. The bridge accepts
-unauthenticated Python execution, so non-loopback access is unsafe until
+Python execution from paired clients, so non-loopback access is unsafe until
 protected remote transport is implemented.
 
 ### Headless Mode Hangs

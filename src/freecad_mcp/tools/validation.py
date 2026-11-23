@@ -475,6 +475,10 @@ else:
         4. Automatically rolls back if validation fails (optional)
 
         Use this for complex operations where you want automatic error recovery.
+        Local approval requires a GUI bridge and a socket connection. XML-RPC,
+        embedded, headless, and older bridges cannot provide it. A failed review
+        is reported without execution; after a lost commit response, execution
+        may already be running and is not retried.
 
         Args:
             code: Python code to execute. Use _result_ = value to return data.
@@ -486,8 +490,8 @@ else:
             Dictionary containing:
                 - success: Whether the operation succeeded (execution + validation)
                 - result: The value assigned to _result_ in the code (if any)
-                - rolled_back: Whether a rollback was performed
-                - execution_success: Whether the code executed without exceptions
+                - rolled_back: Whether rollback was performed, or None if unknown
+                - execution_success: Execution outcome, or None if unknown
                 - execution_error: Any execution error message
                 - validation: Validation results (if validate_after is True)
                 - message: Human-readable summary
@@ -634,15 +638,22 @@ else:
         "message": message
     }}
 """
-        result = await bridge.execute_python(wrapper_code)
+        result = await bridge.execute_reviewed_python(wrapper_code)
         if result.success and result.result:
             return result.result
+        # After dispatch, even an exception or an unserializable result can
+        # follow document or external side effects. Only a denied/unavailable
+        # review establishes that the operation did not start.
+        unknown = result.error_type not in {"ReviewUnavailable", "ReviewDenied"}
         return {
             "success": False,
             "result": None,
-            "rolled_back": False,
-            "execution_success": False,
-            "execution_error": result.error_traceback or "Safe execute failed",
+            "rolled_back": None if unknown else False,
+            "execution_success": None if unknown else False,
+            "error_type": result.error_type,
+            "execution_error": result.error_traceback
+            or result.stderr
+            or "Safe execute failed",
             "validation": None,
-            "message": result.error_traceback or "Safe execute failed",
+            "message": result.error_traceback or result.stderr or "Safe execute failed",
         }

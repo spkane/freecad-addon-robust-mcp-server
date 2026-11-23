@@ -101,6 +101,47 @@ class TestTestingRuntime:
         assert result.returncode == expected, result.stdout + result.stderr
 
     @pytest.mark.just_runtime
+    @pytest.mark.parametrize(
+        ("mode", "executable"),
+        [("gui", "FreeCAD.exe"), ("headless", "FreeCADCmd.exe")],
+    )
+    @pytest.mark.parametrize(
+        "installations",
+        [
+            ("FreeCAD 1.0",),
+            ("FreeCAD 1.1",),
+            ("FreeCAD",),
+            ("FreeCAD 1.1", "FreeCAD 1.0", "FreeCAD"),
+        ],
+    )
+    def test_freecad_executable_finds_windows_installation(
+        self, tmp_path: Path, mode: str, executable: str, installations: tuple[str, ...]
+    ) -> None:
+        """Find FreeCAD under Program Files when it is absent from PATH."""
+        helper = Path(__file__).resolve().parents[2] / "scripts/bridge-helpers.sh"
+        candidates = [tmp_path / name / "bin" / executable for name in installations]
+        for candidate in candidates:
+            candidate.parent.mkdir(parents=True)
+            candidate.write_text("")
+            candidate.chmod(0o755)
+        result = subprocess.run(  # noqa: S603
+            [
+                "/bin/bash",
+                "-c",
+                'OSTYPE=msys; . "$1"; find_freecad_executable "$2"',
+                "bash",
+                str(helper),
+                mode,
+            ],
+            env={"PATH": str(tmp_path), "PROGRAMFILES": str(tmp_path)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(candidates[0])
+
+    @pytest.mark.just_runtime
     @pytest.mark.parametrize("mode", ["gui", "headless"])
     def test_missing_freecad_executable_reports_error(
         self, tmp_path: Path, mode: str
@@ -111,12 +152,12 @@ class TestTestingRuntime:
             [
                 "/bin/bash",
                 "-c",
-                '. "$1"; find_freecad_executable "$2"',
+                'OSTYPE=msys; . "$1"; find_freecad_executable "$2"',
                 "bash",
                 str(helper),
                 mode,
             ],
-            env={"PATH": str(tmp_path), "OSTYPE": "linux-gnu"},
+            env={"PATH": str(tmp_path)},
             capture_output=True,
             text=True,
             check=False,

@@ -28,7 +28,8 @@ The Qt5 test lane checks compatibility with older FreeCAD, not its security supp
 ### Method 1: Public releases with pip
 
 > **Compatibility:** The pairing workflow requires both components at version
-> 0.7.0 or later. Older 0.6.x releases do not support bridge pairing.
+> 0.7.0 or later. Older 0.6.x releases do not support bridge pairing. For
+> local file review, install both the 0.8.0 server and 0.8.0 workbench.
 
 #### MCP server
 
@@ -85,21 +86,21 @@ selects stable releases, not these pre-release assets.
    only when you intend to test it.
 2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and
    open a new Terminal (macOS/Linux) or PowerShell (Windows). The following
-   commands install the downloaded **0.7.0** wheel from Downloads. For a
+   commands install the downloaded **0.8.0** wheel from Downloads. For a
    different release or download location, substitute the actual filename and
    path. Release candidates may use different version spelling in wheel names.
 
    On macOS or Linux:
 
    ```bash
-   uv tool install --force "$HOME/Downloads/freecad_robust_mcp-0.7.0-py3-none-any.whl"
+   uv tool install --force "$HOME/Downloads/freecad_robust_mcp-0.8.0-py3-none-any.whl"
    uv tool update-shell
    ```
 
    On Windows PowerShell:
 
    ```powershell
-   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-0.7.0-py3-none-any.whl"
+   uv tool install --force "$env:USERPROFILE\Downloads\freecad_robust_mcp-0.8.0-py3-none-any.whl"
    uv tool update-shell
    ```
 
@@ -114,8 +115,8 @@ selects stable releases, not these pre-release assets.
 #### FreeCAD workbench bridge
 
 1. Quit FreeCAD. Open [workbench releases](https://github.com/spkane/freecad-addon-robust-mcp-server/releases?q=robust-mcp-workbench)
-   and select the matching compatible release. For 0.7.0, download
-   `freecad-mcp-workbench-0.7.0.zip`. Its `.tar.gz` alternative contains
+   and select the matching compatible release. For 0.8.0, download
+   `freecad-mcp-workbench-0.8.0.zip`. Its `.tar.gz` alternative contains
    the same workbench.
 2. Extract the package folder into the active FreeCAD profile's `Mod` folder.
    It must directly contain `package.xml` and `freecad`. Move any older Robust
@@ -185,10 +186,10 @@ Restart or reconnect the assistant, then ask it to check the FreeCAD connection.
 
 #### MCP server
 
-For version 0.7.0, pull the versioned server image:
+For version 0.8.0, pull the versioned server image:
 
 ```bash
-docker pull spkane/freecad-robust-mcp:0.7.0
+docker pull spkane/freecad-robust-mcp:0.8.0
 ```
 
 For another release, use its matching image tag and compatible workbench. To
@@ -197,8 +198,8 @@ checkout and use a workbench built from that same checkout.
 
 #### FreeCAD workbench bridge
 
-Install a compatible workbench in the FreeCAD profile you use. For the 0.7.0
-image, use the 0.7.0 workbench archive and follow the
+Install a compatible workbench in the FreeCAD profile you use. For the 0.8.0
+image, use the 0.8.0 workbench archive and follow the
 [release archive instructions](#manual-installation-from-a-release-archive).
 
 #### Pair and configure
@@ -208,9 +209,9 @@ credential provisioning procedure. Run the MCP server on the host for the
 normal paired setup. See the [container configuration guide](configuration.md#docker-desktop-configuration)
 for its current limits.
 
-**Note:** The Docker container runs the Robust MCP Server only—it does not include FreeCAD itself. You must run FreeCAD with the Robust MCP Bridge workbench on your host machine (or in a separate container) and configure the Robust MCP Server to connect via `xmlrpc` or `socket` mode.
+**Note:** The Docker container runs the Robust MCP Server only—it does not include FreeCAD itself. You must run FreeCAD with the Robust MCP Bridge workbench on your host machine (or in a separate container) and configure the Robust MCP Server to connect via `socket` mode. Docker Desktop forwarding uses `host.docker.internal`, which the XML-RPC listener rejects.
 
-**Why embedded mode doesn't work with Docker:** Embedded mode requires FreeCAD and the Robust MCP Server to run in the same process, which is impossible when FreeCAD runs on the host and the Robust MCP Server runs inside a Docker container. Additionally, embedded mode fails on macOS due to ABI incompatibility with FreeCAD's bundled Python libraries (`libpython3.11.dylib`). Always use `xmlrpc` or `socket` mode for Docker deployments.
+**Why embedded mode doesn't work with Docker:** Embedded mode requires FreeCAD and the Robust MCP Server to run in the same process, which is impossible when FreeCAD runs on the host and the Robust MCP Server runs inside a Docker container. Additionally, embedded mode fails on macOS due to ABI incompatibility with FreeCAD's bundled Python libraries (`libpython3.11.dylib`). Use `socket` mode for Docker Desktop as described above.
 
 ---
 
@@ -287,11 +288,11 @@ print(os.path.join(App.getUserAppDataDir(), "Mod"))
 
 Use the printed directory, creating it if needed. Move the **entire top-level
 package folder** into `Mod`, not just the inner `freecad` or
-`RobustMCPBridge` folder. For 0.7.0, the installed layout is:
+`RobustMCPBridge` folder. For 0.8.0, the installed layout is:
 
 ```text
 Mod/
-└── freecad-mcp-workbench-0.7.0/
+└── freecad-mcp-workbench-0.8.0/
     ├── package.xml
     ├── LICENSE-CODE
     ├── LICENSE-MIT

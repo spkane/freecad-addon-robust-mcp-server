@@ -943,9 +943,10 @@ _result_ = {
 **Check constraints:**
 ```python
 execute_python('''
+FreeCAD.ActiveDocument.recompute()  # Refresh the solver before inspecting DoF.
 sketch = FreeCAD.ActiveDocument.getObject("SketchName")
 _result_ = {
-    "dof": sketch.solve(),  # Degrees of freedom
+    "dof": getattr(sketch, "DoF", None),  # Degrees of freedom
     "constraint_count": sketch.ConstraintCount,
     "geometry_count": sketch.GeometryCount
 }

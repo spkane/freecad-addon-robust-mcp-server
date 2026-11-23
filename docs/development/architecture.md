@@ -50,7 +50,7 @@ src/freecad_mcp/
 │   ├── base.py            # Abstract bridge interface
 │   ├── embedded.py        # In-process FreeCAD (Linux only)
 │   ├── socket.py          # JSON-RPC socket bridge
-│   └── xmlrpc.py          # XML-RPC bridge (recommended)
+│   └── xmlrpc.py          # XML-RPC bridge
 │
 ├── tools/                 # MCP tool implementations
 │   ├── __init__.py

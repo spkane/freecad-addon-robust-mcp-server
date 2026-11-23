@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import hashlib
 import hmac
 import http.client
@@ -18,6 +19,7 @@ import types
 import xmlrpc.client
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, call
 
@@ -368,15 +370,77 @@ def test_gui_status_warns_that_bridge_accepts_python(
     plugin._listener_states = {"xmlrpc": "running", "socket": "running"}
     plugin._set_status_bar = MagicMock()
     plugin._update_status_bar()
-    assert "Python execution enabled" in plugin._set_status_bar.call_args.args[0]
+    assert (
+        "client code has your permissions" in plugin._set_status_bar.call_args.args[0]
+    )
     status_module.update_status_running.assert_called_once_with(
-        9875, 9876, 0, xmlrpc_running=True, socket_running=True, errors=""
+        9875,
+        9876,
+        0,
+        xmlrpc_running=True,
+        socket_running=True,
+        errors="",
+        review_bypassed=False,
+        macro_review_bypassed=False,
+        file_review_bypassed=False,
+    )
+    status_module.update_status_running.reset_mock()
+    plugin._review_controller = SimpleNamespace(
+        _policy=SimpleNamespace(requires_review=lambda _action: False)
+    )
+    plugin._update_status_bar()
+    assert (
+        status_module.update_status_running.call_args.kwargs["review_bypassed"] is True
+    )
+    assert (
+        status_module.update_status_running.call_args.kwargs["file_review_bypassed"]
+        is True
     )
     plugin._listener_states["xmlrpc"] = "disabled"
     plugin._update_status_bar()
     status_module.update_status_running.assert_called_with(
-        9875, 9876, 0, xmlrpc_running=False, socket_running=True, errors=""
+        9875,
+        9876,
+        0,
+        xmlrpc_running=False,
+        socket_running=True,
+        errors="",
+        review_bypassed=True,
+        macro_review_bypassed=True,
+        file_review_bypassed=True,
     )
+
+
+def test_standalone_warning_is_permanent_and_removed_on_stop(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Standalone GUI startup needs a non-modal warning without the workbench."""
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(server_mod, "FreeCAD", MagicMock(GuiUp=True), raising=False)
+    monkeypatch.setattr(server_mod, "__package__", "standalone_bridge")
+    monkeypatch.delitem(
+        sys.modules, "freecad.RobustMCPBridge.Qt.status_widget", raising=False
+    )
+    status_bar, label = MagicMock(), MagicMock()
+    gui = SimpleNamespace(
+        getMainWindow=lambda: SimpleNamespace(statusBar=lambda: status_bar)
+    )
+    monkeypatch.setattr(server_mod, "FreeCADGui", gui, raising=False)
+    qt = SimpleNamespace(QLabel=MagicMock(return_value=label))
+    monkeypatch.setattr(server_mod, "load_qt_core_widgets", lambda: (None, qt))
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._listener_states = {"xmlrpc": "running", "socket": "running"}
+
+    plugin._update_status_widget()
+    plugin._update_status_widget()
+    status_bar.addPermanentWidget.assert_called_once_with(label)
+    assert "full user permissions" in qt.QLabel.call_args.args[0]
+    assert "files and network" in label.setToolTip.call_args.args[0]
+
+    plugin._stop_status_updates()
+    label.setParent.assert_called_once_with(None)
+    label.deleteLater.assert_called_once_with()
+    assert plugin._standalone_warning is None
 
 
 @pytest.mark.parametrize("freecad_available", [False, True])
@@ -431,8 +495,10 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     widget = module.MCPStatusWidget()
     widget._widget = MagicMock()
     widget.set_running(9875, 9876, 1)
-    assert "Python execution enabled" in widget._widget.setText.call_args.args[0]
+    assert "Python: full user permissions" in widget._widget.setText.call_args.args[0]
     assert "authorized clients" in widget._widget.setToolTip.call_args.args[0]
+    assert "full permissions" in widget._widget.setToolTip.call_args.args[0]
+    assert "files and network" in widget._widget.setToolTip.call_args.args[0]
     widget.set_running(
         9875,
         9876,
@@ -446,6 +512,32 @@ def test_permanent_status_widget_warns_that_bridge_accepts_python(
     assert "XML-RPC: listening" in tooltip and "JSON-RPC: unavailable" in tooltip
     assert "check preferences" in tooltip and "authorized clients" in tooltip
     assert module.__version__ in tooltip
+    policy = MagicMock()
+    policy.requires_review.return_value = False
+    plugin = MagicMock(
+        is_running=True, xmlrpc_port=9875, socket_port=9876, request_count=1
+    )
+    plugin._review_controller = types.SimpleNamespace(_policy=policy)
+    plugin.get_status.return_value = {
+        "listeners": {"xmlrpc": "running", "socket": "running"},
+        "listener_errors": {},
+    }
+    monkeypatch.setitem(
+        sys.modules,
+        "freecad.RobustMCPBridge.commands",
+        types.SimpleNamespace(_mcp_plugin=plugin),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "freecad.RobustMCPBridge.preferences",
+        types.SimpleNamespace(get_status_bar_enabled=lambda: True),
+    )
+    synced = MagicMock()
+    synced.install.return_value = True
+    monkeypatch.setattr(module, "get_status_widget", lambda: synced)
+    module.sync_status_with_bridge()
+    assert synced.set_running.call_args.kwargs["review_bypassed"] is True
+    assert synced.set_running.call_args.kwargs["macro_review_bypassed"] is True
     for method, args in (
         (widget.set_stopped, ()),
         (widget.set_starting, ()),
@@ -484,6 +576,55 @@ def test_xmlrpc_execute_accepts_timeout_and_preserves_one_argument_clients(
         call("first", 30000),
         call("second", 60000),
     ]
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_xmlrpc_screenshot_uses_and_cleans_user_directory(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fail: bool
+) -> None:
+    """Legacy XML-RPC screenshots remove their private directory on all exits."""
+    import os
+
+    original_expanduser = os.path.expanduser
+    monkeypatch.setattr(
+        os.path,
+        "expanduser",
+        lambda path: str(tmp_path) if path == "~" else original_expanduser(path),
+    )
+    created = []
+
+    class View3DInventor:
+        def viewIsometric(self) -> None:
+            pass
+
+        def saveImage(self, path: str, *_args: object) -> None:
+            image = Path(path)
+            assert image.parent.parent == tmp_path
+            created.append(image.parent)
+            image.write_bytes(b"png")
+            if fail:
+                raise RuntimeError("capture failed")
+
+    view = View3DInventor()
+    environment = {
+        "FreeCAD": SimpleNamespace(GuiUp=True, ActiveDocument=object()),
+        "FreeCADGui": SimpleNamespace(ActiveDocument=SimpleNamespace(ActiveView=view)),
+    }
+    plugin = server_mod.FreecadMCPPlugin()
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", False)
+
+    def execute(code: str, _timeout: int) -> dict[str, Any]:
+        return plugin._execute_code_sync(code, initial_globals=environment)
+
+    plugin._execute_via_queue = execute
+    if fail:
+        assert plugin._xmlrpc_get_view() == {
+            "success": False,
+            "error": "capture failed",
+        }
+    else:
+        assert base64.b64decode(plugin._xmlrpc_get_view()["data"]) == b"png"
+    assert created and not created[0].exists()
 
 
 @pytest.mark.asyncio
@@ -787,6 +928,23 @@ def test_xmlrpc_listener_authenticates_before_dispatch(server_mod: Any) -> None:
                 connection.close()
 
         body = xmlrpc.client.dumps((), methodname="ping").encode()
+        for method, path in (("GET", "/challenge"), ("POST", "/RPC2")):
+            for host in ("example.com", "localhost.example.com", "localhost@evil.test"):
+                assert request(method, path, body, Host=host)[0] == 403
+            assert request(method, path, body, Origin="http://localhost:3000")[0] == 403
+            assert request(method, path, body, Origin="null")[0] == 403
+        assert request("GET", "/challenge", Host="localhost:54321")[0] == 200
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+        try:
+            connection.putrequest("GET", "/challenge", skip_host=True)
+            connection.putheader("Host", "localhost")
+            connection.putheader("Host", "127.0.0.1")
+            connection.endheaders()
+            response = connection.getresponse()
+            assert response.status == 403
+            response.read()
+        finally:
+            connection.close()
         assert request("POST", "/RPC2", body)[0] == 401
         status, challenge_bytes = request("GET", "/challenge")
         assert status == 200
@@ -1173,3 +1331,1586 @@ def test_running_request_reports_that_execution_may_continue(
 
     assert result["error_type"] == "TimeoutError"
     assert "may continue" in result["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_socket_disconnect_does_not_cancel_inflight_handler(
+    server_mod: Any,
+) -> None:
+    """Document why a future approval path needs explicit disconnect handling.
+
+    This probes the socket loop only: authentication and code execution are
+    replaced by a blocked coroutine so no FreeCAD mutation can occur.
+    """
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    completed = asyncio.Event()
+    handler_finished = asyncio.Event()
+    readers: list[Any] = []
+
+    async def blocked_handler(
+        _envelope: Any, _session: Any, _owners: Any
+    ) -> dict[str, Any]:
+        entered.set()
+        await release.wait()
+        completed.set()
+        return {"result": "probe"}
+
+    plugin._process_socket_envelope = blocked_handler
+
+    async def handle(reader: Any, writer: Any) -> None:
+        readers.append(reader)
+        try:
+            await plugin._handle_socket_client(reader, writer)
+        finally:
+            handler_finished.set()
+
+    listener = await asyncio.start_server(handle, "127.0.0.1", 0)
+    port = listener.sockets[0].getsockname()[1]
+    writer = None
+    try:
+        _reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        writer.write(b"{}\n")
+        await writer.drain()
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        writer.close()
+        await writer.wait_closed()
+        async with asyncio.timeout(2):
+            while not readers[0].at_eof():  # noqa: ASYNC110 - no EOF event API
+                await asyncio.sleep(0.01)
+        assert not completed.is_set()
+        release.set()
+        await asyncio.wait_for(completed.wait(), timeout=2)
+    finally:
+        release.set()
+        plugin._running = False
+        if writer is not None:
+            writer.close()
+            await writer.wait_closed()
+        listener.close()
+        await listener.wait_closed()
+        if writer is not None:
+            await asyncio.wait_for(handler_finished.wait(), timeout=2)
+
+
+@pytest.mark.asyncio
+async def test_socket_review_requires_authenticated_owner_and_explicit_commit(
+    server_mod: Any,
+) -> None:
+    """A verified socket identity cannot commit another client's review."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    secrets = {"alice": b"a" * 32, "bob": b"b" * 32}
+    authenticator = auth.BridgeAuthenticator(auth.create_hmac_verifier(secrets.get))
+    plugin = server_mod.FreecadMCPPlugin(authenticator=authenticator)
+    coordinator = approval.ReviewCoordinator(2)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 2)
+
+    async def call(
+        client: str, method: str, params: dict, *, wrong: bool = False
+    ) -> dict:
+        body = json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+        ).encode()
+        challenge = authenticator.issue_challenge()
+        message = auth.request_proof_message(client, challenge, "socket", body)
+        secret = b"z" * 32 if wrong else secrets[client]
+        return await plugin._process_socket_envelope(
+            {
+                "client": client,
+                "challenge": challenge,
+                "body": base64.b64encode(body).decode(),
+                "proof": base64.b64encode(
+                    hmac.digest(secret, message, "sha256")
+                ).decode(),
+            },
+            "test-session",
+            set(),
+        )
+
+    begin = await call("alice", "review_begin", {"code": "print(1)"})
+    review_id = begin["result"]["review_id"]
+    request = coordinator.next_review()
+    assert request is not None and request.decide(approved=True)
+    assert coordinator.next_execution() is None
+    assert (
+        await call("alice", "review_commit", {"review_id": review_id}, wrong=True)
+    ) == {"error": "Bridge authentication required"}
+    assert not (await call("bob", "review_commit", {"review_id": review_id}))["result"][
+        "scheduled"
+    ]
+    assert (await call("alice", "review_commit", {"review_id": review_id}))["result"][
+        "scheduled"
+    ]
+    assert not (await call("alice", "review_commit", {"review_id": review_id}))[
+        "result"
+    ]["scheduled"]
+    claimed = coordinator.next_execution()
+    assert claimed == (review_id, request.payload)
+    assert claimed[1].content == b"print(1)"
+    assert coordinator.next_execution() is None
+    coordinator.close()
+
+
+@pytest.mark.asyncio
+async def test_socket_review_disabled_without_local_broker(server_mod: Any) -> None:
+    """An authenticated request cannot silently downgrade to raw execution."""
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._execute_via_queue = MagicMock()
+    response = await plugin._process_jsonrpc_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "review_begin",
+            "params": {"code": "pass"},
+        },
+        "alice",
+    )
+    assert response["error"]["message"] == "Local review is unavailable"
+    plugin._execute_via_queue.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_undisplayable_review_code_reports_reason_without_echoing_content(
+    server_mod: Any,
+) -> None:
+    """Reject misleading review text without returning its contents."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._execute_via_queue = MagicMock()
+    coordinator = approval.ReviewCoordinator(1)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
+    code = "sensitive_example\r\npass"
+    response = await plugin._process_jsonrpc_request(
+        {"jsonrpc": "2.0", "id": 1, "method": "review_begin", "params": {"code": code}},
+        "alice",
+    )
+    assert response["error"]["code"] == -32602
+    assert "cannot be displayed" in response["error"]["message"]
+    assert "sensitive_example" not in str(response)
+    assert coordinator.next_review() is None
+    plugin._execute_via_queue.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_socket_review_disconnect_cancels_session_approvals(
+    server_mod: Any,
+) -> None:
+    """Disconnect cancels pending and committed tickets for that connection."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "alice" else None)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=authenticator
+    )
+    coordinator = approval.ReviewCoordinator(1)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._running = True
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+    other = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+    try:
+        await bridge.connect()
+        response = await bridge._send_request("review_begin", {"code": "print(1)"})
+        review_id = response["review_id"]
+        request = coordinator.next_review()
+        assert request is not None
+        await bridge.disconnect()
+        assert (
+            await asyncio.wait_for(asyncio.to_thread(request.wait_for_decision), 2)
+            == approval.ApprovalState.DENIED
+        )
+        assert not request.decide(approved=True)
+        assert coordinator.next_execution() is None
+        await bridge.connect()
+        result = await bridge._send_request("review_commit", {"review_id": review_id})
+        assert result == {"scheduled": False}
+
+        response2 = await bridge._send_request("review_begin", {"code": "print(2)"})
+        request2 = coordinator.next_review()
+        assert request2 is not None and request2.decide(approved=True)
+        await other.connect()
+        assert not (
+            await other._send_request(
+                "review_commit", {"review_id": response2["review_id"]}
+            )
+        )["scheduled"]
+        assert (
+            await bridge._send_request(
+                "review_commit", {"review_id": response2["review_id"]}
+            )
+        )["scheduled"]
+        await bridge.disconnect()
+        async with asyncio.timeout(2):
+            while request2.state == approval.ApprovalState.APPROVED:  # noqa: ASYNC110
+                await asyncio.sleep(0.01)
+        assert coordinator.next_execution() is None
+    finally:
+        await bridge.disconnect()
+        await other.disconnect()
+        coordinator.close()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_xmlrpc_does_not_expose_unbound_review_methods(server_mod: Any) -> None:
+    """XML-RPC cannot bypass session ownership with experimental review calls."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "alice" else None)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", xmlrpc_port=0, authenticator=authenticator
+    )
+    plugin._execute_via_queue = MagicMock(
+        return_value={"success": True, "result": True}
+    )
+    plugin._running = True
+    thread = threading.Thread(target=plugin._run_xmlrpc_server)
+    thread.start()
+    bridge = None
+    try:
+        assert await asyncio.to_thread(plugin._listener_ready["xmlrpc"].wait, 3)
+        port = plugin._xmlrpc_server.server_address[1]
+        bridge = XmlRpcBridge(
+            host="127.0.0.1",
+            port=port,
+            timeout=2,
+            client_id="alice",
+            signer=lambda message: hmac.digest(secret, message, "sha256"),
+        )
+        await bridge.connect()
+        with pytest.raises(xmlrpc.client.Fault, match="not supported"):
+            await bridge._run_proxy_call(lambda proxy: proxy.review_begin("pass"), 2)
+    finally:
+        if bridge is not None:
+            await bridge.disconnect()
+        plugin._running = False
+        await asyncio.to_thread(thread.join, 3)
+        if plugin._xmlrpc_server is not None:
+            plugin._xmlrpc_server.server_close()
+        assert not thread.is_alive()
+
+
+def test_reviewed_queue_executes_only_claimed_content_and_returns_owner_result(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The GUI queue executes a committed, approved ticket exactly once."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    plugin._execute_code_sync = MagicMock(return_value={"success": True, "result": 5})
+    payload = approval.ApprovalPayload("execute_python", b"_result_ = 5")
+    review_id = broker.begin("alice", payload, 30)
+    request = coordinator.next_review()
+    assert request is not None
+    plugin._process_queue()
+    plugin._execute_code_sync.assert_not_called()
+    assert request.decide(approved=True)
+    plugin._process_queue()
+    plugin._execute_code_sync.assert_not_called()
+    assert broker.commit("alice", review_id)
+    plugin._process_queue()
+    plugin._process_queue()
+    plugin._execute_code_sync.assert_called_once_with("_result_ = 5")
+    assert broker.result("alice", review_id) == {"success": True, "result": 5}
+    assert broker.result("bob", review_id) is None
+    broker.close()
+
+
+def test_reviewed_queue_fails_closed_without_gui(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A headless queue cannot run an approved GUI review ticket."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: False)
+    console = SimpleNamespace(PrintWarning=MagicMock())
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(
+        server_mod, "FreeCAD", SimpleNamespace(Console=console), raising=False
+    )
+    coordinator = approval.ReviewCoordinator(1)
+    broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_broker = broker
+    plugin._execute_code_sync = MagicMock()
+    review_id = broker.begin(
+        "alice", approval.ApprovalPayload("execute_python", b"pass"), 30
+    )
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", review_id)
+    plugin._process_queue()
+    plugin._execute_code_sync.assert_not_called()
+    assert broker.result("alice", review_id) is None
+    assert plugin._review_broker is None
+    response = plugin._review_request(1, "review_begin", {"code": "pass"}, "alice")
+    assert response["error"]["message"] == "Local review is unavailable"
+    plugin._process_queue()
+    console.PrintWarning.assert_called_once_with(
+        "MCP Bridge: reviewed execution disabled; GUI thread unavailable.\n"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change_target", [False, True])
+async def test_file_review_binds_target_and_code_before_execution(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    change_target: bool,
+) -> None:
+    """Only the reviewed code may run, and changed file targets are rejected."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True, "result": 42})
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    path = tmp_path / "model.FCStd"
+    path.write_text("original")
+    response = await plugin._process_jsonrpc_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "review_begin_file",
+            "params": {
+                "code": "_result_ = 42",
+                "path": str(path),
+                "action": "read",
+                "kind": "path",
+            },
+        },
+        "alice",
+    )
+    review_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert request is not None
+    assert request.payload.file_snapshot.resolved_path == str(path.resolve())
+    assert request.decide(approved=True)
+    assert not broker.commit("other-client", review_id)
+    assert broker.commit("alice", review_id)
+    if change_target:
+        path.write_text("modified after approval")
+    plugin._process_queue()
+    result = broker.result("alice", review_id)
+    assert result is not None
+    if change_target:
+        plugin._execute_code_sync.assert_not_called()
+        assert result["error_type"] == "FileTargetChanged"
+    else:
+        plugin._execute_code_sync.assert_called_once_with("_result_ = 42")
+        assert result["result"] == 42
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_file_review_releases_document_reservation(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """Repeated setup failures do not block a subsequent valid reservation."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    plugin._review_broker = approval.LeasedReviewBroker(
+        approval.ReviewCoordinator(1), 1
+    )
+    document = object()
+    for _ in range(33):
+        token = reservations.reserve("Model", document)
+        response = await plugin._review_begin_file(
+            1,
+            {
+                "code": "pass",
+                "path": str(tmp_path / "missing"),
+                "action": "read",
+                "kind": "path",
+                "document_name": "Model",
+                "document_token": token,
+            },
+            "alice",
+        )
+        assert response.get("error")
+    token = reservations.reserve("Model", document)
+    response = await plugin._review_begin_file(
+        2, {"code": "pass", "document_token": token}, "alice"
+    )
+    assert response.get("error")
+    response = await plugin._review_begin_file(
+        3, {"code": "pass", "document_token": []}, "alice"
+    )
+    assert response.get("error")
+    assert reservations.reserve("Model", document)
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+async def test_macro_review_uses_current_roots_once(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """A review uses the current directory and keeps its selected target."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    old, current, system = (tmp_path / name for name in ("old", "current", "system"))
+    for directory in (old, current, system):
+        directory.mkdir()
+    (old / "Demo.FCMacro").write_text("old")
+    (current / "Demo.FCMacro").write_text("current")
+    plugin._current_macro_review_roots = AsyncMock(
+        return_value=(str(current), str(system))
+    )
+    coordinator = approval.ReviewCoordinator(2)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 2)
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}, "alice"
+    )
+    assert response.get("result")
+    request = coordinator.next_review()
+    assert request.payload.file_snapshot.resolved_path == str(
+        (current / "Demo.FCMacro").resolve()
+    )
+    plugin._current_macro_review_roots.return_value = (str(old), str(system))
+    assert request.payload.file_snapshot.resolved_path == str(
+        (current / "Demo.FCMacro").resolve()
+    )
+    plugin._current_macro_review_roots.assert_awaited_once()
+    request.cancel()
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_review", [False, True])
+async def test_queued_review_owns_capture_after_capture_session_closes(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    cancel_review: bool,
+) -> None:
+    """A queued review keeps its capture until its own claim or cancellation."""
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    reservations = plugin._document_reservations
+    document = object()
+    capture = reservations.begin_capture("capture-session")
+    token = reservations.reserve("Model", document, capture)
+    path = tmp_path / "model.step"
+    path.write_text("data")
+    params = {
+        "code": "pass",
+        "path": str(path),
+        "action": "read",
+        "kind": "path",
+        "document_name": "Model",
+        "document_token": token,
+    }
+    response = await plugin._review_begin_file(1, params, "review-session")
+    assert response.get("result")
+    plugin._release_session_reservations({"capture-session"})
+    plugin._release_review_document(token)
+    duplicate = await plugin._review_begin_file(2, params, "other-review-session")
+    assert duplicate.get("error")
+    if cancel_review:
+        plugin._review_broker.cancel_owner("review-session")
+        with pytest.raises(ValueError, match="unavailable"):
+            reservations.take(token, "Model", lambda _: document)
+    else:
+        assert reservations.take(token, "Model", lambda _: document)()
+    plugin._shutdown_review()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_capture_releases_late_session_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A capture queued before disconnect is reclaimed after it runs."""
+    from freecad_mcp.bridge.socket import SocketBridge
+
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    document = SimpleNamespace(Name="Model", FileName=str(tmp_path / "model.FCStd"))
+    monkeypatch.setattr(
+        server_mod, "FreeCAD", SimpleNamespace(ActiveDocument=document), raising=False
+    )
+    secret = b"a" * 32
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        port=0,
+        authenticator=auth.BridgeAuthenticator(
+            auth.create_hmac_verifier(lambda _: secret)
+        ),
+    )
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    reservations = plugin._document_reservations
+    reserve = MagicMock(wraps=reservations.reserve)
+    monkeypatch.setattr(reservations, "reserve", reserve)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+    task = asyncio.create_task(bridge.capture_review_document(None))
+    try:
+        async with asyncio.timeout(5):
+            while plugin._request_queue.empty():  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        plugin._process_queue()
+        reserve.assert_called_once()
+        async with asyncio.timeout(5):
+            while plugin._socket_client_count:  # noqa: ASYNC110
+                await asyncio.sleep(0.005)
+        assert not reservations._entries
+    finally:
+        await bridge.disconnect()
+        plugin._shutdown_review()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reserved_before_cancel", [True, False])
+async def test_cancelled_capture_handler_reclaims_worker_reservation(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, reserved_before_cancel: bool
+) -> None:
+    """Handler cancellation cannot leave an executor's later reservation behind."""
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(1)
+    plugin._document_reservations = reservations
+    started, resume, finished = threading.Event(), threading.Event(), threading.Event()
+    rejected: list[RuntimeError] = []
+
+    def capture(_code: str, _timeout_ms: int) -> dict[str, Any]:
+        token = next(iter(reservations._captures))
+        if reserved_before_cancel:
+            reservations.reserve("Model", object(), token)
+        started.set()
+        assert resume.wait(5)
+        try:
+            if not reserved_before_cancel:
+                reservations.reserve("Model", object(), token)
+        except RuntimeError as error:
+            rejected.append(error)
+        finally:
+            finished.set()
+        return {"success": True}
+
+    monkeypatch.setattr(plugin, "_execute_via_queue", capture)
+    task = asyncio.create_task(
+        plugin._process_jsonrpc_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "capture_review_document",
+                "params": {},
+            },
+            "owner",
+        )
+    )
+    try:
+        assert await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        resume.set()
+        assert await asyncio.to_thread(finished.wait, 5)
+        assert bool(rejected) is not reserved_before_cancel
+        assert not reservations._entries
+    finally:
+        resume.set()
+
+
+@pytest.mark.asyncio
+async def test_timed_out_capture_does_not_discard_other_captures(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A timed-out capture invalidates its own attempt before a late reserve."""
+    reservations_module = importlib.import_module(
+        "freecad_mcp_bridge.document_reservations"
+    )
+    plugin = server_mod.FreecadMCPPlugin()
+    reservations = reservations_module.DocumentReservations(2)
+    plugin._document_reservations = reservations
+    document = object()
+    existing = reservations.begin_capture("owner")
+    reservations.reserve("Model", document, existing)
+    failed_attempts: list[str] = []
+
+    def timeout(_code: str, _timeout_ms: int) -> dict[str, Any]:
+        failed_attempts.append(next(iter(reservations._captures)))
+        return {"success": False}
+
+    monkeypatch.setattr(plugin, "_execute_via_queue", timeout)
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "capture_review_document",
+        "params": {},
+    }
+    response = await plugin._process_jsonrpc_request(request, "owner")
+    assert response["result"]["success"] is False
+    with pytest.raises(RuntimeError, match="cancelled"):
+        reservations.reserve("Other", object(), failed_attempts[0])
+    assert reservations.take(existing, "Model", lambda _: document)()
+
+
+@pytest.mark.asyncio
+async def test_macro_roots_capture_uses_registered_gui_helper(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The actual execution globals capture live roots and reject non-GUI use."""
+    plugin = server_mod.FreecadMCPPlugin()
+    freecad = SimpleNamespace(
+        getUserMacroDir=MagicMock(return_value=str(tmp_path / "first")),
+        getResourceDir=MagicMock(return_value=str(tmp_path / "resources")),
+    )
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    monkeypatch.setattr(server_mod, "FreeCADGui", object(), raising=False)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_via_queue = plugin._execute_code_sync
+    assert await plugin._current_macro_review_roots() == (
+        str(tmp_path / "first"),
+        str(tmp_path / "resources" / "Macro"),
+    )
+    freecad.getUserMacroDir.return_value = str(tmp_path / "second")
+    assert (await plugin._current_macro_review_roots())[0] == str(tmp_path / "second")
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: False)
+    with pytest.raises(ValueError, match="Macro directories unavailable"):
+        await plugin._current_macro_review_roots()
+
+
+@pytest.mark.asyncio
+async def test_macro_roots_captured_through_gui_queue(server_mod: Any) -> None:
+    """A failed queue capture fails closed and never uses stale roots."""
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._execute_via_queue = MagicMock(
+        return_value={"success": True, "result": ["/user", "/system"]}
+    )
+    assert await plugin._current_macro_review_roots() == ("/user", "/system")
+    plugin._execute_via_queue.assert_called_once_with(
+        "_result_ = _robust_mcp_macro_review_roots()"
+    )
+    plugin._execute_via_queue.return_value = {"success": False}
+    with pytest.raises(ValueError):
+        await plugin._current_macro_review_roots()
+
+
+@pytest.mark.asyncio
+async def test_macro_file_review_resolves_local_search_order_and_rejects_paths(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """A macro name is resolved by FreeCAD's user/system search order."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    user, system = tmp_path / "user", tmp_path / "system"
+    user.mkdir()
+    system.mkdir()
+    (system / "Demo.FCMacro").write_text("system")
+    plugin._current_macro_review_roots = AsyncMock(
+        return_value=(str(user), str(system))
+    )
+    coordinator = approval.ReviewCoordinator(2)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 2)
+    params = {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}
+    response = await plugin._review_begin_file(1, params, "alice")
+    assert response.get("result")
+    request = coordinator.next_review()
+    assert request.payload.file_snapshot.resolved_path == str(
+        (system / "Demo.FCMacro").resolve()
+    )
+    request.cancel()
+    params["path"] = "../other"
+    response = await plugin._review_begin_file(2, params, "alice")
+    assert response["error"]["message"] == "File review unavailable or invalid"
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("create_shadow", [False, True])
+async def test_macro_file_review_rejects_new_higher_priority_target(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    create_shadow: bool,
+) -> None:
+    """A newly created user macro cannot replace a reviewed system macro."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True})
+    user, system = tmp_path / "user", tmp_path / "system"
+    user.mkdir()
+    system.mkdir()
+    (system / "Demo.FCMacro").write_text("system")
+    plugin._current_macro_review_roots = AsyncMock(
+        return_value=(str(user), str(system))
+    )
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": "read", "kind": "macro"}, "alice"
+    )
+    review_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert request.decide(approved=True)
+    assert broker.commit("alice", review_id)
+    if create_shadow:
+        (user / "Demo.FCMacro").write_text("new user macro")
+    plugin._process_queue()
+    result = broker.result("alice", review_id)
+    if create_shadow:
+        assert result["error_type"] == "FileTargetChanged"
+        plugin._execute_code_sync.assert_not_called()
+    else:
+        plugin._execute_code_sync.assert_called_once_with(
+            "pass",
+            initial_globals={
+                "_robust_mcp_reviewed_file_path": str(
+                    (system / "Demo.FCMacro").resolve()
+                )
+            },
+        )
+    broker.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["write", "delete"])
+async def test_macro_file_review_rejects_external_symlink(
+    server_mod: Any, tmp_path: Path, action: str
+) -> None:
+    """A macro mutation cannot follow a symlink outside the user macro root."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    user = tmp_path / "user"
+    user.mkdir()
+    external = tmp_path / "external.FCMacro"
+    external.write_text("preserve")
+    try:
+        (user / "Demo.FCMacro").symlink_to(external)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(user),))
+    plugin._review_broker = approval.LeasedReviewBroker(
+        approval.ReviewCoordinator(2), 2
+    )
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": action, "kind": "macro"}, "alice"
+    )
+    assert response["error"]["message"] == "File review unavailable or invalid"
+    assert external.read_text() == "preserve"
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["write", "delete"])
+async def test_macro_file_review_binds_mutation_path(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, action: str
+) -> None:
+    """Macro writes and deletes receive the destination that was reviewed."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True})
+    if action == "delete":
+        (tmp_path / "Demo.FCMacro").write_text("original")
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    response = await plugin._review_begin_file(
+        1, {"code": "pass", "path": "Demo", "action": action, "kind": "macro"}, "alice"
+    )
+    review_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", review_id)
+    plugin._process_queue()
+    plugin._execute_code_sync.assert_called_once_with(
+        "pass",
+        initial_globals={
+            "_robust_mcp_reviewed_file_path": str((tmp_path / "Demo.FCMacro").resolve())
+        },
+    )
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_delete_removes_link_not_target(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reviewing a macro symlink deletes its entry, preserving its target."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    target = tmp_path / "Original.FCMacro"
+    target.write_text("original")
+    link = tmp_path / "Demo.FCMacro"
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    other_macro = other_dir / "Demo.FCMacro"
+    other_macro.write_text("other")
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("Symlink creation is unavailable")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+
+    from freecad_mcp.bridge.base import ExecutionResult
+    from freecad_mcp.tools.macros import register_macro_tools
+
+    registered: dict[str, Any] = {}
+    mcp = MagicMock()
+    mcp.tool = lambda **_kwargs: lambda func: registered.setdefault(func.__name__, func)
+    generated = []
+
+    async def capture(code: str) -> ExecutionResult:
+        generated.append(code)
+        return ExecutionResult(
+            success=True,
+            result={"success": True},
+            stdout="",
+            stderr="",
+            execution_time_ms=1,
+        )
+
+    async def get_bridge() -> Any:
+        return SimpleNamespace(execute_python=capture)
+
+    register_macro_tools(mcp, get_bridge, allow_unsafe_code=False)
+    await registered["delete_macro"]("Demo")
+
+    def execute(code: str, *, initial_globals: dict[str, str]) -> dict[str, Any]:
+        env: dict[str, Any] = dict(initial_globals)
+        env["FreeCAD"] = SimpleNamespace(getUserMacroDir=lambda _create: str(other_dir))
+        exec(code, env)  # noqa: S102 - execute the generated macro deletion
+        return {"success": True, "result": env["_result_"]}
+
+    plugin._execute_code_sync = execute
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    response = await plugin._review_begin_file(
+        1,
+        {"code": generated[0], "path": "Demo", "action": "delete", "kind": "macro"},
+        "alice",
+    )
+    review_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", review_id)
+    plugin._process_queue()
+    assert broker.result("alice", review_id)["success"]
+    assert not link.is_symlink()
+    assert target.read_text() == "original"
+    assert other_macro.read_text() == "other"
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_review_preference_bypass_runs_only_on_review_protocol(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local bypass still uses authenticated review and single-use commit."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    policy_module = importlib.import_module("freecad_mcp_bridge.review_policy")
+    dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "alice" else None)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=authenticator
+    )
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True, "result": 42})
+    coordinator = approval.ReviewCoordinator(1)
+    policy = policy_module.ReviewPolicy()
+    policy.configure("execute_python", require_review=False)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_controller = dialog.ReviewDialogController(
+        coordinator, policy=policy
+    )
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+
+    async def process_queue() -> None:
+        while True:
+            plugin._process_queue()
+            await asyncio.sleep(0.005)
+
+    worker = asyncio.create_task(process_queue())
+    requests = []
+    original_send = bridge._send_request_once
+
+    async def record_request(request, *args, **kwargs):
+        response = await original_send(request, *args, **kwargs)
+        requests.append((request["method"], request["params"], response))
+        return response
+
+    monkeypatch.setattr(bridge, "_send_request_once", record_request)
+    try:
+        result = await bridge.execute_reviewed_python("_result_ = 42")
+        assert result.success and result.result == 42
+        begin = next(item for item in requests if item[0] == "review_begin")
+        commit = next(item for item in requests if item[0] == "review_commit")
+        assert commit[1]["review_id"] == begin[2]["review_id"]
+        assert not any(item[0] == "execute" for item in requests)
+        plugin._execute_code_sync.assert_called_once_with("_result_ = 42")
+    finally:
+        worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
+        plugin._review_controller.close()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_oversized_review_before_dispatch(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The client frame limit prevents an oversized review reaching the broker."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "alice" else None)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=authenticator
+    )
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock()
+    coordinator = approval.ReviewCoordinator(1)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+    try:
+        await bridge.connect()
+        result = await bridge.execute_reviewed_python("x" * 50_000)
+        assert not result.success
+        assert result.error_type == "ReviewUnavailable"
+        assert "socket frame limit" in result.stderr
+        assert coordinator.next_review() is None
+        plugin._execute_code_sync.assert_not_called()
+        assert await bridge.ping() >= 0
+    finally:
+        await bridge.disconnect()
+        coordinator.close()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_socket_reviewed_execution_returns_result_only_to_same_session(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An authenticated review result remains bound to its socket session."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "alice" else None)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=authenticator
+    )
+    plugin._running = True
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    plugin._execute_code_sync = MagicMock(return_value={"success": True, "result": 5})
+    coordinator = approval.ReviewCoordinator(1)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+
+    def signer(message: bytes) -> bytes:
+        return hmac.digest(secret, message, "sha256")
+
+    first = SocketBridge(host="127.0.0.1", port=port, client_id="alice", signer=signer)
+    second = SocketBridge(host="127.0.0.1", port=port, client_id="alice", signer=signer)
+    try:
+        await first.connect()
+        await second.connect()
+        review_id = (
+            await first._send_request("review_begin", {"code": "_result_ = 5"})
+        )["review_id"]
+        request = coordinator.next_review()
+        assert request.decide(approved=True)
+        assert (await first._send_request("review_commit", {"review_id": review_id}))[
+            "scheduled"
+        ]
+        plugin._process_queue()
+        plugin._execute_code_sync.assert_called_once_with("_result_ = 5")
+        assert (await second._send_request("review_result", {"review_id": review_id}))[
+            "result"
+        ] is None
+        assert (await first._send_request("review_result", {"review_id": review_id}))[
+            "result"
+        ] == {"success": True, "result": 5}
+    finally:
+        await first.disconnect()
+        await second.disconnect()
+        coordinator.close()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+def test_experimental_review_refuses_unavailable_gui(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A headless or stopped bridge cannot enable local GUI approval."""
+    plugin = server_mod.FreecadMCPPlugin()
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: False)
+    with pytest.raises(RuntimeError, match="running GUI queue"):
+        plugin._enable_experimental_review()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    with pytest.raises(RuntimeError, match="running GUI queue"):
+        plugin._enable_experimental_review()
+    assert plugin._review_broker is None
+    plugin._timer = None
+    plugin._running = False
+
+
+@pytest.mark.parametrize("gui", [True, False])
+def test_test_instance_marker_uses_informational_gui_output(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    gui: bool,
+) -> None:
+    """The test marker is informational in GUI and remains on stderr headlessly."""
+    console = MagicMock()
+    monkeypatch.setenv("FREECAD_MCP_TESTING", "1")
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    monkeypatch.setattr(
+        server_mod,
+        "FreeCAD",
+        SimpleNamespace(GuiUp=gui, Console=console),
+        raising=False,
+    )
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: False)
+    plugin = server_mod.FreecadMCPPlugin(authenticator=MagicMock())
+    plugin._start_queue_processor = MagicMock()
+    plugin._start_status_updates = MagicMock()
+    plugin._launch_listeners = MagicMock()
+    plugin._await_listeners = MagicMock(return_value={})
+    plugin._report_started = MagicMock()
+    try:
+        plugin.start()
+        marker = f"FREECAD_MCP_BRIDGE_INSTANCE_ID={plugin.instance_id}"
+        if gui:
+            console.PrintMessage.assert_any_call(marker + "\n")
+            assert marker not in capsys.readouterr().err
+        else:
+            assert marker in capsys.readouterr().err
+    finally:
+        plugin.stop()
+
+
+def test_review_setup_failure_leaves_regular_bridge_available(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A review setup error disables review without disabling modeling."""
+    plugin = server_mod.FreecadMCPPlugin(authenticator=MagicMock())
+    plugin._timer = MagicMock()
+    plugin._start_queue_processor = MagicMock()
+    plugin._start_status_updates = MagicMock()
+    plugin._stop_status_updates = MagicMock()
+    plugin._launch_listeners = MagicMock()
+    plugin._await_listeners = MagicMock(return_value={})
+    plugin._report_started = MagicMock()
+    plugin._enable_experimental_review = MagicMock(side_effect=RuntimeError("Qt"))
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    try:
+        plugin.start()
+        assert plugin.is_running
+        assert plugin._review_broker is None
+        plugin._launch_listeners.assert_called_once()
+        response = plugin._review_request(1, "review_begin", {"code": "pass"}, "alice")
+        assert response["error"]["message"] == "Local review is unavailable"
+    finally:
+        plugin.stop()
+
+
+def test_experimental_review_stop_cancels_pending_requests(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stopping on the GUI thread closes the broker and denies pending review."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._stop_status_updates = MagicMock()
+    plugin._enable_experimental_review()
+    broker = plugin._review_broker
+    review_id = broker.begin(
+        "alice", approval.ApprovalPayload("execute_python", b"pass"), 30
+    )
+    plugin.stop()
+    assert broker.status("alice", review_id) is None
+    assert not broker.commit("alice", review_id)
+    assert plugin._review_controller is None
+    assert plugin._review_broker is None
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    assert plugin._review_broker is not broker
+    plugin.stop()
+
+
+def test_gui_restart_closes_pending_review_controller(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A queued worker-thread shutdown cannot disable review on GUI restart."""
+    plugin = server_mod.FreecadMCPPlugin()
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    old = MagicMock()
+    old._closed = False
+    plugin._review_controller = old
+    plugin._review_broker = None
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    old.close.assert_called_once_with()
+    assert plugin._review_controller is not old
+    assert plugin._review_broker is not None
+    plugin._shutdown_review()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_executes_captured_bytes(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A file replacement after approval cannot change the executed macro."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    coordinator = approval.ReviewCoordinator(1)
+    broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_broker = broker
+    macro = tmp_path / "example.FCMacro"
+    macro.write_bytes(b"_result_ = value + 1\n")
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {"value": 41}}, "alice"
+    )
+    review_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert request.payload.content == b"_result_ = value + 1\n"
+    assert request.decide(approved=True)
+    macro.write_bytes(b"_result_ = 999\n")
+    assert broker.commit("alice", review_id)
+    plugin._process_reviewed_queue()
+    assert broker.result("alice", review_id)["result"] == 42
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_rejects_reserved_argument(
+    server_mod: Any, tmp_path: Path
+) -> None:
+    """An argument cannot replace the execution environment or built-ins."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    coordinator = approval.ReviewCoordinator(1)
+    plugin._review_broker = approval.LeasedReviewBroker(coordinator, 1)
+    (tmp_path / "example.FCMacro").write_text("_result_ = 42\n")
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {"__builtins__": {}}}, "alice"
+    )
+    assert "error" in response
+    assert coordinator.next_review() is None
+    valid = await plugin._review_begin_macro(
+        2, {"macro_name": "example", "args": {}}, "alice"
+    )
+    assert "review_id" in valid["result"]
+    plugin._review_broker.close()
+
+
+@pytest.mark.asyncio
+async def test_socket_reviewed_macro_uses_authenticated_session(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Only the requesting session can commit its reviewed macro snapshot."""
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    secret = b"a" * 32
+    authenticator = auth.BridgeAuthenticator(
+        auth.create_hmac_verifier(lambda client: secret if client == "alice" else None)
+    )
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1", port=0, authenticator=authenticator
+    )
+    plugin._running = True
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    (tmp_path / "example.FCMacro").write_bytes(b"_result_ = value\n")
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    coordinator = approval.ReviewCoordinator(1)
+    broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_broker = broker
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+
+    def signer(message: bytes) -> bytes:
+        return hmac.digest(secret, message, "sha256")
+
+    first = SocketBridge(host="127.0.0.1", port=port, client_id="alice", signer=signer)
+    second = SocketBridge(host="127.0.0.1", port=port, client_id="alice", signer=signer)
+    try:
+        await first.connect()
+        await second.connect()
+        review_id = (
+            await first._send_request(
+                "review_begin_macro", {"macro_name": "example", "args": {"value": 42}}
+            )
+        )["review_id"]
+        request = coordinator.next_review()
+        assert request.decide(approved=True)
+        assert not (
+            await second._send_request("review_commit", {"review_id": review_id})
+        )["scheduled"]
+        assert (await first._send_request("review_commit", {"review_id": review_id}))[
+            "scheduled"
+        ]
+        plugin._process_queue()
+        assert (await first._send_request("review_result", {"review_id": review_id}))[
+            "result"
+        ]["result"] == 42
+    finally:
+        await first.disconnect()
+        await second.disconnect()
+        broker.close()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_executes_displayed_utf8_text(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An encoding cookie cannot turn displayed comments into hidden code."""
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    coordinator = approval.ReviewCoordinator(1)
+    broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_broker = broker
+    (tmp_path / "example.FCMacro").write_bytes(
+        b"# coding: unicode_escape\r\n# harmless\\u000a_result_ = 999\r\n"
+        b'if __name__ == "__main__" and "_result_" not in globals():\r\n'
+        b"    _result_ = 42\r\n"
+    )
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {}}, "alice"
+    )
+    review_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    assert broker.commit("alice", review_id)
+    plugin._process_reviewed_queue()
+    result = broker.result("alice", review_id)
+    assert result["success"] and result["result"] == 42
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_normalizes_and_rejects_colliding_arguments(
+    server_mod: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review and execution use the same Python-normalized argument names."""
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    coordinator = approval.ReviewCoordinator(2)
+    broker = approval.LeasedReviewBroker(coordinator, 2)
+    plugin._review_broker = broker
+    (tmp_path / "example.FCMacro").write_text("_result_ = K\n")
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {"\u212a": 42}}, "alice"
+    )
+    request_id = response["result"]["review_id"]
+    request = coordinator.next_review()
+    assert json.loads(request.payload.macro_args_json) == {"K": 42}
+    assert request.decide(approved=True)
+    assert broker.commit("alice", request_id)
+    plugin._process_reviewed_queue()
+    assert broker.result("alice", request_id)["result"] == 42
+    collision = await plugin._review_begin_macro(
+        2, {"macro_name": "example", "args": {"\u212a": 42, "K": 43}}, "alice"
+    )
+    assert "error" in collision
+    assert coordinator.next_review() is None
+    broker.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_macro_traceback_uses_captured_source(
+    server_mod: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replaced macro cannot supply the traceback line for approved code."""
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    approval = importlib.import_module("freecad_mcp_bridge.approval")
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._current_macro_review_roots = AsyncMock(return_value=(str(tmp_path),))
+    coordinator = approval.ReviewCoordinator(1)
+    broker = approval.LeasedReviewBroker(coordinator, 1)
+    plugin._review_broker = broker
+    macro = tmp_path / "example.FCMacro"
+    macro.write_text('raise ValueError("approved line")\n')
+    response = await plugin._review_begin_macro(
+        1, {"macro_name": "example", "args": {}}, "alice"
+    )
+    request_id = response["result"]["review_id"]
+    assert coordinator.next_review().decide(approved=True)
+    macro.write_text('raise ValueError("replacement line")\n')
+    assert broker.commit("alice", request_id)
+    plugin._process_reviewed_queue()
+    result = broker.result("alice", request_id)
+    assert result["success"] is False
+    assert 'raise ValueError("approved line")' in result["error_traceback"]
+    assert "replacement line" not in result["error_traceback"]
+    broker.close()
+
+
+def test_document_selection_reservation_survives_name_reuse(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GUI selection holds the original wrapper until the review claims it."""
+    import importlib
+
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    original = SimpleNamespace(Name="Model", FileName="/tmp/model.FCStd")
+    current = [original]
+    freecad = MagicMock()
+    freecad.ActiveDocument = original
+    freecad.getDocument.side_effect = lambda name: (
+        current[0] if name == "Model" else None
+    )
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    selected = plugin._capture_review_document(None)
+    assert selected and selected["name"] == "Model"
+    current[0] = SimpleNamespace(Name="Model", FileName="/tmp/model.FCStd")
+    guard = plugin._document_reservations.take(
+        selected["token"], "Model", freecad.getDocument
+    )
+    assert not guard()
+    with pytest.raises(ValueError, match="unavailable"):
+        plugin._document_reservations.take(
+            selected["token"], "Model", freecad.getDocument
+        )
+    plugin._shutdown_review()
+
+
+def test_unsaved_document_selection_does_not_consume_reservations(
+    server_mod: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repeated invalid saves leave capacity for a corrected save."""
+    import importlib
+
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
+    document = SimpleNamespace(Name="Model", FileName="")
+    freecad = MagicMock()
+    freecad.ActiveDocument = document
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    plugin = server_mod.FreecadMCPPlugin()
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    for _ in range(server_mod.MAX_PENDING_REQUESTS + 1):
+        assert plugin._capture_review_document(None, True) == {
+            "name": "Model",
+            "path": "",
+            "token": "",
+        }
+    selected = plugin._capture_review_document(None)
+    assert selected and selected["token"]
+    plugin._shutdown_review()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replace_document", [False, True])
+async def test_reserved_file_review_rejects_document_replaced_before_dialog(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    replace_document: bool,
+) -> None:
+    """The original GUI selection, not a later same-named document, is bound."""
+    from freecad_mcp.bridge.file_review import (
+        file_review_document,
+        file_review_document_token,
+    )
+
+    auth = importlib.import_module("freecad_mcp_bridge.authentication")
+    review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
+    monkeypatch.setattr(
+        review_dialog, "create_close_relay", lambda _controller: MagicMock()
+    )
+    monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
+    monkeypatch.setattr(server_mod, "FREECAD_AVAILABLE", True)
+    original = SimpleNamespace(Name="Model", FileName=str(tmp_path / "model.FCStd"))
+    current = [original]
+    freecad = MagicMock()
+    freecad.ActiveDocument = original
+    freecad.getDocument.side_effect = lambda name: (
+        current[0] if name == "Model" else None
+    )
+    monkeypatch.setattr(server_mod, "FreeCAD", freecad, raising=False)
+    secret = b"a" * 32
+    plugin = server_mod.FreecadMCPPlugin(
+        host="127.0.0.1",
+        port=0,
+        authenticator=auth.BridgeAuthenticator(
+            auth.create_hmac_verifier(lambda _: secret)
+        ),
+    )
+    plugin._running = True
+    plugin._timer = MagicMock()
+    plugin._enable_experimental_review()
+    plugin._review_controller._policy.configure("file_operation", require_review=False)
+    original_execute = plugin._execute_code_sync
+    executed = []
+
+    def execute(code, **kwargs):
+        if "_robust_mcp_capture_document" in code:
+            return original_execute(code, **kwargs)
+        executed.append(code)
+        return {"success": True, "result": True}
+
+    monkeypatch.setattr(plugin, "_execute_code_sync", execute)
+    await plugin._start_socket_server()
+    port = plugin._socket_server.sockets[0].getsockname()[1]
+    bridge = SocketBridge(
+        host="127.0.0.1",
+        port=port,
+        client_id="alice",
+        signer=lambda message: hmac.digest(secret, message, "sha256"),
+    )
+
+    async def process_queue():
+        while True:
+            plugin._process_queue()
+            await asyncio.sleep(0.005)
+
+    worker = asyncio.create_task(process_queue())
+    target = tmp_path / "target.FCStd"
+    target.write_text("original")
+    try:
+        selected = await bridge.capture_review_document(None)
+        assert selected and selected["name"] == "Model"
+        if replace_document:
+            current[0] = SimpleNamespace(Name="Model", FileName=str(target))
+        name_token = file_review_document.set(selected["name"])
+        reservation_token = file_review_document_token.set(selected["token"])
+        try:
+            result = await bridge.execute_reviewed_file(
+                "_result_ = 42", str(target), "write", "path"
+            )
+        finally:
+            file_review_document_token.reset(reservation_token)
+            file_review_document.reset(name_token)
+        assert result.success is not replace_document
+        assert executed == ([] if replace_document else ["_result_ = 42"])
+    finally:
+        worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker
+        plugin._shutdown_review()
+        plugin._running = False
+        plugin._socket_server.close()
+        await plugin._socket_server.wait_closed()

@@ -6,11 +6,266 @@ from unittest import mock
 
 import pytest
 
-from freecad_mcp.bridge.socket import RequestNotSentError, SocketBridge
+from freecad_mcp.bridge.socket import JsonRpcError, RequestNotSentError, SocketBridge
 
 
 class TestSocketBridge:
     """Tests for SocketBridge class."""
+
+    @pytest.mark.asyncio
+    async def test_document_capture_passes_execution_deadline_to_bridge(self):
+        """The capture queue uses the same configured deadline as the caller."""
+        bridge = SocketBridge(execution_timeout_ms=45000)
+        with mock.patch.object(
+            bridge,
+            "_send_request",
+            return_value={"success": True, "result": None},
+        ) as request:
+            assert await bridge.capture_review_document(None) is None
+        assert request.await_args is not None
+        assert request.await_args.args[1]["timeout_ms"] == 45000
+
+    @pytest.mark.asyncio
+    async def test_old_workbench_capture_fails_closed_with_upgrade_guidance(self):
+        """An unsupported capture method must not bypass document review."""
+        bridge = SocketBridge()
+        with (
+            mock.patch.object(
+                bridge,
+                "_send_request",
+                side_effect=JsonRpcError(-32601, "Method not found"),
+            ),
+            pytest.raises(RuntimeError, match="update the FreeCAD workbench"),
+        ):
+            await bridge.capture_review_document("Model")
+
+    @pytest.mark.asyncio
+    async def test_reviewed_execution_reports_freecad_execution_time(self):
+        """A completed result excludes time spent waiting for local approval."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        send = mock.AsyncMock(
+            side_effect=[
+                {"review_id": "one"},
+                {"state": "approved"},
+                {"scheduled": True},
+                {"result": {"success": True, "result": 42, "execution_time_ms": 1.5}},
+            ]
+        )
+        with (
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ),
+            mock.patch.object(bridge, "_send_request_once", new=send),
+        ):
+            result = await bridge.execute_reviewed_python("_result_ = 42")
+        assert result.success
+        assert result.result == 42
+        assert result.execution_time_ms == 1.5
+
+    @pytest.mark.asyncio
+    async def test_oversized_authenticated_frame_is_not_sent(self):
+        """Account for envelope expansion before writing an execution request."""
+        bridge = SocketBridge(client_id="probe", signer=lambda _message: b"x" * 32)
+        reader = mock.Mock()
+        reader.readline = mock.AsyncMock(
+            return_value=json.dumps({"challenge": "a" * 43}).encode() + b"\n"
+        )
+        writer = mock.Mock()
+        writer.drain = mock.AsyncMock()
+        request = {
+            "jsonrpc": "2.0",
+            "id": "one",
+            "method": "review_begin",
+            "params": {"code": "x" * 50000},
+        }
+        with pytest.raises(JsonRpcError, match="no execution request was sent"):
+            await bridge._send_request_once(request, reader, writer, 2)
+        writer.write.assert_called_once_with(b'{"type":"challenge"}\n')
+
+    @pytest.mark.asyncio
+    async def test_reviewed_execution_does_not_retry_lost_commit(self):
+        """A lost commit response is ambiguous and must never be replayed."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        send = mock.AsyncMock(
+            side_effect=[
+                {"review_id": "one"},
+                {"state": "approved"},
+                ConnectionError("connection lost"),
+            ]
+        )
+        with (
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ) as connect,
+            mock.patch.object(bridge, "_send_request_once", new=send),
+        ):
+            result = await bridge.execute_reviewed_python("print('hello')")
+        assert not result.success
+        assert result.error_type == "ReviewExecutionUnknown"
+        assert "may already be running" in result.stderr
+        assert [call.args[0]["method"] for call in send.await_args_list] == [
+            "review_begin",
+            "review_status",
+            "review_commit",
+        ]
+        connect.assert_awaited_once()
+        writer.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reviewed_execution_denial_never_commits(self):
+        """Denial must not dispatch the requested Python code."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        send = mock.AsyncMock(side_effect=[{"review_id": "one"}, {"state": "denied"}])
+        with (
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ),
+            mock.patch.object(bridge, "_send_request_once", new=send),
+        ):
+            result = await bridge.execute_reviewed_python("print('hello')")
+        assert not result.success
+        assert result.error_type == "ReviewDenied"
+        assert "denied" in result.stderr
+        assert [call.args[0]["method"] for call in send.await_args_list] == [
+            "review_begin",
+            "review_status",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_reviewed_execution_cancellation_closes_pending_session(self):
+        """Cancellation while awaiting a decision closes the review session."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        waiting = asyncio.Event()
+
+        async def request(request, _reader, _writer, _timeout):
+            if request["method"] == "review_begin":
+                return {"review_id": "one"}
+            assert request["method"] == "review_status"
+            waiting.set()
+            await asyncio.Event().wait()
+
+        with (
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ),
+            mock.patch.object(bridge, "_send_request_once", side_effect=request),
+        ):
+            task = asyncio.create_task(bridge.execute_reviewed_python("pass"))
+            await waiting.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        writer.close.assert_called_once()
+        writer.wait_closed.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_deadline_does_not_commit_late_approval(self):
+        """A decision received after the deadline never schedules execution."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        methods = []
+
+        async def request(request, _reader, _writer, _timeout):
+            methods.append(request["method"])
+            if request["method"] == "review_begin":
+                return {"review_id": "one"}
+            await asyncio.sleep(1)
+            return {"state": "approved"}
+
+        with (
+            mock.patch(
+                "freecad_mcp.bridge.socket.REVIEW_DECISION_TIMEOUT_SECONDS", 0.02
+            ),
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ),
+            mock.patch.object(bridge, "_send_request_once", side_effect=request),
+        ):
+            result = await bridge.execute_reviewed_python("pass")
+        assert not result.success
+        assert result.error_type == "ReviewUnavailable"
+        assert methods == ["review_begin", "review_status"]
+        writer.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("state", "error_type"),
+        [("expired", "ReviewUnavailable"), ("denied", "ReviewDenied")],
+    )
+    async def test_ended_scheduled_review_returns_without_execution(
+        self, state, error_type
+    ):
+        """A ticket ended before GUI claim is a definite non-execution."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        send = mock.AsyncMock(
+            side_effect=[
+                {"review_id": "one"},
+                {"state": "approved"},
+                {"scheduled": True},
+                {"result": None},
+                {"state": state},
+            ]
+        )
+        with (
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ),
+            mock.patch.object(bridge, "_send_request_once", new=send),
+        ):
+            result = await bridge.execute_reviewed_python("pass")
+        assert result.error_type == error_type
+        assert "before execution" in result.stderr
+        assert [call.args[0]["method"] for call in send.await_args_list] == [
+            "review_begin",
+            "review_status",
+            "review_commit",
+            "review_result",
+            "review_status",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_unavailable_committed_result_remains_unknown(self):
+        """A missing result after commit may mean code already ran."""
+        bridge = SocketBridge()
+        writer = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+        send = mock.AsyncMock(
+            side_effect=[
+                {"review_id": "one"},
+                {"state": "approved"},
+                {"scheduled": True},
+                {"result": None},
+                {"state": "unavailable"},
+            ]
+        )
+        with (
+            mock.patch(
+                "asyncio.open_connection",
+                new=mock.AsyncMock(return_value=(mock.Mock(), writer)),
+            ),
+            mock.patch.object(bridge, "_send_request_once", new=send),
+        ):
+            result = await bridge.execute_reviewed_python("pass")
+        assert result.error_type == "ReviewExecutionUnknown"
+        assert "may already be running" in result.stderr
+        assert send.await_count == 5
 
     def test_initialization_defaults(self):
         """Bridge should initialize with correct defaults."""
@@ -272,6 +527,49 @@ class TestSocketBridgeCommunication:
         assert bridge._reader is None
         assert bridge._writer is None
         assert bridge._connected is False
+
+    @pytest.mark.asyncio
+    async def test_failed_capture_keeps_session_for_other_requests(
+        self, mock_streams
+    ) -> None:
+        """A complete capture failure leaves other reservations on the stream."""
+        reader, writer = mock_streams
+        reader.readline.side_effect = self.authenticated_responses({"success": False})
+        bridge = SocketBridge()
+        bridge._reader, bridge._writer, bridge._connected = reader, writer, True
+        with pytest.raises(RuntimeError, match="unable to reserve document"):
+            await bridge.capture_review_document("Model")
+        writer.close.assert_not_called()
+        assert bridge._reader is reader and bridge._writer is writer
+        assert bridge._connected
+
+    @pytest.mark.asyncio
+    async def test_cancelled_request_discards_inflight_connection(
+        self, mock_streams
+    ) -> None:
+        """A late response to a cancelled request cannot satisfy the next call."""
+        reader, writer = mock_streams
+        response_waiting = asyncio.Event()
+
+        async def read() -> bytes:
+            if reader.readline.await_count == 1:
+                return json.dumps({"challenge": "A" * 43}).encode() + b"\n"
+            response_waiting.set()
+            await asyncio.Event().wait()
+            return b""
+
+        reader.readline.side_effect = read
+        bridge = SocketBridge()
+        bridge._reader, bridge._writer, bridge._connected = reader, writer, True
+        task = asyncio.create_task(bridge._send_request("execute", {"code": "pass"}))
+        await asyncio.wait_for(response_waiting.wait(), timeout=2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert writer.write.call_count == 2
+        writer.close.assert_called_once_with()
+        assert bridge._reader is None and bridge._writer is None
+        assert bridge._connected is False and not bridge._lock.locked()
 
     @pytest.mark.asyncio
     async def test_oversized_response_discards_connection(self, mock_streams) -> None:
@@ -574,12 +872,10 @@ class TestSocketBridgeDocuments:
 
     @pytest.mark.asyncio
     async def test_get_active_document_when_not_connected(self):
-        """get_active_document should return None when not connected."""
-        bridge = SocketBridge()
-
-        doc = await bridge.get_active_document()
-
-        assert doc is None
+        """A connection failure is distinct from having no active document."""
+        bridge = SocketBridge(auto_reconnect=False)
+        with pytest.raises(RuntimeError, match="Not connected"):
+            await bridge.get_active_document()
 
     @pytest.mark.asyncio
     async def test_is_gui_available_when_not_connected(self):

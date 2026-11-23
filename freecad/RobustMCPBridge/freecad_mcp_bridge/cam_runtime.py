@@ -31,6 +31,7 @@ import stat
 import sys
 import traceback
 import warnings
+from contextlib import suppress
 from pathlib import Path as FsPath
 from typing import Any
 
@@ -632,10 +633,16 @@ def capabilities(_args: dict[str, Any]) -> dict[str, Any]:
         if hasattr(Prefs, "getAssetPath")
         else None,
         "tool_system": "assets" if _has_tool_assets() else "legacy",
+        "reviewed_legacy_tool_overrides": True,
         "freecad_home": FreeCAD.getHomePath(),
         "known_freecad_issues": FREECAD_BUGS,
         "stock_materials": _machining_materials(),
     }
+
+
+def review_capabilities(_args: dict[str, Any]) -> dict[str, bool]:
+    """Report supported review guards without loading the CAM catalog."""
+    return {"reviewed_legacy_tool_overrides": True}
 
 
 def _has_tool_assets() -> bool:
@@ -1328,7 +1335,130 @@ def _tool_bit(doc: Any, tool_spec: dict[str, Any]) -> Any:
     return bit.attach_to_doc(doc=doc)
 
 
-def _legacy_tool_bit(doc: Any, tool_spec: dict[str, Any]) -> Any:
+class _ReviewedLegacyToolError(ValueError):
+    """A rejected reviewed tool whose temporary objects were cleaned up."""
+
+
+def _create_reviewed_tool_bit(doc: Any, factory: Any, shape: str) -> Any:
+    """Create a legacy tool and clean up its own source document on failure."""
+    previous_documents = set(FreeCAD.listDocuments())
+    previous_objects = {obj.Name for obj in doc.Objects}
+    target = os.path.normcase(os.path.realpath(shape))
+    if any(
+        getattr(opened, "FileName", None)
+        and os.path.normcase(os.path.realpath(opened.FileName)) == target
+        for opened in FreeCAD.listDocuments().values()
+    ):
+        raise _ReviewedLegacyToolError("Reviewed tool shape is already open")
+    try:
+        return factory.Create("ToolBit", shape)
+    except Exception as error:
+        cleanup_error = None
+        # Factory.Create may open the reviewed shape and fail before closing it.
+        # Close only a newly opened document for that shape, never a user document.
+        for name, opened in FreeCAD.listDocuments().items():
+            try:
+                if (
+                    name not in previous_documents
+                    and opened.FileName
+                    and os.path.normcase(os.path.realpath(opened.FileName)) == target
+                ):
+                    FreeCAD.closeDocument(name)
+            except Exception as failure:
+                cleanup_error = failure
+        try:
+            FreeCAD.setActiveDocument(doc.Name)
+        except Exception as failure:
+            cleanup_error = failure
+        # Factory.Create can add its ToolBit before initialization fails.
+        # A cleanup failure must propagate so the outer transaction aborts.
+        for obj in reversed(list(doc.Objects)):
+            if obj.Name not in previous_objects:
+                try:
+                    doc.removeObject(obj.Name)
+                except Exception as failure:
+                    cleanup_error = failure
+        if cleanup_error is not None:
+            raise RuntimeError("Legacy tool cleanup failed") from cleanup_error
+        raise _ReviewedLegacyToolError(str(error)) from error
+
+
+def _reviewed_legacy_tool_bit(doc: Any, attributes: dict[str, Any]) -> Any:  # noqa: PLR0912
+    """Apply only safe properties after a legacy shape has been reviewed."""
+    # FreeCAD 1.0's CreateFromAttrs passes arbitrary dotted paths to
+    # PathUtil.setProperty, including BitShape, after loading the file.
+    # Validate against the actual shape's properties before setting them.
+    import Path.Base.Util as PathUtil
+    from Path.Tool.Bit import Factory
+
+    for group in (attributes["parameter"], attributes["attribute"]):
+        if not isinstance(group, dict):
+            raise _ReviewedLegacyToolError(
+                "Tool parameters and attributes must be mappings"
+            )
+        for name in group:
+            if (
+                not isinstance(name, str)
+                or "." in name
+                or name in {"BitShape", "BitBody", "File", "Proxy"}
+            ):
+                raise _ReviewedLegacyToolError(
+                    f"Tool property {name!r} cannot be changed in reviewed mode"
+                )
+    bit = _create_reviewed_tool_bit(doc, Factory, attributes["shape"])
+    try:
+        bit.Label = attributes["name"]
+        allowed_types = {
+            "App::PropertyAngle",
+            "App::PropertyBool",
+            "App::PropertyDistance",
+            "App::PropertyEnumeration",
+            "App::PropertyFloat",
+            "App::PropertyInteger",
+            "App::PropertyLength",
+            "App::PropertyQuantity",
+        }
+        overrides = []
+        for group in (attributes["parameter"], attributes["attribute"]):
+            if not isinstance(group, dict):
+                raise _ReviewedLegacyToolError(
+                    "Tool parameters and attributes must be mappings"
+                )
+            for name, value in group.items():
+                if (
+                    not isinstance(name, str)
+                    or "." in name
+                    or type(value) not in (str, bool, int, float)
+                    or name not in bit.BitPropertyNames
+                    or bit.getTypeIdOfProperty(name) not in allowed_types
+                ):
+                    raise _ReviewedLegacyToolError(
+                        f"Tool property {name!r} cannot be changed in reviewed mode"
+                    )
+                overrides.append((name, value))
+        for name, value in overrides:
+            PathUtil.setProperty(bit, name, value)
+        bit.Proxy._updateBitShape(bit)
+        bit.Proxy.unloadBitBody(bit)
+        return bit
+    except Exception as error:
+        cleanup_error = None
+        try:
+            bit.Proxy.unloadBitBody(bit)
+        except Exception as failure:
+            cleanup_error = failure
+        try:
+            doc.removeObject(bit.Name)
+        except Exception as failure:
+            cleanup_error = failure
+        if cleanup_error is not None:
+            raise RuntimeError("Legacy tool cleanup failed") from cleanup_error
+        raise _ReviewedLegacyToolError(str(error)) from error
+
+
+def _legacy_tool_bit(
+    doc: Any, tool_spec: dict[str, Any], *, reviewed_shape: bool = False
+) -> Any:
     """Create a tool bit object from a .fctb file or a shape (FreeCAD 1.0)."""
     from Path.Tool.Bit import Factory
 
@@ -1340,15 +1470,17 @@ def _legacy_tool_bit(doc: Any, tool_spec: dict[str, Any]) -> Any:
         return Factory.CreateFrom(tool_spec["bit_file"])
     if "shape" in tool_spec:
         shape = tool_spec["shape"]
-        return Factory.CreateFromAttrs(
-            {
-                "version": 2,
-                "name": tool_spec.get("name") or shape,
-                "shape": shape if shape.endswith(".fcstd") else shape + ".fcstd",
-                "parameter": tool_spec.get("parameters", {}),
-                "attribute": tool_spec.get("attributes", {}),
-            }
-        )
+        attributes = {
+            "version": 2,
+            "name": tool_spec.get("name") or shape,
+            "shape": shape if shape.endswith(".fcstd") else shape + ".fcstd",
+            "parameter": tool_spec.get("parameters", {}),
+            "attribute": tool_spec.get("attributes", {}),
+        }
+        if not reviewed_shape:
+            return Factory.CreateFromAttrs(attributes)
+
+        return _reviewed_legacy_tool_bit(doc, attributes)
     raise ValueError("tool needs one of: library_bit, bit_file, shape")
 
 
@@ -1362,7 +1494,14 @@ def add_tool_controller(args: dict[str, Any]) -> dict[str, Any]:
     if _has_tool_assets():
         tool = _tool_bit(doc, tool_spec)
     else:
-        tool = _legacy_tool_bit(doc, tool_spec)
+        try:
+            tool = _legacy_tool_bit(
+                doc, tool_spec, reviewed_shape=args.get("reviewed_legacy_shape") is True
+            )
+        except _ReviewedLegacyToolError as error:
+            # The helper removed its temporary objects. Return an error value so
+            # FreeCAD commits that cleanup instead of undoing it on abort.
+            return {"reviewed_legacy_tool_error": str(error)}
     number = args.get("tool_number") or job.Proxy.nextToolNumber()
     label = args.get("label") or f"TC: {tool.Label}"
     tc = PathTC.Create(label, tool, number)
@@ -2263,20 +2402,87 @@ def simulate(args: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _capture_cam_image_bytes(qtcore: Any, scratch_dir: str) -> bytes:
+    """Capture in memory, keeping any disk fallback in private scratch."""
+    FreeCADGui.updateGui()
+    view = FreeCADGui.activeDocument().activeView()
+    try:
+        try:
+            image = view.grabFramebuffer()
+            buffer = qtcore.QBuffer()
+            try:
+                if not buffer.open(qtcore.QIODevice.WriteOnly):
+                    raise RuntimeError("Cannot open image buffer")
+                if not image.save(buffer, "PNG"):
+                    raise RuntimeError("Cannot encode image")
+                return bytes(buffer.data().data())
+            finally:
+                buffer.close()
+        except Exception:
+            path = FsPath(scratch_dir) / ("capture-" + secrets.token_hex(16) + ".png")
+            try:
+                view.saveImage(str(path), 800, 800, "Transparent")
+                return path.read_bytes()
+            finally:
+                path.unlink(missing_ok=True)
+    finally:
+        view.setAnimationEnabled(True)
+
+
+def _summarize_cam_report(sanity: Any, qtcore: Any, scratch_dir: str) -> Any:
+    """Capture images privately and close views left open by older builders."""
+    builder = sanity.image_builder
+    prepare_view = builder.prepare_view
+    destroy_view = builder.destroy_view
+    pending: list[int] = []
+
+    def track_view(*args: Any, **kwargs: Any) -> int:
+        index = prepare_view(*args, **kwargs)
+        pending.append(index)
+        return index
+
+    def close_view(index: int) -> None:
+        if index in pending:
+            pending.remove(index)
+        destroy_view(index)
+
+    overrides = {
+        "prepare_view": track_view,
+        "destroy_view": close_view,
+        "capture_image_to_bytes": lambda: _capture_cam_image_bytes(qtcore, scratch_dir),
+    }
+    attributes = vars(builder)
+    original = {name: attributes[name] for name in overrides if name in attributes}
+    attributes.update(overrides)
+    try:
+        return sanity.summarize()
+    finally:
+        for name in overrides:
+            attributes.pop(name, None)
+        attributes.update(original)
+        for index in reversed(pending):
+            with suppress(Exception):
+                destroy_view(index)
+
+
 def check_job(args: dict[str, Any]) -> dict[str, Any]:
     """FreeCAD's job check ("Sanity"): findings, summary, optional HTML report."""
-    import tempfile
-
     from Path.Main.Sanity import ImageBuilder
     from Path.Main.Sanity.Sanity import CAMSanity
+
+    if __package__:
+        from .private_scratch import private_scratch_directory
+    elif "_embedded_private_scratch_directory" in globals():
+        private_scratch_directory = globals()["_embedded_private_scratch_directory"]
+    else:
+        from private_scratch import private_scratch_directory  # type: ignore[import-not-found,no-redef]
 
     doc = _doc(args.get("doc_name"))
     job = _job(doc, args.get("job_name"))
     doc.recompute()
     report_file = args.get("report_file")
-    with tempfile.TemporaryDirectory() as tmp:
-        target = FsPath(report_file) if report_file else FsPath(tmp) / "report.html"
-        target.parent.mkdir(parents=True, exist_ok=True)
+    with private_scratch_directory(".freecad-mcp-cam-") as tmp:
+        target = FsPath(tmp) / "report.html"
         # built like CAMSanity.validate_job(); images (3D views of the GUI) only
         # on request, the report then embeds them
         sanity = object.__new__(CAMSanity)
@@ -2288,7 +2494,30 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
             if args.get("images")
             else ImageBuilder.DummyImageBuilder(str(target.parent))
         )
-        sanity.data = sanity.summarize()
+        if report_file and not args.get("images"):
+            # FreeCAD 1.0's dummy builder returns a directory, which its HTML
+            # renderer tries to open as an image. Provide a private placeholder.
+            import base64
+
+            placeholder = FsPath(tmp) / "empty.png"
+            placeholder.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lX2sAAAAASUVORK5CYII="
+                )
+            )
+
+            def placeholder_image(
+                _obj: Any, _name: str, as_bytes: bool = False, **_kwargs: Any
+            ) -> bytes | str:
+                return b"" if as_bytes else str(placeholder)
+
+            sanity.image_builder.build_image = placeholder_image
+        sanity.data = (
+            _summarize_cam_report(sanity, ImageBuilder.QtCore, tmp)
+            if args.get("images")
+            and hasattr(sanity.image_builder, "capture_image_to_bytes")
+            else sanity.summarize()
+        )
         if hasattr(sanity, "get_all_squawks"):  # FreeCAD 26.3+
             squawks, critical = sanity.get_all_squawks()
         else:  # before: each report section holds its own findings
@@ -2302,7 +2531,9 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
                 sq for sq in squawks if sq.get("squawkType") in ("WARNING", "CAUTION")
             ]
         if report_file:
-            target.write_text(sanity.get_output_report(), encoding="utf-8")
+            output = FsPath(report_file)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(sanity.get_output_report(), encoding="utf-8")
     run = sanity.data.get("runData", {})
     findings = [
         {
@@ -2332,10 +2563,10 @@ def check_job(args: dict[str, Any]) -> dict[str, Any]:
             "stock": {
                 k: _safe(v)
                 for k, v in sanity.data.get("stockData", {}).items()
-                if k not in ("squawkData", "baseImage")
+                if k not in ("squawkData", "baseImage", "stockImage")
             },
         },
-        "report_file": str(target) if report_file else None,
+        "report_file": str(output) if report_file else None,
     }
 
 
@@ -2702,6 +2933,7 @@ CAM_API_VERSION = 1
 _CAM_OPERATIONS = frozenset(
     (
         "capabilities",
+        "review_capabilities",
         "list_tools",
         "analyze_model",
         "create_job",

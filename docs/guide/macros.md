@@ -18,7 +18,16 @@ list_macros() -> list[dict]
 
 ### run_macro
 
-Execute a macro by name with optional arguments.
+With unsafe tools enabled, run a macro by name through a supported GUI/socket
+connection. FreeCAD captures its contents and asks you to review the path,
+arguments, checksum, and code before executing the displayed text. You can
+allow the request once, deny it, or save approval for this path and exact file
+contents. A timed bypass is also available when explicitly enabled in the
+workbench preferences. Saved approvals do not cover arguments or imported files.
+
+Other connection modes return `ReviewUnavailable`; they do not execute the
+macro without local review. See [macro review and saved versions](security.md#macro-review-and-saved-versions)
+for screenshots, settings, and limitations.
 
 ```python
 run_macro(
@@ -27,11 +36,7 @@ run_macro(
 ) -> dict
 ```
 
-**Example prompt:**
-
-```text
-"Run the ExportSTL macro"
-```
+Use `read_macro` to inspect a macro without running it.
 
 ### create_macro
 
@@ -111,10 +116,6 @@ The MCP server excels at helping develop FreeCAD macros. Example workflows:
 
 ```text
 "Read the macro 'MyMacro' and explain what it does"
-```
-
-```text
-"Run the macro and show me any errors from the FreeCAD console"
 ```
 
 ### Creating a New Macro

@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+## Version 0.8.0 (2026-11-23)
+
+Install Robust MCP Bridge workbench 0.8.0 with this server to use local GUI
+review. Existing paired credentials remain valid. Socket is now the default
+connection; client configurations that explicitly choose XML-RPC keep that
+setting. XML-RPC, headless, embedded, and older workbench connections cannot
+provide local file review. Supported file operations fail closed unless the
+user explicitly enables the unreviewed file-operation override. See the
+[security guide](https://spkane.github.io/freecad-addon-robust-mcp-server/0.8.0/guide/security/)
+for limitations and automation options.
+
+### Added
+
+- Local review for enabled Python and macro execution and supported file
+  operations over an authenticated socket with the GUI workbench. Explicit
+  preferences and time-limited bypasses support user-controlled automation.
+- Private per-user temporary directories for screenshots and CAM artifacts,
+  with access controls on supported platforms.
+
+### Changed
+
+- Use socket mode by default so local review can be shown. CAM outputs using
+  job-selected or split paths require an explicit unreviewed-file override;
+  a single explicitly named output can be reviewed.
+- Harden generated FreeCAD code against injection through model strings and
+  reject invalid XML-RPC Host and Origin headers.
+- Document save paths use the exact `.FCStd` suffix before review, appending
+  it when missing, including when file review is bypassed.
+
+### Fixed
+
+- Save and close the same document in one FreeCAD operation. A failed save
+  leaves the document open.
+- Report actual sketch degrees of freedom without calling the solver. Thanks to
+  [thopman](https://github.com/thopman/freecad-addon-robust-mcp-server/commit/23c03808d22b6c8357f988bdb45ac2a930870a6f)
+  for identifying the issue.
+- Read FreeCAD's Report view for console diagnostics in GUI sessions. Return an
+  error when console history is unavailable instead of an ambiguous empty list;
+  console queries accept between 1 and 1000 lines.
+
 ## Version 0.7.0 (2026-11-06)
 
 This release updates both the MCP server and the Robust MCP Bridge. Install

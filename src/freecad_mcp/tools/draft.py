@@ -7,6 +7,9 @@ ShapeString for creating 3D text geometry that can be used with PartDesign.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from freecad_mcp.bridge.file_review import file_review_new_document
+from freecad_mcp.tools._registration import file_tool
+
 
 def _validate_vector(
     value: list[float] | None,
@@ -91,7 +94,7 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
             "get_bridge must be a callable that returns an awaitable bridge"
         )
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge, allow_new_document=True)
     async def draft_shapestring(
         text: str,
         font_path: str | None = None,
@@ -145,7 +148,9 @@ def register_draft_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) -> 
 import Draft
 import os
 
-doc = FreeCAD.ActiveDocument if {doc_name!r} is None else FreeCAD.getDocument({doc_name!r})
+previous_doc = FreeCAD.ActiveDocument
+doc = None if {file_review_new_document.get()!r} else (FreeCAD.getDocument({doc_name!r}) if {bool(doc_name)!r} else FreeCAD.ActiveDocument)
+created_document = doc is None
 if doc is None:
     doc = FreeCAD.newDocument("Unnamed")
 
@@ -180,7 +185,15 @@ try:
         raise ValueError(f"Font file not found: {{font_path}}")
 
     # Create the ShapeString
-    shape_string = Draft.make_shapestring(text, font_path, size)
+    try:
+        FreeCAD.setActiveDocument(doc.Name)
+        shape_string = Draft.make_shapestring(text, font_path, size)
+    finally:
+        if previous_doc is not None:
+            FreeCAD.setActiveDocument(previous_doc.Name)
+        elif not created_document:
+            FreeCAD.setActiveDocument("")
+            FreeCAD.ActiveDocument = None
 
     if shape_string is None:
         raise ValueError("Failed to create ShapeString - check font file and text")
@@ -209,6 +222,8 @@ try:
     }}
 except Exception:
     doc.abortTransaction()
+    if previous_doc is not None:
+        FreeCAD.setActiveDocument(previous_doc.Name)
     raise
 """
         result = await bridge.execute_python(code)
@@ -508,10 +523,10 @@ if doc is None:
 
 shape_string = doc.getObject({shapestring_name!r})
 if shape_string is None:
-    raise ValueError(f"ShapeString not found: {shapestring_name!r}")
+    raise ValueError("ShapeString not found: " + repr({shapestring_name!r}))
 
 if not hasattr(shape_string, 'Shape') or shape_string.Shape is None:
-    raise ValueError(f"Object has no shape: {shapestring_name!r}")
+    raise ValueError("Object has no shape: " + repr({shapestring_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Convert ShapeString to Face")
@@ -572,7 +587,7 @@ except Exception:
             result.error_traceback or "Failed to convert ShapeString to face"
         )
 
-    @mcp.tool()
+    @file_tool(mcp, get_bridge=get_bridge)
     async def draft_text_on_surface(
         text: str,
         target_face: str,
@@ -649,17 +664,17 @@ if doc is None:
 
 target = doc.getObject({target_object!r})
 if target is None:
-    raise ValueError(f"Target object not found: {target_object!r}")
+    raise ValueError("Target object not found: " + repr({target_object!r}))
 
 if not hasattr(target, 'Shape') or target.Shape is None:
-    raise ValueError(f"Target object has no shape: {target_object!r}")
+    raise ValueError("Target object has no shape: " + repr({target_object!r}))
 
 # Get the target face
 face_name = {target_face!r}
 try:
     face = getattr(target.Shape, face_name)
 except Exception:
-    raise ValueError(f"Face not found: {{face_name}} on {target_object!r}")
+    raise ValueError(f"Face not found: {{face_name}} on " + repr({target_object!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Text on Surface")
@@ -699,7 +714,14 @@ try:
     face_normal = face.normalAt(0, 0)
 
     # Create ShapeString at the face position
-    shape_string = Draft.make_shapestring(text, font_path, size)
+    previous_doc = FreeCAD.ActiveDocument
+    try:
+        FreeCAD.setActiveDocument(doc.Name)
+        shape_string = Draft.make_shapestring(text, font_path, size)
+    finally:
+        FreeCAD.setActiveDocument(previous_doc.Name if previous_doc is not None else "")
+        if previous_doc is None:
+            FreeCAD.ActiveDocument = None
     if shape_string is None:
         raise ValueError("Failed to create ShapeString")
 
@@ -861,10 +883,10 @@ if doc is None:
 
 shape_string = doc.getObject({shapestring_name!r})
 if shape_string is None:
-    raise ValueError(f"ShapeString not found: {shapestring_name!r}")
+    raise ValueError("ShapeString not found: " + repr({shapestring_name!r}))
 
 if not hasattr(shape_string, 'Shape') or shape_string.Shape is None:
-    raise ValueError(f"Object has no shape: {shapestring_name!r}")
+    raise ValueError("Object has no shape: " + repr({shapestring_name!r}))
 
 # Wrap in transaction for undo support
 doc.openTransaction("Extrude ShapeString")

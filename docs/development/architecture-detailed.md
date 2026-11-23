@@ -252,7 +252,7 @@ freecad_mcp/
 │   ├── base.py              # Abstract bridge interface
 │   ├── embedded.py          # In-process FreeCAD bridge (Linux only)
 │   ├── socket.py            # JSON-RPC socket bridge
-│   ├── xmlrpc.py            # XML-RPC bridge (recommended)
+│   ├── xmlrpc.py            # XML-RPC bridge
 │   └── protocol.py          # Wire protocol for socket communication
 │
 ├── tools/                    # MCP tool implementations (150+ tools)
