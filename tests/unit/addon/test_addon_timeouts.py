@@ -1924,12 +1924,14 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
     reservations = reservations_module.DocumentReservations(1)
     plugin._document_reservations = reservations
     started, resume, created = threading.Event(), threading.Event(), threading.Event()
+    reservation_token: str | None = None
 
     def capture(_code: str, _timeout_ms: int) -> dict[str, Any]:
+        nonlocal reservation_token
         started.set()
         assert resume.wait(5)
         try:
-            reservations.reserve("Model", object(), "owner")
+            reservation_token = reservations.reserve("Model", object(), "owner")
         finally:
             created.set()
         return {"success": True}
@@ -1951,12 +1953,11 @@ async def test_cancelled_capture_handler_reclaims_late_worker_reservation(
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-        reservations.discard_owner("owner")
         resume.set()
+        assert await asyncio.to_thread(created.wait, 5)
+        assert reservation_token is not None
         async with asyncio.timeout(5):
-            while not created.is_set():  # noqa: ASYNC110
-                await asyncio.sleep(0.005)
-            while reservations._entries:  # noqa: ASYNC110
+            while reservation_token in reservations._entries:  # noqa: ASYNC110
                 await asyncio.sleep(0.005)
     finally:
         resume.set()
