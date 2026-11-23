@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Version 0.8.0 (2026-11-19)
+## Version 0.8.0 (2026-11-23)
 
 Use with Robust MCP Server 0.8.0 for the file-review workflow. Existing paired
 credentials remain valid. The bridge executes with the FreeCAD user's full
@@ -28,6 +28,12 @@ clients you trust.
   CAM artifacts use private per-user directories where supported.
 - Review requires an authenticated socket connection to a GUI workbench;
   explicit overrides are available for unattended workflows.
+
+### Fixed
+
+- Reclaim unclaimed document reservations when their capture connection closes.
+  A queued review takes ownership of its reservation and renews its expiry.
+  Pending reviews are cancelled if their own connection closes.
 
 ## Version 0.7.2 (2026-11-07)
 
