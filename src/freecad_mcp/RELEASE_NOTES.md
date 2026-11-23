@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Version 0.8.0 (2026-11-19)
+## Version 0.8.0 (2026-11-23)
 
 Install Robust MCP Bridge workbench 0.8.0 with this server to use local GUI
 review. Existing paired credentials remain valid. Socket is now the default
@@ -33,6 +33,8 @@ for limitations and automation options.
 
 ### Fixed
 
+- Save and close the same document in one FreeCAD operation. A failed save
+  leaves the document open.
 - Report actual sketch degrees of freedom without calling the solver. Thanks to
   [thopman](https://github.com/thopman/freecad-addon-robust-mcp-server/commit/23c03808d22b6c8357f988bdb45ac2a930870a6f)
   for identifying the issue.
