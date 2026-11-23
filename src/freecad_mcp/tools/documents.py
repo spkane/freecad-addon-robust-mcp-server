@@ -136,10 +136,11 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             "objects": doc.objects,
         }
 
-    @file_tool(mcp)
-    async def save_document(  # noqa: PLR0912
+    async def _save_document(  # noqa: PLR0912
         doc_name: str | None = None,
         path: str | None = None,
+        *,
+        close_after: bool = False,
     ) -> dict[str, Any]:
         """Save a FreeCAD document.
 
@@ -148,6 +149,7 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             path: File path to save to. Uses existing path if None.
                   Required for new (unsaved) documents. A canonical `.FCStd`
                   suffix is appended when missing, without replacing a suffix.
+            close_after: Close the same document after saving in one dispatch.
 
         Returns:
             Dictionary with save result:
@@ -212,7 +214,30 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
         document_token = file_review_document.set(doc_name)
         reservation_token = file_review_document_token.set(reservation)
         try:
-            saved_path = await bridge.save_document(doc_name, path)
+            if close_after:
+                code = f"""
+doc = FreeCAD.getDocument({doc_name!r})
+if doc is None:
+    raise ValueError("Document not found")
+save_path = globals().get("_robust_mcp_reviewed_file_path") or {path!r}
+saved = doc.saveAs(save_path)
+if saved is False:
+    raise RuntimeError("Document save failed")
+if FreeCAD.getDocument(doc.Name) is not doc:
+    raise RuntimeError("Document was replaced during save; leaving it open")
+FreeCAD.closeDocument(doc.Name)
+_result_ = save_path
+"""
+                result = await bridge.execute_python(code)
+                if not result.success:
+                    raise ValueError(
+                        result.error_traceback
+                        or result.stderr
+                        or "Failed to save and close document"
+                    )
+                saved_path = result.result
+            else:
+                saved_path = await bridge.save_document(doc_name, path)
         finally:
             file_review_document_token.reset(reservation_token)
             file_review_document.reset(document_token)
@@ -223,6 +248,27 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
             "success": True,
             "path": saved_path,
         }
+
+    @file_tool(mcp)
+    async def save_document(
+        doc_name: str | None = None,
+        path: str | None = None,
+    ) -> dict[str, Any]:
+        """Save a FreeCAD document.
+
+        Args:
+            doc_name: Name of document to save. Uses active document if None.
+            path: File path to save to. Uses existing path if None.
+                Required for new (unsaved) documents. A canonical `.FCStd`
+                suffix is appended when missing, without replacing a suffix.
+
+        Returns:
+            Dictionary containing the success status and saved path.
+
+        Raises:
+            ValueError: If the document is not found or a new document has no path.
+        """
+        return await _save_document(doc_name, path)
 
     @mcp.tool()
     async def close_document(
@@ -249,10 +295,10 @@ def register_document_tools(mcp: Any, get_bridge: Callable[[], Awaitable[Any]]) 
                 if active is None:
                     raise ValueError("No active document")
                 doc_name = active.name
-            await save_document(doc_name)
+            await _save_document(doc_name, close_after=True)
             saved = True
-
-        await bridge.close_document(doc_name)
+        else:
+            await bridge.close_document(doc_name)
         return {
             "success": True,
             "saved": saved,
