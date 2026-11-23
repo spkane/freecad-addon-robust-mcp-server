@@ -90,10 +90,10 @@ default. The dialog identifies the requested and resolved path, the operation,
 and whether a file already exists. It also shows the generated code. FreeCAD
 checks the target again before dispatch, but this is not an atomic filesystem
 operation: another local process can still change it before it is opened.
-Some tools retain the selected document name during review; others use the
-document active when they execute. In either case, the document's identity and
-contents are not locked: another authorized action can close, replace, or
-modify it before execution.
+Reviewed operations such as document saves and STEP imports bind the request
+to the selected document instance when targeting an existing document.
+FreeCAD rejects the request if that document was closed or replaced before
+execution. Edits to the same document can still affect the result.
 For document saves, the server uses the canonical `.FCStd` suffix before
 review; it appends the suffix when the provided path does not already end
 with that exact spelling. This applies even when file review is bypassed.
