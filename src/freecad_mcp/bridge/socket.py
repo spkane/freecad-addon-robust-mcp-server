@@ -299,7 +299,7 @@ class SocketBridge(FreecadBridge):
                 writer.write(frame)
                 await writer.drain()
                 response_data = await self._read_response_line(reader, writer)
-        except TimeoutError:
+        except (TimeoutError, asyncio.CancelledError):
             self._discard_request_streams(writer)
             raise
 
