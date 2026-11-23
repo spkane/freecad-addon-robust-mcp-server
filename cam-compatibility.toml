@@ -3,6 +3,7 @@ compatible_servers = [
   { tag = "robust-mcp-server-v0.7.0", asset = "freecad_robust_mcp-0.7.0-py3-none-any.whl", sha256 = "9ee4ce4b0f752f244262943fe162e31c18e1ee38c86bd3a5d861a82c8709b740" },  # pragma: allowlist secret
   { tag = "robust-mcp-server-v0.7.0-rc.3", asset = "freecad_robust_mcp-0.7.0rc3-py3-none-any.whl", sha256 = "4e3c2d48d9055893491732c8e4fdcad6f573f69b39a32e8fd0ba5efd7473e1dd" },  # pragma: allowlist secret
   { tag = "robust-mcp-server-v0.7.0-rc.4", asset = "freecad_robust_mcp-0.7.0rc4-py3-none-any.whl", sha256 = "86cd0dd0745ce48f75f5883dbe7a4e78c4942e7d402518f9953800604912268f" },  # pragma: allowlist secret
+  { tag = "robust-mcp-server-v0.8.0", asset = "freecad_robust_mcp-0.8.0-py3-none-any.whl", sha256 = "d075309eabf6f72db7d83c17ebdb7302710c0d6217881c1b4161ecb513981f60" },  # pragma: allowlist secret
 ]
 compatible_workbenches = [
   { tag = "robust-mcp-workbench-v0.7.0", asset = "freecad-mcp-workbench-0.7.0.zip", sha256 = "6a0aaea5ff0034ae68f843afec36d9aa22d75565a268258826129e39a4f642f7" },  # pragma: allowlist secret
