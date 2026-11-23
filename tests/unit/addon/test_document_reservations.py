@@ -1,6 +1,7 @@
 """Verify strong, single-use FreeCAD document identity reservations."""
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,7 +9,7 @@ import pytest
 
 
 @pytest.fixture
-def reservations_module():
+def reservations_module(monkeypatch):
     """Load the helper without starting FreeCAD."""
     path = Path(__file__).parents[3] / (
         "freecad/RobustMCPBridge/freecad_mcp_bridge/document_reservations.py"
@@ -16,6 +17,7 @@ def reservations_module():
     spec = importlib.util.spec_from_file_location("document_reservations_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
     return module
 

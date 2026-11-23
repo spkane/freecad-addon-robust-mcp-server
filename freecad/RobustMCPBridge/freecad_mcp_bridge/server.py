@@ -1327,10 +1327,10 @@ class FreecadMCPPlugin:
         }
 
     def _release_review_document(self, token: str) -> None:
-        """Discard an unclaimed reservation without affecting a claimed guard."""
+        """Discard a capture that the client did not hand off to review."""
         reservations = self._document_reservations
-        if reservations is not None:
-            reservations.discard(token)
+        if reservations is not None and type(token) is str:
+            reservations.discard_capture(token)
 
     def _release_session_reservations(self, owners: set[str]) -> None:
         """Discard unclaimed captures when their socket session closes."""
@@ -2105,7 +2105,9 @@ class FreecadMCPPlugin:
     ) -> dict[str, Any]:
         """Snapshot a file target before presenting the generated operation."""
         broker = self._review_broker
+        reservations = self._document_reservations
         document_token = params.get("document_token")
+        transferred = False
         admitted = False
         try:
             if broker is None or type(owner) is not str:
@@ -2208,6 +2210,11 @@ class FreecadMCPPlugin:
                 document_name=document_name,
                 document_token=document_token,
             )
+            if document_token is not None:
+                if reservations is None:
+                    raise ValueError("Document review unavailable")
+                reservations.admit(document_token, document_name)
+                transferred = True
             result = {
                 "review_id": cast("Any", broker).begin(
                     owner, payload, REVIEW_LEASE_SECONDS
@@ -2225,10 +2232,15 @@ class FreecadMCPPlugin:
                 },
             }
         finally:
-            if not admitted and type(document_token) is str and document_token:
-                reservations = self._document_reservations
-                if reservations is not None:
+            if (
+                not admitted
+                and reservations is not None
+                and type(document_token) is str
+            ):
+                if transferred:
                     reservations.discard(document_token)
+                else:
+                    reservations.discard_capture(document_token)
 
     async def _review_begin_macro(
         self,

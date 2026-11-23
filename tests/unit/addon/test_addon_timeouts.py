@@ -1808,10 +1808,14 @@ async def test_macro_review_uses_current_roots_once(
 
 
 @pytest.mark.asyncio
-async def test_disconnected_file_review_releases_unclaimed_reservation(
-    server_mod: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+@pytest.mark.parametrize("cancel_review", [False, True])
+async def test_queued_review_owns_capture_after_capture_session_closes(
+    server_mod: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    cancel_review: bool,
 ) -> None:
-    """Disconnect before GUI admission frees the unclaimed document slot."""
+    """A queued review keeps its capture until its own claim or cancellation."""
     review_dialog = importlib.import_module("freecad_mcp_bridge.review_dialog")
     monkeypatch.setattr(review_dialog, "create_close_relay", lambda _: MagicMock())
     monkeypatch.setattr(server_mod, "_review_gui_thread_ready", lambda: True)
@@ -1821,25 +1825,30 @@ async def test_disconnected_file_review_releases_unclaimed_reservation(
     plugin._enable_experimental_review()
     reservations = plugin._document_reservations
     document = object()
-    token = reservations.reserve("Model", document)
+    reservations.open_owner("capture-session")
+    token = reservations.reserve("Model", document, "capture-session")
     path = tmp_path / "model.step"
     path.write_text("data")
-    response = await plugin._review_begin_file(
-        1,
-        {
-            "code": "pass",
-            "path": str(path),
-            "action": "read",
-            "kind": "path",
-            "document_name": "Model",
-            "document_token": token,
-        },
-        "alice",
-    )
+    params = {
+        "code": "pass",
+        "path": str(path),
+        "action": "read",
+        "kind": "path",
+        "document_name": "Model",
+        "document_token": token,
+    }
+    response = await plugin._review_begin_file(1, params, "review-session")
     assert response.get("result")
-    plugin._review_broker.cancel_owner("alice")
-    with pytest.raises(ValueError, match="unavailable"):
-        reservations.take(token, "Model", lambda _: document)
+    plugin._release_session_reservations({"capture-session"})
+    plugin._release_review_document(token)
+    duplicate = await plugin._review_begin_file(2, params, "other-review-session")
+    assert duplicate.get("error")
+    if cancel_review:
+        plugin._review_broker.cancel_owner("review-session")
+        with pytest.raises(ValueError, match="unavailable"):
+            reservations.take(token, "Model", lambda _: document)
+    else:
+        assert reservations.take(token, "Model", lambda _: document)()
     plugin._shutdown_review()
 
 
