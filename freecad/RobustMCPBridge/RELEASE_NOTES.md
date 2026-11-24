@@ -35,6 +35,9 @@ clients you trust.
   A queued review takes ownership of its reservation and renews its expiry.
   Pending reviews are cancelled if their own connection closes.
 
+See the [coordinated changelog since 0.7.0](https://github.com/spkane/freecad-addon-robust-mcp-server/blob/main/src/freecad_mcp/RELEASE_NOTES.md#version-080-2026-11-23)
+for server changes and the full release comparisons.
+
 ## Version 0.7.2 (2026-11-07)
 
 ### Changed
