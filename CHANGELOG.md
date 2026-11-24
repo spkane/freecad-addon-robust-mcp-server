@@ -3,6 +3,15 @@
 This project uses **component-specific versioning**. Each component has its own
 release notes and version history.
 
+## 0.8.0
+
+Version 0.8.0 adds local review of enabled Python, macros, and supported file
+operations, with explicit preferences for automation. It defaults to socket
+mode, hardens XML-RPC and generated code, protects temporary artifacts, and
+improves document, sketch, and console handling. The
+[coordinated changelog](src/freecad_mcp/RELEASE_NOTES.md#version-080-2026-11-23)
+covers both components since 0.7.0, including workbench 0.7.1 and 0.7.2.
+
 ## 0.7.1 (workbench)
 
 - Point the workbench manifest to the `released` branch and verify stable

@@ -4,43 +4,113 @@
 
 ## Version 0.8.0 (2026-11-23)
 
-Install Robust MCP Bridge workbench 0.8.0 with this server to use local GUI
-review. Existing paired credentials remain valid. Socket is now the default
-connection; client configurations that explicitly choose XML-RPC keep that
-setting. XML-RPC, headless, embedded, and older workbench connections cannot
-provide local file review. Supported file operations fail closed unless the
-user explicitly enables the unreviewed file-operation override. See the
-[security guide](https://spkane.github.io/freecad-addon-robust-mcp-server/0.8.0/guide/security/)
-for limitations and automation options.
+Install Robust MCP Server 0.8.0 and Robust MCP Bridge 0.8.0 together for local
+review in FreeCAD. Existing pairing credentials remain valid. These notes cover
+the coordinated upgrade from 0.7.0, including the intervening workbench
+releases.
 
 ### Added
 
-- Local review for enabled Python and macro execution and supported file
-  operations over an authenticated socket with the GUI workbench. Explicit
-  preferences and time-limited bypasses support user-controlled automation.
-- Private per-user temporary directories for screenshots and CAM artifacts,
-  with access controls on supported platforms.
+- **Python and macro review.** With unsafe tools explicitly enabled, FreeCAD
+  asks before running `execute_python`, `safe_execute`, or `run_macro` by
+  default. Review the code and allow once or deny. Macro dialogs also show the
+  resolved path, arguments, and SHA-256. FreeCAD executes the captured macro
+  contents and can save a revocable approval for that exact path and contents.
+  Saved approvals do not cover changed arguments or dependencies.
+- **File-operation review.** Supported document opens and saves, CAD imports
+  and exports, CSV, macro file operations, part libraries, fonts, and CAM
+  files require review by default. The dialog shows the operation, requested
+  and resolved paths, target details, and generated code. FreeCAD rechecks the
+  file target before dispatch and verifies the identity of an existing target
+  document where applicable. A separate local process can still change a file
+  after the final check.
+- **Review preferences and status.** The workbench exposes review preferences
+  and an opt-in, time-limited bypass for repeat requests of the same kind.
+  Preferences also let you inspect, locate, and remove saved macro approvals.
+  A persistent indicator shows the bridge's permissions and active local
+  bypasses. MCP clients receive advice about actions with potentially risky
+  effects through tool annotations.
+- **Private temporary files.** Screenshots and CAM report intermediates use
+  per-user scratch directories with platform-specific access controls and
+  cleanup after use. Windows scratch requires a filesystem with persistent
+  ACL support.
 
 ### Changed
 
-- Use socket mode by default so local review can be shown. CAM outputs using
-  job-selected or split paths require an explicit unreviewed-file override;
-  a single explicitly named output can be reviewed.
-- Harden generated FreeCAD code against injection through model strings and
-  reject invalid XML-RPC Host and Origin headers.
-- Document save paths use the exact `.FCStd` suffix before review, appending
-  it when missing, including when file review is bypassed.
+- **Socket is the default connection.** This applies to the MCP server and
+  Docker image. Explicit XML-RPC configurations retain that transport. Local
+  approval requires an authenticated socket and a GUI workbench. Supported
+  file operations fail closed in XML-RPC, headless, embedded, and older
+  workbench configurations unless the user explicitly sets
+  `FREECAD_ALLOW_UNREVIEWED_FILE_OPERATIONS=true` on the server.
+- **CAM file review.** A single explicit post-processing output can be
+  reviewed. Job-selected outputs and split outputs require the explicit
+  file-review override. On FreeCAD 1.0, review shows the resolved CAM tool
+  shape file, and reviewed tool overrides are limited to supported scalar
+  properties.
+- **Listener and generated-code hardening.** XML-RPC rejects browser
+  `Origin` headers and non-loopback `Host` headers. Generated FreeCAD Python
+  quotes or validates model-supplied values in several modeling, export,
+  spreadsheet, and view tools.
+- **Document save paths.** Saves use the canonical `.FCStd` suffix before
+  review. The server appends the suffix if the provided path lacks that exact
+  spelling, including when review is bypassed.
 
 ### Fixed
 
-- Save and close the same document in one FreeCAD operation. A failed save
-  leaves the document open.
-- Report actual sketch degrees of freedom without calling the solver. Thanks to
-  [thopman](https://github.com/thopman/freecad-addon-robust-mcp-server/commit/23c03808d22b6c8357f988bdb45ac2a930870a6f)
-  for identifying the issue.
-- Read FreeCAD's Report view for console diagnostics in GUI sessions. Return an
-  error when console history is unavailable instead of an ambiguous empty list;
-  console queries accept between 1 and 1000 lines.
+- Save and close the same document in one FreeCAD dispatch. A failed save
+  leaves the document open, including when FreeCAD has only partially loaded
+  the document.
+- Report actual sketch degrees of freedom without calling the solver. Thanks
+  to [thopman](https://github.com/thopman) for identifying the issue.
+- Read console history from FreeCAD's GUI Report view. Queries accept 1–1,000
+  lines and report an explicit error when console history is unavailable.
+- Keep review decisions bound to the originating request and connection.
+  Recheck expiry and revocation before execution and separate denial from
+  review unavailability. A lost response after dispatch can leave the outcome
+  unknown. The server avoids replaying that operation.
+- Release unclaimed document reservations on disconnect. A queued review
+  takes over its reservation and renews its expiry. Disconnecting its review
+  connection cancels unclaimed work. Capture cancellation preserves other
+  requests on the same connection. Discard streams when an interrupted
+  request could leave an unread reply.
+- Keep reviewed macro lookup bound to the approved target, clean up partial
+  library and legacy CAM imports, and close temporary CAM report views on
+  failure.
+- Apply explicit CLI port overrides before environment validation and discover
+  FreeCAD 1.1 and 1.0 under Windows Program Files when the executable is absent
+  from PATH.
+
+### Workbench updates shipped in 0.7.1 and 0.7.2
+
+- The workbench manifest points to the `released` branch. Stable workbench
+  archives are checked against that branch before publication.
+- Workbench commands use the `RobustMCPBridge_` prefix to avoid conflicts.
+  Reconfigure custom shortcuts that use the old command IDs. Direct-launch
+  scripts isolate their imports, and a disabled bridge produces less startup
+  output.
+
+### Documentation and validation
+
+- Added a security guide with screenshots of Python review, macro review,
+  saved macro approvals, and the permissions warning. Updated setup, Docker,
+  connection-mode, and tool documentation.
+- Added regression coverage for review decisions and expiry, cancellation and
+  reservation cleanup, resolved file targets, scratch permissions, generated-code
+  escaping, and CAM behavior. The release tested the exact workbench and
+  server packages for compatibility and verified the server on Linux, macOS,
+  and Windows. CI also received dependency and workflow maintenance updates.
+
+Approved code runs with the FreeCAD user's permissions. Direct paired clients
+can still submit Python outside these tool-specific reviews.
+[Security guide](https://spkane.github.io/freecad-addon-robust-mcp-server/0.8.0/guide/security/)
+
+### Full change history
+
+- [Server 0.7.0 to 0.8.0](https://github.com/spkane/freecad-addon-robust-mcp-server/compare/robust-mcp-server-v0.7.0...robust-mcp-server-v0.8.0)
+- [Workbench 0.7.0 to 0.8.0](https://github.com/spkane/freecad-addon-robust-mcp-server/compare/robust-mcp-workbench-v0.7.0...robust-mcp-workbench-v0.8.0)
+- [Published server release and PR list](https://github.com/spkane/freecad-addon-robust-mcp-server/releases/tag/robust-mcp-server-v0.8.0)
+- [Published workbench release and PR list](https://github.com/spkane/freecad-addon-robust-mcp-server/releases/tag/robust-mcp-workbench-v0.8.0)
 
 ## Version 0.7.0 (2026-11-06)
 
